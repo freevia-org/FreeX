@@ -82,7 +82,15 @@ public static class PrintExportHostReadinessPlanner
         Workbook workbook,
         bool hasSelection,
         PrintJobRequest printJobRequest,
-        PrintExportHostCapabilities host)
+        PrintExportHostCapabilities host) =>
+        Create(workbook, hasSelection, printJobRequest, host, out _);
+
+    internal static PrintExportHostReadinessPlan Create(
+        Workbook workbook,
+        bool hasSelection,
+        PrintJobRequest printJobRequest,
+        PrintExportHostCapabilities host,
+        out PortablePdfExportPlan? portablePlan)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(printJobRequest);
@@ -91,7 +99,13 @@ public static class PrintExportHostReadinessPlanner
         var scopePlan = WorkbookExportScopePlanner.Build(workbook, hasSelection, host.Surface);
         var pdfPlan = CreateExportPlan(workbook, printJobRequest, host.Surface, WorkbookExportPrintOutputKind.Pdf);
         var xpsPlan = CreateExportPlan(workbook, printJobRequest, host.Surface, WorkbookExportPrintOutputKind.Xps);
-        var printJobPlan = PrintJobPlanner.CreatePlanFromPageSetup(workbook, printJobRequest, host.Surface);
+        portablePlan = !host.SupportsNativePrintDialog && pdfPlan.IsReady && printJobRequest.Copies > 0
+            ? PortablePdfExportPlanner.CreatePlan(pdfPlan, workbook)
+            : null;
+        var printJobPlan = PrintJobPlanner.BuildJobPlan(
+            printJobRequest,
+            pdfPlan,
+            portablePlan is { IsReady: true } ? portablePlan.TotalPageCount : null);
 
         return new PrintExportHostReadinessPlan(
             host,

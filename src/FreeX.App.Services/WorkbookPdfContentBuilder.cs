@@ -143,6 +143,8 @@ public static class WorkbookPdfContentBuilder
 
         var (pageW, pageH, mL, mR, mT, mB, _, _) =
             SheetPdfPageSetupResolver.ComputePdfGeometry(sheet);
+        if (request.IsCommentSummaryPage)
+            return BuildCommentSummaryPage(request, pageW, pageH, mL, mT, measurer);
 
         // Effective scale for rendering (percent / 100).
         var scaleRatio = ResolveScaleRatio(sheet, exportPlan, request);
@@ -490,7 +492,7 @@ public static class WorkbookPdfContentBuilder
         // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
         // would leak whole-workbook page counts into every sheet's &N when printing/exporting more
         // than one sheet at once (O41).
-        var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, sheet);
+        var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, request, sheet);
 
         // Header text: rendered just below the header margin from the top of the page. The band
         // height (mT - headerEdgePt, the gap between the header edge and the content's top margin)
@@ -586,6 +588,43 @@ public static class WorkbookPdfContentBuilder
         return new PdfContentDocument(pages);
     }
 
+    private static PdfContentPage BuildCommentSummaryPage(
+        PortablePdfExportPageRequest request,
+        double width,
+        double height,
+        double marginLeft,
+        double marginTop,
+        ITextMeasurer measurer)
+    {
+        var page = new PrintPreviewCommentSummaryPage(
+            request.SheetPageNumber,
+            new LayoutRect(0, 0, width / PixelToPointRatio, height / PixelToPointRatio),
+            marginLeft / PixelToPointRatio,
+            marginTop / PixelToPointRatio,
+            request.CommentSummaryEntries);
+        var drawing = PrintPreviewCommentSummaryInstructionBuilder.Build(page, measurer);
+        // The PDF page is white by default. Convert preview text origins from top-left DIPs to
+        // bottom-left PDF points, using the font size to offset the baseline below the top edge.
+        var ops = new List<PdfDrawOp>();
+        foreach (var instruction in drawing.Instructions)
+        {
+            if (instruction.Kind != PrintPreviewPaintKind.Text)
+                continue;
+
+            var font = instruction.Font;
+            ops.Add(new PdfText(
+                instruction.X1 * PixelToPointRatio,
+                height - (instruction.Y1 + font.FontSize) * PixelToPointRatio,
+                font.FontSize * PixelToPointRatio,
+                ToPdfFontFace(font.Bold, font.Italic),
+                ToPdfColor(font.Color),
+                instruction.Text,
+                font.FontFamily));
+        }
+
+        return new PdfContentPage(width, height, ops);
+    }
+
     public static PdfContentPage BuildPage(
         Workbook workbook,
         PortablePdfExportPlan exportPlan,
@@ -595,6 +634,13 @@ public static class WorkbookPdfContentBuilder
         var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
         if (!contentPlan.IsReady)
             throw new InvalidOperationException(contentPlan.StatusText);
+
+        if (request.IsCommentSummaryPage)
+        {
+            return BuildCommentSummaryPage(
+                request, options.PageWidthPoints, options.PageHeightPoints,
+                options.MarginPoints, options.MarginPoints, PortablePdfTextMeasurer.Instance);
+        }
 
         // shared-localization-rtl-F1: resolve the same sheet the page-setup-aware path resolves
         // (BuildPageWithPageSetup above) -- by the print AREA that owns this page's PrintRange
@@ -2301,6 +2347,9 @@ public static class WorkbookPdfContentBuilder
         Sheet sheet)
     {
         var firstPageNumber = sheet.FirstPageNumber ?? 1;
+        if (request.OriginalSheetPagination is { } originalPagination)
+            return firstPageNumber + originalPagination.PageIndex;
+
         var offset = 0;
         foreach (var candidate in exportPlan.PageRequests)
         {
@@ -2329,8 +2378,14 @@ public static class WorkbookPdfContentBuilder
     /// comment pages in that count, and so does FreeX's own WPF path (<c>PrintRenderer.RenderWorksheet</c>
     /// computes totalPages = printPlan.GridPageCount + commentSummaryPages.Count).
     /// </summary>
-    private static int ResolveEffectiveSheetTotalPages(PortablePdfExportPlan exportPlan, Sheet sheet)
+    private static int ResolveEffectiveSheetTotalPages(
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request,
+        Sheet sheet)
     {
+        if (request.OriginalSheetPagination is { } originalPagination)
+            return originalPagination.PageCount;
+
         var total = 0;
         foreach (var candidate in exportPlan.PageRequests)
         {

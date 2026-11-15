@@ -16,7 +16,8 @@ public enum PortablePdfTextRunSource
     WorkbookName,
     PageHeader,
     Cell,
-    PageFooter
+    PageFooter,
+    CommentSummary
 }
 
 public sealed record PortablePdfUnsupportedUnicodeTextDiagnostic(
@@ -66,6 +67,19 @@ public static class PortablePdfTextCapabilityPlanner
                     PortablePdfTextCapabilityPlanStatus.PageContentPlanNotReady,
                     $"Portable PDF text preflight cannot inspect page {request.ExportPageNumber}: {contentPlan.StatusText}",
                     diagnostics);
+            }
+
+            if (request.IsCommentSummaryPage)
+            {
+                textRunCount++; // The "Comments" heading is always ASCII.
+                foreach (var entry in request.CommentSummaryEntries)
+                {
+                    AddTextRun(
+                        PortablePdfTextRunSource.CommentSummary, request, entry.Address.Row, entry.Address.Col,
+                        entry.Text, diagnostics, ref textRunCount);
+                }
+
+                continue;
             }
 
             AddTextRun(
@@ -172,6 +186,7 @@ public static class PortablePdfTextCapabilityPlanner
             PortablePdfTextRunSource.PageHeader => $"page header on export page {diagnostic.ExportPageNumber}",
             PortablePdfTextRunSource.Cell => $"cell {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
             PortablePdfTextRunSource.PageFooter => $"page footer on export page {diagnostic.ExportPageNumber}",
+            PortablePdfTextRunSource.CommentSummary => $"comment at {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
             _ => $"text run on export page {diagnostic.ExportPageNumber}"
         };
 

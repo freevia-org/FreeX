@@ -54,15 +54,8 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
-        var hasSelection = HasPrintSelection(_session.SelectedRange);
-        var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
-            _session.Workbook,
-            hasSelection,
-            new PrintJobRequest(
-                WorkbookExportPrintScope.ActiveSheet,
-                ActiveSheetIndex: ResolveActiveSheetIndex()),
-            PrintExportHostCapabilities.AvaloniaPortable());
-        var scopePlan = workflowPlan.Readiness.ScopePlan;
+        var scopePlan = WorkbookExportScopePlanner.Build(
+            _session.Workbook, HasPrintSelection(_session.SelectedRange), WorkbookExportPrintSurface.MacOs);
 
         if (!scopePlan.CanExport)
         {

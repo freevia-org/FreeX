@@ -1,5 +1,7 @@
 using FluentAssertions;
 using Free.Shared.AppServices.Printing;
+using Free.Shared.Pdf;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -100,6 +102,81 @@ public sealed class WorkbookPrintWorkflowTests
             outputPage.ExportPageNumber.Should().Be(1);
             outputPage.SheetPageNumber.Should().Be(2);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreatePlan_PrintsTheSelectedCommentPageInWorkbookOrder(bool hasPrinter)
+    {
+        var workbook = PrintableWorkbook();
+        var sheet = workbook.Sheets[0];
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.SetPrintAreas([GridRange.Parse("A1:B2", sheet.Id), GridRange.Parse("D4:E5", sheet.Id)]);
+        sheet.HiddenRows.Add(2);
+        sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "Printed first-area note";
+        sheet.Comments[new CellAddress(sheet.Id, 4, 4)] = "Printed second-area note";
+        sheet.Comments[new CellAddress(sheet.Id, 2, 1)] = "Hidden row note";
+        sheet.Comments[new CellAddress(sheet.Id, 4, 1)] = "Between print areas";
+        var secondSheet = workbook.AddSheet("Second worksheet");
+        secondSheet.SetCell(new CellAddress(secondSheet.Id, 1, 1), new TextValue("Next worksheet"));
+
+        var plan = WorkbookPrintWorkflow.CreatePlan(
+            workbook,
+            hasSelection: false,
+            new PrintJobRequest(
+                WorkbookExportPrintScope.VisibleWorkbook,
+                PageRangeKind: PrintJobPageRangeKind.PageRange,
+                FromPage: 3,
+                ToPage: 3),
+            PrintExportHostCapabilities.AvaloniaPortable(
+                canSubmitToPlatformPrinter: hasPrinter,
+                hasPrinterDestination: hasPrinter));
+
+        var job = plan.Readiness.NativePrintPlan.JobPlan;
+        job.IsReady.Should().BeTrue();
+        job.TotalPageCount.Should().Be(4);
+        job.FirstPage.Should().Be(3);
+        job.LastPage.Should().Be(3);
+        var pdfPlan = plan.PortablePdfPlan!;
+        pdfPlan.TotalPageCount.Should().Be(hasPrinter ? 4 : 1);
+        var pageIndex = hasPrinter ? 2 : 0;
+        var appendix = pdfPlan.PageRequests[pageIndex];
+        appendix.IsCommentSummaryPage.Should().BeTrue();
+        appendix.CommentSummaryEntries.Select(entry => entry.Text)
+            .Should().Equal("Printed first-area note", "Printed second-area note");
+
+        var document = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, pdfPlan);
+        document.Pages[pageIndex].Ops.OfType<PdfText>().Select(run => run.Text)
+            .Should().Equal("Comments", "A1: Printed first-area note", "D4: Printed second-area note");
+
+        using var portablePdf = new MemoryStream();
+        PortablePdfDocumentExporter.Save(workbook, pdfPlan, portablePdf);
+        var pdf = System.Text.Encoding.Latin1.GetString(portablePdf.ToArray());
+        pdf.Should().Contain("A1: Printed first-area note").And.Contain("D4: Printed second-area note");
+    }
+
+    [Fact]
+    public void CreatePlan_MatchesWindowsCommentAppendixPagination()
+    {
+        var workbook = PrintableWorkbook();
+        var sheet = workbook.Sheets[0];
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.PageMargins = WorksheetPageMargins.Normal;
+        sheet.PrintArea = GridRange.Parse("A1:AI1", sheet.Id);
+        for (uint col = 1; col <= 35; col++)
+            sheet.Comments[new CellAddress(sheet.Id, 1, col)] = "Note";
+
+        WorksheetPrintRenderPlanner.TryBuild(sheet, null, false, out var windowsPlan).Should().BeTrue();
+        var windowsSummaryPages = WorksheetPrintPageContentPlanner.BuildCommentSummaryPages(sheet, windowsPlan!);
+        windowsSummaryPages.Should().ContainSingle();
+
+        var plan = WorkbookPrintWorkflow.CreatePlan(
+            workbook, hasSelection: false, new PrintJobRequest(WorkbookExportPrintScope.ActiveSheet),
+            PrintExportHostCapabilities.AvaloniaPortable());
+        plan.PortablePdfPlan!.PageRequests.Where(request => request.IsCommentSummaryPage)
+            .Should().ContainSingle().Which.CommentSummaryEntries
+            .Should().Equal(windowsSummaryPages[0].Entries);
     }
 
     [Fact]
