@@ -261,13 +261,11 @@ public static class PortablePdfExportPlanner
         PrintPageGridEntry page,
         List<PortablePdfExportPageRequest> pageRequests)
     {
-        var displayedComments = sheet is { PrintComments: WorksheetPrintComments.AsDisplayed }
-            ? WorksheetPageLayout.GetDisplayedCommentOverlays(
-                sheet.Comments,
-                sheet.ThreadedComments,
+        var displayedComments = sheet is not null && sheet.ShownComments.Count > 0
+            ? PrintDisplayedCommentPlanner.GetOverlays(
+                sheet,
                 CombineSpan(page.RowPlan.TitleRows, page.RowPlan.BodyRows),
-                CombineSpan(page.ColumnPlan.TitleColumns, page.ColumnPlan.BodyColumns),
-                sheet.ShownComments)
+                CombineSpan(page.ColumnPlan.TitleColumns, page.ColumnPlan.BodyColumns))
             : [];
 
         pageRequests.Add(new PortablePdfExportPageRequest(

@@ -17,7 +17,8 @@ public enum PortablePdfTextRunSource
     PageHeader,
     Cell,
     PageFooter,
-    CommentSummary
+    CommentSummary,
+    DisplayedComment
 }
 
 public sealed record PortablePdfUnsupportedUnicodeTextDiagnostic(
@@ -114,6 +115,13 @@ public static class PortablePdfTextCapabilityPlanner
                     ref textRunCount);
             }
 
+            foreach (var comment in request.DisplayedComments)
+            {
+                AddTextRun(
+                    PortablePdfTextRunSource.DisplayedComment, request, comment.Address.Row, comment.Address.Col,
+                    comment.Text, diagnostics, ref textRunCount);
+            }
+
             AddTextRun(
                 PortablePdfTextRunSource.PageFooter,
                 request,
@@ -186,7 +194,8 @@ public static class PortablePdfTextCapabilityPlanner
             PortablePdfTextRunSource.PageHeader => $"page header on export page {diagnostic.ExportPageNumber}",
             PortablePdfTextRunSource.Cell => $"cell {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
             PortablePdfTextRunSource.PageFooter => $"page footer on export page {diagnostic.ExportPageNumber}",
-            PortablePdfTextRunSource.CommentSummary => $"comment at {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
+            PortablePdfTextRunSource.CommentSummary or PortablePdfTextRunSource.DisplayedComment
+                => $"comment at {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
             _ => $"text run on export page {diagnostic.ExportPageNumber}"
         };
 

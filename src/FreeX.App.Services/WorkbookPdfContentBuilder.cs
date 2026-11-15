@@ -561,6 +561,21 @@ public static class WorkbookPdfContentBuilder
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor,
             lineIndex => footerY - (lineIndex * headerFooterLineHeightPt), measurer);
 
+        if (request.DisplayedComments.Count > 0)
+        {
+            // WPF clamps comment boxes before scaling the sheet at its content origin.
+            var commentPage = new LayoutRect(
+                offsetContentLeft * (1 - effectiveScaleRatio),
+                (pageH - offsetContentTop) * (1 - effectiveScaleRatio),
+                pageW * effectiveScaleRatio,
+                pageH * effectiveScaleRatio);
+            AddDisplayedCommentOps(
+                ops, request.DisplayedComments, commentPage, pageH, sheet.PrintBlackAndWhite, measurer,
+                PixelToPointRatio * effectiveScaleRatio,
+                (row, column) => new LayoutRect(
+                    colXs[column], pageH - rowYs[row] - rowHeights[row], colWidths[column], rowHeights[row]));
+        }
+
         return new PdfContentPage(pageW, pageH, ops);
     }
 
@@ -611,15 +626,7 @@ public static class WorkbookPdfContentBuilder
             if (instruction.Kind != PrintPreviewPaintKind.Text)
                 continue;
 
-            var font = instruction.Font;
-            ops.Add(new PdfText(
-                instruction.X1 * PixelToPointRatio,
-                height - (instruction.Y1 + font.FontSize) * PixelToPointRatio,
-                font.FontSize * PixelToPointRatio,
-                ToPdfFontFace(font.Bold, font.Italic),
-                ToPdfColor(font.Color),
-                instruction.Text,
-                font.FontFamily));
+            AddPrintTextOp(ops, instruction, height, PixelToPointRatio);
         }
 
         return new PdfContentPage(width, height, ops);
@@ -788,12 +795,92 @@ public static class WorkbookPdfContentBuilder
             FooterTextColor,
             $"FreeX portable PDF - {request.SheetName} page {request.SheetPageNumber}"));
 
+        if (request.DisplayedComments.Count > 0)
+        {
+            AddDisplayedCommentOps(
+                ops, request.DisplayedComments,
+                new LayoutRect(0, 0, options.PageWidthPoints, options.PageHeightPoints), options.PageHeightPoints,
+                sheet.PrintBlackAndWhite, PortablePdfTextMeasurer.Instance, PixelToPointRatio,
+                (row, column) => new LayoutRect(
+                    gridLeft + (column * columnWidth),
+                    options.PageHeightPoints - gridTop + (row * options.RowHeightPoints),
+                    columnWidth, options.RowHeightPoints));
+        }
+
         return new PdfContentPage(options.PageWidthPoints, options.PageHeightPoints, ops);
     }
 
     // -----------------------------------------------------------------------
     // Page-setup helpers
     // -----------------------------------------------------------------------
+
+    private static void AddDisplayedCommentOps(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<WorksheetDisplayedComment> comments,
+        LayoutRect pageBounds,
+        double pageHeight,
+        bool blackAndWhite,
+        ITextMeasurer measurer,
+        double geometryScale,
+        Func<int, int, LayoutRect> getCellBounds)
+    {
+        foreach (var comment in comments)
+        {
+            var block = PrintDisplayedCommentPlanner.BuildBlock(
+                comment, getCellBounds(comment.RowIndex, comment.ColumnIndex), pageBounds, geometryScale);
+            foreach (var instruction in PrintDisplayedCommentPlanner.BuildInstructions(block, blackAndWhite, measurer, geometryScale))
+            {
+                switch (instruction.Kind)
+                {
+                    case PrintPreviewPaintKind.Polygon when instruction.Points is { Count: 3 } points && instruction.Fill is { } color:
+                        ops.Add(new PdfFilledTriangle(
+                            points[0].X, pageHeight - points[0].Y,
+                            points[1].X, pageHeight - points[1].Y,
+                            points[2].X, pageHeight - points[2].Y,
+                            ToPdfColor(color)));
+                        break;
+
+                    case PrintPreviewPaintKind.Rectangle:
+                        var bottom = pageHeight - instruction.Top - instruction.Height;
+                        if (instruction.Fill is { } fill)
+                        {
+                            ops.Add(new PdfFillRect(
+                                instruction.Left, bottom, instruction.Width, instruction.Height, ToPdfColor(fill)));
+                        }
+
+                        if (instruction.Stroke is { } stroke)
+                        {
+                            ops.Add(new PdfStrokeRect(
+                                instruction.Left, bottom, instruction.Width, instruction.Height,
+                                ToPdfColor(stroke), instruction.StrokeThickness));
+                        }
+
+                        break;
+
+                    case PrintPreviewPaintKind.Text:
+                        AddPrintTextOp(ops, instruction, pageHeight);
+                        break;
+                }
+            }
+        }
+    }
+
+    private static void AddPrintTextOp(
+        List<PdfDrawOp> ops,
+        PrintPreviewPaintInstruction instruction,
+        double pageHeight,
+        double coordinateScale = 1.0)
+    {
+        var font = instruction.Font;
+        ops.Add(new PdfText(
+            instruction.X1 * coordinateScale,
+            pageHeight - (instruction.Y1 + font.FontSize) * coordinateScale,
+            font.FontSize * coordinateScale,
+            ToPdfFontFace(font.Bold, font.Italic),
+            ToPdfColor(font.Color),
+            instruction.Text,
+            font.FontFamily));
+    }
 
     private static void DrawValidationCircle(List<PdfDrawOp> ops, LayoutRect cellBounds)
     {

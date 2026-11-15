@@ -1,3 +1,4 @@
+using Free.Shared.Pdf;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -45,6 +46,83 @@ public sealed class FreeXReview10CommentsHostTests
         page.DisplayedComments.Should().ContainSingle();
         page.DisplayedComments[0].Address.Should().Be(addr);
         page.DisplayedComments[0].Text.Should().Be("Check this total");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void BuildPdf_PaintsOnlyShownCommentsWithTheirIndicatorAndPrintColors(
+        bool legacy, bool blackAndWhite)
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+        sheet.PrintBlackAndWhite = blackAndWhite;
+        var note = new CellAddress(sheet.Id, 2, 2);
+        var thread = new CellAddress(sheet.Id, 3, 3);
+        var outside = new CellAddress(sheet.Id, 7, 7);
+        sheet.Comments[note] = "Check the total";
+        sheet.ThreadedComments[thread] = new ThreadedComment("Confirm the balance", "Alice");
+        sheet.Comments[new CellAddress(sheet.Id, 4, 4)] = "Unpinned note";
+        sheet.Comments[outside] = "Outside selection";
+        sheet.ShownComments.Add(note);
+        sheet.ShownComments.Add(thread);
+        sheet.ShownComments.Add(outside);
+
+        var plan = PlanSelectedRange(workbook, sheet);
+        var page = legacy
+            ? WorkbookPdfContentBuilder.BuildPage(workbook, plan, plan.PageRequests[0], new PortablePdfDocumentOptions())
+            : WorkbookPdfContentBuilder.BuildPageWithPageSetup(workbook, plan, plan.PageRequests[0]);
+
+        var ops = page.Ops;
+        var noteColor = blackAndWhite ? PdfColor.Black : new PdfColor(192, 0, 0);
+        var threadColor = blackAndWhite ? PdfColor.Black : new PdfColor(124, 55, 158);
+        ops.OfType<PdfFilledTriangle>().Select(op => op.Color).Should().Equal(noteColor, threadColor);
+        var boxFill = blackAndWhite ? new PdfColor(255, 255, 255) : new PdfColor(255, 255, 225);
+        ops.OfType<PdfFillRect>().Where(op => op.Color == boxFill).Should().HaveCount(2);
+        var text = string.Join(" ", ops.OfType<PdfText>().Select(op => op.Text));
+        text.Should().Contain("Check the total").And.Contain("Confirm the balance").And.Contain("Alice");
+        text.Should().NotContain("Unpinned note").And.NotContain("Outside selection");
+    }
+
+    [Fact]
+    public void DraftQuality_OmitsDisplayedCommentFromRenderingAndPortableTextPreflight()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.PrintComments = WorksheetPrintComments.AsDisplayed;
+        sheet.Comments[address] = "Неподдържан текст";
+        sheet.ShownComments.Add(address);
+
+        var displayed = PlanSelectedRange(workbook, sheet);
+        var unsupported = PortablePdfTextCapabilityPlanner.CreatePlan(workbook, displayed);
+        unsupported.IsReady.Should().BeFalse();
+        var diagnostic = unsupported.UnsupportedTextDiagnostics.Should().ContainSingle().Which;
+        diagnostic.Source.Should().Be(PortablePdfTextRunSource.DisplayedComment);
+        diagnostic.Row.Should().Be(address.Row);
+        diagnostic.Column.Should().Be(address.Col);
+
+        sheet.PrintDraftQuality = true;
+        var draft = PlanSelectedRange(workbook, sheet);
+        draft.PageRequests[0].DisplayedComments.Should().BeEmpty();
+        PortablePdfTextCapabilityPlanner.CreatePlan(workbook, draft).IsReady.Should().BeTrue();
+        WorkbookPdfContentBuilder.BuildPageWithPageSetup(workbook, draft, draft.PageRequests[0])
+            .Ops.OfType<PdfFilledTriangle>().Should().BeEmpty();
+    }
+
+    private static PortablePdfExportPlan PlanSelectedRange(Workbook workbook, Sheet sheet)
+    {
+        var export = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
+            new WorkbookExportPrintIntent(
+                WorkbookExportPrintScope.SelectedRange,
+                WorkbookExportPrintOutputKind.Pdf,
+                SelectedRange: GridRange.Parse("A1:E6", sheet.Id)),
+            WorkbookExportPrintSurface.MacOs);
+        return PortablePdfExportPlanner.CreatePlan(export, workbook);
     }
 
     [Fact]
