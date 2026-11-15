@@ -277,6 +277,8 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
 
     [Theory]
     [InlineData(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FillDown)]
+    [InlineData(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FillRight)]
     [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
     [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
     [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]

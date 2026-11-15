@@ -4091,7 +4091,7 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("return ToCommand(\"Insert Hyperlink\", commands);");
 
         source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", new NativeMenuGesturePlan(NativeMenuGestureKey.K, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_insertHyperlinkMenuItem.Click += (_, _) => RunGuarded(ShowInsertHyperlinkDialogAsync);");
         source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.InsertHyperlink)");

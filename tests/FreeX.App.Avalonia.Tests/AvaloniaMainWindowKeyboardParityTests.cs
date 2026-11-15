@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 
@@ -66,6 +67,54 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     public void ApplicationMatcher_RejectsExtraOrWrongModifiers(Key key, KeyModifiers modifiers)
     {
         MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(Key.D, KeyModifiers.Meta, 2, 1)]
+    [InlineData(Key.R, KeyModifiers.Meta, 1, 2)]
+    [InlineData(Key.D, KeyModifiers.Control, 2, 1)]
+    [InlineData(Key.R, KeyModifiers.Control, 1, 2)]
+    public async Task FillShortcut_CopiesTheSourceToTheSelectedDestination(
+        Key key,
+        KeyModifiers modifiers,
+        int row,
+        int column)
+    {
+        await Run(async (window, sheet) =>
+        {
+            var source = new CellAddress(sheet.Id, 1, 1);
+            var destination = new CellAddress(sheet.Id, (uint)row, (uint)column);
+            sheet.SetCell(source, new TextValue("Fill source"));
+            window.Session.SelectRange(new GridRange(source, destination));
+
+            await Press(window, key, modifiers);
+
+            sheet.GetValue(destination).Should().Be(new TextValue("Fill source"));
+        });
+    }
+
+    [Theory]
+    [InlineData(KeyModifiers.Meta)]
+    [InlineData(KeyModifiers.Control)]
+    public async Task InsertHyperlinkShortcut_OpensTheWorkbookHyperlinkDialog(KeyModifiers modifiers)
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+            var shortcut = Press(window, Key.K, modifiers);
+            try
+            {
+                var dialog = window.OwnedWindows.OfType<Window>().Should().ContainSingle().Which;
+                dialog.Title.Should().Be(UiText.Get("Hyperlink_InsertHyperlink"));
+            }
+            finally
+            {
+                foreach (var dialog in window.OwnedWindows.ToArray())
+                    dialog.Close();
+            }
+
+            await shortcut;
+        });
     }
 
     [Fact]

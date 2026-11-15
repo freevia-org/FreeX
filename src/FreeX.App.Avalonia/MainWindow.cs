@@ -3060,6 +3060,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             NativeMenuGestureKey.G => Key.G,
             NativeMenuGestureKey.H => Key.H,
             NativeMenuGestureKey.I => Key.I,
+            NativeMenuGestureKey.K => Key.K,
             NativeMenuGestureKey.M => Key.M,
             NativeMenuGestureKey.R => Key.R,
             NativeMenuGestureKey.U => Key.U,
@@ -27358,9 +27359,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         args.Key == Key.F6 &&
         (args.KeyModifiers == KeyModifiers.None || args.KeyModifiers == KeyModifiers.Shift);
 
-    private static bool HasOnlyControlModifier(KeyModifiers modifiers) =>
-        modifiers == KeyModifiers.Control;
-
     private static bool IsAutoSumShortcut(KeyEventArgs args) =>
         args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;
 
@@ -27757,7 +27755,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             FindNext();
         }
-        else if (e.Key == Key.K && HasOnlyControlModifier(e.KeyModifiers))
+        else if (e.Key == Key.K && e.KeyModifiers is KeyModifiers.Control or KeyModifiers.Meta)
         {
             e.Handled = true;
             await ShowInsertHyperlinkDialogAsync();
