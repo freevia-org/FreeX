@@ -335,6 +335,22 @@ public static class FormulaSerializer
             // canonical form is exactly this whole-span quoting, so this is the more correct output.
             WriteSheetSpanName(rr.SheetName!, rr.EndSheetName, sb);
             sb.Append('!');
+            if (rr.SpanKind == SpanReferenceKind.FullColumn)
+            {
+                if (rr.Start.IsColAbsolute) sb.Append('$');
+                sb.Append(rr.Start.ColumnName).Append(':');
+                if (rr.End.IsColAbsolute) sb.Append('$');
+                sb.Append(rr.End.ColumnName);
+                return;
+            }
+            if (rr.SpanKind == SpanReferenceKind.FullRow)
+            {
+                if (rr.Start.IsRowAbsolute) sb.Append('$');
+                sb.Append(rr.Start.Row).Append(':');
+                if (rr.End.IsRowAbsolute) sb.Append('$');
+                sb.Append(rr.End.Row);
+                return;
+            }
             WriteRefPart(rr.Start, sb);
             if (!rr.IsSingleCellSpan)
             {
