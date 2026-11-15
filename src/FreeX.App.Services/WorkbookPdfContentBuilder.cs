@@ -103,7 +103,7 @@ public static class WorkbookPdfContentBuilder
         var pages = exportPlan.PageRequests
             .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request, workbookDirectory, textMeasurer))
             .ToArray();
-        return CreateDocument(exportPlan, pages);
+        return CreateDocument(workbook, exportPlan, pages);
     }
 
     /// <summary>
@@ -584,11 +584,40 @@ public static class WorkbookPdfContentBuilder
         var pages = exportPlan.PageRequests
             .Select(request => BuildPage(workbook, exportPlan, request, options))
             .ToArray();
-        return CreateDocument(exportPlan, pages);
+        return CreateDocument(workbook, exportPlan, pages);
     }
 
-    private static PdfContentDocument CreateDocument(PortablePdfExportPlan plan, IReadOnlyList<PdfContentPage> pages) =>
-        new(pages, plan.PdfLanguage is { } language ? new PdfDocumentProperties { Language = language } : null);
+    private static PdfContentDocument CreateDocument(
+        Workbook workbook,
+        PortablePdfExportPlan plan,
+        IReadOnlyList<PdfContentPage> pages)
+    {
+        if (plan.PublishOptions is not { } options)
+            return new(pages, plan.PdfLanguage is { } language ? new PdfDocumentProperties { Language = language } : null);
+
+        var metadata = ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options);
+        var pageLayout = options.InitialView switch
+        {
+            PdfInitialView.OneColumn => PdfViewerPageLayout.OneColumn,
+            PdfInitialView.TwoColumnLeft => PdfViewerPageLayout.TwoColumnLeft,
+            PdfInitialView.TwoColumnRight => PdfViewerPageLayout.TwoColumnRight,
+            _ => PdfViewerPageLayout.SinglePage
+        };
+        var openMode = options.OpenMode switch
+        {
+            PdfOpenMode.Outlines => PdfViewerOpenMode.Outlines,
+            PdfOpenMode.FullScreen => PdfViewerOpenMode.FullScreen,
+            _ => PdfViewerOpenMode.Normal
+        };
+        var properties = new PdfDocumentProperties(
+            metadata?.Title, metadata?.Creator, metadata?.Subject, metadata?.Keywords, ExportDocumentPropertiesPlanner.DefaultCreator)
+        {
+            Language = plan.PdfLanguage,
+            ViewerSettings = new PdfDocumentViewerSettings(pageLayout, openMode, DisplayDocumentTitle: metadata?.Title is not null),
+            Outlines = PortablePdfOutlinePlanner.Build(workbook, plan.PageRequests, options.EffectiveBookmarkMode)
+        };
+        return new PdfContentDocument(pages, properties);
+    }
 
     private static PdfContentPage BuildCommentSummaryPage(
         PortablePdfExportPageRequest request,
