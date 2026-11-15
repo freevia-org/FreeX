@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.Core.Formula;
 
 namespace FreeX.Core.Commands;
 
@@ -146,6 +147,50 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
                 PrintHeadings = sheet.PrintHeadings,
                 ScaleToFit = sheet.ScaleToFit,
                 FitToPage = sheet.FitToPage,
+                PrintSettings = new WorksheetCustomViewPrintSettings
+                {
+                    PageHeader = sheet.PageHeader,
+                    PageFooter = sheet.PageFooter,
+                    FirstPageHeader = sheet.FirstPageHeader,
+                    FirstPageFooter = sheet.FirstPageFooter,
+                    EvenPageHeader = sheet.EvenPageHeader,
+                    EvenPageFooter = sheet.EvenPageFooter,
+                    DifferentFirstPageHeaderFooter = sheet.DifferentFirstPageHeaderFooter,
+                    DifferentOddEvenHeaderFooter = sheet.DifferentOddEvenHeaderFooter,
+                    HeaderFooterScaleWithDocument = sheet.HeaderFooterScaleWithDocument,
+                    HeaderFooterAlignWithMargins = sheet.HeaderFooterAlignWithMargins,
+                    CenterHorizontallyOnPage = sheet.CenterHorizontallyOnPage,
+                    CenterVerticallyOnPage = sheet.CenterVerticallyOnPage,
+                    PageOrder = sheet.PageOrder,
+                    FirstPageNumber = sheet.FirstPageNumber,
+                    UsePrinterDefaults = sheet.UsePrinterDefaults,
+                    PrintCopies = sheet.PrintCopies,
+                    PrintBlackAndWhite = sheet.PrintBlackAndWhite,
+                    PrintDraftQuality = sheet.PrintDraftQuality,
+                    PrintQualityDpi = sheet.PrintQualityDpi,
+                    PrintQualityVerticalDpi = sheet.PrintQualityVerticalDpi,
+                    PrintErrorValue = sheet.PrintErrorValue,
+                    PrintComments = sheet.PrintComments,
+                    AutoPageBreaksCaptured = true,
+                    AutoPageBreaks = sheet.AutoPageBreaks,
+                    PrintTitleRows = sheet.PrintTitleRows,
+                    PrintTitleColumns = sheet.PrintTitleColumns,
+                    FitToPage = sheet.FitToPage,
+                    LegacyPrintSizeCaptured = true,
+                    LegacyPrintSize = sheet.LegacyPrintSize,
+                    PageSetupMetadataCaptured = true,
+                    PageSetupMetadata = sheet.PageSetupMetadata?.Clone(),
+                    HeaderFooterMetadataCaptured = true,
+                    HeaderFooterMetadata = sheet.HeaderFooterMetadata?.Clone(),
+                    PageMarginsMetadataCaptured = true,
+                    PageMarginsMetadata = sheet.PageMarginsMetadata?.Clone(),
+                    PrintOptionsMetadataCaptured = true,
+                    PrintOptionsMetadata = sheet.PrintOptionsMetadata?.Clone(),
+                    RowPageBreaks = sheet.RowPageBreaks.ToArray(),
+                    ColumnPageBreaks = sheet.ColumnPageBreaks.ToArray(),
+                    RowPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(sheet.RowPageBreaksMetadata),
+                    ColumnPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(sheet.ColumnPageBreaksMetadata),
+                },
             };
         }
 
@@ -212,6 +257,59 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
             sheet.ScaleToFit = scaleToFit;
         if (state.FitToPage is { } fitToPage)
             sheet.FitToPage = fitToPage;
+        if (state.PrintSettings is { } printSettings)
+        {
+            sheet.PageHeader = printSettings.PageHeader;
+            sheet.PageFooter = printSettings.PageFooter;
+            sheet.FirstPageHeader = printSettings.FirstPageHeader;
+            sheet.FirstPageFooter = printSettings.FirstPageFooter;
+            sheet.EvenPageHeader = printSettings.EvenPageHeader;
+            sheet.EvenPageFooter = printSettings.EvenPageFooter;
+            sheet.DifferentFirstPageHeaderFooter = printSettings.DifferentFirstPageHeaderFooter;
+            sheet.DifferentOddEvenHeaderFooter = printSettings.DifferentOddEvenHeaderFooter;
+            sheet.HeaderFooterScaleWithDocument = printSettings.HeaderFooterScaleWithDocument;
+            sheet.HeaderFooterAlignWithMargins = printSettings.HeaderFooterAlignWithMargins;
+            sheet.CenterHorizontallyOnPage = printSettings.CenterHorizontallyOnPage;
+            sheet.CenterVerticallyOnPage = printSettings.CenterVerticallyOnPage;
+            sheet.PageOrder = printSettings.PageOrder;
+            sheet.FirstPageNumber = printSettings.FirstPageNumber;
+            sheet.UsePrinterDefaults = printSettings.UsePrinterDefaults;
+            sheet.PrintCopies = printSettings.PrintCopies;
+            sheet.PrintBlackAndWhite = printSettings.PrintBlackAndWhite;
+            sheet.PrintDraftQuality = printSettings.PrintDraftQuality;
+            sheet.PrintQualityDpi = printSettings.PrintQualityDpi;
+            sheet.PrintQualityVerticalDpi = printSettings.PrintQualityVerticalDpi;
+            sheet.PrintErrorValue = printSettings.PrintErrorValue;
+            sheet.PrintComments = printSettings.PrintComments;
+            if (printSettings.AutoPageBreaksCaptured)
+                sheet.AutoPageBreaks = printSettings.AutoPageBreaks;
+            // An opaque source formula cannot yet be evaluated into title ranges. Keep the
+            // live ranges until modeled replacements are present or the opaque expression is
+            // explicitly cleared; the undo snapshot has no opaque expression and restores both.
+            if (string.IsNullOrEmpty(state.OpaquePrintTitlesExpression) ||
+                printSettings.PrintTitleRows is not null || printSettings.PrintTitleColumns is not null)
+            {
+                sheet.PrintTitleRows = printSettings.PrintTitleRows;
+                sheet.PrintTitleColumns = printSettings.PrintTitleColumns;
+            }
+            sheet.FitToPage = printSettings.FitToPage;
+            if (printSettings.LegacyPrintSizeCaptured)
+                sheet.LegacyPrintSize = printSettings.LegacyPrintSize;
+            if (printSettings.PageSetupMetadataCaptured)
+                sheet.PageSetupMetadata = printSettings.PageSetupMetadata?.Clone();
+            if (printSettings.HeaderFooterMetadataCaptured)
+                sheet.HeaderFooterMetadata = printSettings.HeaderFooterMetadata?.Clone();
+            if (printSettings.PageMarginsMetadataCaptured)
+                sheet.PageMarginsMetadata = printSettings.PageMarginsMetadata?.Clone();
+            if (printSettings.PrintOptionsMetadataCaptured)
+                sheet.PrintOptionsMetadata = printSettings.PrintOptionsMetadata?.Clone();
+            sheet.RowPageBreaks.Clear();
+            sheet.RowPageBreaks.UnionWith(printSettings.RowPageBreaks);
+            sheet.ColumnPageBreaks.Clear();
+            sheet.ColumnPageBreaks.UnionWith(printSettings.ColumnPageBreaks);
+            sheet.RowPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(printSettings.RowPageBreaksMetadata);
+            sheet.ColumnPageBreaksMetadata = WorksheetMetadataCloner.ClonePageBreaks(printSettings.ColumnPageBreaksMetadata);
+        }
     }
 
     /// <summary>
@@ -262,6 +360,8 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             var sheet = ctx.Workbook.GetSheet(state.SheetName);
             if (sheet is null) continue;
             ApplyState(sheet, state, view);
+            if (view.IncludePrintSettings)
+                ApplyOpaquePrintReferences(ctx.Workbook, sheet, state);
         }
         if (CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, view.ActiveSheetIndex) is { } activeSheetIndex)
             ctx.Workbook.ActiveSheetIndex = activeSheetIndex;
@@ -311,15 +411,64 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         ctx.Workbook.ActiveSheetIndex = CustomViewStatePlanner.SanitizeActiveSheetIndex(ctx.Workbook, _previousActiveSheetIndex);
     }
 
+    // Excel resolves these saved defined-name expressions afresh each time a view is shown.
+    // Apply only fully resolved results to the live sheet; the saved formulas stay unchanged.
+    private static void ApplyOpaquePrintReferences(Workbook workbook, Sheet sheet, WorksheetCustomViewState state)
+    {
+        var hasArea = state.PrintAreas is null && !string.IsNullOrWhiteSpace(state.OpaquePrintAreaExpression);
+        var hasTitles = !string.IsNullOrWhiteSpace(state.OpaquePrintTitlesExpression) &&
+            state.PrintSettings?.PrintTitleRows is null && state.PrintSettings?.PrintTitleColumns is null;
+        if (!hasArea && !hasTitles) return;
+        var evaluator = new FormulaEvaluator();
+
+        if (hasArea)
+        {
+            var result = evaluator.ResolveReferenceGeometry(state.OpaquePrintAreaExpression!, sheet, workbook);
+            if (result.Status == ReferenceGeometryStatus.Error ||
+                result.Status == ReferenceGeometryStatus.Success && result.Areas.Any(area => area.Start.Sheet != sheet.Id))
+                sheet.SetPrintAreas([]);
+            else if (result.Status == ReferenceGeometryStatus.Success)
+                sheet.SetPrintAreas(result.Areas);
+        }
+
+        if (hasTitles)
+        {
+            var result = evaluator.ResolveReferenceGeometry(state.OpaquePrintTitlesExpression!, sheet, workbook);
+            if (result.Status == ReferenceGeometryStatus.Unsupported) return;
+            if (result.Status == ReferenceGeometryStatus.Error || result.Areas.Any(area => area.Start.Sheet != sheet.Id))
+            {
+                sheet.PrintTitleRows = null;
+                sheet.PrintTitleColumns = null;
+                return;
+            }
+            WorksheetRepeatRange? rows = null, columns = null;
+            foreach (var area in result.Areas)
+            {
+                if (area.Start.Col == 1 && area.End.Col == CellAddress.MaxCol)
+                    rows = new WorksheetRepeatRange(area.Start.Row, area.End.Row);
+                if (area.Start.Row == 1 && area.End.Row == CellAddress.MaxRow)
+                    columns = new WorksheetRepeatRange(area.Start.Col, area.End.Col);
+            }
+            sheet.PrintTitleRows = rows;
+            sheet.PrintTitleColumns = columns;
+        }
+    }
+
     private static void ApplyState(Sheet sheet, WorksheetCustomViewState state, WorkbookCustomView view)
     {
+        // Loaded files can contain settings even when the corresponding view flag is off.
+        // Strip each disabled facet before either apply path sees the state.
+        if (!view.IncludeHiddenRowsColumnsAndFilterSettings)
+            state = state with { HiddenRows = null, HiddenCols = null, FilterHiddenRows = null, AutoFilter = null };
+        if (!view.IncludePrintSettings)
+            state = state with
+            {
+                PrintAreas = null, PageOrientation = null, PaperSize = null, PaperSizeCode = null,
+                PageMargins = null, HeaderMargin = null, FooterMargin = null, PrintGridlines = null,
+                PrintHeadings = null, ScaleToFit = null, FitToPage = null, PrintSettings = null
+            };
         CustomViewStatePlanner.ApplyState(sheet, state);
-        // N14: only restore hidden-rows/cols/filter and print settings when the saved view
-        // actually captured them (i.e. its flag was set at save time) — matching Excel, where
-        // a view saved with either checkbox unchecked leaves that facet of the current sheet
-        // state untouched when the view is later shown.
-        if (view.IncludeHiddenRowsColumnsAndFilterSettings || view.IncludePrintSettings)
-            SaveCustomViewCommand.ApplyExtendedState(sheet, state);
+        SaveCustomViewCommand.ApplyExtendedState(sheet, state);
     }
 }
 

@@ -89,7 +89,7 @@ public sealed partial class XlsxNonChartSchemaValidationTests
 
 
     [Fact]
-    public void LoadedWorkbookSave_RemovesSourceNativeCustomViewsForExcelCompatibility()
+    public void LoadedWorkbookSave_NormalizesSourceCustomViewsForExcelCompatibility()
     {
         var workbook = new Workbook("CustomViewSchemaRepair");
         var sheet = workbook.AddSheet("Data");
@@ -115,16 +115,16 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         saved.Position = 0;
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        LoadPackageXml(archive, "xl/workbook.xml")
-            .Root!
-            .Element(workbookNs + "customWorkbookViews")
-            .Should()
-            .BeNull();
-        LoadPackageXml(archive, "xl/worksheets/sheet1.xml")
-            .Root!
-            .Element(workbookNs + "customSheetViews")
-            .Should()
-            .BeNull();
+        var workbookView = LoadPackageXml(archive, "xl/workbook.xml").Root!
+            .Element(workbookNs + "customWorkbookViews")!
+            .Elements(workbookNs + "customWorkbookView").Should().ContainSingle().Which;
+        workbookView.Attribute("guid")!.Value.Should().Be("{A9519446-EBD3-4D7E-9DBA-8858EAD6D331}");
+        workbookView.Attribute("windowWidth").Should().NotBeNull();
+        workbookView.Attribute("windowHeight").Should().NotBeNull();
+        LoadPackageXml(archive, "xl/worksheets/sheet1.xml").Root!
+            .Element(workbookNs + "customSheetViews")!
+            .Elements(workbookNs + "customSheetView").Should().ContainSingle()
+            .Which.Attribute("guid")!.Value.Should().Be("{A9519446-EBD3-4D7E-9DBA-8858EAD6D331}");
         SchemaErrors(saved).Should().BeEmpty();
     }
 
