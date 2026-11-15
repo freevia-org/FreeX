@@ -52,7 +52,15 @@ public sealed record RangeRefNode(
     string? SheetName = null,
     string? EndSheetName = null,
     bool IsSingleCellSpan = false,
-    SpanReferenceKind SpanKind = SpanReferenceKind.CellRange) : FormulaNode;
+    SpanReferenceKind SpanKind = SpanReferenceKind.CellRange) : FormulaNode
+{
+    // Preserve the pre-SpanKind constructor for already-compiled callers and cached test assemblies.
+    public RangeRefNode(CellRefNode Start, CellRefNode End, string? SheetName,
+        string? EndSheetName, bool IsSingleCellSpan)
+        : this(Start, End, SheetName, EndSheetName, IsSingleCellSpan, SpanReferenceKind.CellRange)
+    {
+    }
+}
 
 /// <summary>A whole-column range reference (e.g. A:A, Sheet2!A:B).</summary>
 public sealed record FullColumnRangeRefNode(
