@@ -12,7 +12,8 @@ public enum WorkbookExportPrintScope
 {
     ActiveSheet,
     SelectedRange,
-    VisibleWorkbook
+    VisibleWorkbook,
+    GroupedSheets
 }
 
 public enum WorkbookExportPrintRangeSource
@@ -86,7 +87,10 @@ public sealed record WorkbookExportPrintIntent(
     WorkbookExportPrintOutputKind OutputKind,
     int? ActiveSheetIndex = null,
     GridRange? SelectedRange = null,
-    bool IgnorePrintAreas = false);
+    bool IgnorePrintAreas = false)
+{
+    public IReadOnlySet<SheetId>? GroupedSheetIds { get; init; }
+}
 
 public sealed record WorkbookExportPrintPageCapacity(
     uint RowsPerPage,
@@ -325,6 +329,9 @@ public static class WorkbookExportPrintPlanner
                 ResolveSelectedRange(workbook, intent.SelectedRange, out invalidStatus, out invalidStatusText),
             WorkbookExportPrintScope.VisibleWorkbook =>
                 ResolveVisibleWorkbookRanges(workbook, intent.IgnorePrintAreas),
+            WorkbookExportPrintScope.GroupedSheets => intent.GroupedSheetIds is { Count: > 0 } sheetIds
+                ? ResolveVisibleWorkbookRanges(workbook, intent.IgnorePrintAreas, sheetIds)
+                : [],
             _ =>
                 ResolveActiveSheetRange(workbook, intent, out invalidStatus, out invalidStatusText)
         };
@@ -359,15 +366,26 @@ public static class WorkbookExportPrintPlanner
 
     private static IReadOnlyList<SheetRangeRequest> ResolveVisibleWorkbookRanges(
         Workbook workbook,
-        bool ignorePrintAreas)
+        bool ignorePrintAreas,
+        IReadOnlySet<SheetId>? sheetFilter = null)
     {
         var requests = new List<SheetRangeRequest>();
         foreach (var sheet in workbook.Sheets)
         {
-            if (sheet.IsHidden)
+            if (sheet.IsHidden || sheet.IsVeryHidden || (sheetFilter is not null && !sheetFilter.Contains(sheet.Id)))
                 continue;
 
-            requests.AddRange(ResolveSheetPrintRanges(sheet, ignorePrintAreas));
+            var ranges = ResolveSheetPrintRanges(sheet, ignorePrintAreas);
+            if (sheetFilter is not null && ranges.Count == 0)
+            {
+                // The Windows grouped-sheet paginator includes an empty selected sheet as a blank page.
+                var anchor = new CellAddress(sheet.Id, 1, 1);
+                requests.Add(new SheetRangeRequest(sheet, new GridRange(anchor, anchor), WorkbookExportPrintRangeSource.UsedRange));
+            }
+            else
+            {
+                requests.AddRange(ranges);
+            }
         }
 
         return requests;
@@ -494,6 +512,10 @@ public static class WorkbookExportPrintPlanner
                 request.Sheet.ColumnPageBreaks,
                 request.Sheet.IsColEffectivelyHidden);
 
+            // A fully hidden area contributes no pages to the worksheet print stream.
+            if (rowPlans.Count == 0 || columnPlans.Count == 0)
+                continue;
+
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
                 request.Sheet.Name,
                 request.PrintRange,
@@ -546,6 +568,10 @@ public static class WorkbookExportPrintPlanner
                 columnBreaks,
                 request.Sheet.IsColEffectivelyHidden);
 
+            // A fully hidden area contributes no pages to the worksheet print stream.
+            if (rowPlans.Count == 0 || columnPlans.Count == 0)
+                continue;
+
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
                 request.Sheet.Name,
                 request.PrintRange,
@@ -597,6 +623,7 @@ public static class WorkbookExportPrintPlanner
         {
             WorkbookExportPrintScope.SelectedRange => "selected range",
             WorkbookExportPrintScope.VisibleWorkbook => "visible workbook",
+            WorkbookExportPrintScope.GroupedSheets => "grouped worksheets",
             _ => "active sheet"
         };
 

@@ -63,15 +63,12 @@ public static class PageContentRenderModelBuilder
     /// When set, used as the page's &amp;P header/footer number instead of the default
     /// <c>sheet.FirstPageNumber + pageIndex</c>. Callers that paginate a sheet's multiple print
     /// areas as separate <paramref name="pagePlan"/>s (each restarting <paramref name="pageIndex"/>
-    /// at 0) pass a running index across all of that sheet's areas here, matching
-    /// <c>WorkbookPdfContentBuilder.ResolveEffectiveSheetPageNumber</c>'s continuous per-sheet
-    /// counter for the real print/PDF export.
+    /// at 0) pass the displayed number across the complete print scope here.
     /// </param>
     /// <param name="overrideTotalPages">
     /// When set, used as the page's &amp;N total-page count instead of the default
-    /// <c>pagePlan.PageCount</c> (that single area's own page count). Pass the aggregate page
-    /// count across all of a sheet's print areas so multi-area previews agree with
-    /// <c>WorkbookPdfContentBuilder.ResolveEffectiveSheetTotalPages</c>.
+    /// <c>pagePlan.PageCount</c> (that single area's own page count). Pass the complete print
+    /// scope's page count, including any comment appendix pages.
     /// </param>
     public static PageContentLayout? Build(
         Workbook workbook,

@@ -467,32 +467,16 @@ public static class WorkbookPdfContentBuilder
                 colWidths, rowHeights, colXs, rowYs, contentPlan, measurer);
         }
 
-        // ── Header band ────────────────────────────────────────────────────────
-        // N45/N46: page.SheetPageNumber is always 1-based per print area (PrintPageGridPlanner
-        // numbers every area's pages 1..N independently), so it neither honors sheet.FirstPageNumber
-        // nor continues across a sheet's multiple print areas. Resolve the printed page number the
-        // same way WorksheetPrintRenderPlanner.TryBuild does for WPF: a single counter, seeded from
-        // FirstPageNumber, running across every page that belongs to this sheet (all its print areas,
-        // in export order).
         AddVectorDrawingOps(workbook, sheet, exportPlan, request, ops, pageW, pageH, measurer);
 
-        var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
-        var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
-        // R127-services-draft-quality-vector-drawings-1: header/footer (&G) pictures are raster
-        // graphics too -- Excel's Draft Quality suppresses them exactly like it suppresses charts and
-        // sheet pictures, matching PrintRenderer.HeaderFooterDrawing.cs's `!draftQuality` guard on
-        // leftPicture/centerPicture/rightPicture (the WPF path). Resolved to Empty (both sections'
-        // pictures null) here at the single choke point RenderHeaderFooterBand reads from, rather than
-        // threading draftQuality through every downstream picture-drawing call.
+        var (pageNumber, totalPages) = ResolveHeaderFooterPagination(exportPlan, request, sheet);
+        var headerFooter = WorksheetPrintPageContentPlanner.ResolveHeaderFooterVariant(sheet, pageNumber);
+        var header = headerFooter.Header;
+        var footer = headerFooter.Footer;
+        // Draft Quality suppresses raster pictures in the header and footer as it does on the sheet.
         var (headerPictures, footerPictures) = sheet.PrintDraftQuality
             ? (WorksheetHeaderFooterPictureSet.Empty, WorksheetHeaderFooterPictureSet.Empty)
-            : ResolveHeaderFooterPicturesForPage(sheet, pageNumber);
-        // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
-        // (RenderWorksheet computes totalPages = printPlan.GridPageCount + comment pages, scoped to
-        // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
-        // would leak whole-workbook page counts into every sheet's &N when printing/exporting more
-        // than one sheet at once (O41).
-        var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, request, sheet);
+            : (headerFooter.HeaderPictures, headerFooter.FooterPictures);
 
         // Header text: rendered just below the header margin from the top of the page. The band
         // height (mT - headerEdgePt, the gap between the header edge and the content's top margin)
@@ -2420,98 +2404,38 @@ public static class WorkbookPdfContentBuilder
         PagePrintTextPlanner.ExpandHeaderFooterText(
             raw, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
 
-    /// <summary>
-    /// Computes the printed page number for <paramref name="request"/> honoring
-    /// <see cref="Sheet.FirstPageNumber"/> and continuing sequentially across every print area that
-    /// belongs to the same sheet, matching <c>WorksheetPrintRenderPlanner.TryBuild</c>'s single
-    /// running counter (seeded from <c>sheet.FirstPageNumber ?? 1</c>) across areas -- unlike
-    /// <see cref="PortablePdfExportPageRequest.SheetPageNumber"/>, which <see cref="PrintPageGridPlanner"/>
-    /// always numbers 1..N independently per print area.
-    /// </summary>
-    private static int ResolveEffectiveSheetPageNumber(
+    private static (int PageNumber, int PageCount) ResolveHeaderFooterPagination(
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request,
         Sheet sheet)
     {
         var firstPageNumber = sheet.FirstPageNumber ?? 1;
-        if (request.OriginalSheetPagination is { } originalPagination)
-            return firstPageNumber + originalPagination.PageIndex;
+        if (exportPlan.ExportPrintPlan.Intent.Scope is WorkbookExportPrintScope.VisibleWorkbook or WorkbookExportPrintScope.GroupedSheets)
+        {
+            // WPF applies the document offset to the sheet's configured starting number. The
+            // total includes every page in the original job, including comment appendices.
+            var (documentPageNumber, documentPageCount) =
+                request.OriginalDocumentPagination ?? (request.ExportPageNumber, exportPlan.TotalPageCount);
+            return (firstPageNumber + documentPageNumber - 1, documentPageCount);
+        }
 
-        var offset = 0;
+        if (request.OriginalSheetPagination is { } originalSheet)
+            return (firstPageNumber + originalSheet.PageIndex, originalSheet.PageCount);
+
+        var pageNumber = firstPageNumber + request.SheetPageNumber - 1;
+        var sheetPageCount = 0;
         foreach (var candidate in exportPlan.PageRequests)
         {
             if (candidate.PrintRange.Start.Sheet != sheet.Id)
                 continue;
 
             if (candidate.ExportPageNumber == request.ExportPageNumber)
-                return firstPageNumber + offset;
+                pageNumber = firstPageNumber + sheetPageCount;
 
-            offset++;
+            sheetPageCount++;
         }
 
-        // Should not happen (request always comes from exportPlan.PageRequests), but fall back to
-        // the area-local numbering rather than throwing.
-        return firstPageNumber + request.SheetPageNumber - 1;
-    }
-
-    /// <summary>
-    /// Computes the &amp;N total-page-count value for <paramref name="sheet"/>: the count of every
-    /// actual <see cref="PortablePdfExportPageRequest"/> belonging to that sheet (a sheet can have more
-    /// than one configured print area — see N45/N46), INCLUDING any "at end of sheet" comment-summary
-    /// pages <c>PortablePdfExportPlanner.AddCommentSummaryPageRequests</c> appends after the grid pages
-    /// -- NOT merely <see cref="WorkbookSheetExportPrintPlanSummary.PageCount"/> (grid pages only), and
-    /// NOT <see cref="WorkbookExportPrintPlan.TotalPageCount"/>, which sums across every sheet in the
-    /// export. Real Excel resets &amp;N per sheet in a multi-sheet print job and includes the appended
-    /// comment pages in that count, and so does FreeX's own WPF path (<c>PrintRenderer.RenderWorksheet</c>
-    /// computes totalPages = printPlan.GridPageCount + commentSummaryPages.Count).
-    /// </summary>
-    private static int ResolveEffectiveSheetTotalPages(
-        PortablePdfExportPlan exportPlan,
-        PortablePdfExportPageRequest request,
-        Sheet sheet)
-    {
-        if (request.OriginalSheetPagination is { } originalPagination)
-            return originalPagination.PageCount;
-
-        var total = 0;
-        foreach (var candidate in exportPlan.PageRequests)
-        {
-            if (candidate.PrintRange.Start.Sheet == sheet.Id)
-                total++;
-        }
-
-        // Should not happen (the sheet owning this page must have at least one request), but fall
-        // back to the whole-export total rather than reporting 0 pages.
-        return total > 0 ? total : exportPlan.TotalPageCount;
-    }
-
-    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer)
-        ResolveHeaderFooterForPage(Sheet sheet, int pageNumber)
-    {
-        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeader, sheet.FirstPageFooter);
-
-        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeader, sheet.EvenPageFooter);
-
-        return (sheet.PageHeader, sheet.PageFooter);
-    }
-
-    /// <summary>
-    /// Resolves the header/footer picture sets (<c>&amp;G</c> images) for the page the same way
-    /// <see cref="ResolveHeaderFooterForPage"/> resolves the header/footer text, so a first-page or
-    /// odd/even override's picture set is honored consistently with its text.
-    /// </summary>
-    private static (WorksheetHeaderFooterPictureSet HeaderPictures, WorksheetHeaderFooterPictureSet FooterPictures)
-        ResolveHeaderFooterPicturesForPage(Sheet sheet, int pageNumber)
-    {
-        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeaderPictures, sheet.FirstPageFooterPictures);
-
-        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeaderPictures, sheet.EvenPageFooterPictures);
-
-        return (sheet.PageHeaderPictures, sheet.PageFooterPictures);
+        return (pageNumber, sheetPageCount == 0 ? exportPlan.TotalPageCount : sheetPageCount);
     }
 
     // -----------------------------------------------------------------------

@@ -84,19 +84,10 @@ public sealed partial class MainWindow
 
             context = AvaloniaPrintPreviewPaginationContext.Empty();
         }
-        else if (!PrintPreviewPaginationContext.TryCreate(
-                     _session.Workbook,
-                     _session.ActiveSheet,
-                     PrintPreviewTextMeasurer,
-                     out var sheetContext,
-                     ResolveWorkbookDirectoryForHeaderFooter()))
+        else if (!TryCreatePreviewContextForSettings(new PrintPreviewSettings(), out context))
         {
             ShowEditIssue(UiText.Get("ShellLoc_NothingToPreview"));
             return;
-        }
-        else
-        {
-            context = AvaloniaPrintPreviewPaginationContext.FromSheetContext(sheetContext);
         }
 
         await ShowPrintPreviewWindowCoreAsync(
@@ -458,21 +449,22 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Paginates what the given print settings would print (active sheet, selection or the whole
-    /// workbook, honouring Ignore Print Area) for the preview surfaces.
+    /// Paginates the active sheet or sheet group, selection, or whole workbook for the preview surfaces.
     /// </summary>
     private bool TryCreatePreviewContextForSettings(
         PrintPreviewSettings settings,
         out AvaloniaPrintPreviewPaginationContext context)
     {
         var ignorePrintArea = settings.PrintWhat is PrintWhat.Selection || settings.IgnorePrintArea;
-        return settings.PrintWhat == PrintWhat.EntireWorkbook
+        var groupedSheetIds = settings.PrintWhat == PrintWhat.ActiveSheets ? GetGroupedPrintSheetIds() : null;
+        return settings.PrintWhat == PrintWhat.EntireWorkbook || groupedSheetIds is not null
             ? AvaloniaPrintPreviewPaginationContext.TryCreateWorkbook(
                 _session.Workbook,
                 PrintPreviewTextMeasurer,
                 out context,
                 ResolveWorkbookDirectoryForHeaderFooter(),
-                settings.IgnorePrintArea)
+                settings.IgnorePrintArea,
+                groupedSheetIds)
             : AvaloniaPrintPreviewPaginationContext.TryCreate(
                 _session.Workbook,
                 _session.ActiveSheet,

@@ -236,6 +236,93 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
             return true;
         }, CancellationToken.None);
 
+    [Theory]
+    [InlineData("preview")]
+    [InlineData("backstage")]
+    [InlineData("dialog")]
+    public Task PrintActiveSheets_SubmitsOnlyTheVisibleTabGroupInWorkbookOrder(string surface) =>
+        Session.Dispatch(async () =>
+        {
+            var service = new FakePrintService("one-printer");
+            await WithWindowAsync(service, async window =>
+            {
+                var session = window.Session;
+                var first = session.ActiveSheet;
+                var excluded = session.Workbook.AddSheet("Ungrouped sheet");
+                var last = session.Workbook.AddSheet("Last grouped sheet");
+                foreach (var (sheet, text) in new[] { (first, "First"), (excluded, "Extra"), (last, "Last") })
+                {
+                    sheet.PrintArea = GridRange.Parse("A1:A1", sheet.Id);
+                    sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(text));
+                }
+
+                session.SelectSheetFromTab(last.Id, selectRange: false, toggle: true).Should().BeTrue();
+                session.IsWorkbookGrouped.Should().BeTrue();
+                session.ActiveSheet.Id.Should().Be(last.Id);
+
+                Control root;
+                string submitId;
+                string? nextId;
+                switch (surface)
+                {
+                    case "backstage":
+                        window.ShowBackstageOverlayForTest();
+                        typeof(MainWindow).GetMethod("TryActivateBackstagePane", BindingFlags.Instance | BindingFlags.NonPublic)!
+                            .Invoke(window, [FreeXBackstagePaneId.Print]);
+                        await SettleAsync();
+                        var frame = (AvaloniaBackstageFrame)typeof(MainWindow)
+                            .GetField("_backstageOverlay", BindingFlags.Instance | BindingFlags.NonPublic)!
+                            .GetValue(window)!;
+                        root = frame.CurrentPaneContent!;
+                        submitId = "BackstagePrintNowButton";
+                        nextId = "BackstagePrintNextPage";
+                        break;
+
+                    case "dialog":
+                        root = await OpenModalAsync(window, "ShowPrintDialogAsync", []);
+                        var activeSheets = Find<RadioButton>(root, "PrintScope_ActiveSheet");
+                        activeSheets.IsChecked.Should().BeTrue();
+                        activeSheets.Content.Should().Be(UiText.Get("PrintPreview_PrintWhatActiveSheets").Replace("_", "", StringComparison.Ordinal));
+                        submitId = "PrintConfirmButton";
+                        nextId = null;
+                        break;
+
+                    default:
+                        root = await OpenModalAsync(window, "ShowPrintPreviewDialogAsync", [null, null, null]);
+                        submitId = PrintPreviewDialogPlanner.ExportPdfButtonAutomationId;
+                        nextId = PrintPreviewDialogPlanner.NextPageButtonAutomationId;
+                        break;
+                }
+
+                if (nextId is not null)
+                {
+                    PrintedText(root).Should().Contain("First").And.NotContain("Extra");
+                    var next = Find<Button>(root, nextId);
+                    next.IsEnabled.Should().BeTrue();
+                    next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    await SettleAsync();
+                    PrintedText(root).Should().Contain("Last").And.NotContain("Extra");
+                    next.IsEnabled.Should().BeFalse();
+                }
+
+                var submit = Find<Button>(root, submitId);
+                submit.IsEnabled.Should().BeTrue();
+                submit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await SettleAsync();
+
+                service.Submission.Should().NotBeNull();
+                service.Submission!.EffectivePageRange.FirstPage.Should().Be(1);
+                service.Submission.EffectivePageRange.LastPage.Should().Be(2);
+            });
+
+            return true;
+        }, CancellationToken.None);
+
+    private static IEnumerable<string?> PrintedText(Control root) =>
+        Find<Canvas>(root, PrintPreviewDialogPlanner.PageCanvasAutomationId).GetVisualDescendants()
+            .OfType<TextBlock>()
+            .Select(text => text.Text);
+
     private static void ConfigureThreePrintPages(Sheet sheet)
     {
         sheet.PrintArea = GridRange.Parse("A1:A3", sheet.Id);

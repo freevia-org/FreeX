@@ -9,7 +9,7 @@ public enum PrintPreviewWorkbookPageKind
     CommentSummary,
 }
 
-/// <summary>One page in the ordered Entire Workbook print-preview stream.</summary>
+/// <summary>One page in the ordered print-preview stream for a workbook or sheet group.</summary>
 public sealed record PrintPreviewWorkbookPageInfo(
     int PageIndex,
     SheetId SheetId,
@@ -47,7 +47,16 @@ public sealed class PrintPreviewWorkbookPaginationContext
         ITextMeasurer textMeasurer,
         out PrintPreviewWorkbookPaginationContext context,
         string workbookDirectory = "",
-        bool ignorePrintArea = false)
+        bool ignorePrintArea = false) =>
+        TryCreate(workbook, textMeasurer, out context, workbookDirectory, ignorePrintArea, sheetFilter: null);
+
+    public static bool TryCreate(
+        Workbook workbook,
+        ITextMeasurer textMeasurer,
+        out PrintPreviewWorkbookPaginationContext context,
+        string workbookDirectory,
+        bool ignorePrintArea,
+        IReadOnlySet<SheetId>? sheetFilter)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(textMeasurer);
@@ -57,7 +66,7 @@ public sealed class PrintPreviewWorkbookPaginationContext
 
         foreach (var sheet in workbook.Sheets)
         {
-            if (sheet.IsHidden || sheet.IsVeryHidden)
+            if (sheet.IsHidden || sheet.IsVeryHidden || (sheetFilter is not null && !sheetFilter.Contains(sheet.Id)))
                 continue;
 
             if (!PrintPreviewPaginationContext.TryCreate(
@@ -66,7 +75,9 @@ public sealed class PrintPreviewWorkbookPaginationContext
                     textMeasurer,
                     out var sheetContext,
                     workbookDirectory,
-                    ignorePrintArea))
+                    ignorePrintArea,
+                    printRangeOverride: null,
+                    includeEmptySheet: sheetFilter is not null))
             {
                 continue;
             }

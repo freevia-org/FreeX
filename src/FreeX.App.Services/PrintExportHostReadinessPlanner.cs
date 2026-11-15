@@ -122,12 +122,7 @@ public static class PrintExportHostReadinessPlanner
         WorkbookExportPrintOutputKind outputKind) =>
         WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             workbook,
-            new WorkbookExportPrintIntent(
-                printJobRequest.Scope,
-                outputKind,
-                printJobRequest.ActiveSheetIndex,
-                printJobRequest.SelectedRange,
-                printJobRequest.IgnorePrintAreas),
+            printJobRequest.CreateExportIntent(outputKind),
             surface);
 
     private static PrintExportNativePrintReadinessPlan CreateNativePrintPlan(

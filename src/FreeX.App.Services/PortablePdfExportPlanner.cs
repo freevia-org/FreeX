@@ -41,6 +41,9 @@ public sealed record PortablePdfExportPageRequest(
     // Retain the sheet's unfiltered page position for printed headers and footers.
     internal (int PageIndex, int PageCount)? OriginalSheetPagination { get; init; }
 
+    // Document order includes comment appendices and every printed worksheet.
+    internal (int PageNumber, int PageCount)? OriginalDocumentPagination { get; init; }
+
     public IReadOnlyList<uint> TitleRows => PageSpans.TitleRows;
 
     public IReadOnlyList<uint> BodyRows => PageSpans.BodyRows;
@@ -123,7 +126,8 @@ public static class PortablePdfExportPlanner
             pageRequests.Add(page with
             {
                 ExportPageNumber = pageRequests.Count + 1,
-                OriginalSheetPagination = page.OriginalSheetPagination ?? (sheetPageIndex, sheetPageCounts[sheetId])
+                OriginalSheetPagination = page.OriginalSheetPagination ?? (sheetPageIndex, sheetPageCounts[sheetId]),
+                OriginalDocumentPagination = page.OriginalDocumentPagination ?? (page.ExportPageNumber, exportPlan.TotalPageCount)
             });
         }
         return exportPlan with

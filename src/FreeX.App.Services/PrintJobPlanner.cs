@@ -52,6 +52,14 @@ public sealed record PrintJobRequest(
 {
     /// <summary>Init-only so the positional constructor keeps its signature for already-compiled callers.</summary>
     public PrintSides Sides { get; init; } = PrintSides.PrinterDefault;
+
+    public IReadOnlySet<SheetId>? GroupedSheetIds { get; init; }
+
+    internal WorkbookExportPrintIntent CreateExportIntent(WorkbookExportPrintOutputKind outputKind) =>
+        new(Scope, outputKind, ActiveSheetIndex, SelectedRange, IgnorePrintAreas)
+        {
+            GroupedSheetIds = GroupedSheetIds
+        };
 }
 
 /// <summary>
@@ -107,12 +115,7 @@ public static class PrintJobPlanner
 
         var exportPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             workbook,
-            new WorkbookExportPrintIntent(
-                request.Scope,
-                WorkbookExportPrintOutputKind.Pdf,
-                request.ActiveSheetIndex,
-                request.SelectedRange,
-                request.IgnorePrintAreas),
+            request.CreateExportIntent(WorkbookExportPrintOutputKind.Pdf),
             surface);
 
         return BuildJobPlan(request, exportPlan);
@@ -130,12 +133,7 @@ public static class PrintJobPlanner
 
         var exportPlan = WorkbookExportPrintPlanner.CreatePlan(
             workbook,
-            new WorkbookExportPrintIntent(
-                request.Scope,
-                WorkbookExportPrintOutputKind.Pdf,
-                request.ActiveSheetIndex,
-                request.SelectedRange,
-                request.IgnorePrintAreas),
+            request.CreateExportIntent(WorkbookExportPrintOutputKind.Pdf),
             pageCapacity,
             surface);
 

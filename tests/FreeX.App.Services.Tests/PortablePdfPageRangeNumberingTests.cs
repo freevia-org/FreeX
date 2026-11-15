@@ -7,7 +7,7 @@ namespace FreeX.App.Services.Tests;
 public sealed class PortablePdfPageRangeNumberingTests
 {
     [Fact]
-    public void ExportRange_PreservesSheetNumberingAcrossPrintAreasAndCommentSummary()
+    public void WorkbookExportRange_PreservesOriginalNumberingAcrossPrintAreasAndCommentSummary()
     {
         var workbook = new Workbook("Budget");
         var cover = workbook.AddSheet("Cover");
@@ -32,13 +32,63 @@ public sealed class PortablePdfPageRangeNumberingTests
 
         rangePlan.PageRequests.Select(page => page.ExportPageNumber).Should().Equal(1, 2);
         var document = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, rangePlan);
-        document.Pages[0].Ops.OfType<PdfText>().Should().Contain(text => text.Text == "First page 7 of 3");
-        document.Pages[1].Ops.OfType<PdfText>().Should().Contain(text => text.Text == "Even page 8 of 3");
+        document.Pages[0].Ops.OfType<PdfText>().Should().Contain(text => text.Text == "Even page 8 of 4");
+        document.Pages[1].Ops.OfType<PdfText>().Should().Contain(text => text.Text == "Odd page 9 of 4");
 
         var filteredAgain = PortablePdfExportPlanner.ApplyPageRange(rangePlan, new ExportPageRange(2, 2));
         var finalPage = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, filteredAgain)
             .Pages.Should().ContainSingle().Which;
-        finalPage.Ops.OfType<PdfText>().Should().Contain(text => text.Text == "Even page 8 of 3");
+        finalPage.Ops.OfType<PdfText>().Should().Contain(text => text.Text == "Odd page 9 of 4");
+    }
+
+    [Theory]
+    [InlineData(WorkbookExportPrintScope.VisibleWorkbook, false, 0)]
+    [InlineData(WorkbookExportPrintScope.VisibleWorkbook, true, 2)]
+    [InlineData(WorkbookExportPrintScope.GroupedSheets, false, 0)]
+    [InlineData(WorkbookExportPrintScope.GroupedSheets, true, 2)]
+    public void MultiSheetPrintRange_NumberingIncludesEarlierWorksheetAndItsCommentAppendix(
+        WorkbookExportPrintScope scope, bool hasPrinter, int firstDetailPageIndex)
+    {
+        var workbook = new Workbook("Budget");
+        var cover = workbook.AddSheet("Cover");
+        cover.PrintArea = GridRange.Parse("A1:B2", cover.Id);
+        cover.PrintComments = WorksheetPrintComments.AtEnd;
+        cover.Comments[new CellAddress(cover.Id, 1, 1)] = "Review";
+        if (scope == WorkbookExportPrintScope.GroupedSheets)
+        {
+            var excluded = workbook.AddSheet("Excluded");
+            excluded.PrintArea = GridRange.Parse("A1:B2", excluded.Id);
+        }
+
+        var details = workbook.AddSheet("Details");
+        details.PrintArea = GridRange.Parse("A1:B2", details.Id);
+        details.RowPageBreaks.Add(2);
+        ConfigureFooters(details, firstPageNumber: null);
+
+        var workflow = WorkbookPrintWorkflow.CreatePlan(
+            workbook,
+            hasSelection: false,
+            new PrintJobRequest(
+                scope,
+                PageRangeKind: PrintJobPageRangeKind.PageRange,
+                FromPage: 3,
+                ToPage: 4)
+            {
+                GroupedSheetIds = scope == WorkbookExportPrintScope.GroupedSheets
+                    ? new HashSet<SheetId> { cover.Id, details.Id }
+                    : null
+            },
+            PrintExportHostCapabilities.AvaloniaPortable(
+                canSubmitToPlatformPrinter: hasPrinter,
+                hasPrinterDestination: hasPrinter));
+
+        workflow.Readiness.NativePrintPlan.JobPlan.TotalPageCount.Should().Be(4);
+        var pages = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, workflow.PortablePdfPlan!).Pages;
+        pages.Should().HaveCount(hasPrinter ? 4 : 2);
+        pages[firstDetailPageIndex].Ops.OfType<PdfText>()
+            .Should().Contain(text => text.Text == "Odd page 3 of 4");
+        pages[firstDetailPageIndex + 1].Ops.OfType<PdfText>()
+            .Should().Contain(text => text.Text == "Even page 4 of 4");
     }
 
     [Theory]
@@ -70,7 +120,7 @@ public sealed class PortablePdfPageRangeNumberingTests
         page.Ops.OfType<PdfText>().Should().Contain(text => text.Text == expectedFooter);
     }
 
-    private static void ConfigureFooters(Sheet sheet, int firstPageNumber)
+    private static void ConfigureFooters(Sheet sheet, int? firstPageNumber)
     {
         sheet.FirstPageNumber = firstPageNumber;
         sheet.DifferentFirstPageHeaderFooter = true;

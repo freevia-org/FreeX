@@ -63,14 +63,16 @@ internal sealed class AvaloniaPrintPreviewPaginationContext
         ITextMeasurer textMeasurer,
         out AvaloniaPrintPreviewPaginationContext context,
         string workbookDirectory = "",
-        bool ignorePrintArea = false)
+        bool ignorePrintArea = false,
+        IReadOnlySet<SheetId>? sheetFilter = null)
     {
         if (!PrintPreviewWorkbookPaginationContext.TryCreate(
                 workbook,
                 textMeasurer,
                 out var workbookContext,
                 workbookDirectory,
-                ignorePrintArea))
+                ignorePrintArea,
+                sheetFilter))
         {
             context = null!;
             return false;
