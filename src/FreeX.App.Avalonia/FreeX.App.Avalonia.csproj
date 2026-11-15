@@ -56,10 +56,6 @@
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">
-    <Compile Remove="MacOs/**/*.cs" />
-  </ItemGroup>
-
   <PropertyGroup>
     <AssemblyName>FreeX</AssemblyName>
     <ApplicationTitle>FreeX</ApplicationTitle>
@@ -69,6 +65,7 @@
     <InformationalVersion>0.5.0</InformationalVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
     <RootNamespace>FreeX.App.Avalonia</RootNamespace>
     <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
@@ -77,9 +74,6 @@
     <TargetFrameworks Condition="'$(EnableMacOsTargetFramework)' == 'true'">net10.0;net10.0-macos</TargetFrameworks>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
-    <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(FreeXValidationHost)' == 'true'">
     <OutputPath>bin/Validation/$(Configuration)/</OutputPath>
     <IntermediateOutputPath>obj/Validation/$(Configuration)/$(TargetFramework)/</IntermediateOutputPath>

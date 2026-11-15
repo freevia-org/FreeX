@@ -211,7 +211,7 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_WiresWorkbookSharePlannerToAvaloniaFallback()
+    public void MainWindow_WiresWorkbookSharePlannerToNativeShareAndFallback()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -275,19 +275,18 @@ public sealed class AvaloniaShellSourceTests
         serviceSource.Should().Contain("internal interface IWorkbookShareSheetService");
         serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(Window owner, string filePath);");
         serviceSource.Should().Contain("internal static class WorkbookShareSheetServiceFactory");
-        serviceSource.Should().Contain("#if FREEX_MACOS_SHARE_SHEET");
-        serviceSource.Should().Contain("return new MacOsWorkbookShareSheetService(shareSheetLabel);");
+        serviceSource.Should().Contain("OperatingSystem.IsMacOS()");
+        serviceSource.Should().Contain("? new MacOsWorkbookShareSheetService(shareSheetLabel)");
         serviceSource.Should().Contain("internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService");
         serviceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: false);");
         serviceSource.Should().Contain("WorkbookShareSheetResult.Unavailable(_unavailableMessage)");
-        macOsServiceSource.Should().Contain("internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetService");
-        macOsServiceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: true);");
-        macOsServiceSource.Should().Contain("NSSharingServicePicker");
-        macOsServiceSource.Should().Contain("NSUrl.FromFilename(filePath)");
+        macOsServiceSource.Should().Contain("[SupportedOSPlatform(\"macos\")]");
+        macOsServiceSource.Should().Contain("CanShowShareSheet: true");
+        macOsServiceSource.Should().Contain("Allocate(\"NSSharingServicePicker\")");
+        macOsServiceSource.Should().Contain("fileURLWithPath:");
         macOsServiceSource.Should().Contain("owner.TryGetPlatformHandle()");
-        macOsServiceSource.Should().Contain("platformHandle?.HandleDescriptor != \"NSWindow\"");
-        macOsServiceSource.Should().Contain("Runtime.GetNSObject<NSWindow>(platformHandle.Handle)");
-        macOsServiceSource.Should().Contain("ShowRelativeToRect(anchorView.Bounds, anchorView, NSRectEdge.MinYEdge)");
+        macOsServiceSource.Should().Contain("IMacOSTopLevelPlatformHandle { NSView: not 0 }");
+        macOsServiceSource.Should().Contain("showRelativeToRect:ofView:preferredEdge:");
 
         source.Should().NotContain("DataTransferManager");
         source.Should().NotContain("WindowInteropHelper");

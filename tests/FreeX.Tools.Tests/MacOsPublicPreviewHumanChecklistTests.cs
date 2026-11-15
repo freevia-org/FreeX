@@ -65,13 +65,13 @@ public sealed class MacOsPublicPreviewHumanChecklistTests
         source.Should().Contain("missing default-handler proof blocks promotion");
 
         source.Should().Contain("## Future Native Share Sheet Readiness");
-        source.Should().Contain("The current macOS public-preview candidate uses the existing share fallback; a native AppKit share sheet is not implemented yet.");
-        source.Should().Contain("Do not claim native share-sheet parity until a build that implements the native sheet passes every row in this section.");
-        source.Should().Contain("| Native AppKit share sheet implementation status | Candidate contains a native AppKit share-sheet route; current public-preview builds record `Not implemented` because it is not implemented yet |");
+        source.Should().Contain("FreeX opens the native macOS Share sheet for saved workbooks in the shipping build.");
+        source.Should().Contain("Run each check on the candidate before claiming share-sheet parity.");
+        source.Should().Contain("| Native AppKit share sheet implementation status | Candidate contains a native AppKit share-sheet route |");
         source.Should().Contain("| Saved workbook opens native share sheet | From a saved workbook, Share opens the native macOS share sheet for that workbook file, not only the fallback route |");
         source.Should().Contain("| Cancel leaves workbook and file unchanged | Cancel closes the sheet without changing workbook contents, saved file path, dirty state, or the saved workbook bytes |");
         source.Should().Contain("| Share target receives workbook file | At least one share target receives the saved workbook file with the expected file name and readable workbook contents |");
-        source.Should().Contain("| Existing share fallback still works | The existing share fallback remains usable when the native share sheet is unavailable, canceled, or unsupported |");
+        source.Should().Contain("| Existing share fallback still works | When the native share sheet cannot open, the workbook is revealed in Finder |");
         source.Should().Contain("| Keyboard focus after open and cancel | Keyboard focus lands predictably in the sheet and returns to a usable FreeX focus target after Cancel or completion |");
         source.Should().Contain("| VoiceOver announcement and navigation | VoiceOver identifies the sheet, target controls, Cancel action, and completion or cancel return state clearly enough to navigate safely |");
 

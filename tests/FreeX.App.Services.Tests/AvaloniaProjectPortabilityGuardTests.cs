@@ -71,7 +71,8 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         new("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         new("ObjCRuntime namespace", new(@"(?<![\w.])ObjCRuntime(?:\.[A-Za-z_]\w*)?(?![\w.])", DefaultRegexOptions)),
         new("NSSharingService type", new(@"(?<![\w.])NSSharingService(?![\w.])", DefaultRegexOptions)),
-        new("NSSharingServicePicker type", new(@"(?<![\w.])NSSharingServicePicker(?![\w.])", DefaultRegexOptions))
+        new("NSSharingServicePicker type", new(@"(?<![\w.])NSSharingServicePicker(?![\w.])", DefaultRegexOptions)),
+        new("Objective-C interop", new(@"libobjc\.A\.dylib|objc_msgSend", DefaultRegexOptions))
     ];
 
     private static readonly HashSet<string> NativeMacOsForbiddenPatternDescriptions = NativeMacOsForbiddenPatterns
@@ -120,11 +121,11 @@ public sealed class AvaloniaProjectPortabilityGuardTests
             .ToArray();
 
         violations.Should().BeEmpty(
-            "FreeX.App.Avalonia source must keep Windows/WPF dependencies out of every path and direct AppKit/Foundation/ObjCRuntime/NSSharingService usage confined to the macOS-only compile folder");
+            "FreeX.App.Avalonia source must keep Windows/WPF dependencies out of every path and direct AppKit/Foundation/ObjCRuntime/NSSharingService usage confined to the macOS adapter folder");
     }
 
     [Fact]
-    public void MacOsTargetFramework_StaysOptInUntilNativeHostBoundaryIsReady()
+    public void MacOsTargetFramework_StaysOptInAndShippingBuildIncludesTheShareAdapter()
     {
         var projectPath = RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
         var project = XDocument.Load(projectPath);
@@ -153,22 +154,11 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         supportedOsVersion.Attribute("Condition")!.Value.Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
         supportedOsVersion.Value.Trim().Should().Be("12.0");
 
-        var macOsCompileRemove = PortableBoundaryGuard.ProjectItemElements(project, "Compile")
-            .Where(element => element.Attribute("Remove")?.Value == "MacOs/**/*.cs")
+        PortableBoundaryGuard.ProjectItemElements(project, "Compile")
+            .Select(element => element.Attribute("Remove")?.Value.Replace('\\', '/'))
             .Should()
-            .ContainSingle("native macOS source must be excluded from every non-macOS target framework")
-            .Subject;
-        PortableBoundaryGuard.ProjectCondition(macOsCompileRemove).Should().Be("'$(TargetFramework)' != 'net10.0-macos'");
-
-        var macOsDefineConstants = PortableBoundaryGuard.ProjectPropertyElements(project, "DefineConstants")
-            .Should()
-            .ContainSingle("the native share-sheet implementation must be opt-in behind the macOS TFM")
-            .Subject;
-        PortableBoundaryGuard.ProjectCondition(macOsDefineConstants).Should().Be("'$(TargetFramework)' == 'net10.0-macos'");
-        macOsDefineConstants.Value
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Should()
-            .Contain("FREEX_MACOS_SHARE_SHEET");
+            .NotContain("MacOs/**/*.cs",
+                "the runtime-guarded share sheet ships in the default net10.0 build");
     }
 
     [Fact]
@@ -187,9 +177,9 @@ public sealed class AvaloniaProjectPortabilityGuardTests
 
     private static bool IsAllowedNativeMacOsPattern(string relativePath, PortableBoundaryPattern pattern) =>
         NativeMacOsForbiddenPatternDescriptions.Contains(pattern.Description)
-        && IsMacOsConditionalSourcePath(relativePath);
+        && IsMacOsAdapterSourcePath(relativePath);
 
-    private static bool IsMacOsConditionalSourcePath(string relativePath)
+    private static bool IsMacOsAdapterSourcePath(string relativePath)
     {
         var normalizedPath = relativePath.Replace('\\', '/');
         return normalizedPath.StartsWith("src/FreeX.App.Avalonia/MacOs/", StringComparison.OrdinalIgnoreCase);
