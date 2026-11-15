@@ -29,7 +29,7 @@ public sealed partial class MainWindow
     // ── View ▸ Show ▸ Ruler ─────────────────────────────────────────────────────
     private void ToggleShowRulers()
     {
-        if (_isOpening || _isSaving)
+        if (_isOpening || _isSaving || _session.ViewMode != WorksheetViewMode.PageLayout)
             return;
 
         if (!TryCommitPendingFormulaEdit())

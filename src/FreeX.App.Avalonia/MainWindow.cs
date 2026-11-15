@@ -1828,6 +1828,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
         _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
         AttachSplitPanePointerHandlers();
+        AttachPageLayoutRulerPointerHandlers();
 
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -5055,6 +5056,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildSheetGrid()
     {
         RecordSheetGridBuilt();
+        _pageLayoutRuler = null;
         if (IsChartsheet(_session.ActiveSheet))
             return BuildChartsheetView();
         _formulaReferenceGridOverlay = null;
