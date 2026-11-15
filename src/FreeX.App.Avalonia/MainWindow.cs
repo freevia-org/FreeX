@@ -29442,6 +29442,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     outputKind,
                     exportOptions,
                     File.Exists);
+                PersistPdfExportLanguage(requestPlan);
                 if (requestPlan.ShouldConfirmNormalizedOverwrite &&
                     !await ConfirmNormalizedOverwriteAsync(
                         requestPlan.Request.Path,
@@ -29480,11 +29481,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             }
 
                             var exportExecution = await new AtomicExportExecutor()
-                                .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                                .ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
                                 effectiveRequest.Path,
-                                (output, token) =>
+                                (temporaryPath, token) =>
                                 {
                                     token.ThrowIfCancellationRequested();
+                                    // The Skia backend adds catalog metadata to the PDF it just wrote.
+                                    using var output = new FileStream(temporaryPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
                                     return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(
                                         _session.Workbook,
                                         effectiveExportPlan,

@@ -103,7 +103,7 @@ public static class WorkbookPdfContentBuilder
         var pages = exportPlan.PageRequests
             .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request, workbookDirectory, textMeasurer))
             .ToArray();
-        return new PdfContentDocument(pages);
+        return CreateDocument(exportPlan, pages);
     }
 
     /// <summary>
@@ -584,8 +584,11 @@ public static class WorkbookPdfContentBuilder
         var pages = exportPlan.PageRequests
             .Select(request => BuildPage(workbook, exportPlan, request, options))
             .ToArray();
-        return new PdfContentDocument(pages);
+        return CreateDocument(exportPlan, pages);
     }
+
+    private static PdfContentDocument CreateDocument(PortablePdfExportPlan plan, IReadOnlyList<PdfContentPage> pages) =>
+        new(pages, plan.PdfLanguage is { } language ? new PdfDocumentProperties { Language = language } : null);
 
     private static PdfContentPage BuildCommentSummaryPage(
         PortablePdfExportPageRequest request,

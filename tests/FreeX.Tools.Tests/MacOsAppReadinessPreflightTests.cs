@@ -2573,7 +2573,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
                     var exportExecutor = new AtomicExportExecutor();
                     var exportExecution = await exportExecutor
-                        .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                        .ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
                     StatusBarReadoutKind.Average,
                     StatusBarReadoutKind.NumericalCount,
                     StatusBarReadoutKind.Maximum,

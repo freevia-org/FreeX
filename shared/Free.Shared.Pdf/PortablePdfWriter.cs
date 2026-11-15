@@ -297,7 +297,9 @@ public static class PortablePdfWriter
             })
             .ToArray();
 
-        objects.Add(PdfObject.Ascii("<< /Type /Catalog /Pages 2 0 R >>"));
+        var language = properties?.Language;
+        var languageEntry = string.IsNullOrWhiteSpace(language) ? string.Empty : $" /Lang {EncodeTextOperand(language)}";
+        objects.Add(PdfObject.Ascii($"<< /Type /Catalog /Pages 2 0 R{languageEntry} >>"));
         objects.Add(PdfObject.Ascii($"<< /Type /Pages /Kids [{string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R"))}] /Count {pages.Count} >>"));
         foreach (var font in fontResources)
             objects.Add(PdfObject.Ascii($"<< /Type /Font /Subtype /Type1 /BaseFont /{font.BaseFont} /Encoding /WinAnsiEncoding >>"));

@@ -1341,7 +1341,7 @@ function Test-SourceWiring {
                 "AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)",
                 "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(",
                 "AtomicExportExecutor",
-                ".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(",
+                ".ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(",
                 "ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);",
                 "_workbookStatisticsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics));",
                 "ApplyNativeFileMenuAvailability(isIdle);",

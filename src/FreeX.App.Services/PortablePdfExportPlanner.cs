@@ -78,6 +78,8 @@ public sealed record PortablePdfExportPlan(
     public bool IsReady => Status == PortablePdfExportPlanStatus.Ready;
 
     public int TotalPageCount => PageRequests.Count;
+
+    public string? PdfLanguage { get; init; }
 }
 
 public static class PortablePdfExportPlanner
@@ -99,7 +101,10 @@ public static class PortablePdfExportPlanner
         if (!ExportPlanner.TryValidatePageRange(options.PageRange, exportPlan.TotalPageCount, out error, textResolver))
             return false;
 
-        effectivePlan = ApplyPageRange(exportPlan, options.PageRange);
+        effectivePlan = ApplyPageRange(exportPlan, options.PageRange) with
+        {
+            PdfLanguage = ExportPlanner.NormalizePdfLanguage(options.PdfLanguage)
+        };
         return true;
     }
 

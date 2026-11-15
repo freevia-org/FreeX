@@ -5,11 +5,56 @@ using Free.Shared.Pdf.Skia;
 using FreeX.App.Avalonia.Pdf;
 using FreeX.App.Services;
 using FreeX.Core.Model;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Tokens;
 
 namespace FreeX.App.Avalonia.Tests;
 
 public sealed class SkiaPdfDocumentExporterTests
 {
+    [Theory]
+    [InlineData("  pt_br  ", "pt-BR", false)]
+    [InlineData("", "en-US", true)]
+    public void ExportOptions_StampNormalizedCatalogLanguageOnBothPdfBackends(
+        string requestedLanguage,
+        string expectedLanguage,
+        bool writeOnly)
+    {
+        var workbook = new Workbook("Workbook");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sample text"));
+        var exportPlan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            PdfLanguage = requestedLanguage,
+            PageRange = new ExportPageRange(1, 1),
+        };
+        PortablePdfExportPlanner.TryApplyOptions(exportPlan, options, out var effectivePlan, out var error)
+            .Should().BeTrue(error);
+
+        using var skia = writeOnly ? new WriteOnlyMemoryStream() : new MemoryStream();
+        AvaloniaPdfDocumentExporter.Save(workbook, effectivePlan, skia).Backend.Should().Be(PdfExportBackend.Skia);
+        AssertCatalogLanguage(skia, expectedLanguage);
+
+        using var portable = new MemoryStream();
+        PortablePdfDocumentExporter.Save(workbook, effectivePlan, portable);
+        AssertCatalogLanguage(portable, expectedLanguage);
+    }
+
+    private static void AssertCatalogLanguage(MemoryStream stream, string expectedLanguage)
+    {
+        using var pdf = PdfDocument.Open(stream.ToArray());
+        pdf.NumberOfPages.Should().Be(1);
+        pdf.GetPage(1).Text.Should().Contain("Sample text");
+        var catalog = pdf.Structure.Catalog.CatalogDictionary;
+        catalog.Data["Lang"].Should().BeAssignableTo<IDataToken<string>>().Which.Data.Should().Be(expectedLanguage);
+    }
+
+    private sealed class WriteOnlyMemoryStream : MemoryStream
+    {
+        public override bool CanRead => false;
+    }
+
     [Fact]
     public void Save_EmbedsFontsAndRendersNonWinAnsiUnicodeText()
     {
