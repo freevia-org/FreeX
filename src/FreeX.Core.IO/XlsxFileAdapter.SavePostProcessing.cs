@@ -614,7 +614,26 @@ public sealed partial class XlsxFileAdapter
         }
 
         NormalizeStylesheetForSchema();
+        XlsxCustomViewNativeMetadata? customViewMetadata = null;
+        if (workbook.CustomViews.Count > 0 && sourcePackage?.SourceSheetIdsByLocalId is { } sourceSheetIds)
+        {
+            using var source = sourcePackage.OpenRead();
+            customViewMetadata = XlsxCustomViewNativeMetadata.Capture(source, sourceSheetIds);
+        }
         NormalizeSourcePackageForExcelCompatibility();
+        // Compatibility normalization removes source custom views, which can contain
+        // malformed Excel-incompatible window state. Re-author the current model after
+        // that pass so saved edits and deletions are not silently discarded.
+        if (workbook.CustomViews.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxCustomViewMapper.Save(packageStream, workbook);
+            if (customViewMetadata is not null)
+            {
+                packageStream.Position = 0;
+                customViewMetadata.Apply(packageStream, workbook);
+            }
+        }
         NormalizeDocumentPropertiesPackageGraph();
         NormalizeWorkbookForSchema();
 

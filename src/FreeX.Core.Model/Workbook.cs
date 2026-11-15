@@ -1080,4 +1080,64 @@ public sealed record WorksheetCustomViewState(
     /// <summary>Print scaling (Sheet.ScaleToFit) at capture time. See <see cref="PrintAreas"/>.</summary>
     WorksheetScaleToFit? ScaleToFit = null,
     /// <summary>Fit-to-page flag (Sheet.FitToPage) at capture time. See <see cref="PrintAreas"/>.</summary>
-    bool? FitToPage = null);
+    bool? FitToPage = null,
+    WorksheetCustomViewPrintSettings? PrintSettings = null,
+    IReadOnlyList<WorksheetCustomViewPrintAreaForm>? PrintAreaReferenceForms = null,
+    string? OpaquePrintAreaExpression = null,
+    string? OpaquePrintTitlesExpression = null);
+
+/// <summary>Original print-area syntax and its resolved bounds, used only while those bounds remain unchanged.</summary>
+public sealed record WorksheetCustomViewPrintAreaForm(GridRange Range, WorksheetCustomViewPrintAreaKind Kind);
+
+public enum WorksheetCustomViewPrintAreaKind
+{
+    CellRange,
+    FullColumn,
+    FullRow
+}
+
+/// <summary>Additional captured print settings; null on a view state means the settings were not captured.</summary>
+public sealed record WorksheetCustomViewPrintSettings
+{
+    public WorksheetHeaderFooter PageHeader { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter PageFooter { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter FirstPageHeader { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter FirstPageFooter { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter EvenPageHeader { get; init; } = new("", "", "");
+    public WorksheetHeaderFooter EvenPageFooter { get; init; } = new("", "", "");
+    public bool DifferentFirstPageHeaderFooter { get; init; }
+    public bool DifferentOddEvenHeaderFooter { get; init; }
+    public bool HeaderFooterScaleWithDocument { get; init; } = true;
+    public bool HeaderFooterAlignWithMargins { get; init; } = true;
+    public bool CenterHorizontallyOnPage { get; init; }
+    public bool CenterVerticallyOnPage { get; init; }
+    public WorksheetPageOrder PageOrder { get; init; }
+    public int? FirstPageNumber { get; init; }
+    public bool? UsePrinterDefaults { get; init; }
+    public int? PrintCopies { get; init; }
+    public bool PrintBlackAndWhite { get; init; }
+    public bool PrintDraftQuality { get; init; }
+    public int? PrintQualityDpi { get; init; }
+    public int? PrintQualityVerticalDpi { get; init; }
+    public WorksheetPrintErrorValue PrintErrorValue { get; init; }
+    public WorksheetPrintComments PrintComments { get; init; }
+    public bool AutoPageBreaksCaptured { get; init; }
+    public bool? AutoPageBreaks { get; init; }
+    public WorksheetRepeatRange? PrintTitleRows { get; init; }
+    public WorksheetRepeatRange? PrintTitleColumns { get; init; }
+    public IReadOnlyList<uint> RowPageBreaks { get; init; } = [];
+    public IReadOnlyList<uint> ColumnPageBreaks { get; init; } = [];
+    public WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata { get; init; }
+    public WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata { get; init; }
+    public bool? FitToPage { get; init; }
+    public bool LegacyPrintSizeCaptured { get; init; }
+    public int? LegacyPrintSize { get; init; }
+    public bool PageSetupMetadataCaptured { get; init; }
+    public NativeXmlPreserveBag? PageSetupMetadata { get; init; }
+    public bool HeaderFooterMetadataCaptured { get; init; }
+    public NativeXmlPreserveBag? HeaderFooterMetadata { get; init; }
+    public bool PageMarginsMetadataCaptured { get; init; }
+    public NativeXmlPreserveBag? PageMarginsMetadata { get; init; }
+    public bool PrintOptionsMetadataCaptured { get; init; }
+    public NativeXmlPreserveBag? PrintOptionsMetadata { get; init; }
+}

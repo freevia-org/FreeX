@@ -491,7 +491,9 @@ public static class FormulaRewriter
                 return rr with { Start = (CellRefNode)pasteStart, End = (CellRefNode)pasteEnd };
             }
 
-            if (op is RenameSheetOp renameSpan)
+            // A span whose first qualifier carries an external workbook (including a
+            // path before the bracket) must not follow local sheet renames.
+            if (op is RenameSheetOp renameSpan && !(rr.SheetName?.Contains('[') ?? false))
             {
                 var newStartSheet = rr.SheetName;
                 var newEndSheet = rr.EndSheetName;
@@ -518,7 +520,7 @@ public static class FormulaRewriter
             }
 
             if (op is DeleteSheetOp deleteSpanSheet &&
-                !(rr.SheetName?.StartsWith("[", StringComparison.Ordinal) ?? false) &&
+                !(rr.SheetName?.Contains('[') ?? false) &&
                 (string.Equals(rr.SheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase) ||
                  string.Equals(rr.EndSheetName, deleteSpanSheet.SheetName, StringComparison.OrdinalIgnoreCase)))
             {

@@ -1788,6 +1788,10 @@ public sealed partial class XlsxFileAdapter
             foreach (var customWorkbookView in customWorkbookViews)
                 customWorkbookView.Remove();
 
+            foreach (var name in root.Element(workbookNs + "definedNames")?.Elements(workbookNs + "definedName").ToList() ?? [])
+                if (XlsxCustomViewMapper.IsCustomViewPrintName(name.Attribute("name")?.Value, out _, out _))
+                    name.Remove();
+
             XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
             return true;
         }

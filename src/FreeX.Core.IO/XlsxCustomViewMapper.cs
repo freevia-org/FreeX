@@ -80,12 +80,258 @@ internal static class XlsxCustomViewMapper
                     PageMargins: ParsePageMargins(pageMargins),
                     HeaderMargin: ParseNullableDouble(pageMargins, "header"),
                     FooterMargin: ParseNullableDouble(pageMargins, "footer"),
-                    PrintGridlines: XlsxXmlAttributeReader.ReadNullableBoolAttribute(printOptions, "gridLines"),
-                    PrintHeadings: XlsxXmlAttributeReader.ReadNullableBoolAttribute(printOptions, "headings"),
-                    ScaleToFit: ParseScaleToFit(pageSetup, fitToPage))));
+                    PrintGridlines: printOptions is null ? null : XlsxXmlAttributeReader.ReadBoolAttribute(printOptions, "gridLines"),
+                    PrintHeadings: printOptions is null ? null : XlsxXmlAttributeReader.ReadBoolAttribute(printOptions, "headings"),
+                    ScaleToFit: ParseScaleToFit(pageSetup, fitToPage),
+                    PrintSettings: ReadPrintSettings(customSheetView, worksheetNs, fitToPage))));
         }
 
         return customViews;
+    }
+
+    // Excel stores custom-view print areas and titles as hidden sheet-scoped workbook names.
+    // Only recognize the exact GUID-shaped wvu form, leaving ordinary user names untouched.
+    internal static bool IsCustomViewPrintName(string? name, out string guid, out bool titles)
+    {
+        guid = string.Empty;
+        titles = false;
+        if (name is null || !name.StartsWith("Z_", StringComparison.OrdinalIgnoreCase) || name.Length < 39)
+            return false;
+        var suffix = name[38..];
+        titles = string.Equals(suffix, "_.wvu.PrintTitles", StringComparison.OrdinalIgnoreCase);
+        if (!titles && !string.Equals(suffix, "_.wvu.PrintArea", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!Guid.TryParseExact(name.Substring(2, 36).Replace('_', '-'), "D", out var parsed)) return false;
+        guid = $"{{{parsed:D}}}".ToUpperInvariant();
+        return true;
+    }
+
+    internal static void ReadCustomViewPrintNames(Stream packageStream, Workbook workbook)
+    {
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
+        var entry = archive.GetEntry("xl/workbook.xml");
+        if (entry is null) return;
+        var xml = XlsxPackageXmlEditor.LoadXml(entry);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        foreach (var name in xml.Root?.Element(ns + "definedNames")?.Elements(ns + "definedName") ?? [])
+        {
+            if (!IsCustomViewPrintName(name.Attribute("name")?.Value, out var guid, out var titles) ||
+                XlsxXmlAttributeReader.ReadIntAttribute(name, "localSheetId") is not { } sheetIndex ||
+                sheetIndex < 0 || sheetIndex >= workbook.Sheets.Count) continue;
+            var sheet = workbook.Sheets[sheetIndex];
+            var viewIndex = workbook.CustomViews.FindIndex(view =>
+                string.Equals(NormalizeId(view.Id), guid, StringComparison.OrdinalIgnoreCase));
+            if (viewIndex < 0) continue;
+            var view = workbook.CustomViews[viewIndex];
+            var states = view.Sheets.ToList();
+            var stateIndex = states.FindIndex(state =>
+                string.Equals(state.SheetName, sheet.Name, StringComparison.OrdinalIgnoreCase));
+            if (stateIndex < 0) continue;
+            var state = states[stateIndex];
+            var refs = SplitDefinedNameReferences(name.Value);
+            if (titles)
+            {
+                var print = state.PrintSettings ?? new WorksheetCustomViewPrintSettings();
+                WorksheetRepeatRange? rows = null, columns = null;
+                var opaque = false;
+                foreach (var reference in refs)
+                {
+                    if (!TryReferenceBody(reference, sheet.Name, out var body)) { opaque = true; break; }
+                    var parts = body.Replace("$", "", StringComparison.Ordinal).Split(':');
+                    if (parts.Length != 2) { opaque = true; break; }
+                    if (uint.TryParse(parts[0], out var r1) && uint.TryParse(parts[1], out var r2) &&
+                        r1 >= 1 && r1 <= CellAddress.MaxRow && r2 >= r1 && r2 <= CellAddress.MaxRow)
+                    {
+                        if (rows is not null) { opaque = true; break; }
+                        rows = new WorksheetRepeatRange(r1, r2);
+                    }
+                    else
+                    {
+                        var c1 = CellAddress.ColumnNameToNumber(parts[0]);
+                        var c2 = CellAddress.ColumnNameToNumber(parts[1]);
+                        if (c1 >= 1 && c1 <= CellAddress.MaxCol && c2 >= c1 && c2 <= CellAddress.MaxCol)
+                        {
+                            if (columns is not null) { opaque = true; break; }
+                            columns = new WorksheetRepeatRange(c1, c2);
+                        }
+                        else { opaque = true; break; }
+                    }
+                }
+                states[stateIndex] = state with
+                {
+                    PrintSettings = print with
+                    {
+                        PrintTitleRows = opaque ? null : rows,
+                        PrintTitleColumns = opaque ? null : columns
+                    },
+                    OpaquePrintTitlesExpression = opaque ? name.Value : null
+                };
+            }
+            else
+            {
+                var areas = new List<GridRange>();
+                var forms = new List<WorksheetCustomViewPrintAreaForm>();
+                var opaque = false;
+                foreach (var reference in refs)
+                {
+                    if (!TryReferenceBody(reference, sheet.Name, out var body) ||
+                        !TryParsePrintArea(body, sheet.Id, out var area, out var kind))
+                    {
+                        opaque = true;
+                        break;
+                    }
+                    areas.Add(area);
+                    forms.Add(new WorksheetCustomViewPrintAreaForm(area, kind));
+                }
+                states[stateIndex] = state with
+                {
+                    PrintAreas = opaque ? null : areas,
+                    PrintAreaReferenceForms = opaque ? null : forms,
+                    OpaquePrintAreaExpression = opaque ? name.Value : null
+                };
+            }
+            workbook.CustomViews[viewIndex] = view with { Sheets = states };
+        }
+    }
+
+    private static IEnumerable<string> SplitDefinedNameReferences(string text)
+    {
+        var start = 0;
+        var quoted = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\'')
+            {
+                if (quoted && i + 1 < text.Length && text[i + 1] == '\'') { i++; continue; }
+                quoted = !quoted;
+            }
+            else if (text[i] == ',' && !quoted) { yield return text[start..i].Trim(); start = i + 1; }
+        }
+        yield return text[start..].Trim();
+    }
+
+    private static bool TryReferenceBody(string reference, string sheetName, out string body)
+    {
+        body = string.Empty;
+        var separator = reference.LastIndexOf('!');
+        if (separator < 0) return false;
+        var qualifier = reference[..separator].Trim();
+        if (qualifier.Length >= 2 && qualifier[0] == '\'' && qualifier[^1] == '\'')
+            qualifier = qualifier[1..^1].Replace("''", "'", StringComparison.Ordinal);
+        if (!string.Equals(qualifier, sheetName, StringComparison.OrdinalIgnoreCase)) return false;
+        body = reference[(separator + 1)..].Trim();
+        return body.Length > 0;
+    }
+
+    private static bool TryParsePrintArea(string body, SheetId sheet, out GridRange range,
+        out WorksheetCustomViewPrintAreaKind kind)
+    {
+        range = default;
+        kind = WorksheetCustomViewPrintAreaKind.CellRange;
+        var plain = body.Replace("$", "", StringComparison.Ordinal).Trim();
+        var parts = plain.Split(':');
+        if (parts.Length == 2)
+        {
+            var firstColumn = CellAddress.ColumnNameToNumber(parts[0]);
+            var lastColumn = CellAddress.ColumnNameToNumber(parts[1]);
+            if (firstColumn is >= 1 and <= CellAddress.MaxCol && lastColumn is >= 1 and <= CellAddress.MaxCol)
+            {
+                range = new GridRange(new CellAddress(sheet, 1, firstColumn),
+                    new CellAddress(sheet, CellAddress.MaxRow, lastColumn));
+                kind = WorksheetCustomViewPrintAreaKind.FullColumn;
+                return true;
+            }
+            if (uint.TryParse(parts[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var firstRow) &&
+                uint.TryParse(parts[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var lastRow) &&
+                firstRow is >= 1 and <= CellAddress.MaxRow && lastRow is >= 1 and <= CellAddress.MaxRow)
+            {
+                range = new GridRange(new CellAddress(sheet, firstRow, 1),
+                    new CellAddress(sheet, lastRow, CellAddress.MaxCol));
+                kind = WorksheetCustomViewPrintAreaKind.FullRow;
+                return true;
+            }
+        }
+        try { range = GridRange.ParseCellOrRange(plain, sheet); return true; }
+        catch (FormatException) { return false; }
+    }
+
+    private static void WriteCustomViewPrintNames(XDocument xml, XNamespace ns, Workbook workbook,
+        IReadOnlyList<(string Id, List<WorksheetCustomViewState> States)> views)
+    {
+        var root = xml.Root;
+        if (root is null) return;
+        var names = root.Element(ns + "definedNames");
+        if (names is not null)
+            foreach (var existing in names.Elements(ns + "definedName").ToList())
+                if (IsCustomViewPrintName(existing.Attribute("name")?.Value, out _, out _))
+                    existing.Remove();
+
+        var generated = new List<XElement>();
+        foreach (var (id, states) in views)
+        {
+            if (!Guid.TryParse(id.Trim('{', '}'), out var guid)) continue;
+            var prefix = "Z_" + guid.ToString("D").ToUpperInvariant().Replace('-', '_') + "_.wvu.";
+            foreach (var state in states)
+            {
+                var sheet = workbook.GetSheet(state.SheetName);
+                if (sheet is null) continue;
+                var sheetIndex = workbook.IndexOfSheet(sheet.Id);
+                var qualifier = SheetNameFormatter.QuoteIfNeeded(sheet.Name) + "!";
+                if (state.OpaquePrintAreaExpression is { Length: > 0 } rawArea && state.PrintAreas is null)
+                {
+                    generated.Add(new XElement(ns + "definedName", new XAttribute("name", prefix + "PrintArea"),
+                        new XAttribute("localSheetId", sheetIndex), new XAttribute("hidden", "1"), rawArea));
+                }
+                else if (state.PrintAreas is { Count: > 0 } areas)
+                {
+                    static string Abs(CellAddress cell) =>
+                        "$" + CellAddress.NumberToColumnName(cell.Col) + "$" + cell.Row;
+                    var refs = areas.Select((area, index) =>
+                    {
+                        var form = state.PrintAreaReferenceForms is { } forms && index < forms.Count
+                            ? forms[index] : null;
+                        if (form is not null && form.Range == area)
+                        {
+                            if (form.Kind == WorksheetCustomViewPrintAreaKind.FullColumn &&
+                                area.Start.Row == 1 && area.End.Row == CellAddress.MaxRow)
+                                return qualifier + "$" + CellAddress.NumberToColumnName(area.Start.Col) +
+                                    ":$" + CellAddress.NumberToColumnName(area.End.Col);
+                            if (form.Kind == WorksheetCustomViewPrintAreaKind.FullRow &&
+                                area.Start.Col == 1 && area.End.Col == CellAddress.MaxCol)
+                                return qualifier + "$" + area.Start.Row + ":$" + area.End.Row;
+                        }
+                        return qualifier + Abs(area.Start) + ":" + Abs(area.End);
+                    });
+                    generated.Add(new XElement(ns + "definedName", new XAttribute("name", prefix + "PrintArea"),
+                        new XAttribute("localSheetId", sheetIndex), new XAttribute("hidden", "1"), string.Join(",", refs)));
+                }
+                if (state.OpaquePrintTitlesExpression is { Length: > 0 } rawTitles &&
+                    state.PrintSettings?.PrintTitleRows is null && state.PrintSettings?.PrintTitleColumns is null)
+                {
+                    generated.Add(new XElement(ns + "definedName", new XAttribute("name", prefix + "PrintTitles"),
+                        new XAttribute("localSheetId", sheetIndex), new XAttribute("hidden", "1"), rawTitles));
+                }
+                else if (state.PrintSettings is { } print)
+                {
+                    var refs = new List<string>();
+                    if (print.PrintTitleRows is { } rows)
+                        refs.Add(qualifier + "$" + rows.Start + ":$" + rows.End);
+                    if (print.PrintTitleColumns is { } cols)
+                        refs.Add(qualifier + "$" + CellAddress.NumberToColumnName(cols.Start) +
+                            ":$" + CellAddress.NumberToColumnName(cols.End));
+                    if (refs.Count > 0)
+                        generated.Add(new XElement(ns + "definedName", new XAttribute("name", prefix + "PrintTitles"),
+                            new XAttribute("localSheetId", sheetIndex), new XAttribute("hidden", "1"), string.Join(",", refs)));
+                }
+            }
+        }
+        if (generated.Count == 0) return;
+        if (names is null)
+        {
+            names = new XElement(ns + "definedNames");
+            var next = root.Element(ns + "customWorkbookViews");
+            if (next is not null) next.AddBeforeSelf(names); else root.Add(names);
+        }
+        names.Add(generated);
     }
 
     private static string? ReadActiveSelectionCellReference(XElement customSheetView, XElement? pane, XNamespace worksheetNs)
@@ -204,6 +450,11 @@ internal static class XlsxCustomViewMapper
         var sheetPaths = XlsxWorkbookSheetPathReader.GetWorkbookSheetPaths(workbookXml, workbookRels, workbookNs, relNs)
             .ToDictionary(pair => pair.SheetName, pair => pair.WorksheetPath, StringComparer.OrdinalIgnoreCase);
         var sheetsElement = workbookXml.Root?.Element(workbookNs + "sheets");
+        var workbookView = workbookXml.Root?.Element(workbookNs + "bookViews")?.Element(workbookNs + "workbookView");
+        // Excel refuses to open customWorkbookView without window dimensions even though
+        // the OOXML schema marks them optional. Reuse the workbook window when available.
+        var windowWidth = workbookView is null ? null : XlsxXmlAttributeReader.ReadIntAttribute(workbookView, "windowWidth");
+        var windowHeight = workbookView is null ? null : XlsxXmlAttributeReader.ReadIntAttribute(workbookView, "windowHeight");
 
         var customViews = workbook.CustomViews
             .Select((view, index) => new
@@ -227,6 +478,8 @@ internal static class XlsxCustomViewMapper
                 workbookNs + "customWorkbookView",
                 new XAttribute("name", item.View.Name),
                 new XAttribute("guid", item.Id),
+                new XAttribute("windowWidth", windowWidth is > 0 ? windowWidth.Value : 20000),
+                new XAttribute("windowHeight", windowHeight is > 0 ? windowHeight.Value : 10000),
                 new XAttribute("activeSheetId", GetActiveSheetId(sheetsElement, workbookNs, workbook, item.View)),
                 item.View.IncludePrintSettings ? new XAttribute("includePrintSettings", "1") : new XAttribute("includePrintSettings", "0"),
                 item.View.IncludeHiddenRowsColumnsAndFilterSettings ? new XAttribute("includeHiddenRowCol", "1") : new XAttribute("includeHiddenRowCol", "0")))));
@@ -237,6 +490,8 @@ internal static class XlsxCustomViewMapper
         // restore the source file's true values for this view's guid -- hardcoding "0"
         // previously masked those attributes as "already present" and silently discarded
         // the source's real autoUpdate/mergeInterval/personalView on every save.
+        WriteCustomViewPrintNames(workbookXml, workbookNs, workbook,
+            customViews.Select(item => (item.Id, item.View.IncludePrintSettings ? item.States : new List<WorksheetCustomViewState>())).ToList());
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
 
         var customViewsBySheet = new Dictionary<string, List<XElement>>(StringComparer.OrdinalIgnoreCase);
@@ -325,6 +580,9 @@ internal static class XlsxCustomViewMapper
             state.ZoomPercent == 100 ? null : new XAttribute("scale", XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(state.ZoomPercent)),
             state.ShowFormulas ? new XAttribute("showFormulas", "1") : null,
             DetermineEffectiveFitToPage(state) is true ? new XAttribute("fitToPage", "1") : null,
+            state.PrintAreas is { Count: > 0 } ||
+                state.PrintAreas is null && !string.IsNullOrEmpty(state.OpaquePrintAreaExpression)
+                    ? new XAttribute("printArea", "1") : null,
             // ShowAutoFilter ("Show AutoFilter Drop Down Controls") is distinct from the <autoFilter>
             // child element's own ref/criteria: without it, Excel restores the view without the
             // filter dropdown arrows even though the underlying autoFilter element round-trips.
@@ -381,12 +639,45 @@ internal static class XlsxCustomViewMapper
         // pageSetup?, headerFooter?, autoFilter?, extLst?) — hidden-rows/cols/FilterHiddenRows
         // do not (Excel keeps those on the live sheetData row/col elements), so that field is
         // intentionally not written here; see the matching read-side comment above.
+        if (state.PrintSettings is { } printSettings)
+        {
+            if (ToPageBreaksXml(workbookNs, "rowBreaks", printSettings.RowPageBreaks, printSettings.RowPageBreaksMetadata, CellAddress.MaxRow, CellAddress.MaxCol - 1) is { } rowBreaks)
+                customSheetView.Add(rowBreaks);
+            if (ToPageBreaksXml(workbookNs, "colBreaks", printSettings.ColumnPageBreaks, printSettings.ColumnPageBreaksMetadata, CellAddress.MaxCol, CellAddress.MaxRow - 1) is { } colBreaks)
+                customSheetView.Add(colBreaks);
+        }
         if (ToPageMarginsXml(workbookNs, state) is { } pageMarginsXml)
+        {
+            ApplyPrintMetadata(pageMarginsXml, state.PrintSettings?.PageMarginsMetadata, "pageMargins",
+                ["left", "right", "top", "bottom", "header", "footer"], []);
+            XlsxWorksheetPageLayoutNormalizer.NormalizePageMargins(pageMarginsXml);
             customSheetView.Add(pageMarginsXml);
+        }
         if (ToPrintOptionsXml(workbookNs, state) is { } printOptionsXml)
+        {
+            ApplyPrintMetadata(printOptionsXml, state.PrintSettings?.PrintOptionsMetadata, "printOptions",
+                ["gridLines", "headings", "horizontalCentered", "verticalCentered"], []);
+            XlsxWorksheetPageLayoutNormalizer.NormalizePrintOptions(printOptionsXml);
             customSheetView.Add(printOptionsXml);
+        }
         if (ToPageSetupXml(workbookNs, state) is { } pageSetupXml)
+        {
+            ApplyPrintMetadata(pageSetupXml, state.PrintSettings?.PageSetupMetadata, "pageSetup",
+                ["paperSize", "scale", "firstPageNumber", "fitToWidth", "fitToHeight", "pageOrder",
+                 "orientation", "usePrinterDefaults", "blackAndWhite", "draft", "cellComments",
+                 "useFirstPageNumber", "errors", "horizontalDpi", "verticalDpi", "copies"], []);
+            XlsxWorksheetPageLayoutNormalizer.NormalizePageSetup(pageSetupXml);
             customSheetView.Add(pageSetupXml);
+        }
+        if (state.PrintSettings is { } headerFooterSettings)
+        {
+            var headerFooter = ToHeaderFooterXml(workbookNs, headerFooterSettings);
+            ApplyPrintMetadata(headerFooter, headerFooterSettings.HeaderFooterMetadata, "headerFooter",
+                ["differentOddEven", "differentFirst", "scaleWithDoc", "alignWithMargins"],
+                ["oddHeader", "oddFooter", "evenHeader", "evenFooter", "firstHeader", "firstFooter"]);
+            XlsxWorksheetPageLayoutNormalizer.NormalizeHeaderFooter(headerFooter);
+            customSheetView.Add(headerFooter);
+        }
         if (autoFilterXml is not null)
             customSheetView.Add(autoFilterXml);
 
@@ -444,18 +735,20 @@ internal static class XlsxCustomViewMapper
 
     private static XElement? ToPrintOptionsXml(XNamespace workbookNs, WorksheetCustomViewState state)
     {
-        if (state.PrintGridlines is null && state.PrintHeadings is null)
+        if (state.PrintGridlines is null && state.PrintHeadings is null && state.PrintSettings is null)
             return null;
 
         return new XElement(
             workbookNs + "printOptions",
-            state.PrintGridlines is true ? new XAttribute("gridLines", "1") : null,
-            state.PrintHeadings is true ? new XAttribute("headings", "1") : null);
+            state.PrintGridlines is { } gridlines ? new XAttribute("gridLines", gridlines ? "1" : "0") : null,
+            state.PrintHeadings is { } headings ? new XAttribute("headings", headings ? "1" : "0") : null,
+            state.PrintSettings?.CenterHorizontallyOnPage is true ? new XAttribute("horizontalCentered", "1") : null,
+            state.PrintSettings?.CenterVerticallyOnPage is true ? new XAttribute("verticalCentered", "1") : null);
     }
 
     private static XElement? ToPageSetupXml(XNamespace workbookNs, WorksheetCustomViewState state)
     {
-        if (state.PageOrientation is null && state.PaperSizeCode is null && state.PaperSize is null && state.ScaleToFit is null)
+        if (state.PageOrientation is null && state.PaperSizeCode is null && state.PaperSize is null && state.ScaleToFit is null && state.PrintSettings is null)
             return null;
 
         var paperSizeCode = state.PaperSizeCode ?? (state.PaperSize is { } paperSize ? PaperSizeCodes.GetCode(paperSize) : (int?)null);
@@ -472,7 +765,159 @@ internal static class XlsxCustomViewMapper
                 ? new XAttribute("scale", scaleToFit.ScalePercent ?? 100)
                 : null,
             scaleToFit.FitToPagesWide is { } fitToPagesWide ? new XAttribute("fitToWidth", fitToPagesWide) : null,
-            scaleToFit.FitToPagesTall is { } fitToPagesTall ? new XAttribute("fitToHeight", fitToPagesTall) : null);
+            scaleToFit.FitToPagesTall is { } fitToPagesTall ? new XAttribute("fitToHeight", fitToPagesTall) : null,
+            state.PrintSettings is { } settings ? new XAttribute("pageOrder", settings.PageOrder == WorksheetPageOrder.OverThenDown ? "overThenDown" : "downThenOver") : null,
+            state.PrintSettings?.FirstPageNumber is > 0 and var firstPage ? new XAttribute("firstPageNumber", firstPage) : null,
+            state.PrintSettings?.FirstPageNumber is > 0 ? new XAttribute("useFirstPageNumber", "1") : null,
+            state.PrintSettings?.UsePrinterDefaults is { } useDefaults ? new XAttribute("usePrinterDefaults", useDefaults ? "1" : "0") : null,
+            state.PrintSettings?.PrintCopies is > 0 and var copies ? new XAttribute("copies", copies) : null,
+            state.PrintSettings?.PrintBlackAndWhite is true ? new XAttribute("blackAndWhite", "1") : null,
+            state.PrintSettings?.PrintDraftQuality is true ? new XAttribute("draft", "1") : null,
+            state.PrintSettings?.PrintQualityDpi is > 0 and var dpi ? new XAttribute("horizontalDpi", dpi) : null,
+            state.PrintSettings?.PrintQualityVerticalDpi is > 0 and var verticalDpi ? new XAttribute("verticalDpi", verticalDpi) : null,
+            state.PrintSettings is { } options ? new XAttribute("errors", options.PrintErrorValue switch { WorksheetPrintErrorValue.Blank => "blank", WorksheetPrintErrorValue.Dash => "dash", WorksheetPrintErrorValue.NotAvailable => "NA", _ => "displayed" }) : null,
+            state.PrintSettings is { } comments ? new XAttribute("cellComments", comments.PrintComments switch { WorksheetPrintComments.AtEnd => "atEnd", WorksheetPrintComments.AsDisplayed => "asDisplayed", _ => "none" }) : null);
+    }
+
+    private static WorksheetCustomViewPrintSettings? ReadPrintSettings(XElement view, XNamespace ns, bool? fitToPage)
+    {
+        var headerFooter = view.Element(ns + "headerFooter");
+        var pageSetup = view.Element(ns + "pageSetup");
+        var printOptions = view.Element(ns + "printOptions");
+        var rowBreaks = view.Element(ns + "rowBreaks");
+        var colBreaks = view.Element(ns + "colBreaks");
+        if (headerFooter is null && pageSetup is null && printOptions is null && rowBreaks is null && colBreaks is null &&
+            view.Element(ns + "pageMargins") is null && fitToPage is null)
+            return null;
+
+        int? Positive(string name) => pageSetup is null ? null :
+            XlsxXmlAttributeReader.ReadIntAttribute(pageSetup, name) is > 0 and var value ? value : null;
+        var headerMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetHeaderFooterMetadata(headerFooter);
+        var marginsMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetPageMarginsMetadata(view.Element(ns + "pageMargins"));
+        var optionsMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrintOptionsMetadata(printOptions);
+        var setupMetadata = XlsxWorksheetLayoutMetadataReader.ReadWorksheetPageSetupMetadata(pageSetup);
+        return new WorksheetCustomViewPrintSettings
+        {
+            PageHeader = ReadHeaderFooter(headerFooter?.Element(ns + "oddHeader")?.Value),
+            PageFooter = ReadHeaderFooter(headerFooter?.Element(ns + "oddFooter")?.Value),
+            FirstPageHeader = ReadHeaderFooter(headerFooter?.Element(ns + "firstHeader")?.Value),
+            FirstPageFooter = ReadHeaderFooter(headerFooter?.Element(ns + "firstFooter")?.Value),
+            EvenPageHeader = ReadHeaderFooter(headerFooter?.Element(ns + "evenHeader")?.Value),
+            EvenPageFooter = ReadHeaderFooter(headerFooter?.Element(ns + "evenFooter")?.Value),
+            DifferentFirstPageHeaderFooter = XlsxXmlAttributeReader.ReadBoolAttribute(headerFooter, "differentFirst"),
+            DifferentOddEvenHeaderFooter = XlsxXmlAttributeReader.ReadBoolAttribute(headerFooter, "differentOddEven"),
+            HeaderFooterScaleWithDocument = XlsxXmlAttributeReader.ReadBoolAttribute(headerFooter, "scaleWithDoc", true),
+            HeaderFooterAlignWithMargins = XlsxXmlAttributeReader.ReadBoolAttribute(headerFooter, "alignWithMargins", true),
+            CenterHorizontallyOnPage = XlsxXmlAttributeReader.ReadBoolAttribute(printOptions, "horizontalCentered"),
+            CenterVerticallyOnPage = XlsxXmlAttributeReader.ReadBoolAttribute(printOptions, "verticalCentered"),
+            PageOrder = pageSetup?.Attribute("pageOrder")?.Value == "overThenDown" ? WorksheetPageOrder.OverThenDown : WorksheetPageOrder.DownThenOver,
+            FirstPageNumber = XlsxXmlAttributeReader.ReadBoolAttribute(pageSetup, "useFirstPageNumber") ? Positive("firstPageNumber") : null,
+            UsePrinterDefaults = XlsxXmlAttributeReader.ReadNullableBoolAttribute(pageSetup, "usePrinterDefaults"),
+            PrintCopies = Positive("copies"),
+            PrintBlackAndWhite = XlsxXmlAttributeReader.ReadBoolAttribute(pageSetup, "blackAndWhite"),
+            PrintDraftQuality = XlsxXmlAttributeReader.ReadBoolAttribute(pageSetup, "draft"),
+            PrintQualityDpi = Positive("horizontalDpi"),
+            PrintQualityVerticalDpi = Positive("verticalDpi"),
+            PrintErrorValue = pageSetup?.Attribute("errors")?.Value switch { "blank" => WorksheetPrintErrorValue.Blank, "dash" => WorksheetPrintErrorValue.Dash, "NA" => WorksheetPrintErrorValue.NotAvailable, _ => WorksheetPrintErrorValue.Displayed },
+            PrintComments = pageSetup?.Attribute("cellComments")?.Value switch { "atEnd" => WorksheetPrintComments.AtEnd, "asDisplayed" => WorksheetPrintComments.AsDisplayed, _ => WorksheetPrintComments.None },
+            RowPageBreaks = ReadPageBreaks(rowBreaks, ns, CellAddress.MaxRow),
+            ColumnPageBreaks = ReadPageBreaks(colBreaks, ns, CellAddress.MaxCol),
+            RowPageBreaksMetadata = XlsxWorksheetPageBreaksMetadataReader.Read(rowBreaks, CellAddress.MaxRow),
+            ColumnPageBreaksMetadata = XlsxWorksheetPageBreaksMetadataReader.Read(colBreaks, CellAddress.MaxCol),
+            HeaderFooterMetadata = headerMetadata,
+            HeaderFooterMetadataCaptured = headerMetadata is not null,
+            PageMarginsMetadata = marginsMetadata,
+            PageMarginsMetadataCaptured = marginsMetadata is not null,
+            PrintOptionsMetadata = optionsMetadata,
+            PrintOptionsMetadataCaptured = optionsMetadata is not null,
+            PageSetupMetadata = setupMetadata,
+            PageSetupMetadataCaptured = setupMetadata is not null,
+            FitToPage = fitToPage
+        };
+    }
+
+    private static IReadOnlyList<uint> ReadPageBreaks(XElement? parent, XNamespace ns, uint max) =>
+        parent?.Elements(ns + "brk")
+            .Where(item => XlsxXmlAttributeReader.ReadBoolAttribute(item, "man"))
+            .Select(item => XlsxWorksheetPageBreakIdReader.TryReadSupportedId(item, max, out var id) ? id : 0)
+            .Where(id => id != 0).Distinct().OrderBy(id => id).ToArray() ?? [];
+
+    private static XElement? ToPageBreaksXml(XNamespace ns, string name, IReadOnlyList<uint> breaks,
+        WorksheetPageBreaksMetadataModel? metadata, uint max, uint spanMax)
+    {
+        var valid = breaks.Where(id => XlsxWorksheetPageBreakIdReader.IsSupported(id, max)).Distinct().OrderBy(id => id).ToArray();
+        if (valid.Length == 0 && metadata is null) return null;
+        var element = new XElement(ns + name,
+            new XAttribute("count", valid.Length), new XAttribute("manualBreakCount", valid.Length));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, metadata?.NativeAttributes, ["count", "manualBreakCount"]);
+        foreach (var id in valid)
+        {
+            var child = new XElement(ns + "brk", new XAttribute("id", id),
+                new XAttribute("max", spanMax), new XAttribute("man", "1"));
+            if (metadata?.BreakNativeAttributes.TryGetValue(id, out var attrs) is true)
+                XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(child, attrs, ["id", "man"]);
+            element.Add(child);
+        }
+        XlsxWorksheetPageBreakNormalizer.NormalizeElement(element);
+        return element;
+    }
+
+    private static WorksheetHeaderFooter ReadHeaderFooter(string? value)
+    {
+        var sections = new[] { new StringBuilder(), new StringBuilder(), new StringBuilder() };
+        var current = sections[1];
+        var inFontName = false;
+        value ??= string.Empty;
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (value[i] == '&' && i + 1 < value.Length)
+            {
+                var next = value[i + 1];
+                if (next == '&') { current.Append("&&"); i++; continue; }
+                if (next == '"') { inFontName = !inFontName; current.Append("&\""); i++; continue; }
+                if (!inFontName && next is 'L' or 'C' or 'R')
+                {
+                    current = sections[next == 'L' ? 0 : next == 'C' ? 1 : 2];
+                    i++;
+                    continue;
+                }
+            }
+            else if (inFontName && value[i] == '"') inFontName = false;
+            current.Append(value[i]);
+        }
+        return new WorksheetHeaderFooter(
+            XlsxWorksheetPageSetupMapper.FromHeaderFooterText(sections[0].ToString()),
+            XlsxWorksheetPageSetupMapper.FromHeaderFooterText(sections[1].ToString()),
+            XlsxWorksheetPageSetupMapper.FromHeaderFooterText(sections[2].ToString()));
+    }
+
+    private static XElement ToHeaderFooterXml(XNamespace ns, WorksheetCustomViewPrintSettings settings)
+    {
+        static XElement? Element(XNamespace ns, string name, WorksheetHeaderFooter value)
+        {
+            var text = new StringBuilder();
+            if (!string.IsNullOrEmpty(value.Left)) text.Append("&L").Append(XlsxWorksheetPageSetupMapper.ToHeaderFooterText(value.Left));
+            if (!string.IsNullOrEmpty(value.Center)) text.Append("&C").Append(XlsxWorksheetPageSetupMapper.ToHeaderFooterText(value.Center));
+            if (!string.IsNullOrEmpty(value.Right)) text.Append("&R").Append(XlsxWorksheetPageSetupMapper.ToHeaderFooterText(value.Right));
+            return text.Length == 0 ? null : new XElement(ns + name, XmlTextSanitizer.Sanitize(text.ToString()));
+        }
+        return new XElement(ns + "headerFooter",
+            settings.DifferentOddEvenHeaderFooter ? new XAttribute("differentOddEven", "1") : null,
+            settings.DifferentFirstPageHeaderFooter ? new XAttribute("differentFirst", "1") : null,
+            !settings.HeaderFooterScaleWithDocument ? new XAttribute("scaleWithDoc", "0") : null,
+            !settings.HeaderFooterAlignWithMargins ? new XAttribute("alignWithMargins", "0") : null,
+            Element(ns, "oddHeader", settings.PageHeader), Element(ns, "oddFooter", settings.PageFooter),
+            Element(ns, "evenHeader", settings.EvenPageHeader), Element(ns, "evenFooter", settings.EvenPageFooter),
+            Element(ns, "firstHeader", settings.FirstPageHeader), Element(ns, "firstFooter", settings.FirstPageFooter));
+    }
+
+    private static void ApplyPrintMetadata(XElement element, NativeXmlPreserveBag? bag, string key,
+        IReadOnlyCollection<string> modeledAttributes, IReadOnlyCollection<string> modeledChildren)
+    {
+        var (attributes, children) = XmlNativeBagSerializer.Deserialize(bag?.Get(key));
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(element, attributes, modeledAttributes);
+        foreach (var child in children)
+            XlsxWorksheetNativeMetadataHelpers.TryAddNativeChildElement(element, child, modeledChildren);
     }
 
     private static XElement? ToAutoFilterXml(XNamespace workbookNs, WorksheetAutoFilterModel? autoFilter)

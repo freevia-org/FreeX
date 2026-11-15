@@ -123,6 +123,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private Dictionary<string, string>? _namedFormulaSnapshot;
     private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
+    private List<(int Index, WorkbookCustomView View)>? _customViewRenameSnapshot;
     // T6: string sheet-name refs on model objects
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameSnapshot;
     private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
@@ -208,6 +209,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
 
         _oldName = sheet.Name;
         sheet.Name = _newName;
+        RewriteCustomViews(ctx.Workbook, _oldName, _newName);
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new RenameSheetOp(_oldName, _newName), _formulaSnapshot);
@@ -506,12 +508,101 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         return new CommandOutcome(true);
     }
 
+    private void RewriteCustomViews(Workbook workbook, string oldName, string newName)
+    {
+        _customViewRenameSnapshot = [];
+        var operation = new RenameSheetOp(oldName, newName);
+        for (int index = 0; index < workbook.CustomViews.Count; index++)
+        {
+            var view = workbook.CustomViews[index];
+            var changed = false;
+            var states = new List<WorksheetCustomViewState>(view.Sheets.Count);
+            foreach (var state in view.Sheets)
+            {
+                var name = string.Equals(state.SheetName, oldName, StringComparison.OrdinalIgnoreCase)
+                    ? newName : state.SheetName;
+                var area = RewriteCustomViewExpression(state.OpaquePrintAreaExpression, operation, state.SheetName);
+                var titles = RewriteCustomViewExpression(state.OpaquePrintTitlesExpression, operation, state.SheetName);
+                if (!string.Equals(name, state.SheetName, StringComparison.Ordinal) ||
+                    !string.Equals(area, state.OpaquePrintAreaExpression, StringComparison.Ordinal) ||
+                    !string.Equals(titles, state.OpaquePrintTitlesExpression, StringComparison.Ordinal))
+                    changed = true;
+                states.Add(state with { SheetName = name, OpaquePrintAreaExpression = area, OpaquePrintTitlesExpression = titles });
+            }
+            if (!changed) continue;
+            _customViewRenameSnapshot.Add((index, view));
+            workbook.CustomViews[index] = view with { Sheets = states };
+        }
+    }
+
+    private static string? RewriteCustomViewExpression(string? expression, RenameSheetOp operation, string hostSheetName)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+            return expression;
+        var equals = expression[0] == '=';
+        var body = equals ? expression[1..] : expression;
+        var parts = SplitCustomViewUnion(body);
+        if (parts is null) return expression;
+        try
+        {
+            // Validate every part before changing any of them: opaque malformed names must
+            // remain byte-for-byte intact rather than being partially rewritten.
+            foreach (var part in parts) _ = new Parser(new Lexer(part).Tokenize()).Parse();
+            var changed = false;
+            for (var i = 0; i < parts.Count; i++)
+            {
+                var rewritten = FormulaRewriter.Rewrite(parts[i], operation, hostSheetName);
+                if (rewritten is null) continue;
+                parts[i] = rewritten;
+                changed = true;
+            }
+            return changed ? (equals ? "=" : "") + string.Join(",", parts) : expression;
+        }
+        catch { return expression; } // Match FormulaRewriter: opaque invalid text is preserved.
+    }
+
+    private static List<string>? SplitCustomViewUnion(string text)
+    {
+        var parts = new List<string>();
+        var start = 0;
+        var depth = 0;
+        var sheetQuote = false;
+        var textQuote = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '\'' && !textQuote)
+            {
+                if (sheetQuote && i + 1 < text.Length && text[i + 1] == '\'') { i++; continue; }
+                sheetQuote = !sheetQuote;
+            }
+            else if (c == '"' && !sheetQuote)
+            {
+                if (textQuote && i + 1 < text.Length && text[i + 1] == '"') { i++; continue; }
+                textQuote = !textQuote;
+            }
+            else if (!sheetQuote && !textQuote)
+            {
+                if (c == '(') depth++;
+                else if (c == ')' && --depth < 0) return null;
+                else if (c == ',' && depth == 0) { parts.Add(text[start..i]); start = i + 1; }
+            }
+        }
+        if (sheetQuote || textQuote || depth != 0) return null;
+        parts.Add(text[start..]);
+        return parts;
+    }
+
     public void Revert(ICommandContext ctx)
     {
         if (_oldName is not null)
         {
             var s = ctx.GetSheet(_sheetId);
             s.Name = _oldName;
+            if (_customViewRenameSnapshot is not null)
+                foreach (var (index, view) in _customViewRenameSnapshot)
+                    if (index < ctx.Workbook.CustomViews.Count)
+                        ctx.Workbook.CustomViews[index] = view;
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
             RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimRenameSnapshot);
