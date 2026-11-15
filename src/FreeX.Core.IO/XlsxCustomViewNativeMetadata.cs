@@ -43,7 +43,7 @@ internal sealed class XlsxCustomViewNativeMetadata
             {
                 if (attribute.Name.Namespace != XNamespace.None || !WorkbookAttributes.Contains(attribute.Name.LocalName)) continue;
                 if (attribute.Name.LocalName is "windowWidth" or "windowHeight" &&
-                    (!uint.TryParse(attribute.Value, out var size) || size == 0)) continue;
+                    (!uint.TryParse(attribute.Value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var size) || size == 0)) continue;
                 values[attribute.Name.LocalName] = attribute.Value;
             }
             result._workbook[id] = values;
@@ -75,7 +75,7 @@ internal sealed class XlsxCustomViewNativeMetadata
                         var normalized = XlsxXmlNormalizationHelpers.NormalizeBoolean(attribute.Value);
                         if (normalized is not null) values[name] = normalized;
                     }
-                    else if (name == "colorId" && uint.TryParse(attribute.Value, out var color))
+                    else if (name == "colorId" && uint.TryParse(attribute.Value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var color))
                         values[name] = color.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }
                 result._sheets[(sourceSheetIds[index], id)] = values;

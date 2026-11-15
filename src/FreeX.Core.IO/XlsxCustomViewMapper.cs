@@ -140,7 +140,7 @@ internal static class XlsxCustomViewMapper
                     if (!TryReferenceBody(reference, sheet.Name, out var body)) { opaque = true; break; }
                     var parts = body.Replace("$", "", StringComparison.Ordinal).Split(':');
                     if (parts.Length != 2) { opaque = true; break; }
-                    if (uint.TryParse(parts[0], out var r1) && uint.TryParse(parts[1], out var r2) &&
+                    if (uint.TryParse(parts[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var r1) && uint.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var r2) &&
                         r1 >= 1 && r1 <= CellAddress.MaxRow && r2 >= r1 && r2 <= CellAddress.MaxRow)
                     {
                         if (rows is not null) { opaque = true; break; }
