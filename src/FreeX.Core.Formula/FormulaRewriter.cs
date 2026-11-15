@@ -60,7 +60,20 @@ public sealed record RenameSheetOp(string OldSheetName, string NewSheetName)    
 // exist anywhere in the workbook). Optional/defaulted so existing callers that only rewrite
 // cell/range refs keep compiling unchanged; callers that also own the deleted sheet's
 // StructuredTables can populate it to get the matching Table[...] #REF! behavior below.
-public sealed record DeleteSheetOp(string SheetName, IReadOnlyList<string>? DeletedTableNames = null, IReadOnlyList<string>? SheetOrder = null) : RewriteOperation;
+public sealed record DeleteSheetOp(string SheetName, IReadOnlyList<string>? DeletedTableNames = null, IReadOnlyList<string>? SheetOrder = null) : RewriteOperation
+{
+    // Keep the original CLR signatures available to already-compiled callers.
+    public DeleteSheetOp(string SheetName, IReadOnlyList<string>? DeletedTableNames)
+        : this(SheetName, DeletedTableNames, null)
+    {
+    }
+
+    public void Deconstruct(out string sheetName, out IReadOnlyList<string>? deletedTableNames)
+    {
+        sheetName = SheetName;
+        deletedTableNames = DeletedTableNames;
+    }
+}
 public sealed record RenameTableOp(string OldTableName, string NewTableName)    : RewriteOperation;
 
 // ── Partial-range (Insert/Delete Cells) operations ────────────────────────────

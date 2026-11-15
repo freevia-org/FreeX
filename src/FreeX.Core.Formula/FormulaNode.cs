@@ -60,6 +60,16 @@ public sealed record RangeRefNode(
         : this(Start, End, SheetName, EndSheetName, IsSingleCellSpan, SpanReferenceKind.CellRange)
     {
     }
+
+    public void Deconstruct(out CellRefNode start, out CellRefNode end, out string? sheetName,
+        out string? endSheetName, out bool isSingleCellSpan)
+    {
+        start = Start;
+        end = End;
+        sheetName = SheetName;
+        endSheetName = EndSheetName;
+        isSingleCellSpan = IsSingleCellSpan;
+    }
 }
 
 /// <summary>A whole-column range reference (e.g. A:A, Sheet2!A:B).</summary>
