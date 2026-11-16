@@ -65,12 +65,18 @@ internal static class XlsxShapeTextDocumentCodec
         static bool? Flag(XElement e, string name) => e.Attribute(name)?.Value switch { "1" or "true" => true, "0" or "false" => false, _ => null };
         static int? Int(XElement e, string name) => int.TryParse(e.Attribute(name)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
         var font = properties.Element(A + "latin")?.Attribute("typeface")?.Value;
-        var fill = properties.Element(A + "solidFill");
+        var fill = properties.Elements().FirstOrDefault(IsTextFill);
         CellColor? color = null;
-        var hex = fill?.Element(A + "srgbClr")?.Attribute("val")?.Value;
+        var solid = fill?.Name == A + "solidFill" && IsSupportedSolidFill(fill) ? fill : null;
+        var hex = solid?.Element(A + "srgbClr")?.Attribute("val")?.Value;
         if (hex is { Length: 6 } && int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb))
             color = new CellColor((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
-        WorkbookThemeColorReference? theme = fill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(fill, A, out var reference) ? reference : null;
+        WorkbookThemeColorReference? theme = solid is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solid, A, out var reference) ? reference : null;
+        var fillOverride = fill is null ? null : fill.Name == A + "noFill"
+            ? new DrawingShapeTextFillOverride(DrawingShapeTextFillKind.NoFill,
+                fill.Nodes().Any() || fill.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration) ? fill.ToString(SaveOptions.DisableFormatting) : null)
+            : solid is null || (color is null && theme is null)
+                ? new DrawingShapeTextFillOverride(DrawingShapeTextFillKind.Unsupported, fill.ToString(SaveOptions.DisableFormatting)) : null;
         var click = properties.Element(A + "hlinkClick");
         var id = click?.Attribute(R + "id")?.Value;
         DrawingObjectHyperlink? link = id is not null && relationships is not null && relationships.TryGetValue(id, out var target)
@@ -78,7 +84,32 @@ internal static class XlsxShapeTextDocumentCodec
         return new DrawingShapeTextRunStyle(font?.StartsWith('+') == true ? null : font,
             font?.StartsWith('+') == true ? font : null, Int(properties, "sz") is { } size ? size / 100d : null,
             Flag(properties, "b"), Flag(properties, "i"), properties.Attribute("u")?.Value,
-            Int(properties, "baseline"), color, theme, properties.Attribute("lang")?.Value, link);
+            Int(properties, "baseline"), color, theme, properties.Attribute("lang")?.Value, link) { FillOverride = fillOverride };
+    }
+
+    private static bool IsTextFill(XElement element) => element.Name.Namespace == A &&
+        element.Name.LocalName is "noFill" or "solidFill" or "gradFill" or "blipFill" or "pattFill" or "grpFill";
+
+    // Only claim a resolved solid when its color and transformations are representable by
+    // WorkbookThemeColorReference. Alpha, unsupported colors and other transforms stay opaque.
+    private static bool IsSupportedSolidFill(XElement fill)
+    {
+        var children = fill.Elements().ToArray();
+        if (children.Length != 1 || fill.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration)) return false;
+        var color = children[0];
+        if (color.Attributes().Any(attribute => !attribute.IsNamespaceDeclaration && attribute.Name != "val")) return false;
+        if (color.Name == A + "srgbClr") return !color.Elements().Any();
+        if (color.Name != A + "schemeClr") return false;
+        var transforms = color.Elements().ToArray();
+        if (transforms.Length == 0) return true;
+        if (transforms.Any(element => element.Attributes().Count(attribute => !attribute.IsNamespaceDeclaration) != 1 ||
+            !int.TryParse(element.Attribute("val")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value) || value is < 0 or > 100000 || element.HasElements)) return false;
+        if (transforms.Length == 1)
+            return (transforms[0].Name == A + "lumMod" || transforms[0].Name == A + "tint" || transforms[0].Name == A + "shade") &&
+                int.Parse(transforms[0].Attribute("val")!.Value, CultureInfo.InvariantCulture) != 0;
+        if (transforms.Length != 2 || transforms[0].Name != A + "lumMod" || transforms[1].Name != A + "lumOff") return false;
+        return int.Parse(transforms[0].Attribute("val")!.Value, CultureInfo.InvariantCulture) +
+            int.Parse(transforms[1].Attribute("val")!.Value, CultureInfo.InvariantCulture) == 100000;
     }
 
     internal static Dictionary<string, DrawingObjectHyperlink> SourceRelationships(DrawingShapeTextDocument document)
@@ -252,12 +283,26 @@ internal static class XlsxShapeTextDocumentCodec
         if (style.Underline is not null) p.SetAttributeValue("u", style.Underline);
         if (style.Baseline is { } baseline) p.SetAttributeValue("baseline", baseline.ToString(CultureInfo.InvariantCulture));
         if (style.Language is not null) p.SetAttributeValue("lang", style.Language);
-        var fill = XlsxDrawingColorWriter.ToSolidFill(style.ThemeColor, style.Color, A);
+        if (style.FillOverride is not null && (style.Color is not null || style.ThemeColor is not null))
+            throw new InvalidOperationException("A shape text fill override cannot be combined with a solid color.");
+        var fill = style.FillOverride is { } fillOverride ? WriteFillOverride(fillOverride) :
+            XlsxDrawingColorWriter.ToSolidFill(style.ThemeColor, style.Color, A);
         if (fill is not null) p.Add(fill);
         if ((style.ThemeFont ?? style.FontFamily) is { } font) p.Add(new XElement(A + "latin", new XAttribute("typeface", font)));
         if (style.Hyperlink is { } hyperlink)
             p.Add(new XElement(A + "hlinkClick", new XAttribute(R + "id", relationshipId ?? throw new InvalidOperationException("Missing shape text hyperlink relationship.")),
                 hyperlink.Tooltip is null ? null : new XAttribute("tooltip", hyperlink.Tooltip)));
         return p;
+    }
+
+    private static XElement WriteFillOverride(DrawingShapeTextFillOverride fill)
+    {
+        if (!Enum.IsDefined(fill.Kind)) throw new InvalidOperationException("Invalid shape text fill kind.");
+        if (fill.Kind == DrawingShapeTextFillKind.NoFill && fill.SourceXml is null) return new XElement(A + "noFill");
+        if (fill.SourceXml is null) throw new InvalidOperationException("Unsupported shape text fill requires its source XML.");
+        var element = XElement.Parse(fill.SourceXml, LoadOptions.PreserveWhitespace);
+        if (!IsTextFill(element) || (fill.Kind == DrawingShapeTextFillKind.NoFill) != (element.Name == A + "noFill"))
+            throw new InvalidOperationException("Invalid shape text fill XML.");
+        return element;
     }
 }

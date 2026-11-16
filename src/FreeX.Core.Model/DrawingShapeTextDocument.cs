@@ -5,6 +5,12 @@ namespace FreeX.Core.Model;
 /// <summary>Content kinds within one shape-text paragraph.</summary>
 public enum DrawingShapeTextInlineKind { Run, Field, Break }
 
+/// <summary>Explicit non-solid or otherwise unsupported DrawingML text fill.</summary>
+public enum DrawingShapeTextFillKind { NoFill, Unsupported }
+
+/// <summary>A fill override; unsupported fills retain their original DrawingML element.</summary>
+public sealed record DrawingShapeTextFillOverride(DrawingShapeTextFillKind Kind, string? SourceXml = null);
+
 /// <summary>Explicit run properties. Null values inherit their formatting context.</summary>
 public sealed record DrawingShapeTextRunStyle(
     string? FontFamily = null,
@@ -17,7 +23,11 @@ public sealed record DrawingShapeTextRunStyle(
     CellColor? Color = null,
     WorkbookThemeColorReference? ThemeColor = null,
     string? Language = null,
-    DrawingObjectHyperlink? Hyperlink = null);
+    DrawingObjectHyperlink? Hyperlink = null)
+{
+    /// <summary>Explicit no-fill or a fill that cannot yet be resolved as a solid color.</summary>
+    public DrawingShapeTextFillOverride? FillOverride { get; init; }
+}
 
 /// <summary>Text defaults for a DrawingML list level or its default paragraph properties.</summary>
 public sealed record DrawingShapeTextParagraphDefaults(

@@ -17,7 +17,11 @@ public sealed record ResolvedShapeTextStyle(
     CellColor? Color,
     WorkbookThemeColorReference? ThemeColor,
     string? Language,
-    DrawingObjectHyperlink? Hyperlink);
+    DrawingObjectHyperlink? Hyperlink)
+{
+    /// <summary>Explicit no-fill or an unresolved fill; neither is an inherited solid color.</summary>
+    public DrawingShapeTextFillOverride? FillOverride { get; init; }
+}
 
 /// <summary>A source inline and its independently resolved formatting.</summary>
 public sealed record ResolvedShapeTextInline(
@@ -77,9 +81,10 @@ public static class ShapeTextStyleResolver
             not null => null,
             _ => style?.FontFamily
         };
+        var fillOverride = style?.FillOverride;
         return new ResolvedShapeTextStyle(font, style?.ThemeFont, style?.FontSizePoints, style?.Bold,
-            style?.Italic, style?.Underline, style?.Baseline, style?.ThemeColor?.Resolve(theme) ?? style?.Color,
-            style?.ThemeColor, style?.Language, style?.Hyperlink);
+            style?.Italic, style?.Underline, style?.Baseline, fillOverride is null ? style?.ThemeColor?.Resolve(theme) ?? style?.Color : null,
+            fillOverride is null ? style?.ThemeColor : null, style?.Language, style?.Hyperlink) { FillOverride = fillOverride };
     }
 
     private static DrawingShapeTextRunStyle? Merge(DrawingShapeTextRunStyle? inherited, DrawingShapeTextRunStyle? specified)
@@ -89,7 +94,7 @@ public static class ShapeTextStyleResolver
         // A font or color supplied by a closer scope replaces the entire corresponding choice.
         // In particular an explicit RGB color must not inherit a lower-scope theme color.
         var specifiesFont = specified.ThemeFont is not null || specified.FontFamily is not null;
-        var specifiesColor = specified.ThemeColor is not null || specified.Color is not null;
+        var specifiesColor = specified.ThemeColor is not null || specified.Color is not null || specified.FillOverride is not null;
         return new DrawingShapeTextRunStyle(
             specifiesFont ? specified.FontFamily : inherited.FontFamily,
             specifiesFont ? specified.ThemeFont : inherited.ThemeFont,
@@ -101,6 +106,9 @@ public static class ShapeTextStyleResolver
             specifiesColor ? specified.Color : inherited.Color,
             specifiesColor ? specified.ThemeColor : inherited.ThemeColor,
             specified.Language ?? inherited.Language,
-            specified.Hyperlink ?? inherited.Hyperlink);
+            specified.Hyperlink ?? inherited.Hyperlink)
+        {
+            FillOverride = specifiesColor ? specified.FillOverride : inherited.FillOverride
+        };
     }
 }

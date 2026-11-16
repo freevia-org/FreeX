@@ -110,4 +110,26 @@ public sealed class ShapeTextStyleResolverTests
         paragraphs[1].Inlines[2].FieldType.Should().Be("slidenum");
         paragraphs[1].Inlines[2].Style.Baseline.Should().Be(30000);
     }
+
+    [Fact]
+    public void ExplicitNoFillAndUnsupportedGradientBlockInheritedSolidColor()
+    {
+        var gradient = new DrawingShapeTextFillOverride(DrawingShapeTextFillKind.Unsupported,
+            "<a:gradFill xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"/>");
+        var doc = new DrawingShapeTextDocument(
+            [new DrawingShapeTextParagraph([new(DrawingShapeTextInlineKind.Run, "Inherited none"),
+                new(DrawingShapeTextInlineKind.Run, "Gradient", style: new DrawingShapeTextRunStyle { FillOverride = gradient }),
+                new(DrawingShapeTextInlineKind.Run, "Solid", style: new DrawingShapeTextRunStyle(Color: new CellColor(4, 5, 6)))],
+                defaultRunStyle: new DrawingShapeTextRunStyle { FillOverride = new(DrawingShapeTextFillKind.NoFill) })],
+            new DrawingShapeTextParagraphDefaults(RunStyle: new DrawingShapeTextRunStyle(ThemeColor: new(WorkbookThemeColorSlot.Accent1))));
+        var paragraph = ShapeTextStyleResolver.Resolve(doc, WorkbookTheme.Office).Single();
+        paragraph.DefaultStyle.FillOverride!.Kind.Should().Be(DrawingShapeTextFillKind.NoFill);
+        paragraph.DefaultStyle.Color.Should().BeNull();
+        paragraph.Inlines[0].Style.FillOverride!.Kind.Should().Be(DrawingShapeTextFillKind.NoFill);
+        paragraph.Inlines[0].Style.ThemeColor.Should().BeNull();
+        paragraph.Inlines[1].Style.FillOverride.Should().Be(gradient);
+        paragraph.Inlines[1].Style.Color.Should().BeNull();
+        paragraph.Inlines[2].Style.FillOverride.Should().BeNull();
+        paragraph.Inlines[2].Style.Color.Should().Be(new CellColor(4, 5, 6));
+    }
 }
