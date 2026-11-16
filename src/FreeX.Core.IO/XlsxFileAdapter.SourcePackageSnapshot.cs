@@ -160,6 +160,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintBoolean(stream, chart.IsVisible);
         WriteFingerprintBoolean(stream, chart.Locked);
+        WriteFingerprintBoolean(stream, chart.PrintObject);
         WriteFingerprintDictionary(stream, chart.DrawingLockAttributes);
         WriteFingerprintString(stream, chart.DrawingLockChildrenXml);
         WriteFingerprintBoolean(stream, chart.IsPivotChart);
@@ -194,6 +195,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintBoolean(stream, picture.IsLinkedToSourceRange);
         WriteFingerprintBoolean(stream, picture.IsVisible);
         WriteFingerprintBoolean(stream, picture.Locked);
+        WriteFingerprintBoolean(stream, picture.PrintObject);
         WriteFingerprintBoolean(stream, picture.LockAspectRatio);
         WriteFingerprintString(stream, picture.DrawingNoMove?.ToString());
         WriteFingerprintString(stream, picture.DrawingNoResize?.ToString());
@@ -226,6 +228,7 @@ public sealed partial class XlsxFileAdapter
     private static void WriteDrawingTextBoxFingerprint(Stream stream, TextBoxModel textBox)
     {
         WriteFingerprintBoolean(stream, textBox.Locked);
+        WriteFingerprintBoolean(stream, textBox.PrintObject);
         WriteFingerprintString(stream, textBox.DrawingNoMove?.ToString());
         WriteFingerprintString(stream, textBox.DrawingNoResize?.ToString());
         WriteFingerprintDictionary(stream, textBox.DrawingLockAttributes);
@@ -263,6 +266,7 @@ public sealed partial class XlsxFileAdapter
     private static void WriteDrawingShapeFingerprint(Stream stream, DrawingShapeModel shape)
     {
         WriteFingerprintBoolean(stream, shape.Locked);
+        WriteFingerprintBoolean(stream, shape.PrintObject);
         WriteFingerprintString(stream, shape.DrawingNoMove?.ToString());
         WriteFingerprintString(stream, shape.DrawingNoResize?.ToString());
         WriteFingerprintDictionary(stream, shape.DrawingLockAttributes);
@@ -3217,7 +3221,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static bool ChartRequiresFullSavePostProcessing(Workbook workbook, Sheet sheet, ChartModel chart) =>
-            (chart.SourceXlsxLocked.HasValue && (chart.SourceXlsxLocked != chart.Locked ||
+            (chart.SourceXlsxLocked.HasValue && (chart.SourceXlsxLocked != chart.Locked || chart.SourceXlsxPrintObject != chart.PrintObject ||
                 !DrawingLockAttributesMatch(chart.SourceXlsxLockAttributes, chart.DrawingLockAttributes) || chart.SourceXlsxLockChildrenXml != chart.DrawingLockChildrenXml)) ||
             chart.ExternalData is not null ||
             chart.UserShapes is not null ||
@@ -4564,6 +4568,7 @@ public sealed partial class XlsxFileAdapter
                 var current = sheet.Pictures[index];
                 if (!IsPatchSafeSourcePicture(current) ||
                     source.IsLocked != current.Locked ||
+                    source.PrintObject != current.PrintObject ||
                     source.LockAspectRatio != current.LockAspectRatio ||
                     source.DrawingNoMove != current.DrawingNoMove ||
                     source.DrawingNoResize != current.DrawingNoResize ||
@@ -4602,6 +4607,7 @@ public sealed partial class XlsxFileAdapter
                 var current = sheet.TextBoxes[index];
                 if (!IsPatchSafeSourceTextBox(current) ||
                     source.Locked != current.Locked ||
+                    source.PrintObject != current.PrintObject ||
                     source.DrawingNoMove != current.DrawingNoMove ||
                     source.DrawingNoResize != current.DrawingNoResize ||
                     !DrawingLockAttributesMatch(source.DrawingLockAttributes, current.DrawingLockAttributes) ||
@@ -4645,6 +4651,7 @@ public sealed partial class XlsxFileAdapter
                 var current = sheet.DrawingShapes[index];
                 if (!IsPatchSafeSourceDrawingShape(current) ||
                     source.Locked != current.Locked ||
+                    source.PrintObject != current.PrintObject ||
                     source.DrawingNoMove != current.DrawingNoMove ||
                     source.DrawingNoResize != current.DrawingNoResize ||
                     !DrawingLockAttributesMatch(source.DrawingLockAttributes, current.DrawingLockAttributes) ||

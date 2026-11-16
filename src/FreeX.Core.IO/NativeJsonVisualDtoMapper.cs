@@ -29,6 +29,7 @@ internal static class NativeJsonVisualDtoMapper
         FlipVertical = picture.FlipVertical,
         IsVisible = picture.IsVisible,
         Locked = picture.Locked,
+        PrintObject = picture.PrintObject,
         CropLeft = SanitizeCropEdge(picture.CropLeft),
         CropTop = SanitizeCropEdge(picture.CropTop),
         CropRight = SanitizeCropEdge(picture.CropRight),
@@ -94,6 +95,7 @@ internal static class NativeJsonVisualDtoMapper
                 FlipVertical = pictureDto.FlipVertical,
                 IsVisible = pictureDto.IsVisible,
                 Locked = pictureDto.Locked,
+        PrintObject = pictureDto.PrintObject,
                 CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
                 CropTop = SanitizeCropEdge(pictureDto.CropTop),
                 CropRight = SanitizeCropEdge(pictureDto.CropRight),
@@ -140,6 +142,7 @@ internal static class NativeJsonVisualDtoMapper
         FlipVertical = textBox.FlipVertical,
         IsVisible = textBox.IsVisible,
         Locked = textBox.Locked,
+        PrintObject = textBox.PrintObject,
         DrawingNoMove = textBox.DrawingNoMove,
         DrawingNoResize = textBox.DrawingNoResize,
         DrawingLockAttributes = textBox.DrawingLockAttributes,
@@ -191,6 +194,7 @@ internal static class NativeJsonVisualDtoMapper
                 FlipVertical = textBoxDto.FlipVertical,
                 IsVisible = textBoxDto.IsVisible,
                 Locked = textBoxDto.Locked,
+        PrintObject = textBoxDto.PrintObject,
                 DrawingNoMove = textBoxDto.DrawingNoMove,
                 DrawingNoResize = textBoxDto.DrawingNoResize,
                 DrawingLockAttributes = textBoxDto.DrawingLockAttributes,
@@ -234,6 +238,7 @@ internal static class NativeJsonVisualDtoMapper
         FlipVertical = shape.FlipVertical,
         IsVisible = shape.IsVisible,
         Locked = shape.Locked,
+        PrintObject = shape.PrintObject,
         DrawingNoMove = shape.DrawingNoMove,
         DrawingNoResize = shape.DrawingNoResize,
         DrawingLockAttributes = shape.DrawingLockAttributes,
@@ -310,6 +315,7 @@ internal static class NativeJsonVisualDtoMapper
                 FlipVertical = shapeDto.FlipVertical,
                 IsVisible = shapeDto.IsVisible,
                 Locked = shapeDto.Locked,
+        PrintObject = shapeDto.PrintObject,
                 DrawingNoMove = shapeDto.DrawingNoMove,
                 DrawingNoResize = shapeDto.DrawingNoResize,
                 DrawingLockAttributes = shapeDto.DrawingLockAttributes,
@@ -435,6 +441,7 @@ internal class PictureDto
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
     public bool Locked { get; set; } = true;
+    public bool PrintObject { get; set; } = true;
     public double CropLeft { get; set; }
     public double CropTop { get; set; }
     public double CropRight { get; set; }
@@ -473,6 +480,7 @@ internal class TextBoxDto
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
     public bool Locked { get; set; } = true;
+    public bool PrintObject { get; set; } = true;
     public bool? DrawingNoMove { get; set; }
     public bool? DrawingNoResize { get; set; }
     public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
@@ -513,6 +521,7 @@ internal class DrawingShapeDto
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
     public bool Locked { get; set; } = true;
+    public bool PrintObject { get; set; } = true;
     public bool? DrawingNoMove { get; set; }
     public bool? DrawingNoResize { get; set; }
     public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }

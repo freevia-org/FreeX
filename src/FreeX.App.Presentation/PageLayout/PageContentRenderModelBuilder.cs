@@ -551,13 +551,14 @@ public static class PageContentRenderModelBuilder
         var pageGridLeftInGridSpace = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, pageGridLeft);
         var pageGridTopInGridSpace = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, pageGridTop);
 
-        var cellLookup = BuildChartCellLookup(workbook, sheet, pageRows, pageColumns);
-        var blocks = new List<PageChartBlock>();
-        foreach (var chart in sheet.Charts)
-        {
-            if (!ShouldPrintChart(chart, pageGridRect))
-                continue;
+        var printableCharts = sheet.Charts.Where(chart => ShouldPrintChart(chart, pageGridRect)).ToArray();
+        if (printableCharts.Length == 0)
+            return [];
 
+        var cellLookup = BuildChartCellLookup(workbook, sheet, pageRows, pageColumns, printableCharts);
+        var blocks = new List<PageChartBlock>();
+        foreach (var chart in printableCharts)
+        {
             var chartGridLeft = ChartAnchorGeometry.ConvertColumnOffsetToGridSpace(sheet, chart.Left);
             var chartGridTop = ChartAnchorGeometry.ConvertRowOffsetToGridSpace(sheet, chart.Top);
             var chartGridWidth = ChartAnchorGeometry.ConvertColumnExtentToGridSpace(sheet, chart.Left, chart.Width);
@@ -605,7 +606,7 @@ public static class PageContentRenderModelBuilder
 
     private static bool ShouldPrintChart(ChartModel chart, LayoutRect pageGridRect)
     {
-        if (!chart.IsVisible ||
+        if (!chart.IsVisible || !chart.PrintObject ||
             !double.IsFinite(chart.Left) ||
             !double.IsFinite(chart.Top) ||
             !double.IsFinite(chart.Width) ||
@@ -635,14 +636,15 @@ public static class PageContentRenderModelBuilder
         Workbook workbook,
         Sheet sheet,
         IReadOnlyList<uint> pageRows,
-        IReadOnlyList<uint> pageColumns)
+        IReadOnlyList<uint> pageColumns,
+        IReadOnlyList<ChartModel> printableCharts)
     {
         var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
         foreach (var row in pageRows)
             foreach (var column in pageColumns)
                 AddDisplayCell(lookup, workbook, sheet, row, column);
 
-        foreach (var chart in sheet.Charts)
+        foreach (var chart in printableCharts)
         {
             var range = chart.DataRange;
             if (range.Start.Sheet != sheet.Id || range.End.Sheet != sheet.Id)
@@ -651,7 +653,7 @@ public static class PageContentRenderModelBuilder
             // A chart with "Show data in hidden rows and columns" off must not read hidden cells at
             // all -- matching ViewportService.BuildChartDataCells, which omits them from the on-screen
             // chart's data cells. Skipping them here keeps this shared, per-sheet lookup a UNION over
-            // the sheet's charts (a sibling chart that DOES show hidden data still contributes them),
+            // the page's printable charts (a sibling chart that DOES show hidden data still contributes them),
             // and PrintChartTextOverlayPlanner.BuildCellLookup then re-applies the per-chart filter so
             // a permissive sibling can never widen a strict chart's printed data labels.
             for (var row = range.Start.Row; row <= range.End.Row; row++)

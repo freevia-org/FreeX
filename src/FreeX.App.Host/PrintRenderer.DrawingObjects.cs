@@ -91,7 +91,7 @@ public static partial class PrintRenderer
 
     private static bool ShouldPrintChart(ChartModel chart, Rect pageGridRect)
     {
-        if (!chart.IsVisible ||
+        if (!chart.IsVisible || !chart.PrintObject ||
             !double.IsFinite(chart.Left) ||
             !double.IsFinite(chart.Top) ||
             !double.IsFinite(chart.Width) ||

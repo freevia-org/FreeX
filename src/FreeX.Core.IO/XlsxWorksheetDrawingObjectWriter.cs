@@ -778,7 +778,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(drawingNs + "prstGeom",
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
-            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked));
+            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked, picture.PrintObject));
 
     /// <summary>
     /// R65-io-image-drawing-6-1: emits a picture inserted via Excel's "Link to File" -- identical to
@@ -832,7 +832,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(drawingNs + "prstGeom",
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
-            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked));
+            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked, picture.PrintObject));
 
     /// <summary>
     /// Reconstructs a CellRangeSnapshot picture (a "camera" / Paste Special &gt; Linked Picture /
@@ -927,7 +927,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XElement(drawingNs + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
                         new XElement(drawingNs + "chExt", new XAttribute("cx", widthEmu), new XAttribute("cy", heightEmu)))),
                 children),
-            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked));
+            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked, picture.PrintObject));
     }
 
     private static XElement ToPictureSnapshotBackgroundShape(
@@ -1032,8 +1032,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
             LockChildren(picture.DrawingLockChildrenXml));
     }
 
-    private static XElement ToDrawingClientData(XNamespace xdr, bool locked) =>
-        new(xdr + "clientData", locked ? null : new XAttribute("fLocksWithSheet", "0"));
+    private static XElement ToDrawingClientData(XNamespace xdr, bool locked, bool printObject) =>
+        new(xdr + "clientData", locked ? null : new XAttribute("fLocksWithSheet", "0"), printObject ? null : new XAttribute("fPrintsWithSheet", "0"));
 
     private static XElement? ToDrawingMovementLocks(XNamespace drawing, string name, bool? noMove, bool? noResize, IReadOnlyDictionary<string, string>? other, string? children) =>
         noMove is null && noResize is null && other is not { Count: > 0 } && children is null ? null : new XElement(drawing + name,
@@ -1175,7 +1175,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     // baking in a border Excel/the user never authored.
                     outlineHasNoFill: textBox.OutlineHasNoFill),
                 ToTextBoxTxBody(textBox, drawingNs, spreadsheetDrawingNs)),
-            ToDrawingClientData(spreadsheetDrawingNs, textBox.Locked));
+            ToDrawingClientData(spreadsheetDrawingNs, textBox.Locked, textBox.PrintObject));
 
     /// <summary>
     /// Builds the <c>&lt;xdr:txBody&gt;</c> element for a text box, round-tripping the font
@@ -1314,7 +1314,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(shape.Width)),
                 new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(shape.Height))),
             shapeOrConnectorElement,
-            ToDrawingClientData(spreadsheetDrawingNs, shape.Locked));
+            ToDrawingClientData(spreadsheetDrawingNs, shape.Locked, shape.PrintObject));
     }
 
     /// <summary>

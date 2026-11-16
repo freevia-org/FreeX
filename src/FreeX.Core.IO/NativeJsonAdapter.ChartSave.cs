@@ -9,6 +9,7 @@ public sealed partial class NativeJsonAdapter
         Type = chart.Type,
         Name = chart.Name,
         Locked = chart.Locked,
+        PrintObject = chart.PrintObject,
         DrawingLockAttributes = chart.DrawingLockAttributes,
         DrawingLockChildrenXml = chart.DrawingLockChildrenXml,
         AltTextTitle = chart.AltTextTitle,

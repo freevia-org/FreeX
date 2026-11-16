@@ -108,6 +108,8 @@ public sealed partial class XlsxFileAdapter
                 chart.Name = chartPart.Name;
                 chart.Locked = chartPart.IsLocked;
                 chart.SourceXlsxLocked = chartPart.IsLocked;
+                chart.PrintObject = chartPart.PrintObject;
+                chart.SourceXlsxPrintObject = chartPart.PrintObject;
                 chart.DrawingLockAttributes = chartPart.DrawingLockAttributes;
                 chart.SourceXlsxLockAttributes = chartPart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(chartPart.DrawingLockAttributes);
                 chart.DrawingLockChildrenXml = chartPart.DrawingLockChildrenXml;
@@ -161,6 +163,8 @@ public sealed partial class XlsxFileAdapter
                     // r378: Format Picture lock flags, previously session-only.
                     LockAspectRatio = picturePart.LockAspectRatio,
                     Locked = picturePart.IsLocked,
+                    PrintObject = picturePart.PrintObject,
+                    SourceXlsxPrintObject = picturePart.PrintObject,
                     DrawingNoMove = picturePart.DrawingNoMove,
                     DrawingNoResize = picturePart.DrawingNoResize,
                     DrawingLockAttributes = picturePart.DrawingLockAttributes,
@@ -195,6 +199,12 @@ public sealed partial class XlsxFileAdapter
                 };
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
             picture.IsSourceLoaded = true;
+            picture.Locked = picturePart.IsLocked;
+            picture.SourceXlsxName = picturePart.Name;
+            picture.SourceXlsxLocked = picturePart.IsLocked;
+            picture.SourceXlsxAspectLock = picture.LockAspectRatio;
+            picture.PrintObject = picturePart.PrintObject;
+            picture.SourceXlsxPrintObject = picturePart.PrintObject;
             sheet.Pictures.Add(picture);
             AddLoadedDrawingObjectOrder(
                 loadedDrawingObjectOrder,
@@ -222,6 +232,8 @@ public sealed partial class XlsxFileAdapter
                 FlipVertical = textBoxPart.FlipVertical,
                 HasFill = textBoxPart.HasFill,
                 Locked = textBoxPart.Locked,
+                    PrintObject = textBoxPart.PrintObject,
+                    SourceXlsxPrintObject = textBoxPart.PrintObject,
                 DrawingNoMove = textBoxPart.DrawingNoMove,
                 DrawingNoResize = textBoxPart.DrawingNoResize,
                 DrawingLockAttributes = textBoxPart.DrawingLockAttributes,
@@ -272,6 +284,8 @@ public sealed partial class XlsxFileAdapter
                     shapePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                 Kind = shapePart.Kind,
                 Locked = shapePart.Locked,
+                    PrintObject = shapePart.PrintObject,
+                    SourceXlsxPrintObject = shapePart.PrintObject,
                 DrawingNoMove = shapePart.DrawingNoMove,
                 DrawingNoResize = shapePart.DrawingNoResize,
                 DrawingLockAttributes = shapePart.DrawingLockAttributes,

@@ -15,6 +15,7 @@ public sealed partial class NativeJsonAdapter
             {
                 Name = chartDto.Name,
                 Locked = chartDto.Locked,
+        PrintObject = chartDto.PrintObject,
         DrawingLockAttributes = chartDto.DrawingLockAttributes,
         DrawingLockChildrenXml = chartDto.DrawingLockChildrenXml,
                 AltTextTitle = chartDto.AltTextTitle,

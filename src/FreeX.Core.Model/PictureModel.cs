@@ -62,6 +62,9 @@ public sealed class PictureModel
     /// while other (default-locked) pictures on the same protected sheet remain immovable.
     /// </summary>
     public bool Locked { get; set; } = true;
+    /// <summary>Whether this visible drawing is included when printing.</summary>
+    public bool PrintObject { get; set; } = true;
+    internal bool? SourceXlsxPrintObject { get; set; }
 
     /// <summary>Independent DrawingML picture movement restriction, when explicitly authored.</summary>
     public bool? DrawingNoMove { get; set; }

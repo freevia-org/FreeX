@@ -72,6 +72,9 @@ public sealed class ChartModel
     /// same protected sheet remain immovable.
     /// </summary>
     public bool Locked { get; set; } = true;
+    /// <summary>Whether this visible drawing is included when printing.</summary>
+    public bool PrintObject { get; set; } = true;
+    internal bool? SourceXlsxPrintObject { get; set; }
     internal bool? SourceXlsxLocked { get; set; }
     public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
     public string? DrawingLockChildrenXml { get; set; }

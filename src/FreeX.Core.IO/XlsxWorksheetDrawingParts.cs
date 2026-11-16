@@ -34,7 +34,8 @@ internal sealed record XlsxChartPackagePart(
     DrawingObjectHyperlink? Hyperlink = null,
     bool IsLocked = true,
     IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
-    string? DrawingLockChildrenXml = null);
+    string? DrawingLockChildrenXml = null,
+    bool PrintObject = true);
 
 internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
@@ -101,7 +102,8 @@ internal sealed record XlsxPicturePackagePart(
     bool? DrawingNoMove = null,
     bool? DrawingNoResize = null,
     IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
-    string? DrawingLockChildrenXml = null);
+    string? DrawingLockChildrenXml = null,
+    bool PrintObject = true);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -145,7 +147,8 @@ internal sealed record XlsxTextBoxPackagePart(
     bool? DrawingNoMove = null,
     bool? DrawingNoResize = null,
     IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
-    string? DrawingLockChildrenXml = null);
+    string? DrawingLockChildrenXml = null,
+    bool PrintObject = true);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -241,7 +244,8 @@ internal sealed record XlsxShapePackagePart(
     bool? DrawingNoMove = null,
     bool? DrawingNoResize = null,
     IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
-    string? DrawingLockChildrenXml = null);
+    string? DrawingLockChildrenXml = null,
+    bool PrintObject = true);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -485,7 +489,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ReadObjectHyperlink(graphicFrameElement ?? chartElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById),
                 ReadLocksWithSheet(graphicFrameElement ?? chartElement),
                 ReadChartLockAttributes(graphicFrameElement ?? chartElement),
-                ReadDrawingLockChildren(graphicFrameElement ?? chartElement, "graphicFrameLocks")));
+                ReadDrawingLockChildren(graphicFrameElement ?? chartElement, "graphicFrameLocks"),
+                ReadPrintsWithSheet(graphicFrameElement ?? chartElement)));
         }
 
         return charts;
@@ -629,7 +634,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 DrawingNoMove: noMove,
                 DrawingNoResize: noResize,
                 DrawingLockAttributes: ReadOtherDrawingLockAttributes(pictureElement, "picLocks", includeAspect: true),
-                DrawingLockChildrenXml: ReadDrawingLockChildren(pictureElement, "picLocks")));
+                DrawingLockChildrenXml: ReadDrawingLockChildren(pictureElement, "picLocks"),
+                PrintObject: ReadPrintsWithSheet(pictureElement)));
         }
 
         return pictures;
@@ -709,7 +715,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 LinkedSourceEndCol: marker.Value.EndCol,
                 SnapshotSourceRowCount: marker.Value.SourceRowCount,
                 SnapshotSourceColumnCount: marker.Value.SourceColumnCount,
-                IsLocked: ReadLocksWithSheet(group)));
+                IsLocked: ReadLocksWithSheet(group), PrintObject: ReadPrintsWithSheet(group)));
         }
 
         return result;
@@ -1070,7 +1076,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 DrawingNoMove: ReadDrawingLockFlag(shapeElement, "spLocks", "noMove"),
                 DrawingNoResize: ReadDrawingLockFlag(shapeElement, "spLocks", "noResize"),
                 DrawingLockAttributes: ReadOtherDrawingLockAttributes(shapeElement, "spLocks", includeAspect: false),
-                DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks")));
+                DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks"),
+                PrintObject: ReadPrintsWithSheet(shapeElement)));
             return;
         }
 
@@ -1153,7 +1160,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             DrawingNoMove: ReadDrawingLockFlag(shapeElement, "spLocks", "noMove"),
             DrawingNoResize: ReadDrawingLockFlag(shapeElement, "spLocks", "noResize"),
             DrawingLockAttributes: ReadOtherDrawingLockAttributes(shapeElement, "spLocks", includeAspect: false),
-                DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks")));
+                DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks"),
+                PrintObject: ReadPrintsWithSheet(shapeElement)));
     }
 
     /// <summary>
@@ -1465,7 +1473,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             DrawingNoMove: ReadDrawingLockFlag(cxnSpElement, "cxnSpLocks", "noMove"),
             DrawingNoResize: ReadDrawingLockFlag(cxnSpElement, "cxnSpLocks", "noResize"),
             DrawingLockAttributes: ReadOtherDrawingLockAttributes(cxnSpElement, "cxnSpLocks", includeAspect: false),
-                DrawingLockChildrenXml: ReadDrawingLockChildren(cxnSpElement, "cxnSpLocks")));
+                DrawingLockChildrenXml: ReadDrawingLockChildren(cxnSpElement, "cxnSpLocks"),
+                PrintObject: ReadPrintsWithSheet(cxnSpElement)));
     }
 
     private static bool ReadUsesThemeEffectStyle(
@@ -1565,6 +1574,13 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         static bool? OptionalFlag(XElement element, string name) => element.Attribute(name) is null ? null : Flag(element, name);
         return (Flag(locks, "noChangeAspect"), OptionalFlag(locks, "noMove"), OptionalFlag(locks, "noResize"));
+    }
+
+    private static bool ReadPrintsWithSheet(XElement element)
+    {
+        XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var raw = FindNearestAnchorElement(element, xdr)?.Element(xdr + "clientData")?.Attribute("fPrintsWithSheet")?.Value;
+        return raw is not ("0" or "false");
     }
 
     private static bool ReadLocksWithSheet(XElement element)

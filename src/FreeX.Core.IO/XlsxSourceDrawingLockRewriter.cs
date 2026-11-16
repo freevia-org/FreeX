@@ -10,7 +10,7 @@ internal static class XlsxSourceDrawingLockRewriter
     private static readonly XNamespace Xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
     private static readonly XNamespace Drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    private sealed record LockState(bool Locked, bool? Aspect, bool? NoMove, bool? NoResize, IReadOnlyDictionary<string, string>? Other, string? Children);
+    private sealed record LockState(bool Locked, bool PrintObject, bool? Aspect, bool? NoMove, bool? NoResize, IReadOnlyDictionary<string, string>? Other, string? Children);
 
     internal static void Save(Stream stream, Workbook workbook, XlsxWorkbookWorksheetPathMap? paths)
     {
@@ -39,20 +39,20 @@ internal static class XlsxSourceDrawingLockRewriter
                 if (changed) changedNames.Add(name);
             }
             foreach (var picture in sheet.Pictures) Add(picture.SourceXlsxName, picture.IsSourceLoaded,
-                new(picture.Locked, picture.LockAspectRatio, picture.DrawingNoMove, picture.DrawingNoResize, picture.DrawingLockAttributes, picture.DrawingLockChildrenXml),
-                picture.SourceXlsxLocked != picture.Locked || picture.SourceXlsxAspectLock != picture.LockAspectRatio || picture.SourceXlsxNoMove != picture.DrawingNoMove ||
+                new(picture.Locked, picture.PrintObject, picture.LockAspectRatio, picture.DrawingNoMove, picture.DrawingNoResize, picture.DrawingLockAttributes, picture.DrawingLockChildrenXml),
+                picture.SourceXlsxLocked != picture.Locked || picture.SourceXlsxPrintObject != picture.PrintObject || picture.SourceXlsxAspectLock != picture.LockAspectRatio || picture.SourceXlsxNoMove != picture.DrawingNoMove ||
                 picture.SourceXlsxNoResize != picture.DrawingNoResize || !SameAttributes(picture.SourceXlsxLockAttributes, picture.DrawingLockAttributes) || picture.SourceXlsxLockChildrenXml != picture.DrawingLockChildrenXml);
             foreach (var textBox in sheet.TextBoxes) Add(textBox.SourceXlsxName, textBox.IsSourceLoaded,
-                new(textBox.Locked, null, textBox.DrawingNoMove, textBox.DrawingNoResize, textBox.DrawingLockAttributes, textBox.DrawingLockChildrenXml),
-                textBox.SourceXlsxLocked != textBox.Locked || textBox.SourceXlsxNoMove != textBox.DrawingNoMove || textBox.SourceXlsxNoResize != textBox.DrawingNoResize ||
+                new(textBox.Locked, textBox.PrintObject, null, textBox.DrawingNoMove, textBox.DrawingNoResize, textBox.DrawingLockAttributes, textBox.DrawingLockChildrenXml),
+                textBox.SourceXlsxLocked != textBox.Locked || textBox.SourceXlsxPrintObject != textBox.PrintObject || textBox.SourceXlsxNoMove != textBox.DrawingNoMove || textBox.SourceXlsxNoResize != textBox.DrawingNoResize ||
                 !SameAttributes(textBox.SourceXlsxLockAttributes, textBox.DrawingLockAttributes) || textBox.SourceXlsxLockChildrenXml != textBox.DrawingLockChildrenXml);
             foreach (var shape in sheet.DrawingShapes) Add(shape.SourceXlsxName, shape.IsSourceLoaded,
-                new(shape.Locked, null, shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml),
-                shape.SourceXlsxLocked != shape.Locked || shape.SourceXlsxNoMove != shape.DrawingNoMove || shape.SourceXlsxNoResize != shape.DrawingNoResize ||
+                new(shape.Locked, shape.PrintObject, null, shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml),
+                shape.SourceXlsxLocked != shape.Locked || shape.SourceXlsxPrintObject != shape.PrintObject || shape.SourceXlsxNoMove != shape.DrawingNoMove || shape.SourceXlsxNoResize != shape.DrawingNoResize ||
                 !SameAttributes(shape.SourceXlsxLockAttributes, shape.DrawingLockAttributes) || shape.SourceXlsxLockChildrenXml != shape.DrawingLockChildrenXml);
             // Chart anchors are regenerated before this pass, unlike the preserved source objects.
             foreach (var chart in sheet.Charts) Add(chart.Name, chart.SourceXlsxLocked.HasValue,
-                new(chart.Locked, null, null, null, chart.DrawingLockAttributes, chart.DrawingLockChildrenXml), chart.SourceXlsxLocked != chart.Locked ||
+                new(chart.Locked, chart.PrintObject, null, null, null, chart.DrawingLockAttributes, chart.DrawingLockChildrenXml), chart.SourceXlsxLocked != chart.Locked || chart.SourceXlsxPrintObject != chart.PrintObject ||
                 !SameAttributes(chart.SourceXlsxLockAttributes, chart.DrawingLockAttributes) || chart.SourceXlsxLockChildrenXml != chart.DrawingLockChildrenXml);
             if (states.Count == 0) continue;
             var worksheetPath = paths?.SheetPathsByName.GetValueOrDefault(sheet.Name);
@@ -106,18 +106,20 @@ internal static class XlsxSourceDrawingLockRewriter
             }
             foreach (var group in operations.Where(item => item.Anchor is not null).GroupBy(item => item.Anchor!))
             {
-                if (group.Select(item => item.State.Locked).Distinct().Skip(1).Any())
-                    throw new InvalidOperationException("Drawing objects sharing one anchor cannot have different sheet-protection locks.");
+                if (group.Select(item => (item.State.Locked, item.State.PrintObject)).Distinct().Skip(1).Any())
+                    throw new InvalidOperationException("Drawing objects sharing one anchor cannot have different sheet-protection or printing flags.");
                 var anchor = group.Key;
                 var raw = anchor.Element(Xdr + "clientData")?.Attribute("fLocksWithSheet")?.Value;
                 var oldLocked = raw is not ("0" or "false");
-                if (oldLocked == group.First().State.Locked || !anchor.Descendants(Xdr + "grpSp").Any()) continue;
+                var printRaw = anchor.Element(Xdr + "clientData")?.Attribute("fPrintsWithSheet")?.Value;
+                var oldPrintObject = printRaw is not ("0" or "false");
+                if ((oldLocked == group.First().State.Locked && oldPrintObject == group.First().State.PrintObject) || !anchor.Descendants(Xdr + "grpSp").Any()) continue;
                 var modeled = group.Select(item => item.Element).ToHashSet();
                 var unmatchedChild = anchor.Descendants().Any(item =>
                     (item.Name == Xdr + "pic" || item.Name == Xdr + "sp" || item.Name == Xdr + "cxnSp" || item.Name == Xdr + "graphicFrame" || item.Name == Xdr + "contentPart") &&
                     !modeled.Contains(item));
                 if (unmatchedChild)
-                    throw new InvalidOperationException("Cannot change a group anchor lock while an unmodeled drawing object shares it.");
+                    throw new InvalidOperationException("Cannot change group anchor flags while an unmodeled drawing object shares it.");
             }
             foreach (var (element, anchor, properties, locks, state) in operations)
             {
@@ -128,6 +130,9 @@ internal static class XlsxSourceDrawingLockRewriter
                     var raw = clientData.Attribute("fLocksWithSheet")?.Value;
                     var oldLocked = raw is not ("0" or "false");
                     if (oldLocked != state.Locked) clientData.SetAttributeValue("fLocksWithSheet", state.Locked ? null : "0");
+                    var printRaw = clientData.Attribute("fPrintsWithSheet")?.Value;
+                    var oldPrintObject = printRaw is not ("0" or "false");
+                    if (oldPrintObject != state.PrintObject) clientData.SetAttributeValue("fPrintsWithSheet", state.PrintObject ? null : "0");
                 }
                 if (properties is null || element.Name == Xdr + "grpSp") continue;
                 var lockElement = properties.Element(Drawing + locks);

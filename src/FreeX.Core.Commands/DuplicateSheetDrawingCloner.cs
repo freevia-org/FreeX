@@ -468,6 +468,7 @@ internal static class DuplicateSheetDrawingCloner
             // unchecked) silently reverted to the locked default on every clone, re-locking it against
             // move/resize under sheet protection even though the source stayed unlocked.
             Locked = textBox.Locked,
+            PrintObject = textBox.PrintObject,
             DrawingNoMove = textBox.DrawingNoMove,
             DrawingNoResize = textBox.DrawingNoResize,
             DrawingLockAttributes = textBox.DrawingLockAttributes is null ? null : new Dictionary<string, string>(textBox.DrawingLockAttributes),
@@ -534,6 +535,7 @@ internal static class DuplicateSheetDrawingCloner
             IsVisible = shape.IsVisible,
             HasFill = shape.HasFill,
             Locked = shape.Locked,
+            PrintObject = shape.PrintObject,
             DrawingNoMove = shape.DrawingNoMove,
             DrawingNoResize = shape.DrawingNoResize,
             DrawingLockAttributes = shape.DrawingLockAttributes is null ? null : new Dictionary<string, string>(shape.DrawingLockAttributes),
@@ -688,6 +690,7 @@ internal static class DuplicateSheetDrawingCloner
             // silently reverted to the locked default on every clone, re-locking it against move/resize
             // under sheet protection even though the source stayed unlocked.
             Locked = picture.Locked,
+            PrintObject = picture.PrintObject,
             Width = picture.Width,
             Height = picture.Height,
             LockAspectRatio = picture.LockAspectRatio,
@@ -758,6 +761,7 @@ internal static class DuplicateSheetDrawingCloner
             // silently reverted to the locked default on every clone, re-locking it against move/resize
             // under sheet protection even though the source stayed unlocked.
             Locked = chart.Locked,
+            PrintObject = chart.PrintObject,
             DrawingLockAttributes = chart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(chart.DrawingLockAttributes),
             DrawingLockChildrenXml = chart.DrawingLockChildrenXml,
             Type = chart.Type,

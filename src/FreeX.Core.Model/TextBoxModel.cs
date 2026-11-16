@@ -49,6 +49,9 @@ public sealed class TextBoxModel
     /// other (default-locked) text boxes on the same protected sheet remain immovable.
     /// </summary>
     public bool Locked { get; set; } = true;
+    /// <summary>Whether this visible drawing is included when printing.</summary>
+    public bool PrintObject { get; set; } = true;
+    internal bool? SourceXlsxPrintObject { get; set; }
     /// <summary>Independent DrawingML movement restriction, when explicitly authored.</summary>
     public bool? DrawingNoMove { get; set; }
     /// <summary>Independent DrawingML resize restriction, when explicitly authored.</summary>

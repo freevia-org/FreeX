@@ -894,7 +894,7 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(chart.Height))),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0")));
+            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0"), chart.PrintObject ? null : new XAttribute("fPrintsWithSheet", "0")));
 
     private static XElement ToOneCellChartAnchor(
         ChartModel chart,
@@ -917,7 +917,7 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(chart.Height))),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0")));
+            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0"), chart.PrintObject ? null : new XAttribute("fPrintsWithSheet", "0")));
     }
 
     private static XElement ToTwoCellChartAnchor(
@@ -940,7 +940,7 @@ internal static class XlsxWorksheetChartWriter
             ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
             ToAnchorMarkerXml("to", to, spreadsheetDrawingNs),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0")));
+            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0"), chart.PrintObject ? null : new XAttribute("fPrintsWithSheet", "0")));
     }
 
     private static XElement ToChartFrameOrAlternateContent(

@@ -40,6 +40,62 @@ public sealed class XlsxDrawingSheetLockTests
         picture.LockAspectRatio.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PrintObject_RoundTripsOnAllDrawingKindsAndSourceEdit(bool print)
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Name = "Shape", Anchor = new CellAddress(sheet.Id, 1, 1), PrintObject = print });
+        sheet.TextBoxes.Add(new TextBoxModel { Name = "Text", Anchor = new CellAddress(sheet.Id, 2, 1), PrintObject = print });
+        sheet.Pictures.Add(new PictureModel { Name = "Picture", Anchor = new CellAddress(sheet.Id, 3, 1), ImageBytes = Png, PrintObject = print });
+        sheet.Charts.Add(new ChartModel { Name = "Chart", Type = ChartType.Column, DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)), PrintObject = print });
+        using var first = Save(workbook);
+        var loaded = new XlsxFileAdapter().Load(first);
+        var source = loaded.Sheets.Single();
+        source.DrawingShapes.Single().PrintObject.Should().Be(print);
+        source.TextBoxes.Single().PrintObject.Should().Be(print);
+        source.Pictures.Single().PrintObject.Should().Be(print);
+        source.Charts.Single().PrintObject.Should().Be(print);
+        source.Pictures.Single().IsVisible.Should().BeTrue();
+        source.DrawingShapes.Single().PrintObject = !print;
+        source.TextBoxes.Single().PrintObject = !print;
+        source.Pictures.Single().PrintObject = !print;
+        source.Charts.Single().PrintObject = !print;
+        using var second = Save(loaded);
+        var result = new XlsxFileAdapter().Load(second).Sheets.Single();
+        result.DrawingShapes.Single().PrintObject.Should().Be(!print);
+        result.TextBoxes.Single().PrintObject.Should().Be(!print);
+        result.Pictures.Single().PrintObject.Should().Be(!print);
+        result.Charts.Single().PrintObject.Should().Be(!print);
+        result.Pictures.Single().IsVisible.Should().BeTrue();
+        using var native = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(loaded, native);
+        native.Position = 0;
+        var nativeSheet = adapter.Load(native).Sheets.Single();
+        nativeSheet.DrawingShapes.Single().PrintObject.Should().Be(!print);
+        nativeSheet.TextBoxes.Single().PrintObject.Should().Be(!print);
+        nativeSheet.Pictures.Single().PrintObject.Should().Be(!print);
+        nativeSheet.Charts.Single().PrintObject.Should().Be(!print);
+    }
+
+    [Fact]
+    public void PrintObject_SourcePatchPreservesOtherClientDataAttributes()
+    {
+        using var input = Save(CreateTwoShapes());
+        RewriteDrawing(input, root => root.Descendants(Xdr + "clientData").First().SetAttributeValue("fLocksWithSheet", "0"));
+        var workbook = new XlsxFileAdapter().Load(input);
+        var shape = workbook.Sheets.Single().DrawingShapes.Single(item => item.Name == "One");
+        shape.Locked.Should().BeFalse();
+        shape.PrintObject = false;
+        using var output = Save(workbook);
+        var result = new XlsxFileAdapter().Load(output).Sheets.Single().DrawingShapes.Single(item => item.Name == "One");
+        result.PrintObject.Should().BeFalse();
+        result.Locked.Should().BeFalse();
+    }
+
     [Fact]
     public void ExcelShapeFixture_UnlockEditSurvivesSourcePackageSave()
     {
@@ -191,9 +247,11 @@ public sealed class XlsxDrawingSheetLockTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void GroupChildrenWithConflictingSheetLocks_FailRegardlessOfXmlOrder(bool reverse)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void GroupChildrenWithConflictingAnchorFlags_FailRegardlessOfXmlOrder(bool reverse, bool printConflict)
     {
         using var input = Save(CreateTwoShapes());
         RewriteDrawing(input, root =>
@@ -213,7 +271,9 @@ public sealed class XlsxDrawingSheetLockTests
         });
         var loaded = new XlsxFileAdapter().Load(input);
         loaded.Sheets.Single().DrawingShapes.Should().HaveCount(2);
-        loaded.Sheets.Single().DrawingShapes.Single(shape => shape.Name == "One").Locked = false;
+        var shape = loaded.Sheets.Single().DrawingShapes.Single(shape => shape.Name == "One");
+        if (printConflict) shape.PrintObject = false;
+        else shape.Locked = false;
         Action save = () => { using var result = Save(loaded); };
         save.Should().Throw<InvalidOperationException>().WithMessage("*sharing one anchor*");
     }

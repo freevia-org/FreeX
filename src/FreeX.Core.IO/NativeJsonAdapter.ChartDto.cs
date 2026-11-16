@@ -8,6 +8,7 @@ public sealed partial class NativeJsonAdapter
     {
         public string? Name { get; set; }
         public bool Locked { get; set; } = true;
+        public bool PrintObject { get; set; } = true;
         public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
         public string? DrawingLockChildrenXml { get; set; }
 
