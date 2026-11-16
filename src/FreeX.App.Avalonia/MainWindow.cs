@@ -19481,6 +19481,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        // Backspace/Delete must be allowed to remove a selected cell-value completion without the
+        // following TextChanged pass immediately offering the same completion again.
+        if (e.Key is Key.Back or Key.Delete)
+            _formulaRangeEditingSession.SuppressNextCellValueAutocomplete();
+
         if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyModifiers))
         {
             e.Handled = true;
