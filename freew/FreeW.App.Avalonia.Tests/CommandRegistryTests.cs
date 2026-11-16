@@ -279,6 +279,38 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public async Task Legacy_form_field_shading_command_toggles_screen_only_field_chrome()
+    {
+        await Session.Dispatch(() =>
+        {
+            var editor = new DocumentView();
+            editor.LoadDocument(TextDocument.CreateEmpty());
+            editor.InsertLegacyFormField(LegacyFormFieldKind.Text);
+            editor.Measure(new Size(800, 1200));
+            var fieldRun = LegacyFormField.Enumerate(editor.Document).Single().Run;
+            var originalText = fieldRun.Text;
+            var originalField = fieldRun.ComplexField;
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
+            var placed = (System.Collections.IEnumerable)(typeof(DocumentView)
+                .GetField("_placed", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(editor)!);
+            placed.Cast<object>().Where(item => (bool)item.GetType().GetProperty("IsLegacyFormField")!.GetValue(item)!)
+                .Should().HaveCount(originalText.Length, "the renderer must tag only glyphs from the WPF-shaded field run");
+
+            // WPF's matching command flips its screen-only shading preference and rerenders; it does not
+            // edit the field's result or formatting. Avalonia used to register this command to an empty action.
+            DocumentView.LegacyFormFieldShadingVisible.Should().BeTrue();
+            Execute(registry, "freew.ff-shading");
+            DocumentView.LegacyFormFieldShadingVisible.Should().BeFalse();
+            fieldRun.Text.Should().Be(originalText);
+            fieldRun.ComplexField.Should().BeSameAs(originalField);
+
+            Execute(registry, "freew.ff-shading");
+            DocumentView.LegacyFormFieldShadingVisible.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void Legacy_form_field_options_apply_and_undo_as_one_model_edit()
     {
         var view = new DocumentView();

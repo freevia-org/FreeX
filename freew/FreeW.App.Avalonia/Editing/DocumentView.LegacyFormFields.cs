@@ -5,10 +5,20 @@ namespace FreeW.App.Avalonia.Editing;
 
 public sealed partial class DocumentView
 {
+    /// <summary>Word's default on-screen legacy form-field shading preference.</summary>
+    public static bool LegacyFormFieldShadingVisible { get; private set; } = true;
+
+    /// <summary>Developer &gt; Legacy Tools &gt; Form Field Shading. This is view chrome, not document formatting.</summary>
+    public void ToggleLegacyFormFieldShading()
+    {
+        LegacyFormFieldShadingVisible = !LegacyFormFieldShadingVisible;
+        InvalidateVisual();
+    }
+
     /// <summary>
     /// Developer &gt; Legacy Tools: inserts a Word 97-2003 Text / Check Box / Drop-Down form field at the
     /// caret, with the same defaults and naming as the WPF editor. The Avalonia renderer shows and
-    /// round-trips form fields (their result text); form-field fill-in and shading remain separate gaps.
+    /// round-trips form fields (their result text), including Word's screen-only shading toggle.
     /// </summary>
     public void InsertLegacyFormField(LegacyFormFieldKind kind)
     {
