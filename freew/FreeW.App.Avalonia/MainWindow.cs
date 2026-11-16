@@ -1065,6 +1065,32 @@ public sealed partial class MainWindow : Window
     private Task OpenWordCountDialogAsync() =>
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
+    private Task OpenLegacyFormFieldOptionsAsync() =>
+        OpenLegacyFormFieldOptionsAsync(field => LegacyFormFieldOptionsDialog.ShowAsync(this, field));
+
+    private async Task OpenLegacyFormFieldOptionsAsync(
+        Func<LegacyFormField, Task<LegacyFormField?>> showDialogAsync)
+    {
+        if (_editor.LegacyFormFieldOptionsTargetAtCaret() is not { } target)
+        {
+            _status.Text = LegacyFormFieldOptionsModel.Text("NoFieldAtCaret");
+            _editor.Focus();
+            return;
+        }
+
+        if (_editor.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyTextEdit).IsBlocked)
+        {
+            _status.Text = LegacyFormFieldOptionsModel.Text("EditBlocked");
+            _editor.Focus();
+            return;
+        }
+
+        var updated = await showDialogAsync(target.FormField);
+        if (updated is not null && !_editor.ApplyLegacyFormFieldOptions(target.Field, updated))
+            _status.Text = LegacyFormFieldOptionsModel.Text("ChangeFailed");
+        _editor.Focus();
+    }
+
     private async Task OpenCrossReferenceDialogAsync()
     {
         var dialog = new CrossReferenceDialog(_editor.Document);
@@ -2143,6 +2169,7 @@ public sealed partial class MainWindow : Window
             OpenHyphenationOptionsDialog: () => RunUiTask(OpenHyphenationOptionsDialogAsync),
             OpenManualHyphenationDialog: () => RunUiTask(OpenManualHyphenationDialogAsync),
             OpenLineNumberOptionsDialog: () => RunUiTask(OpenLineNumberOptionsDialogAsync),
+            OpenLegacyFormFieldOptions: () => RunUiTask(OpenLegacyFormFieldOptionsAsync),
             OpenPageNumberFormatDialog: () => RunUiTask(OpenPageNumberFormatDialogAsync),
             AskHeaderFooterText: _askHeaderFooterText ??
                 ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),

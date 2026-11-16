@@ -17,6 +17,8 @@ public sealed class AvaloniaContextMenuInteractionTests
     {
         await Session.Dispatch(() =>
         {
+            var anchor = new Button();
+            var window = Show(anchor);
             var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
                 new RibbonMenu(
                 [
@@ -30,12 +32,74 @@ public sealed class AvaloniaContextMenuInteractionTests
                 _ => { });
             var parent = menu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "More"));
             var child = Assert.Single(parent.Items.OfType<MenuItem>());
+            menu.PlacementTarget = anchor;
 
-            parent.IsSubMenuOpen = true;
-            RaiseKey(child, Key.Left);
+            try
+            {
+                menu.Open(anchor);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                parent.IsSubMenuOpen = true;
+                child.Focus(NavigationMethod.Directional);
+                Assert.True(child.IsFocused);
+                RaiseKey(child, Key.Left);
 
-            Assert.False(parent.IsSubMenuOpen);
-            Assert.True(parent.IsSelected);
+                Assert.False(parent.IsSubMenuOpen);
+                Assert.True(parent.IsSelected);
+                Assert.False(parent.IsFocused);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.ContextIdle);
+                Assert.True(parent.IsFocused);
+            }
+            finally
+            {
+                menu.Close();
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ContextMenu_NestedCloseDoesNotReclaimFocusAfterLaterNavigation()
+    {
+        await Session.Dispatch(() =>
+        {
+            var anchor = new Button();
+            var window = Show(anchor);
+            var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+                new RibbonMenu(
+                [
+                    new RibbonMenuItem("More", Children:
+                    [
+                        new RibbonMenuItem("Child"),
+                    ]),
+                    new RibbonMenuItem("Other"),
+                ]),
+                _ => { });
+            var items = menu.Items.OfType<MenuItem>().ToArray();
+            var parent = items[0];
+            var other = items[1];
+            var child = Assert.Single(parent.Items.OfType<MenuItem>());
+            menu.PlacementTarget = anchor;
+
+            try
+            {
+                menu.Open(anchor);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                parent.IsSubMenuOpen = true;
+                child.Focus(NavigationMethod.Directional);
+                RaiseKey(child, Key.Left);
+
+                other.Focus(NavigationMethod.Directional);
+                Assert.True(other.IsFocused);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.ContextIdle);
+
+                Assert.True(other.IsFocused);
+                Assert.False(parent.IsFocused);
+            }
+            finally
+            {
+                menu.Close();
+                window.Close();
+            }
         }, CancellationToken.None);
     }
 
