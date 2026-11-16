@@ -237,45 +237,82 @@ public static class GridAutofillPlanner
         var srcLeft = srcLeftCol.LeftOffset + rowHeaderWidth;
         var srcRight = srcRightCol.LeftOffset + rowHeaderWidth + srcRightCol.Width;
 
-        var boundTop = Math.Min(srcTop, pointer.Y);
-        var boundBottom = Math.Max(srcBottom, pointer.Y);
-        var boundLeft = Math.Min(srcLeft, pointer.X);
-        var boundRight = Math.Max(srcRight, pointer.X);
-
-        uint? targetRow = null;
-        uint? targetColumn = null;
-        var preferTopRow = pointer.Y < srcTop;
-        var preferLeftColumn = pointer.X < srcLeft;
-
-        foreach (var row in viewport.RowMetrics)
-        {
-            var midY = row.TopOffset + columnHeaderHeight + row.Height / 2;
-            if (midY < boundTop)
-                continue;
-            if (midY > boundBottom)
-                break;
-
-            targetRow ??= row.Row;
-            if (!preferTopRow)
-                targetRow = row.Row;
-        }
-
-        foreach (var column in viewport.ColMetrics)
-        {
-            var midX = column.LeftOffset + rowHeaderWidth + column.Width / 2;
-            if (midX < boundLeft)
-                continue;
-            if (midX > boundRight)
-                break;
-
-            targetColumn ??= column.Col;
-            if (!preferLeftColumn)
-                targetColumn = column.Col;
-        }
+        var targetRow = CalculateDragAxisTarget(
+            viewport.RowMetrics, columnHeaderHeight, srcTop, srcBottom, pointer.Y, sequential: false,
+            static row => (row.Row, row.TopOffset, row.Height));
+        var targetColumn = CalculateDragAxisTarget(
+            viewport.ColMetrics, rowHeaderWidth, srcLeft, srcRight, pointer.X, sequential: false,
+            static column => (column.Col, column.LeftOffset, column.Width));
 
         return targetRow.HasValue && targetColumn.HasValue
             ? new CellAddress(default, targetRow.Value, targetColumn.Value)
             : null;
+    }
+
+    /// <summary>
+    /// Resolves a drag in displayed coordinates. Sequential layouts use the same projected axes
+    /// as the worksheet grid, including pinned split bands and displayed cell sizes.
+    /// Offset layouts use the viewport's main axes.
+    /// </summary>
+    public static CellAddress? CalculateDragTarget(
+        ViewportModel viewport,
+        GridRange source,
+        GridPoint pointer,
+        ViewportGeometrySettings settings)
+    {
+        var sequential = settings.MetricPlacement == ViewportMetricPlacement.Sequential;
+        var rows = sequential ? ViewportGeometryPlanner.ProjectRows(viewport) : viewport.RowMetrics;
+        var columns = sequential ? ViewportGeometryPlanner.ProjectColumns(viewport) : viewport.ColMetrics;
+        if (!ViewportGeometryPlanner.TryGetCellBounds(rows, columns, source.Start.Row, source.Start.Col, settings, out var start) ||
+            !ViewportGeometryPlanner.TryGetCellBounds(rows, columns, source.End.Row, source.End.Col, settings, out var end))
+        {
+            return null;
+        }
+
+        var targetRow = CalculateDragAxisTarget(
+            rows, settings.ColumnHeaderHeight, start.Top, end.Bottom, pointer.Y, sequential,
+            row => (row.Row, row.TopOffset * settings.EffectiveScale, settings.GetRowHeight(row)));
+        var targetColumn = CalculateDragAxisTarget(
+            columns, settings.RowHeaderWidth, start.Left, end.Right, pointer.X, sequential,
+            column => (column.Col, column.LeftOffset * settings.EffectiveScale, settings.GetColumnWidth(column)));
+
+        return targetRow.HasValue && targetColumn.HasValue
+            ? new CellAddress(source.Start.Sheet, targetRow.Value, targetColumn.Value)
+            : null;
+    }
+
+    private static uint? CalculateDragAxisTarget<TMetric>(
+        IReadOnlyList<TMetric> metrics,
+        double origin,
+        double sourceStart,
+        double sourceEnd,
+        double pointer,
+        bool sequential,
+        Func<TMetric, (uint Index, double Offset, double Size)> getGeometry)
+    {
+        var lowerBound = Math.Min(sourceStart, pointer);
+        var upperBound = Math.Max(sourceEnd, pointer);
+        var preferFirst = pointer < sourceStart;
+        var nextStart = origin;
+        uint? target = null;
+        for (var i = 0; i < metrics.Count; i++)
+        {
+            var (index, offset, size) = getGeometry(metrics[i]);
+            var start = sequential ? nextStart : origin + offset;
+            var midpoint = start + size / 2;
+            nextStart = start + size;
+
+            if (midpoint < lowerBound)
+                continue;
+            if (midpoint > upperBound)
+                break;
+
+            if (preferFirst)
+                return index;
+            target = index;
+        }
+
+        return target;
     }
 
     public static bool IsOnHandle(
