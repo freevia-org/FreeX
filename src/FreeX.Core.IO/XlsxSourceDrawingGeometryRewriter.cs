@@ -495,18 +495,18 @@ internal static class XlsxSourceDrawingGeometryRewriter
         if (existing?.Element(drawingNs + "bodyPr") is { } currentProperties &&
             candidate.Element(drawingNs + "bodyPr") is { } candidateProperties)
             candidateProperties.ReplaceWith(new XElement(currentProperties));
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        static XElement WithoutRelationshipAttributes(XElement element, XNamespace ns)
+        {
+            var clone = new XElement(element);
+            foreach (var attribute in clone.DescendantsAndSelf().Attributes().Where(a => a.Name.Namespace == ns || a.IsNamespaceDeclaration).ToArray()) attribute.Remove();
+            return clone;
+        }
         if (existing is not null && ReferenceEquals(document, originalDocument))
         {
             // The package merger may renumber relationships while preserving their targets.
             // When the original immutable document is otherwise unchanged, retain the merged
             // body and its opaque IDs instead of trying to interpret unknown extensions.
-            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-            static XElement WithoutRelationshipAttributes(XElement element, XNamespace ns)
-            {
-                var clone = new XElement(element);
-                foreach (var attribute in clone.DescendantsAndSelf().Attributes().Where(a => a.Name.Namespace == ns || a.IsNamespaceDeclaration).ToArray()) attribute.Remove();
-                return clone;
-            }
             if (XNode.DeepEquals(WithoutRelationshipAttributes(existing, relNs), WithoutRelationshipAttributes(candidate, relNs))) return false;
         }
         // Equal r:id text does not prove equal targets after copying across drawing parts.
@@ -514,10 +514,35 @@ internal static class XlsxSourceDrawingGeometryRewriter
             (!XlsxShapeTextDocumentCodec.HasOpaqueRelationships(document) || ReferenceEquals(document, originalDocument))) return false;
         // Relationship IDs are owned by a drawing part; copying them from a different body can bind
         // to the wrong target. Retain an identical source body above, but reject unsafe replacement.
-        candidate = XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: false, bindTextRelationship);
+        var sameSource = existing is not null && originalDocument is not null && document.SourceOwnershipId == originalDocument.SourceOwnershipId &&
+            XNode.DeepEquals(WithoutRelationshipAttributes(existing, relNs), WithoutRelationshipAttributes(candidate, relNs));
+        Dictionary<int, string>? opaqueRelationshipValues = null;
+        if (sameSource)
+        {
+            // The package merge can renumber opaque IDs. Retain their values from the current
+            // drawing, not the original snapshot; known text hyperlinks are rebound below.
+            var currentAttributes = existing!.DescendantsAndSelf().Attributes().Where(a => a.Name.Namespace == relNs).ToArray();
+            var candidateAttributes = candidate.DescendantsAndSelf().Attributes().Where(a => a.Name.Namespace == relNs).ToArray();
+            var known = XlsxShapeTextDocumentCodec.SourceRelationships(document);
+            if (currentAttributes.Length != candidateAttributes.Length || currentAttributes.Where((attribute, index) =>
+                attribute.Name != candidateAttributes[index].Name || attribute.Parent?.Name != candidateAttributes[index].Parent?.Name).Any())
+                sameSource = false;
+            else
+                for (var index = 0; index < candidateAttributes.Length; index++)
+                    if (candidateAttributes[index].Name != relNs + "id" || candidateAttributes[index].Parent?.Name != drawingNs + "hlinkClick" ||
+                        !known.ContainsKey(candidateAttributes[index].Value))
+                        (opaqueRelationshipValues ??= [])[index] = currentAttributes[index].Value;
+        }
+        candidate = XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: false, bindTextRelationship,
+            preserveOpaqueRelationships: sameSource);
         if (existing?.Element(drawingNs + "bodyPr") is { } properties &&
             candidate.Element(drawingNs + "bodyPr") is { } replacementProperties)
             replacementProperties.ReplaceWith(new XElement(properties));
+        if (opaqueRelationshipValues is not null)
+        {
+            var attributes = candidate.DescendantsAndSelf().Attributes().Where(a => a.Name.Namespace == relNs).ToArray();
+            foreach (var (index, value) in opaqueRelationshipValues) attributes[index].Value = value;
+        }
         if (existing is not null) existing.ReplaceWith(candidate);
         else if (shapeElement.Element(SpreadsheetDrawingNs + "extLst") is { } extension) extension.AddBeforeSelf(candidate);
         else shapeElement.Add(candidate);

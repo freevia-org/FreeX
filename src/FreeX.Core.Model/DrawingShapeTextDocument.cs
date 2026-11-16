@@ -104,5 +104,31 @@ public sealed class DrawingShapeTextDocument
     public IReadOnlyList<DrawingShapeTextListLevel> ListLevels => _listLevels;
     public string PlainText { get; }
     internal string? SourceXml { get; init; }
-    internal Guid SourceOwnershipId { get; } = Guid.NewGuid();
+    internal Guid SourceOwnershipId { get; init; } = Guid.NewGuid();
+
+    /// <summary>Rewrites hyperlinks without changing text, formatting, or retained source XML.</summary>
+    public DrawingShapeTextDocument RewriteHyperlinks(Func<DrawingObjectHyperlink, DrawingObjectHyperlink> rewrite)
+    {
+        ArgumentNullException.ThrowIfNull(rewrite);
+        var changed = false;
+        DrawingShapeTextRunStyle? RewriteStyle(DrawingShapeTextRunStyle? style)
+        {
+            if (style?.Hyperlink is not { } link) return style;
+            var updated = rewrite(link) ?? throw new InvalidOperationException("A shape text hyperlink cannot be null.");
+            if (updated == link) return style;
+            changed = true;
+            return style with { Hyperlink = updated };
+        }
+        DrawingShapeTextParagraphDefaults? RewriteDefaults(DrawingShapeTextParagraphDefaults? defaults) =>
+            defaults is null ? null : defaults with { RunStyle = RewriteStyle(defaults.RunStyle) };
+        var defaultParagraph = RewriteDefaults(DefaultParagraph);
+        var levels = ListLevels.Select(level => level with { Defaults = RewriteDefaults(level.Defaults)! }).ToArray();
+        var paragraphs = Paragraphs.Select(paragraph =>
+            new DrawingShapeTextParagraph(paragraph.Inlines.Select(inline =>
+                new DrawingShapeTextInline(inline.Kind, inline.Text, inline.FieldId, inline.FieldType, RewriteStyle(inline.Style))
+                    { SourceXml = inline.SourceXml }), paragraph.Alignment, RewriteStyle(paragraph.DefaultRunStyle), paragraph.Level)
+                { SourceXml = paragraph.SourceXml }).ToArray();
+        return changed ? new DrawingShapeTextDocument(paragraphs, defaultParagraph, levels)
+            { SourceXml = SourceXml, SourceOwnershipId = SourceOwnershipId } : this;
+    }
 }

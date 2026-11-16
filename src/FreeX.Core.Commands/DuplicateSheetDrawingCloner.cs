@@ -51,6 +51,8 @@ internal static class DuplicateSheetDrawingCloner
             var cloned = CloneDrawingShape(shape, copyId);
             // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
             cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
+            if (cloned.ShapeTextDocument is { } document)
+                cloned.ShapeTextDocument = document.RewriteHyperlinks(link => RewriteSameSheetHyperlinkTarget(link, source.Name, copy.Name)!);
             copy.DrawingShapes.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, cloned.Id);

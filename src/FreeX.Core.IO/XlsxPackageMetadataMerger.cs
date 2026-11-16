@@ -343,7 +343,11 @@ internal static class XlsxPackageMetadataMerger
                 continue;
             }
 
-            if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)))
+            // A copied drawing can reference multiple distinct IDs with the same target (for
+            // example several rich-text runs). Dropping a duplicate signature here leaves its
+            // still-referenced ID dangling in the copied drawing XML.
+            if (!existingRelationships.Add(RelationshipSignature(sourceRelationship)) &&
+                !sourceEntry.FullName.StartsWith("xl/drawings/_rels/", StringComparison.OrdinalIgnoreCase))
             {
                 changed = true;
                 continue;

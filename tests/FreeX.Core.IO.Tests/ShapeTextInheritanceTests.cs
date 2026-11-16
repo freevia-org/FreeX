@@ -1,4 +1,7 @@
 using System.Xml.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -71,5 +74,8 @@ public sealed class ShapeTextInheritanceTests
         xml.Element(A + "lstStyle")!.Element(A + "lvl3pPr")!.Element(A + "defRPr")!.Attribute("i")!.Value.Should().Be("0");
         xml.Element(A + "p")!.Element(A + "pPr")!.Element(A + "defRPr")!.Attribute("b")!.Value.Should().Be("0");
         xml.Name.Should().Be(Xdr + "txBody");
+        saved.Position = 0;
+        using var package = SpreadsheetDocument.Open(saved, false);
+        new OpenXmlValidator(FileFormatVersions.Microsoft365).Validate(package).Should().BeEmpty();
     }
 }

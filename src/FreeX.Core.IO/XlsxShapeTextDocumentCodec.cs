@@ -165,7 +165,7 @@ internal static class XlsxShapeTextDocumentCodec
     }
 
     internal static XElement Write(DrawingShapeTextDocument document, bool allowSourceRelationships,
-        Func<DrawingObjectHyperlink, string>? bindRelationship = null)
+        Func<DrawingObjectHyperlink, string>? bindRelationship = null, bool preserveOpaqueRelationships = false)
     {
         var (relationships, authoredIds) = BuildRelationships(document);
         XElement result;
@@ -202,8 +202,13 @@ internal static class XlsxShapeTextDocumentCodec
             foreach (var attribute in result.DescendantsAndSelf().Attributes().Where(attribute => attribute.Name.Namespace == R))
             {
                 if (attribute.Name != R + "id" || attribute.Parent?.Name != A + "hlinkClick" ||
-                    bindRelationship is null || !relationships.TryGetValue(attribute.Value, out var link))
+                    !relationships.TryGetValue(attribute.Value, out var link))
+                {
+                    if (preserveOpaqueRelationships) continue;
                     throw new InvalidOperationException("Shape rich text contains drawing relationships that cannot be safely regenerated.");
+                }
+                if (bindRelationship is null)
+                    throw new InvalidOperationException("Shape rich text hyperlinks require a relationship binder.");
                 attribute.Value = bindRelationship(link);
             }
         }
