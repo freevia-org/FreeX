@@ -164,9 +164,9 @@ public static class AvaloniaContextMenuRenderer
                 return;
             case RibbonPopupKeyboardAction.CloseSubmenu when parent is not null:
                 parent.IsSubMenuOpen = false;
-                parent.Focusable = true;
-                parent.IsSelected = true;
-                parent.Focus(NavigationMethod.Tab);
+                AvaloniaMenuFocusRestorer.RestoreToParentAfterSubmenuClose(
+                    parent,
+                    () => contextMenu.IsOpen);
                 args.Handled = true;
                 return;
             case RibbonPopupKeyboardAction.ClosePopup:
