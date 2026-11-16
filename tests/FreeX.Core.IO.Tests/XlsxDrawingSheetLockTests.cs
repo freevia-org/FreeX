@@ -55,15 +55,21 @@ public sealed class XlsxDrawingSheetLockTests
     }
 
     [Fact]
-    public void ChangedSourceLockWithoutMatchingDrawing_FailsRatherThanLosingEdit()
+    public void RenameAndUnlockSourcePicture_UsesOriginalIdentity()
     {
-        using var input = Save(CreateTwoShapes());
-        var workbook = new XlsxFileAdapter().Load(input);
-        var shape = workbook.Sheets.Single().DrawingShapes[0];
-        shape.Name = "MissingSourceName";
-        shape.Locked = false;
-        Action save = () => { using var result = Save(workbook); };
-        save.Should().Throw<InvalidOperationException>().WithMessage("*modified source drawing lock*");
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Pictures.Add(new PictureModel { Name = "First", Anchor = new CellAddress(sheet.Id, 1, 1), ImageBytes = Png });
+        sheet.Pictures.Add(new PictureModel { Name = "Second", Anchor = new CellAddress(sheet.Id, 4, 1), ImageBytes = Png });
+        using var input = Save(workbook);
+        var loaded = new XlsxFileAdapter().Load(input);
+        var first = loaded.Sheets.Single().Pictures.Single(picture => picture.Name == "First");
+        first.Name = "Renamed";
+        first.Locked = false;
+        using var saved = Save(loaded);
+        var pictures = new XlsxFileAdapter().Load(saved).Sheets.Single().Pictures;
+        pictures.Single(picture => picture.Name == "First").Locked.Should().BeFalse();
+        pictures.Single(picture => picture.Name == "Second").Locked.Should().BeTrue();
     }
 
     [Fact]
@@ -146,6 +152,24 @@ public sealed class XlsxDrawingSheetLockTests
         nativeChart.Locked.Should().Be(!locked);
         nativeChart.DrawingLockAttributes!["noMove"].Should().Be("1");
         nativeChart.DrawingLockChildrenXml.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void RenamedSourceChart_LockEditSurvives()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.Charts.Add(new ChartModel { Name = "Before", Type = ChartType.Column, DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)) });
+        sheet.Pictures.Add(new PictureModel { Name = "Picture", Anchor = new CellAddress(sheet.Id, 6, 1), ImageBytes = Png });
+        using var first = Save(workbook);
+        var loaded = new XlsxFileAdapter().Load(first);
+        var chart = loaded.Sheets.Single().Charts.Single();
+        chart.Name = "After";
+        chart.Locked = false;
+        using var second = Save(loaded);
+        var result = new XlsxFileAdapter().Load(second).Sheets.Single().Charts.Single();
+        result.Name.Should().Be("After");
+        result.Locked.Should().BeFalse();
     }
 
     [Theory]

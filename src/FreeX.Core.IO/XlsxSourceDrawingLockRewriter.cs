@@ -18,8 +18,8 @@ internal static class XlsxSourceDrawingLockRewriter
         using var archive = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true);
         foreach (var sheet in workbook.Sheets)
         {
-            var names = sheet.Pictures.Select(p => p.Name).Concat(sheet.TextBoxes.Select(t => t.Name))
-                .Concat(sheet.DrawingShapes.Select(s => s.Name)).Concat(sheet.Charts.Select(c => c.Name))
+            var names = sheet.Pictures.Select(p => p.IsSourceLoaded ? p.SourceXlsxName : p.Name).Concat(sheet.TextBoxes.Select(t => t.IsSourceLoaded ? t.SourceXlsxName : t.Name))
+                .Concat(sheet.DrawingShapes.Select(s => s.IsSourceLoaded ? s.SourceXlsxName : s.Name)).Concat(sheet.Charts.Select(c => c.Name))
                 .Where(name => !string.IsNullOrEmpty(name)).GroupBy(name => name!, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
             var states = new Dictionary<string, LockState>(StringComparer.Ordinal);
@@ -38,18 +38,19 @@ internal static class XlsxSourceDrawingLockRewriter
                 states[name] = state;
                 if (changed) changedNames.Add(name);
             }
-            foreach (var picture in sheet.Pictures) Add(picture.Name, picture.IsSourceLoaded,
+            foreach (var picture in sheet.Pictures) Add(picture.SourceXlsxName, picture.IsSourceLoaded,
                 new(picture.Locked, picture.LockAspectRatio, picture.DrawingNoMove, picture.DrawingNoResize, picture.DrawingLockAttributes, picture.DrawingLockChildrenXml),
                 picture.SourceXlsxLocked != picture.Locked || picture.SourceXlsxAspectLock != picture.LockAspectRatio || picture.SourceXlsxNoMove != picture.DrawingNoMove ||
                 picture.SourceXlsxNoResize != picture.DrawingNoResize || !SameAttributes(picture.SourceXlsxLockAttributes, picture.DrawingLockAttributes) || picture.SourceXlsxLockChildrenXml != picture.DrawingLockChildrenXml);
-            foreach (var textBox in sheet.TextBoxes) Add(textBox.Name, textBox.IsSourceLoaded,
+            foreach (var textBox in sheet.TextBoxes) Add(textBox.SourceXlsxName, textBox.IsSourceLoaded,
                 new(textBox.Locked, null, textBox.DrawingNoMove, textBox.DrawingNoResize, textBox.DrawingLockAttributes, textBox.DrawingLockChildrenXml),
                 textBox.SourceXlsxLocked != textBox.Locked || textBox.SourceXlsxNoMove != textBox.DrawingNoMove || textBox.SourceXlsxNoResize != textBox.DrawingNoResize ||
                 !SameAttributes(textBox.SourceXlsxLockAttributes, textBox.DrawingLockAttributes) || textBox.SourceXlsxLockChildrenXml != textBox.DrawingLockChildrenXml);
-            foreach (var shape in sheet.DrawingShapes) Add(shape.Name, shape.IsSourceLoaded,
+            foreach (var shape in sheet.DrawingShapes) Add(shape.SourceXlsxName, shape.IsSourceLoaded,
                 new(shape.Locked, null, shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml),
                 shape.SourceXlsxLocked != shape.Locked || shape.SourceXlsxNoMove != shape.DrawingNoMove || shape.SourceXlsxNoResize != shape.DrawingNoResize ||
                 !SameAttributes(shape.SourceXlsxLockAttributes, shape.DrawingLockAttributes) || shape.SourceXlsxLockChildrenXml != shape.DrawingLockChildrenXml);
+            // Chart anchors are regenerated before this pass, unlike the preserved source objects.
             foreach (var chart in sheet.Charts) Add(chart.Name, chart.SourceXlsxLocked.HasValue,
                 new(chart.Locked, null, null, null, chart.DrawingLockAttributes, chart.DrawingLockChildrenXml), chart.SourceXlsxLocked != chart.Locked ||
                 !SameAttributes(chart.SourceXlsxLockAttributes, chart.DrawingLockAttributes) || chart.SourceXlsxLockChildrenXml != chart.DrawingLockChildrenXml);

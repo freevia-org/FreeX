@@ -74,6 +74,7 @@ public sealed class PictureModel
     /// <summary>Preserved XML children of the DrawingML lock element, wrapped in a root element.</summary>
     public string? DrawingLockChildrenXml { get; set; }
     internal string? SourceXlsxLockChildrenXml { get; set; }
+    internal string? SourceXlsxName { get; set; }
     internal bool? SourceXlsxLocked { get; set; }
     internal bool? SourceXlsxAspectLock { get; set; }
     internal bool? SourceXlsxNoMove { get; set; }
