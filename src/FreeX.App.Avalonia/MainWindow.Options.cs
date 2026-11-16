@@ -458,6 +458,13 @@ public sealed partial class MainWindow
         var showFormulaBarBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_ShowFormulaBar")), IsChecked = current.ShowFormulaBar };
         ApplyOptionsCheckBoxChrome(showFormulaBarBox);
         AutomationProperties.SetAutomationId(showFormulaBarBox, "OptionsShowFormulaBarCheckBox");
+        var formulaBarExpandedBox = OptionsCheckBox(
+            OptionsText("Options_ExpandFormulaBar"),
+            isChecked: current.FormulaBarExpanded,
+            isEnabled: showFormulaBarBox.IsChecked == true);
+        AutomationProperties.SetAutomationId(formulaBarExpandedBox, "OptionsFormulaBarExpandedCheckBox");
+        showFormulaBarBox.IsCheckedChanged += (_, _) =>
+            formulaBarExpandedBox.IsEnabled = showFormulaBarBox.IsChecked == true;
         var showGridlinesBox = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("Options_ShowGridlines")), IsChecked = current.ShowGridlines };
         ApplyOptionsCheckBoxChrome(showGridlinesBox);
         AutomationProperties.SetAutomationId(showGridlinesBox, "OptionsShowGridlinesCheckBox");
@@ -468,9 +475,7 @@ public sealed partial class MainWindow
         var viewPanel = OptionsCategoryPanel(
             OptionsSectionHeader(OptionsText("Options_WorkbookViewOptions"), topMargin: 0, bottomMargin: 12),
             OptionsToggleRow(showFormulaBarBox, new Thickness(0, 0, 0, 6)),
-            OptionsToggleRow(
-                OptionsCheckBox(OptionsText("Options_ExpandFormulaBar"), isEnabled: showFormulaBarBox.IsChecked == true),
-                new Thickness(0, 0, 0, 4)));
+            OptionsToggleRow(formulaBarExpandedBox, new Thickness(0, 0, 0, 4)));
         viewPanel.Spacing = 0;
 
         // ── Save ────────────────────────────────────────────────────────────────
@@ -1294,7 +1299,8 @@ public sealed partial class MainWindow
                 input,
                 enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
                 enableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true,
-                quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true);
+                quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true,
+                formulaBarExpanded: formulaBarExpandedBox.IsChecked == true);
             if (!saveResult.IsPersisted)
             {
                 warningText.Text = saveResult.PersistenceError ?? UiText.Get("Options_SaveFailed");
@@ -1315,6 +1321,7 @@ public sealed partial class MainWindow
             if (!ApplyFormulaErrorCheckingOptions())
                 return false;
 
+            ApplyFormulaBarOptions(current);
             ApplyLiveOptions(input);
             ApplyCalculationOptionsSubmission(calculationSubmission);
             return true;
@@ -1399,9 +1406,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Applies the cheap, immediately-visible options to the live session: gridlines, headings,
-    /// and formula-bar visibility. The persisted fields (default font/size/sheet-count,
-    /// default format, proofing rules) take effect on the next workbook/launch.
+    /// Applies sheet gridline and heading options to the live workbook.
     /// </summary>
     private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)
     {
@@ -1413,10 +1418,6 @@ public sealed partial class MainWindow
             _session.SetShowHeadings(input.ShowHeadings);
             RefreshViewportSizeForZoom();
         }
-
-        var formulaBarVisible = !_isFormulaBarHidden;
-        if (formulaBarVisible != input.ShowFormulaBar)
-            ApplyFormulaBarVisibility(input.ShowFormulaBar);
 
         RefreshShell(UiText.Get("Options_Saved"));
     }

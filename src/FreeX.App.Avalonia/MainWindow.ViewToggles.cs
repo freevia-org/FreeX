@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -8,9 +9,7 @@ namespace FreeX.App.Avalonia;
 /// This partial wires the View tab commands that were previously no-ops:
 /// <list type="bullet">
 ///   <item><c>view.formulaBar</c> — show/hide the formula bar input (and its Name Box / cell-address
-///   readout). This flips <see cref="Avalonia.Controls.Control.IsVisible"/> on the existing
-///   <c>_formulaBox</c> TextBox and <c>_cellAddressText</c> TextBlock, so it is a genuine rendering
-///   change, not a status message.</item>
+    ///   readout) in every open workbook window.</item>
 ///   <item><c>view.pageLayoutView</c> — show page boundaries and optional margin rulers over the editable
 ///   worksheet grid.</item>
 /// </list>
@@ -22,8 +21,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     /// <summary>
-    /// Backing flag for the formula-bar visibility toggle. Defaults to visible (matches the initial
-    /// layout, where <c>_formulaBox</c> and <c>_cellAddressText</c> are shown).
+    /// Current visibility of the formula bar in this window.
     /// </summary>
     private bool _isFormulaBarHidden;
 
@@ -40,9 +38,14 @@ public sealed partial class MainWindow
             return;
 
         var visible = _isFormulaBarHidden;
-        ApplyFormulaBarVisibility(visible);
+        var result = _optionsRuntimeSession.MutateFresh(options => options.ShowFormulaBar = visible);
+        ApplyFormulaBarVisibility(result.Options.ShowFormulaBar);
+        WindowRegistry.NotifyFormulaBarVisibilityChanged(this, result.Options.ShowFormulaBar);
 
-        RefreshShell(visible ? UiText.Get("ShellLoc_ShowingFormulaBar") : UiText.Get("ShellLoc_HidingFormulaBar"));
+        if (result.IsPersisted)
+            RefreshShell(visible ? UiText.Get("ShellLoc_ShowingFormulaBar") : UiText.Get("ShellLoc_HidingFormulaBar"));
+        else
+            ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
     }
 
     /// <summary>
@@ -51,12 +54,18 @@ public sealed partial class MainWindow
     /// used to flip only the input and Name Box, so after View hid the whole row, re-enabling the bar
     /// in Options reported it visible while the row stayed collapsed.
     /// </summary>
-    private void ApplyFormulaBarVisibility(bool visible)
+    internal void ApplyFormulaBarVisibility(bool visible)
     {
+        var moveFocus = !visible && IsActive
+            && FocusManager?.GetFocusedElement() is Control focused
+            && IsDescendantOf(focused, _formulaBarHost);
         _isFormulaBarHidden = !visible;
         _formulaBarHost.IsVisible = visible;
         _formulaBox.IsVisible = visible;
         _cellAddressText.IsVisible = visible;
+        if (moveFocus)
+            MoveFocusToActiveCellBorder();
+        _refreshRibbonToggleStates?.Invoke();
     }
 
     /// <summary>
