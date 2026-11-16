@@ -1689,7 +1689,8 @@ public sealed partial class MainWindow
                 },
                 TextWrapping = shape.TextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap };
             var textFrame = new Border { Width = Math.Max(0, bounds.Width), Height = Math.Max(0, bounds.Height),
-                Padding = new Thickness(4), ClipToBounds = true, Child = text };
+                Padding = new Thickness(shape.TextInsets?.Left ?? 4, shape.TextInsets?.Top ?? 4,
+                    shape.TextInsets?.Right ?? 4, shape.TextInsets?.Bottom ?? 4), ClipToBounds = true, Child = text };
             ApplyDrawingObjectTransform(textFrame, shape.Appearance.Transform.RotationDegrees, false, false);
             Canvas.SetLeft(textFrame, bounds.Left - clip.Left);
             Canvas.SetTop(textFrame, bounds.Top - clip.Top);

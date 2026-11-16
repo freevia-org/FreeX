@@ -234,6 +234,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
 
             if (RewriteShapeAltTextAndTitle(shapeElement, shape.AltText, shape.Title))
                 changed = true;
+            if (shapeElement.Name == SpreadsheetDrawingNs + "cxnSp" && (shape.HasShapeText || shape.ShapeTextInsets is not null))
+                throw new InvalidOperationException("Connector shapes cannot contain text or text insets in XLSX.");
+            if (shapeElement.Name != SpreadsheetDrawingNs + "cxnSp" && RewriteDrawingTextBody(shapeElement, shape.ShapeText ?? "", drawingNs))
+                changed = true;
+            if (shapeElement.Name != SpreadsheetDrawingNs + "cxnSp" && RewriteShapeTextInsets(shapeElement, shape.ShapeTextInsets, drawingNs))
+                changed = true;
         }
 
         return changed;
@@ -382,16 +388,22 @@ internal static class XlsxSourceDrawingGeometryRewriter
     {
         var changed = RewriteShapeAltTextAndTitle(textBoxElement, textBox.AltText, textBox.Title);
 
-        var txBody = textBoxElement.Element(SpreadsheetDrawingNs + "txBody");
-        var newText = textBox.Text ?? "";
+        if (RewriteDrawingTextBody(textBoxElement, textBox.Text ?? "", drawingNs)) changed = true;
+        return changed;
+    }
+
+    private static bool RewriteDrawingTextBody(XElement shapeElement, string newText, XNamespace drawingNs)
+    {
+        var changed = false;
+        var txBody = shapeElement.Element(SpreadsheetDrawingNs + "txBody");
         if (!string.Equals(XlsxWorksheetDrawingPartReader.ReadShapeTextBodyPlainText(txBody, drawingNs), newText, StringComparison.Ordinal))
         {
             if (txBody is null)
             {
                 txBody = new XElement(SpreadsheetDrawingNs + "txBody", new XElement(drawingNs + "bodyPr"),
                     new XElement(drawingNs + "lstStyle"), new XElement(drawingNs + "p"));
-                var extensionList = textBoxElement.Element(SpreadsheetDrawingNs + "extLst");
-                if (extensionList is null) textBoxElement.Add(txBody);
+                var extensionList = shapeElement.Element(SpreadsheetDrawingNs + "extLst");
+                if (extensionList is null) shapeElement.Add(txBody);
                 else extensionList.AddBeforeSelf(txBody);
                 changed = true;
             }
@@ -399,6 +411,45 @@ internal static class XlsxSourceDrawingGeometryRewriter
         }
 
         return changed;
+    }
+
+    private static bool RewriteShapeTextInsets(XElement shapeElement, DrawingShapeTextInsets? insets, XNamespace drawingNs)
+    {
+        var txBody = shapeElement.Element(SpreadsheetDrawingNs + "txBody");
+        var original = XlsxWorksheetDrawingPartReader.ReadShapeTextInsets(txBody, drawingNs);
+        if (Equals(original, insets)) return false;
+        var body = txBody?.Element(drawingNs + "bodyPr");
+        if (body is null && insets is null) return false;
+        var changed = false;
+        if (txBody is null)
+        {
+            txBody = new XElement(SpreadsheetDrawingNs + "txBody", new XElement(drawingNs + "bodyPr"),
+                new XElement(drawingNs + "lstStyle"), new XElement(drawingNs + "p"));
+            var extensionList = shapeElement.Element(SpreadsheetDrawingNs + "extLst");
+            if (extensionList is null) shapeElement.Add(txBody); else extensionList.AddBeforeSelf(txBody);
+            changed = true;
+        }
+        if (body is null)
+        {
+            body = txBody.Element(drawingNs + "bodyPr");
+            if (body is null) { body = new XElement(drawingNs + "bodyPr"); txBody.AddFirst(body); }
+            changed = true;
+        }
+        Set("lIns", original?.Left, insets?.Left);
+        Set("rIns", original?.Right, insets?.Right);
+        Set("tIns", original?.Top, insets?.Top);
+        Set("bIns", original?.Bottom, insets?.Bottom);
+        return changed;
+
+        void Set(string name, long? previous, long? value)
+        {
+            if (previous == value) return;
+            var old = body.Attribute(name)?.Value;
+            var next = value?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (old == next) return;
+            body.SetAttributeValue(name, next);
+            changed = true;
+        }
     }
 
     /// <summary>

@@ -14,6 +14,45 @@ namespace FreeX.App.Host.Tests;
 
 public sealed class PrintRendererShapeTests
 {
+    [Fact]
+    public void DrawPrintedShapes_RespectsInsetsAndPositionsSelectableText()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var model = new DrawingShapeModel();
+            var bounds = new LayoutRect(10, 10, 160, 80);
+            var block = new PageShapeBlock(model.Id, bounds, ShapeGeometryBuilder.Build(model.Kind, bounds),
+                DrawingObjectRenderMetadataPlanner.ResolveDrawingShapeRenderMetadata(model, new Workbook("test").Theme),
+                "Label", new PageTextFont("Segoe UI", 12, false, false, new PresentationRgb(0, 0, 0)),
+                DrawingShapeTextHAlign.Left, DrawingShapeTextVAnchor.Top, true)
+            { BodyClip = new LayoutRect(0, 0, 200, 120) };
+
+            var original = RenderTextOverlay(block);
+            var zero = RenderTextOverlay(block with { TextInsets = new PageShapeTextInsets(0, 0, 0, 0) });
+            var inset = RenderTextOverlay(block with { TextInsets = new PageShapeTextInsets(20, 5, 12, 3) });
+            original.X.Should().Be(zero.X);
+            original.Y.Should().Be(zero.Y);
+            inset.X.Should().BeApproximately(zero.X + 20, 0.01);
+            inset.Y.Should().BeApproximately(zero.Y + 12, 0.01);
+            var aligned = block with { TextHorizontalAlignment = DrawingShapeTextHAlign.Right,
+                TextVerticalAlignment = DrawingShapeTextVAnchor.Bottom };
+            var originalAligned = RenderTextOverlay(aligned);
+            var insetAligned = RenderTextOverlay(aligned with { TextInsets = new PageShapeTextInsets(20, 5, 12, 3) });
+            insetAligned.X.Should().BeApproximately(originalAligned.X - 5, 0.01);
+            insetAligned.Y.Should().BeApproximately(originalAligned.Y - 3, 0.01);
+        });
+    }
+
+    private static PdfTextOverlay RenderTextOverlay(PageShapeBlock block)
+    {
+        var overlays = new List<PdfTextOverlay>();
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+            typeof(PrintRenderer).GetMethod("DrawPrintedShapes", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, [dc, overlays, new[] { block }, false]);
+        return overlays.Should().ContainSingle().Subject;
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

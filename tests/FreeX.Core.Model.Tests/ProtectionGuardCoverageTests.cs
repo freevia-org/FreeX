@@ -923,6 +923,22 @@ public class ProtectionGuardCoverageTests
             },
 
             // ---- Drawing object text ----
+            ["SetDrawingShapeTextInsetsCommand"] = (wb, sheet) =>
+            {
+                var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+                sheet.IsProtected = false;
+                sheet.DrawingShapes.Add(shape);
+                sheet.IsProtected = true;
+                return new SetDrawingShapeTextInsetsCommand(sheet.Id, shape.Id, new DrawingShapeTextInsets(0, null, null, null));
+            },
+            ["SetDrawingShapeTextCommand"] = (wb, sheet) =>
+            {
+                var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), ShapeText = "Before" };
+                sheet.IsProtected = false;
+                sheet.DrawingShapes.Add(shape);
+                sheet.IsProtected = true;
+                return new SetDrawingShapeTextCommand(sheet.Id, shape.Id, "After");
+            },
             ["SetTextBoxTextCommand"] = (wb, sheet) =>
             {
                 var textBox = new TextBoxModel

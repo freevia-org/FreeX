@@ -1271,6 +1271,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         // otherwise Excel treats the object as a plain autoshape: no connection-site glue, and it is
         // listed as a generic shape rather than "Connector" in the Selection Pane. Connectors carry no
         // txBody per the OOXML CT_Connector schema, so text (which they never have anyway) is omitted.
+        if (DrawingShapeKindSupport.IsLineLike(shape.Kind) && (shape.HasShapeText || shape.ShapeTextInsets is not null))
+            throw new InvalidOperationException("Connector shapes cannot contain text or text insets in XLSX.");
         XElement shapeOrConnectorElement = DrawingShapeKindSupport.IsLineLike(shape.Kind)
             ? new XElement(spreadsheetDrawingNs + "cxnSp",
                 new XElement(spreadsheetDrawingNs + "nvCxnSpPr",
@@ -1306,7 +1308,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvSpPr",
                         ToDrawingMovementLocks(drawingNs, "spLocks", shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml))),
                 shapeProperties,
-                shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);
+                shape.HasShapeText || shape.ShapeTextInsets is not null ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);
 
         return new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs, shape.AnchorOffsetX, shape.AnchorOffsetY),
@@ -1420,6 +1422,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
         var bodyPrElement = new XElement(drawingNs + "bodyPr",
             new XAttribute("anchor", anchorValue),
             new XAttribute("wrap", wrapValue));
+        if (shape.ShapeTextInsets is { } insets)
+        {
+            if (insets.Left is { } left) bodyPrElement.SetAttributeValue("lIns", left.ToString(CultureInfo.InvariantCulture));
+            if (insets.Right is { } right) bodyPrElement.SetAttributeValue("rIns", right.ToString(CultureInfo.InvariantCulture));
+            if (insets.Top is { } top) bodyPrElement.SetAttributeValue("tIns", top.ToString(CultureInfo.InvariantCulture));
+            if (insets.Bottom is { } bottom) bodyPrElement.SetAttributeValue("bIns", bottom.ToString(CultureInfo.InvariantCulture));
+        }
         if (!string.IsNullOrEmpty(shape.WarpPreset))
             bodyPrElement.Add(new XElement(drawingNs + "prstTxWarp",
                 new XAttribute("prst", shape.WarpPreset)));

@@ -594,6 +594,7 @@ internal static class DuplicateSheetDrawingCloner
             ShapeTextOutlineThemeColor = shape.ShapeTextOutlineThemeColor,
             ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints,
             ShapeText = shape.ShapeText,
+            ShapeTextInsets = shape.ShapeTextInsets,
             ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
             ShapeTextBold = shape.ShapeTextBold,
             ShapeTextItalic = shape.ShapeTextItalic,

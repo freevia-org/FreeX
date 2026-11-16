@@ -1,5 +1,8 @@
 namespace FreeX.Core.Model;
 
+/// <summary>Authored shape text insets in EMUs; null sides inherit the file-format default.</summary>
+public sealed record DrawingShapeTextInsets(long? Left, long? Right, long? Top, long? Bottom);
+
 public enum DrawingShapeEffectPreset
 {
     None = 0,
@@ -370,6 +373,14 @@ public sealed class DrawingShapeModel
     /// <see langword="null"/> / empty when the shape carries no text.
     /// </summary>
     public string? ShapeText { get; set; }
+
+    /// <summary>Authored text margins; null preserves absence for each side.</summary>
+    private DrawingShapeTextInsets? _shapeTextInsets;
+    public DrawingShapeTextInsets? ShapeTextInsets
+    {
+        get => _shapeTextInsets;
+        set => _shapeTextInsets = value is { Left: null, Right: null, Top: null, Bottom: null } ? null : value;
+    }
 
     /// <summary>
     /// Font size for the first run's <c>&lt;a:rPr sz&gt;</c>, in points (OOXML stores

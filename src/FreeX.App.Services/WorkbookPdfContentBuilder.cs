@@ -1293,17 +1293,21 @@ public static class WorkbookPdfContentBuilder
         if (!string.IsNullOrWhiteSpace(shape.Text))
         {
             var fontSize = Math.Max(1, shape.TextFont.FontSize * scaleY);
-            var availableWidth = Math.Max(0, shape.Bounds.Width - 8);
-            var availableHeight = Math.Max(0, shape.Bounds.Height - 8);
+            var leftInset = shape.TextInsets?.Left ?? 4;
+            var rightInset = shape.TextInsets?.Right ?? 4;
+            var topInset = shape.TextInsets?.Top ?? 4;
+            var bottomInset = shape.TextInsets?.Bottom ?? 4;
+            var availableWidth = Math.Max(0, shape.Bounds.Width - leftInset - rightInset);
+            var availableHeight = Math.Max(0, shape.Bounds.Height - topInset - bottomInset);
             var lineHeight = textMeasurer.Measure("Ag", shape.TextFont.FontFamily, shape.TextFont.FontSize, shape.TextFont.Bold, shape.TextFont.Italic).Height;
             if (!double.IsFinite(lineHeight) || lineHeight <= 0) lineHeight = shape.TextFont.FontSize;
             var lines = WrapShapeText(shape.Text, shape.TextFont, availableWidth, shape.TextWrap, textMeasurer);
             var totalHeight = lines.Count * lineHeight;
             var textTop = shape.TextVerticalAlignment switch
             {
-                DrawingShapeTextVAnchor.Middle => shape.Bounds.Top + 4 + Math.Max(0, (availableHeight - totalHeight) / 2),
-                DrawingShapeTextVAnchor.Bottom => shape.Bounds.Bottom - 4 - Math.Min(availableHeight, totalHeight),
-                _ => shape.Bounds.Top + 4
+                DrawingShapeTextVAnchor.Middle => shape.Bounds.Top + topInset + Math.Max(0, (availableHeight - totalHeight) / 2),
+                DrawingShapeTextVAnchor.Bottom => shape.Bounds.Bottom - bottomInset - Math.Min(availableHeight, totalHeight),
+                _ => shape.Bounds.Top + topInset
             };
             var textOps = new List<PdfDrawOp>();
             for (var index = 0; index < lines.Count && index * lineHeight < availableHeight; index++)
@@ -1312,9 +1316,9 @@ public static class WorkbookPdfContentBuilder
                 var lineWidth = textMeasurer.Measure(line, shape.TextFont.FontFamily, shape.TextFont.FontSize, shape.TextFont.Bold, shape.TextFont.Italic).Width;
                 var left = shape.TextHorizontalAlignment switch
                 {
-                    DrawingShapeTextHAlign.Center => shape.Bounds.Left + 4 + Math.Max(0, (availableWidth - lineWidth) / 2),
-                    DrawingShapeTextHAlign.Right => shape.Bounds.Right - 4 - Math.Min(availableWidth, lineWidth),
-                    _ => shape.Bounds.Left + 4
+                    DrawingShapeTextHAlign.Center => shape.Bounds.Left + leftInset + Math.Max(0, (availableWidth - lineWidth) / 2),
+                    DrawingShapeTextHAlign.Right => shape.Bounds.Right - rightInset - Math.Min(availableWidth, lineWidth),
+                    _ => shape.Bounds.Left + leftInset
                 };
                 textOps.Add(new PdfText(left * scaleX, pageHeight - ((textTop + index * lineHeight) * scaleY + fontSize), fontSize,
                     ToPdfFontFace(shape.TextFont.Bold, shape.TextFont.Italic), shape.BlackAndWhite ? PdfColor.Black : ToPdfColor(shape.TextFont.Color),

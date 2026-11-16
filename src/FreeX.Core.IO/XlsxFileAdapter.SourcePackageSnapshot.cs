@@ -271,6 +271,11 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintString(stream, shape.DrawingNoResize?.ToString());
         WriteFingerprintDictionary(stream, shape.DrawingLockAttributes);
         WriteFingerprintString(stream, shape.DrawingLockChildrenXml);
+        WriteFingerprintString(stream, shape.ShapeText);
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Left?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Right?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Top?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Bottom?.ToString(CultureInfo.InvariantCulture));
         WriteFingerprintString(stream, shape.Name);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintAddress(stream, shape.Anchor);
@@ -4657,6 +4662,8 @@ public sealed partial class XlsxFileAdapter
                     !DrawingLockAttributesMatch(source.DrawingLockAttributes, current.DrawingLockAttributes) ||
                     source.DrawingLockChildrenXml != current.DrawingLockChildrenXml ||
                     source.Kind != current.Kind ||
+                    !StringEquals(source.ShapeText ?? "", current.ShapeText ?? "") ||
+                    source.ShapeTextInsets != current.ShapeTextInsets ||
                     !StringEquals(source.Name, current.Name) ||
                     !StringEquals(source.Title, current.Title) ||
                     !StringEquals(source.AltText, current.AltText) ||

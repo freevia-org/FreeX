@@ -325,6 +325,7 @@ public sealed partial class XlsxFileAdapter
                 EndConnectedShapeId = shapePart.EndConnectedShapeId,
                 EndConnectedShapeConnectionIndex = shapePart.EndConnectedShapeConnectionIndex,
                 ShapeText = shapePart.ShapeText,
+                ShapeTextInsets = shapePart.ShapeTextInsets,
                 ShapeTextFontSizePoints = shapePart.ShapeTextFontSizePoints,
                 ShapeTextBold = shapePart.ShapeTextBold,
                 ShapeTextItalic = shapePart.ShapeTextItalic,

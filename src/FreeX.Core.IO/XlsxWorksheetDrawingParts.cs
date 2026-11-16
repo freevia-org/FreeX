@@ -245,7 +245,8 @@ internal sealed record XlsxShapePackagePart(
     bool? DrawingNoResize = null,
     IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
     string? DrawingLockChildrenXml = null,
-    bool PrintObject = true);
+    bool PrintObject = true,
+    DrawingShapeTextInsets? ShapeTextInsets = null);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -1161,7 +1162,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             DrawingNoResize: ReadDrawingLockFlag(shapeElement, "spLocks", "noResize"),
             DrawingLockAttributes: ReadOtherDrawingLockAttributes(shapeElement, "spLocks", includeAspect: false),
                 DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks"),
-                PrintObject: ReadPrintsWithSheet(shapeElement)));
+                PrintObject: ReadPrintsWithSheet(shapeElement),
+                ShapeTextInsets: ReadShapeTextInsets(txBodyElement, drawingNs)));
     }
 
     /// <summary>
@@ -1177,6 +1179,15 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// single flat <c>ShapeText</c> string with one set of formatting fields, not a per-run model.
     /// </para>
     /// </summary>
+    internal static DrawingShapeTextInsets? ReadShapeTextInsets(XElement? txBody, XNamespace drawingNs)
+    {
+        var body = txBody?.Element(drawingNs + "bodyPr");
+        static long? Read(XElement? element, string name) => long.TryParse(element?.Attribute(name)?.Value,
+            NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+        var insets = new DrawingShapeTextInsets(Read(body, "lIns"), Read(body, "rIns"), Read(body, "tIns"), Read(body, "bIns"));
+        return insets is { Left: null, Right: null, Top: null, Bottom: null } ? null : insets;
+    }
+
     internal static string ReadShapeTextBodyPlainText(XElement? txBody, XNamespace drawingNs)
     {
         if (txBody is null)

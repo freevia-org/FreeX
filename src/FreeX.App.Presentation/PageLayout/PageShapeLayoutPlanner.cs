@@ -6,6 +6,9 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PageLayout;
 
+/// <summary>Resolved shape text insets in page DIPs; null sides retain renderer defaults.</summary>
+public sealed record PageShapeTextInsets(double? Left, double? Right, double? Top, double? Bottom);
+
 /// <summary>A shape's portable geometry and appearance on a print page.</summary>
 public sealed record PageShapeBlock(
     Guid Id,
@@ -21,6 +24,7 @@ public sealed record PageShapeBlock(
     public LayoutRect BodyClip { get; init; }
     public IReadOnlyList<ShapeGeometry> Arrowheads { get; init; } = [];
     public bool BlackAndWhite { get; init; }
+    public PageShapeTextInsets? TextInsets { get; init; }
 }
 
 /// <summary>Resolves printable drawing shapes into page-space geometry.</summary>
@@ -126,7 +130,10 @@ public static class PageShapeLayoutPlanner
             {
                 BodyClip = new LayoutRect(bodyLeft, bodyTop, bodyWidth, bodyHeight),
                 Arrowheads = BuildArrowheads(shape, bounds, appearance, scaleRatio),
-                BlackAndWhite = sheet.PrintBlackAndWhite
+                BlackAndWhite = sheet.PrintBlackAndWhite,
+                TextInsets = shape.ShapeTextInsets is { } insets ? new PageShapeTextInsets(
+                    insets.Left / 9525d * scaleRatio, insets.Right / 9525d * scaleRatio,
+                    insets.Top / 9525d * scaleRatio, insets.Bottom / 9525d * scaleRatio) : null
             });
         }
         return result;

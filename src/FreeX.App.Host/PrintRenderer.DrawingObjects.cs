@@ -62,7 +62,13 @@ public static partial class PrintRenderer
                     dc.DrawGeometry(outline.Brush, null, WpfShapeGeometryAdapter.ToGeometry(arrowhead, FillRule.Nonzero));
             dc.Pop();
 
-            if (bounds.Width > 0 && bounds.Height > 0 && !string.IsNullOrEmpty(shape.Text))
+            var leftInset = Math.Max(0, shape.TextInsets?.Left ?? 0);
+            var rightInset = Math.Max(0, shape.TextInsets?.Right ?? 0);
+            var topInset = Math.Max(0, shape.TextInsets?.Top ?? 0);
+            var bottomInset = Math.Max(0, shape.TextInsets?.Bottom ?? 0);
+            var innerWidth = Math.Max(0, bounds.Width - leftInset - rightInset);
+            var innerHeight = Math.Max(0, bounds.Height - topInset - bottomInset);
+            if (innerWidth > 0 && innerHeight > 0 && !string.IsNullOrEmpty(shape.Text))
             {
                 // Flipping a shape mirrors its outline, but Excel keeps its text readable.
                 var textTransform = new Matrix();
@@ -77,8 +83,8 @@ public static partial class PrintRenderer
                 var formatted = new FormattedText(shape.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                     typeface, font.FontSize, textBrush, 1.0)
                 {
-                    MaxTextWidth = bounds.Width,
-                    MaxTextHeight = bounds.Height,
+                    MaxTextWidth = innerWidth,
+                    MaxTextHeight = innerHeight,
                     TextAlignment = shape.TextHorizontalAlignment switch
                     {
                         DrawingShapeTextHAlign.Center => TextAlignment.Center,
@@ -89,12 +95,12 @@ public static partial class PrintRenderer
                 };
                 var top = shape.TextVerticalAlignment switch
                 {
-                    DrawingShapeTextVAnchor.Middle => bounds.Top + Math.Max(0, (bounds.Height - formatted.Height) / 2),
-                    DrawingShapeTextVAnchor.Bottom => bounds.Bottom - Math.Min(bounds.Height, formatted.Height),
-                    _ => bounds.Top
+                    DrawingShapeTextVAnchor.Middle => bounds.Top + topInset + Math.Max(0, (innerHeight - formatted.Height) / 2),
+                    DrawingShapeTextVAnchor.Bottom => bounds.Top + topInset + Math.Max(0, innerHeight - formatted.Height),
+                    _ => bounds.Top + topInset
                 };
                 dc.PushClip(new RectangleGeometry(bounds));
-                dc.DrawText(formatted, new Point(bounds.Left, top));
+                dc.DrawText(formatted, new Point(bounds.Left + leftInset, top));
                 dc.Pop();
                 dc.Pop();
                 // PDF's selectable-text overlay has no clip geometry. Only include single-line,
@@ -103,13 +109,13 @@ public static partial class PrintRenderer
                     typeface, font.FontSize, textBrush, 1.0);
                 if (appearance.Transform.RotationDegrees == 0 && bodyClip.Contains(bounds) &&
                     !shape.Text.Contains('\n') && !shape.Text.Contains('\r') &&
-                    unboundedText.Height <= bounds.Height && unboundedText.WidthIncludingTrailingWhitespace <= bounds.Width)
+                    unboundedText.Height <= innerHeight && unboundedText.WidthIncludingTrailingWhitespace <= innerWidth)
                 {
                     var x = shape.TextHorizontalAlignment switch
                     {
-                        DrawingShapeTextHAlign.Center => bounds.Left + (bounds.Width - formatted.WidthIncludingTrailingWhitespace) / 2,
-                        DrawingShapeTextHAlign.Right => bounds.Right - formatted.WidthIncludingTrailingWhitespace,
-                        _ => bounds.Left
+                        DrawingShapeTextHAlign.Center => bounds.Left + leftInset + (innerWidth - formatted.WidthIncludingTrailingWhitespace) / 2,
+                        DrawingShapeTextHAlign.Right => bounds.Left + leftInset + innerWidth - formatted.WidthIncludingTrailingWhitespace,
+                        _ => bounds.Left + leftInset
                     };
                     textOverlays.Add(new PdfTextOverlay(shape.Text, x, top, font.FontSize, font.FontFamily,
                         font.Bold, font.Italic, textColor));

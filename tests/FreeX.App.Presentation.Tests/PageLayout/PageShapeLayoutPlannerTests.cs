@@ -109,6 +109,17 @@ public sealed class PageShapeLayoutPlannerTests
     }
 
     [Fact]
+    public void Build_ResolvesExplicitTextInsetsAndKeepsMissingSides()
+    {
+        var sheet = new Workbook("test").AddSheet("Sheet1");
+        var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), ShapeText = "text",
+            ShapeTextInsets = new DrawingShapeTextInsets(0, 19050, null, 38100) };
+        var block = PageShapeLayoutPlanner.Build([shape], sheet, WorkbookTheme.Office, [1], [1], 0, 0,
+            new PrintGridMeasurement(0, 0, 100, 50), 0.5).Should().ContainSingle().Subject;
+        block.TextInsets.Should().Be(new PageShapeTextInsets(0, 1, null, 2));
+    }
+
+    [Fact]
     public void Build_ArrowheadsScaleWithPageRatherThanClampingAtOnePixel()
     {
         var sheet = new Workbook("test").AddSheet("Sheet1");

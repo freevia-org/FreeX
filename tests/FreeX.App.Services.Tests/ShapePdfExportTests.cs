@@ -164,4 +164,29 @@ public sealed class ShapePdfExportTests
             .Ops.OfType<PdfClipGroup>().Single().Ops.OfType<PdfText>().Should().ContainSingle().Subject;
         rendered.Text.Should().Be(text);
     }
+
+    [Fact]
+    public void PageSetup_UsesAuthoredLeftTextInset()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("A1"));
+        sheet.PrintArea = GridRange.Parse("A1:H20", sheet.Id);
+        var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 2, 2), ShapeText = "Label",
+            ShapeTextHAlign = DrawingShapeTextHAlign.Left, ShapeTextVAnchor = DrawingShapeTextVAnchor.Top,
+            ShapeTextInsets = new DrawingShapeTextInsets(0, 0, 0, 0) };
+        sheet.DrawingShapes.Add(shape);
+        var print = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(workbook,
+            new WorkbookExportPrintIntent(WorkbookExportPrintScope.ActiveSheet, WorkbookExportPrintOutputKind.Pdf, ActiveSheetIndex: 0));
+        var plan = PortablePdfExportPlanner.CreatePlan(print, workbook);
+        double TextX()
+        {
+            var ops = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, plan).Pages.Single().Ops;
+            return ops.OfType<PdfClipGroup>().Single().Ops.OfType<PdfRotationGroup>().Last()
+                .Ops.OfType<PdfClipGroup>().Single().Ops.OfType<PdfText>().Single().X;
+        }
+        var before = TextX();
+        shape.ShapeTextInsets = shape.ShapeTextInsets with { Left = 95250 };
+        TextX().Should().BeApproximately(before + 7.5, 0.01);
+    }
 }

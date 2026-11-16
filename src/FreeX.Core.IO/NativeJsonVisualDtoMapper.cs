@@ -266,6 +266,7 @@ internal static class NativeJsonVisualDtoMapper
             ? new ArrowheadDto { Type = ta.Type, Width = ta.Width, Length = ta.Length }
             : null,
         ShapeText = shape.ShapeText,
+        ShapeTextInsets = shape.ShapeTextInsets,
         ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
         ShapeTextBold = shape.ShapeTextBold,
         ShapeTextItalic = shape.ShapeTextItalic,
@@ -343,6 +344,7 @@ internal static class NativeJsonVisualDtoMapper
                     ? new DrawingArrowhead(ta.Type, ta.Width, ta.Length)
                     : null,
                 ShapeText = shapeDto.ShapeText,
+                ShapeTextInsets = shapeDto.ShapeTextInsets,
                 ShapeTextFontSizePoints = shapeDto.ShapeTextFontSizePoints,
                 ShapeTextBold = shapeDto.ShapeTextBold,
                 ShapeTextItalic = shapeDto.ShapeTextItalic,
@@ -545,6 +547,7 @@ internal class DrawingShapeDto
     public ArrowheadDto? TailArrowhead { get; set; }
     // ── Shape text ────────────────────────────────────────────────────────
     public string? ShapeText { get; set; }
+    public DrawingShapeTextInsets? ShapeTextInsets { get; set; }
     public double ShapeTextFontSizePoints { get; set; }
     public bool ShapeTextBold { get; set; }
     public bool ShapeTextItalic { get; set; }
