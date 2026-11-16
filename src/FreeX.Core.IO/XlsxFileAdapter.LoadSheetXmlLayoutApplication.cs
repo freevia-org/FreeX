@@ -106,6 +106,12 @@ public sealed partial class XlsxFileAdapter
             if (XlsxChartPartReader.TryReadSupportedChart(chartPart.Xml, sheet.Id, fallbackChartDataRange, sheetNameResolver, out var chart))
             {
                 chart.Name = chartPart.Name;
+                chart.Locked = chartPart.IsLocked;
+                chart.SourceXlsxLocked = chartPart.IsLocked;
+                chart.DrawingLockAttributes = chartPart.DrawingLockAttributes;
+                chart.SourceXlsxLockAttributes = chartPart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(chartPart.DrawingLockAttributes);
+                chart.DrawingLockChildrenXml = chartPart.DrawingLockChildrenXml;
+                chart.SourceXlsxLockChildrenXml = chartPart.DrawingLockChildrenXml;
                 chart.AltTextTitle = chartPart.Title;
                 chart.AltTextDescription = chartPart.AltText;
                 // R98-io-chart-hyperlink-model-field: populate the model's own hyperlink field (resolved
@@ -155,6 +161,16 @@ public sealed partial class XlsxFileAdapter
                     // r378: Format Picture lock flags, previously session-only.
                     LockAspectRatio = picturePart.LockAspectRatio,
                     Locked = picturePart.IsLocked,
+                    DrawingNoMove = picturePart.DrawingNoMove,
+                    DrawingNoResize = picturePart.DrawingNoResize,
+                    DrawingLockAttributes = picturePart.DrawingLockAttributes,
+                    DrawingLockChildrenXml = picturePart.DrawingLockChildrenXml,
+                    SourceXlsxLockChildrenXml = picturePart.DrawingLockChildrenXml,
+                    SourceXlsxLocked = picturePart.IsLocked,
+                    SourceXlsxAspectLock = picturePart.LockAspectRatio,
+                    SourceXlsxNoMove = picturePart.DrawingNoMove,
+                    SourceXlsxNoResize = picturePart.DrawingNoResize,
+                    SourceXlsxLockAttributes = picturePart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(picturePart.DrawingLockAttributes),
                     RotationDegrees = picturePart.RotationDegrees,
                     FlipHorizontal = picturePart.FlipHorizontal,
                     FlipVertical = picturePart.FlipVertical,
@@ -204,6 +220,16 @@ public sealed partial class XlsxFileAdapter
                 FlipHorizontal = textBoxPart.FlipHorizontal,
                 FlipVertical = textBoxPart.FlipVertical,
                 HasFill = textBoxPart.HasFill,
+                Locked = textBoxPart.Locked,
+                DrawingNoMove = textBoxPart.DrawingNoMove,
+                DrawingNoResize = textBoxPart.DrawingNoResize,
+                DrawingLockAttributes = textBoxPart.DrawingLockAttributes,
+                    DrawingLockChildrenXml = textBoxPart.DrawingLockChildrenXml,
+                    SourceXlsxLockChildrenXml = textBoxPart.DrawingLockChildrenXml,
+                SourceXlsxLocked = textBoxPart.Locked,
+                SourceXlsxNoMove = textBoxPart.DrawingNoMove,
+                SourceXlsxNoResize = textBoxPart.DrawingNoResize,
+                SourceXlsxLockAttributes = textBoxPart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(textBoxPart.DrawingLockAttributes),
                 FillColor = textBoxPart.FillColor,
                 OutlineColor = textBoxPart.OutlineColor,
                 // R91-commands-insert-object-5-1: preserve an authored <a:ln><a:noFill/> so a loaded
@@ -243,6 +269,16 @@ public sealed partial class XlsxFileAdapter
                     shapePart.Anchor?.FromRowZeroBased + 1 ?? 1,
                     shapePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
                 Kind = shapePart.Kind,
+                Locked = shapePart.Locked,
+                DrawingNoMove = shapePart.DrawingNoMove,
+                DrawingNoResize = shapePart.DrawingNoResize,
+                DrawingLockAttributes = shapePart.DrawingLockAttributes,
+                    DrawingLockChildrenXml = shapePart.DrawingLockChildrenXml,
+                    SourceXlsxLockChildrenXml = shapePart.DrawingLockChildrenXml,
+                SourceXlsxLocked = shapePart.Locked,
+                SourceXlsxNoMove = shapePart.DrawingNoMove,
+                SourceXlsxNoResize = shapePart.DrawingNoResize,
+                SourceXlsxLockAttributes = shapePart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(shapePart.DrawingLockAttributes),
                 Name = shapePart.Name,
                 Title = shapePart.Title,
                 AltText = shapePart.AltText,

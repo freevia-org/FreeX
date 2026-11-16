@@ -515,6 +515,8 @@ public sealed partial class XlsxFileAdapter
             // (R107) -- reached the model and never the saved file.
             packageStream.Position = 0;
             XlsxSourceDrawingHyperlinkRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
+            packageStream.Position = 0;
+            XlsxSourceDrawingLockRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         // R118-io-drawing-zorder-1: Bring Forward/Send Backward/Selection Pane commands only ever

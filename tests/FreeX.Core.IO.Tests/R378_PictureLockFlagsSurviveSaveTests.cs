@@ -92,14 +92,12 @@ public sealed class R378_PictureLockFlagsSurviveSaveTests
     }
 
     [Fact]
-    public void ADefaultPictureRoundTripsLockedAndWritesNoElement()
+    public void ADefaultPictureRoundTripsLockedAndWritesAspectFlag()
     {
-        // Byte-stability: the defaults are "locked", so an ordinary picture must still produce the
-        // XML it produced before this change. Writing picLocks unconditionally would churn every
-        // drawing part in every existing workbook.
+        // The model defaults to a locked aspect; the OOXML omitted-attribute default is false.
         using var saved = SaveWithPicture(_ => { });
 
-        PictureLocksElement(saved).Should().BeNull("an all-default picture needs no lock override");
+        PictureLocksElement(saved)!.Attribute("noChangeAspect")!.Value.Should().Be("1");
 
         var reloaded = Reload(saved);
         reloaded.LockAspectRatio.Should().BeTrue();
@@ -107,16 +105,9 @@ public sealed class R378_PictureLockFlagsSurviveSaveTests
     }
 
     [Fact]
-    public void AnExcelStyleAspectLockIsReadAsLockedAspectAndMovablePicture()
+    public void AspectAndDrawingRestrictionsDoNotOverrideSheetProtectionLock()
     {
-        // What Excel actually writes for a picture whose aspect is locked but which can still be
-        // moved: the element is present, noChangeAspect is set, and the move/resize locks are absent,
-        // which per the OOXML defaults means false.
-        using var saved = SaveWithPicture(picture =>
-        {
-            picture.LockAspectRatio = false;
-            picture.Locked = false;
-        });
+        using var saved = SaveWithPicture(_ => { });
 
         saved.Position = 0;
         using (var archive = new ZipArchive(saved, ZipArchiveMode.Update, leaveOpen: true))
@@ -132,6 +123,8 @@ public sealed class R378_PictureLockFlagsSurviveSaveTests
             var locks = document.Descendants(DrawingNs + "picLocks").Single();
             locks.RemoveAttributes();
             locks.SetAttributeValue("noChangeAspect", "1");
+            locks.SetAttributeValue("noMove", "0");
+            locks.SetAttributeValue("noResize", "0");
 
             entry.Delete();
             using var write = new StreamWriter(archive.CreateEntry(entry.FullName).Open());
@@ -141,6 +134,8 @@ public sealed class R378_PictureLockFlagsSurviveSaveTests
         var reloaded = Reload(saved);
 
         reloaded.LockAspectRatio.Should().BeTrue("noChangeAspect=\"1\" locks the aspect ratio");
-        reloaded.Locked.Should().BeFalse("noMove/noResize are absent, which the schema reads as false");
+        reloaded.Locked.Should().BeTrue("the anchor defaults to locked independently of drawing restrictions");
+        reloaded.DrawingNoMove.Should().BeFalse();
+        reloaded.DrawingNoResize.Should().BeFalse();
     }
 }

@@ -7,6 +7,9 @@ public sealed partial class NativeJsonAdapter
     private class ChartDto
     {
         public string? Name { get; set; }
+        public bool Locked { get; set; } = true;
+        public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+        public string? DrawingLockChildrenXml { get; set; }
 
         /// <summary>R80-app-accessibility-a11y-5-1: see <see cref="ChartModel.AltTextTitle"/>.</summary>
         public string? AltTextTitle { get; set; }

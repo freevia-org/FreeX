@@ -20,10 +20,15 @@ internal static class NativeJsonVisualDtoMapper
         Width = PositiveFiniteOrDefault(picture.Width, 240),
         Height = PositiveFiniteOrDefault(picture.Height, 140),
         LockAspectRatio = picture.LockAspectRatio,
+        DrawingNoMove = picture.DrawingNoMove,
+        DrawingNoResize = picture.DrawingNoResize,
+        DrawingLockAttributes = picture.DrawingLockAttributes,
+        DrawingLockChildrenXml = picture.DrawingLockChildrenXml,
         RotationDegrees = NormalizeRotation(picture.RotationDegrees),
         FlipHorizontal = picture.FlipHorizontal,
         FlipVertical = picture.FlipVertical,
         IsVisible = picture.IsVisible,
+        Locked = picture.Locked,
         CropLeft = SanitizeCropEdge(picture.CropLeft),
         CropTop = SanitizeCropEdge(picture.CropTop),
         CropRight = SanitizeCropEdge(picture.CropRight),
@@ -80,10 +85,15 @@ internal static class NativeJsonVisualDtoMapper
                 Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
                 Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
                 LockAspectRatio = pictureDto.LockAspectRatio,
+                DrawingNoMove = pictureDto.DrawingNoMove,
+                DrawingNoResize = pictureDto.DrawingNoResize,
+                DrawingLockAttributes = pictureDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = pictureDto.DrawingLockChildrenXml,
                 RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
                 FlipHorizontal = pictureDto.FlipHorizontal,
                 FlipVertical = pictureDto.FlipVertical,
                 IsVisible = pictureDto.IsVisible,
+                Locked = pictureDto.Locked,
                 CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
                 CropTop = SanitizeCropEdge(pictureDto.CropTop),
                 CropRight = SanitizeCropEdge(pictureDto.CropRight),
@@ -129,6 +139,11 @@ internal static class NativeJsonVisualDtoMapper
         FlipHorizontal = textBox.FlipHorizontal,
         FlipVertical = textBox.FlipVertical,
         IsVisible = textBox.IsVisible,
+        Locked = textBox.Locked,
+        DrawingNoMove = textBox.DrawingNoMove,
+        DrawingNoResize = textBox.DrawingNoResize,
+        DrawingLockAttributes = textBox.DrawingLockAttributes,
+        DrawingLockChildrenXml = textBox.DrawingLockChildrenXml,
         HasFill = textBox.HasFill,
         FillColor = textBox.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
@@ -175,6 +190,11 @@ internal static class NativeJsonVisualDtoMapper
                 FlipHorizontal = textBoxDto.FlipHorizontal,
                 FlipVertical = textBoxDto.FlipVertical,
                 IsVisible = textBoxDto.IsVisible,
+                Locked = textBoxDto.Locked,
+                DrawingNoMove = textBoxDto.DrawingNoMove,
+                DrawingNoResize = textBoxDto.DrawingNoResize,
+                DrawingLockAttributes = textBoxDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = textBoxDto.DrawingLockChildrenXml,
                 HasFill = textBoxDto.HasFill,
                 FillColor = textBoxDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
@@ -213,6 +233,11 @@ internal static class NativeJsonVisualDtoMapper
         FlipHorizontal = shape.FlipHorizontal,
         FlipVertical = shape.FlipVertical,
         IsVisible = shape.IsVisible,
+        Locked = shape.Locked,
+        DrawingNoMove = shape.DrawingNoMove,
+        DrawingNoResize = shape.DrawingNoResize,
+        DrawingLockAttributes = shape.DrawingLockAttributes,
+        DrawingLockChildrenXml = shape.DrawingLockChildrenXml,
         HasFill = shape.HasFill,
         FillColor = shape.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = shape.OutlineColor is { } outline ? FormatColor(outline) : null,
@@ -284,6 +309,11 @@ internal static class NativeJsonVisualDtoMapper
                 FlipHorizontal = shapeDto.FlipHorizontal,
                 FlipVertical = shapeDto.FlipVertical,
                 IsVisible = shapeDto.IsVisible,
+                Locked = shapeDto.Locked,
+                DrawingNoMove = shapeDto.DrawingNoMove,
+                DrawingNoResize = shapeDto.DrawingNoResize,
+                DrawingLockAttributes = shapeDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = shapeDto.DrawingLockChildrenXml,
                 HasFill = shapeDto.HasFill,
                 FillColor = shapeDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = shapeDto.OutlineColor is { } outline ? ParseColor(outline) : null,
@@ -396,10 +426,15 @@ internal class PictureDto
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
     public bool LockAspectRatio { get; set; } = true;
+    public bool? DrawingNoMove { get; set; }
+    public bool? DrawingNoResize { get; set; }
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+    public string? DrawingLockChildrenXml { get; set; }
     public double RotationDegrees { get; set; }
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool Locked { get; set; } = true;
     public double CropLeft { get; set; }
     public double CropTop { get; set; }
     public double CropRight { get; set; }
@@ -437,6 +472,11 @@ internal class TextBoxDto
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool Locked { get; set; } = true;
+    public bool? DrawingNoMove { get; set; }
+    public bool? DrawingNoResize { get; set; }
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+    public string? DrawingLockChildrenXml { get; set; }
     public bool HasFill { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
@@ -472,6 +512,11 @@ internal class DrawingShapeDto
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool Locked { get; set; } = true;
+    public bool? DrawingNoMove { get; set; }
+    public bool? DrawingNoResize { get; set; }
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+    public string? DrawingLockChildrenXml { get; set; }
     public bool HasFill { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }

@@ -135,20 +135,28 @@ public sealed class DrawingShapeModel
 
     /// <summary>
     /// Whether this shape is locked against move/resize while its sheet is protected with
-    /// the "Edit objects" permission blocked, matching OOXML <c>&lt;a:spLocks noMove="1" noResize="1".../&gt;</c>
-    /// (the fLocksWithSheet-style per-object lock under the shape's spPr, or the analogous
-    /// picLocks/graphicFrameLocks for pictures/charts). Defaults to <see langword="true"/>, matching
+    /// the "Edit objects" permission blocked, matching the anchor's OOXML
+    /// <c>&lt;xdr:clientData fLocksWithSheet="..."/&gt;</c>. Defaults to <see langword="true"/>, matching
     /// Excel's default of a locked shape. When an author explicitly unlocks a shape (unchecks
     /// Format Shape &gt; Properties &gt; Locked) that one shape stays movable/resizable even while
     /// the sheet protection has "Edit objects" turned off, while other (default-locked) shapes on
     /// the same protected sheet remain immovable.
     /// </summary>
-    /// <remarks>
-    /// Reading/writing the OOXML per-shape lock attribute (<c>a:spLocks</c>) on load/save is
-    /// deferred follow-up work — this field is currently in-memory/session-only and defaults to
-    /// locked, matching Excel's authored default when no lock override is present.
-    /// </remarks>
     public bool Locked { get; set; } = true;
+    /// <summary>Independent DrawingML movement restriction, when explicitly authored.</summary>
+    public bool? DrawingNoMove { get; set; }
+    /// <summary>Independent DrawingML resize restriction, when explicitly authored.</summary>
+    public bool? DrawingNoResize { get; set; }
+    /// <summary>Other explicitly authored DrawingML lock attributes.</summary>
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+
+    /// <summary>Preserved XML children of the DrawingML lock element, wrapped in a root element.</summary>
+    public string? DrawingLockChildrenXml { get; set; }
+    internal string? SourceXlsxLockChildrenXml { get; set; }
+    internal bool? SourceXlsxLocked { get; set; }
+    internal bool? SourceXlsxNoMove { get; set; }
+    internal bool? SourceXlsxNoResize { get; set; }
+    internal IReadOnlyDictionary<string, string>? SourceXlsxLockAttributes { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
 

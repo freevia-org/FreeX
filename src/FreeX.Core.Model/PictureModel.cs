@@ -55,19 +55,30 @@ public sealed class PictureModel
     /// <summary>
     /// R111-model-drawing-object-lock-1-1: whether this picture is locked against move/resize while
     /// its sheet is protected with the "Edit objects" permission blocked -- mirrors
-    /// <see cref="DrawingShapeModel.Locked"/> (matching OOXML <c>&lt;a:picLocks noMove="1" noResize="1".../&gt;</c>).
+    /// <see cref="DrawingShapeModel.Locked"/> (OOXML anchor <c>xdr:clientData@fLocksWithSheet</c>).
     /// Defaults to <see langword="true"/>, matching Excel's default of a locked picture. When an author
     /// explicitly unlocks a picture (unchecks Format Picture &gt; Properties &gt; Locked) that one
     /// picture stays movable/resizable even while the sheet protection has "Edit objects" turned off,
     /// while other (default-locked) pictures on the same protected sheet remain immovable.
     /// </summary>
-    /// <remarks>
-    /// Reading/writing the OOXML per-picture lock attribute (<c>a:picLocks</c>) on load/save is
-    /// deferred follow-up work, exactly like <see cref="DrawingShapeModel.Locked"/> -- this field is
-    /// currently in-memory/session-only and defaults to locked, matching Excel's authored default when
-    /// no lock override is present.
-    /// </remarks>
     public bool Locked { get; set; } = true;
+
+    /// <summary>Independent DrawingML picture movement restriction, when explicitly authored.</summary>
+    public bool? DrawingNoMove { get; set; }
+
+    /// <summary>Independent DrawingML picture resize restriction, when explicitly authored.</summary>
+    public bool? DrawingNoResize { get; set; }
+    /// <summary>Other explicitly authored DrawingML lock attributes.</summary>
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+
+    /// <summary>Preserved XML children of the DrawingML lock element, wrapped in a root element.</summary>
+    public string? DrawingLockChildrenXml { get; set; }
+    internal string? SourceXlsxLockChildrenXml { get; set; }
+    internal bool? SourceXlsxLocked { get; set; }
+    internal bool? SourceXlsxAspectLock { get; set; }
+    internal bool? SourceXlsxNoMove { get; set; }
+    internal bool? SourceXlsxNoResize { get; set; }
+    internal IReadOnlyDictionary<string, string>? SourceXlsxLockAttributes { get; set; }
 
     public double CropLeft { get; set; }
     public double CropTop { get; set; }

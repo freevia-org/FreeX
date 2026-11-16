@@ -31,7 +31,10 @@ internal sealed record XlsxChartPackagePart(
     // same mechanism XlsxPicturePackagePart/XlsxTextBoxPackagePart/XlsxShapePackagePart already use
     // (R97-model-drawing-hyperlink-2-2). Defaults to null so the out-of-scope positional caller
     // referenced above keeps compiling unchanged.
-    DrawingObjectHyperlink? Hyperlink = null);
+    DrawingObjectHyperlink? Hyperlink = null,
+    bool IsLocked = true,
+    IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
+    string? DrawingLockChildrenXml = null);
 
 internal sealed record XlsxPicturePackagePart(
     byte[] ImageBytes,
@@ -69,10 +72,7 @@ internal sealed record XlsxPicturePackagePart(
     // (SelectionPaneCommands) sets PictureModel.IsVisible, and without this the hide was lost on
     // save -- the picture came back visible the next time the file was opened.
     bool IsHidden = false,
-    // r378: Format Picture > Size > "Lock aspect ratio" and Properties > "Locked", from a:picLocks.
-    // Both were session-only before: unchecking either and saving brought the lock back on reload.
-    // Absent picLocks means LOCKED here, matching PictureModel's documented default and Excel's
-    // authored default for a picture; a present element is read per the OOXML attribute defaults.
+    // Aspect ratio comes from a:picLocks; sheet protection comes from anchor clientData.
     bool LockAspectRatio = true,
     bool IsLocked = true,
     // R97-model-drawing-hyperlink-2-2: the picture's object-level hyperlink (<a:hlinkClick> on its
@@ -97,7 +97,11 @@ internal sealed record XlsxPicturePackagePart(
     int? LinkedSourceEndRow = null,
     int? LinkedSourceEndCol = null,
     uint SnapshotSourceRowCount = 0,
-    uint SnapshotSourceColumnCount = 0);
+    uint SnapshotSourceColumnCount = 0,
+    bool? DrawingNoMove = null,
+    bool? DrawingNoResize = null,
+    IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
+    string? DrawingLockChildrenXml = null);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -136,7 +140,12 @@ internal sealed record XlsxTextBoxPackagePart(
     // <a:extLst> carries the "Mark as decorative" extension (see
     // XlsxWorksheetDrawingParts.ReadNonVisualDecorative) -- mirrors XlsxPicturePackagePart's
     // IsDecorative field.
-    bool IsDecorative = false);
+    bool IsDecorative = false,
+    bool Locked = true,
+    bool? DrawingNoMove = null,
+    bool? DrawingNoResize = null,
+    IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
+    string? DrawingLockChildrenXml = null);
 
 internal sealed record XlsxShapePackagePart(
     DrawingShapeKind Kind,
@@ -227,7 +236,12 @@ internal sealed record XlsxShapePackagePart(
     // IsDecorative field.
     bool IsDecorative = false,
     /// <summary>True when the first WordArt run explicitly has <c>&lt;a:noFill/&gt;</c>.</summary>
-    bool ShapeTextHasNoFill = false);
+    bool ShapeTextHasNoFill = false,
+    bool Locked = true,
+    bool? DrawingNoMove = null,
+    bool? DrawingNoResize = null,
+    IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
+    string? DrawingLockChildrenXml = null);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -468,7 +482,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 // hyperlink from the drawing part's own relationships -- reads from graphicFrameElement
                 // (same source as the name/Alt-Text reads above) since that is where the cNvPr carrying
                 // hlinkClick actually lives, not inside <c:chart>/<cx:chart>.
-                ReadObjectHyperlink(graphicFrameElement ?? chartElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
+                ReadObjectHyperlink(graphicFrameElement ?? chartElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById),
+                ReadLocksWithSheet(graphicFrameElement ?? chartElement),
+                ReadChartLockAttributes(graphicFrameElement ?? chartElement),
+                ReadDrawingLockChildren(graphicFrameElement ?? chartElement, "graphicFrameLocks")));
         }
 
         return charts;
@@ -558,7 +575,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             // decorative picture stays exempt from the Missing-Alt-Text rule after a round-trip.
             var isDecorative = ReadNonVisualDecorative(pictureElement);
             var isHidden = ReadNonVisualHidden(pictureElement);
-            var (lockAspectRatio, isLocked) = ReadPictureLocks(pictureElement);
+            var (lockAspectRatio, noMove, noResize) = ReadPictureLocks(pictureElement);
+            var isLocked = ReadLocksWithSheet(pictureElement);
             var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
             var pictureTransform = pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
 
@@ -607,7 +625,11 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 isHidden,
                 lockAspectRatio,
                 isLocked,
-                ReadObjectHyperlink(pictureElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById)));
+                ReadObjectHyperlink(pictureElement, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById),
+                DrawingNoMove: noMove,
+                DrawingNoResize: noResize,
+                DrawingLockAttributes: ReadOtherDrawingLockAttributes(pictureElement, "picLocks", includeAspect: true),
+                DrawingLockChildrenXml: ReadDrawingLockChildren(pictureElement, "picLocks")));
         }
 
         return pictures;
@@ -686,7 +708,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 LinkedSourceEndRow: marker.Value.EndRow,
                 LinkedSourceEndCol: marker.Value.EndCol,
                 SnapshotSourceRowCount: marker.Value.SourceRowCount,
-                SnapshotSourceColumnCount: marker.Value.SourceColumnCount));
+                SnapshotSourceColumnCount: marker.Value.SourceColumnCount,
+                IsLocked: ReadLocksWithSheet(group)));
         }
 
         return result;
@@ -1042,7 +1065,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 txBoxVAnchor,
                 outlineHasNoFill,
                 hyperlink,
-                isDecorative));
+                isDecorative,
+                Locked: ReadLocksWithSheet(shapeElement),
+                DrawingNoMove: ReadDrawingLockFlag(shapeElement, "spLocks", "noMove"),
+                DrawingNoResize: ReadDrawingLockFlag(shapeElement, "spLocks", "noResize"),
+                DrawingLockAttributes: ReadOtherDrawingLockAttributes(shapeElement, "spLocks", includeAspect: false),
+                DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks")));
             return;
         }
 
@@ -1120,7 +1148,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ReadShapeAdjustValues(spPr, drawingNs),
             hyperlink,
             isDecorative,
-            textHasNoFill));
+            textHasNoFill,
+            Locked: ReadLocksWithSheet(shapeElement),
+            DrawingNoMove: ReadDrawingLockFlag(shapeElement, "spLocks", "noMove"),
+            DrawingNoResize: ReadDrawingLockFlag(shapeElement, "spLocks", "noResize"),
+            DrawingLockAttributes: ReadOtherDrawingLockAttributes(shapeElement, "spLocks", includeAspect: false),
+                DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks")));
     }
 
     /// <summary>
@@ -1427,7 +1460,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
             ShapeTextOutlineWidthPoints: 0,
             AdjustValues: ReadShapeAdjustValues(spPr, drawingNs),
             Hyperlink: hyperlink,
-            IsDecorative: isDecorative));
+            IsDecorative: isDecorative,
+            Locked: ReadLocksWithSheet(cxnSpElement),
+            DrawingNoMove: ReadDrawingLockFlag(cxnSpElement, "cxnSpLocks", "noMove"),
+            DrawingNoResize: ReadDrawingLockFlag(cxnSpElement, "cxnSpLocks", "noResize"),
+            DrawingLockAttributes: ReadOtherDrawingLockAttributes(cxnSpElement, "cxnSpLocks", includeAspect: false),
+                DrawingLockChildrenXml: ReadDrawingLockChildren(cxnSpElement, "cxnSpLocks")));
     }
 
     private static bool ReadUsesThemeEffectStyle(
@@ -1510,8 +1548,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// <summary>
     /// r318: whether the object is hidden (Selection Pane eye off), from cNvPr@hidden.
     /// </summary>
-    /// <summary>r378: reads a:picLocks. Absent element = locked (see the record field comment).</summary>
-    private static (bool LockAspectRatio, bool IsLocked) ReadPictureLocks(XElement pictureElement)
+    private static (bool LockAspectRatio, bool? NoMove, bool? NoResize) ReadPictureLocks(XElement pictureElement)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
@@ -1521,12 +1558,53 @@ internal static partial class XlsxWorksheetDrawingPartReader
             .Element(spreadsheetDrawingNs + "cNvPicPr")?
             .Element(drawingNs + "picLocks");
         if (locks is null)
-            return (true, true);
+            return (false, null, null);
 
         static bool Flag(XElement element, string name) =>
             element.Attribute(name)?.Value is "1" or "true";
 
-        return (Flag(locks, "noChangeAspect"), Flag(locks, "noMove") || Flag(locks, "noResize"));
+        static bool? OptionalFlag(XElement element, string name) => element.Attribute(name) is null ? null : Flag(element, name);
+        return (Flag(locks, "noChangeAspect"), OptionalFlag(locks, "noMove"), OptionalFlag(locks, "noResize"));
+    }
+
+    private static bool ReadLocksWithSheet(XElement element)
+    {
+        XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var raw = FindNearestAnchorElement(element, xdr)?.Element(xdr + "clientData")?.Attribute("fLocksWithSheet")?.Value;
+        return raw is not ("0" or "false");
+    }
+
+    private static bool? ReadDrawingLockFlag(XElement element, string locksName, string flag)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var raw = element.Descendants(drawing + locksName).FirstOrDefault()?.Attribute(flag)?.Value;
+        return raw is null ? null : raw is "1" or "true";
+    }
+
+    private static IReadOnlyDictionary<string, string>? ReadOtherDrawingLockAttributes(XElement element, string locksName, bool includeAspect)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var attributes = element.Descendants(drawing + locksName).FirstOrDefault()?.Attributes()
+            .Where(attribute => !attribute.IsNamespaceDeclaration && attribute.Name != "noMove" && attribute.Name != "noResize" &&
+                !(includeAspect && attribute.Name == "noChangeAspect"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes is { Count: > 0 } ? attributes : null;
+    }
+
+    private static IReadOnlyDictionary<string, string>? ReadChartLockAttributes(XElement element)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var attributes = element.Descendants(drawing + "graphicFrameLocks").FirstOrDefault()?.Attributes()
+            .Where(attribute => !attribute.IsNamespaceDeclaration)
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return attributes is { Count: > 0 } ? attributes : null;
+    }
+
+    private static string? ReadDrawingLockChildren(XElement element, string locksName)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var children = element.Descendants(drawing + locksName).FirstOrDefault()?.Elements().ToArray();
+        return children is { Length: > 0 } ? new XElement("root", children.Select(child => new XElement(child))).ToString(SaveOptions.DisableFormatting) : null;
     }
 
     private static bool ReadNonVisualHidden(XElement element)
