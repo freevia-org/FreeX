@@ -260,8 +260,18 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
         RenderTargetState(state);
     }
 
-    private async void OnOk() => await ApplyAsync(
-        (message, title) => AvaloniaUserMessageDialog.ShowWarningAsync(this, message, title));
+    private async void OnOk()
+    {
+        try
+        {
+            await ApplyAsync(
+                (message, title) => AvaloniaUserMessageDialog.ShowWarningAsync(this, message, title));
+        }
+        catch (Exception error)
+        {
+            System.Diagnostics.Trace.TraceError("Failed to apply the hyperlink dialog: {0}", error);
+        }
+    }
 
     private async Task<bool> ApplyAsync(Func<string, string, Task> showWarning)
     {

@@ -135,6 +135,7 @@ public sealed class HyperlinkDialogTests
             });
             validation.Text.Should().BeEmpty();
             validation.IsVisible.Should().BeTrue();
+            return true;
         }, CancellationToken.None);
     }
 
