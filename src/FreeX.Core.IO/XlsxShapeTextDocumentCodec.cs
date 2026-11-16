@@ -32,16 +32,31 @@ internal static class XlsxShapeTextDocumentCodec
                     kind == DrawingShapeTextInlineKind.Field ? element.Attribute("type")?.Value : null, style)
                     { SourceXml = element.ToString(SaveOptions.DisableFormatting) });
             }
-            var alignment = paragraph.Element(A + "pPr")?.Attribute("algn")?.Value switch
-            {
-                "l" => DrawingShapeTextHAlign.Left, "ctr" => DrawingShapeTextHAlign.Center,
-                "r" => DrawingShapeTextHAlign.Right, _ => (DrawingShapeTextHAlign?)null
-            };
-            paragraphs.Add(new DrawingShapeTextParagraph(inlines, alignment)
+            var properties = paragraph.Element(A + "pPr");
+            var level = int.TryParse(properties?.Attribute("lvl")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLevel)
+                && parsedLevel is >= 0 and <= 8 ? parsedLevel : (int?)null;
+            paragraphs.Add(new DrawingShapeTextParagraph(inlines, ReadAlignment(properties),
+                ReadStyle(properties?.Element(A + "defRPr"), relationships), level)
                 { SourceXml = paragraph.ToString(SaveOptions.DisableFormatting) });
         }
-        return new DrawingShapeTextDocument(paragraphs) { SourceXml = body.ToString(SaveOptions.DisableFormatting) };
+        var listStyle = body.Element(A + "lstStyle");
+        var defaultParagraph = ReadDefaults(listStyle?.Element(A + "defPPr"), relationships);
+        var levels = Enumerable.Range(0, 9)
+            .Select(level => (Level: level, Defaults: ReadDefaults(listStyle?.Element(A + $"lvl{level + 1}pPr"), relationships)))
+            .Where(item => item.Defaults is not null)
+            .Select(item => new DrawingShapeTextListLevel(item.Level, item.Defaults!));
+        return new DrawingShapeTextDocument(paragraphs, defaultParagraph, levels) { SourceXml = body.ToString(SaveOptions.DisableFormatting) };
     }
+
+    private static DrawingShapeTextHAlign? ReadAlignment(XElement? properties) => properties?.Attribute("algn")?.Value switch
+    {
+        "l" => DrawingShapeTextHAlign.Left, "ctr" => DrawingShapeTextHAlign.Center,
+        "r" => DrawingShapeTextHAlign.Right, _ => null
+    };
+
+    private static DrawingShapeTextParagraphDefaults? ReadDefaults(XElement? properties,
+        IReadOnlyDictionary<string, (string Target, string? TargetMode)>? relationships) => properties is null ? null :
+        new DrawingShapeTextParagraphDefaults(ReadAlignment(properties), ReadStyle(properties.Element(A + "defRPr"), relationships));
 
     private static DrawingShapeTextRunStyle? ReadStyle(XElement? properties,
         IReadOnlyDictionary<string, (string Target, string? TargetMode)>? relationships)
@@ -71,11 +86,11 @@ internal static class XlsxShapeTextDocumentCodec
         return BuildRelationships(document).Targets;
     }
 
-    private static (Dictionary<string, DrawingObjectHyperlink> Targets, Dictionary<DrawingShapeTextInline, string> AuthoredIds)
+    private static (Dictionary<string, DrawingObjectHyperlink> Targets, Dictionary<object, string> AuthoredIds)
         BuildRelationships(DrawingShapeTextDocument document)
     {
         var result = new Dictionary<string, DrawingObjectHyperlink>(StringComparer.Ordinal);
-        var authored = new Dictionary<DrawingShapeTextInline, string>();
+        var authored = new Dictionary<object, string>(ReferenceEqualityComparer.Instance);
         var usedIds = new HashSet<string>(StringComparer.Ordinal);
         void Reserve(string? xml)
         {
@@ -89,27 +104,47 @@ internal static class XlsxShapeTextDocumentCodec
             Reserve(paragraph.SourceXml);
             foreach (var inline in paragraph.Inlines) Reserve(inline.SourceXml);
         }
-        foreach (var inline in document.Paragraphs.SelectMany(paragraph => paragraph.Inlines))
+        var hasListLinks = document.DefaultParagraph?.RunStyle?.Hyperlink is not null ||
+            document.ListLevels.Any(level => level.Defaults.RunStyle?.Hyperlink is not null);
+        var sourceBody = hasListLinks && document.SourceXml is { } sourceXml ? XElement.Parse(sourceXml) : null;
+        var sourceList = sourceBody?.Element(A + "lstStyle");
+        Add(document, document.DefaultParagraph?.RunStyle, sourceList?.Element(A + "defPPr")?.Element(A + "defRPr"));
+        foreach (var level in document.ListLevels)
+            Add(level, level.Defaults.RunStyle, sourceList?.Element(A + $"lvl{level.Level + 1}pPr")?.Element(A + "defRPr"));
+        foreach (var paragraph in document.Paragraphs)
         {
-            if (inline.Style?.Hyperlink is not { } hyperlink) continue;
-            if (inline.SourceXml is not { } xml)
+            var sourceParagraph = paragraph.DefaultRunStyle?.Hyperlink is not null && paragraph.SourceXml is { } paragraphXml
+                ? XElement.Parse(paragraphXml) : null;
+            Add(paragraph, paragraph.DefaultRunStyle, sourceParagraph?.Element(A + "pPr")?.Element(A + "defRPr"));
+            foreach (var inline in paragraph.Inlines)
             {
-                if (authored.ContainsKey(inline)) continue;
+                var sourceInline = inline.Style?.Hyperlink is not null && inline.SourceXml is { } inlineXml
+                    ? XElement.Parse(inlineXml) : null;
+                Add(inline, inline.Style, sourceInline?.Element(A + "rPr"));
+            }
+        }
+        return (result, authored);
+
+        void Add(object owner, DrawingShapeTextRunStyle? style, XElement? sourceProperties)
+        {
+            if (style?.Hyperlink is not { } hyperlink) return;
+            if (sourceProperties is null)
+            {
+                if (authored.ContainsKey(owner)) return;
                 var index = authored.Count + 1;
                 string newId;
                 do { newId = "rIdFreeXRichText" + index++; } while (!usedIds.Add(newId));
-                authored.Add(inline, newId);
+                authored.Add(owner, newId);
                 result.Add(newId, hyperlink);
-                continue;
+                return;
             }
-            var id = XElement.Parse(xml).Element(A + "rPr")?.Element(A + "hlinkClick")?.Attribute(R + "id")?.Value;
-            if (id is null) continue;
+            var id = sourceProperties.Element(A + "hlinkClick")?.Attribute(R + "id")?.Value;
+            if (id is null) return;
             if (result.TryGetValue(id, out var previous) &&
                 (previous.Target != hyperlink.Target || previous.TargetMode != hyperlink.TargetMode))
                 throw new InvalidOperationException("A shape text relationship ID has conflicting targets.");
             result[id] = hyperlink;
         }
-        return (result, authored);
     }
 
     internal static string? Fingerprint(DrawingShapeTextDocument? document, bool includeOpaqueOwner = true) => document is null ? null :
@@ -141,13 +176,21 @@ internal static class XlsxShapeTextDocumentCodec
         }
         else
         {
-            result = new XElement(Xdr + "txBody", new XElement(A + "bodyPr"), new XElement(A + "lstStyle"));
+            var list = new XElement(A + "lstStyle");
+            if (document.DefaultParagraph is { } defaults) list.Add(WriteDefaults("defPPr", defaults, authoredIds.GetValueOrDefault(document)));
+            foreach (var level in document.ListLevels.OrderBy(level => level.Level))
+                list.Add(WriteDefaults($"lvl{level.Level + 1}pPr", level.Defaults, authoredIds.GetValueOrDefault(level)));
+            result = new XElement(Xdr + "txBody", new XElement(A + "bodyPr"), list);
             foreach (var paragraph in document.Paragraphs)
             {
                 if (paragraph.SourceXml is { } paragraphXml) { result.Add(XElement.Parse(paragraphXml, LoadOptions.PreserveWhitespace)); continue; }
                 var p = new XElement(A + "p");
-                if (paragraph.Alignment is { } align) p.Add(new XElement(A + "pPr", new XAttribute("algn", align switch
-                { DrawingShapeTextHAlign.Center => "ctr", DrawingShapeTextHAlign.Right => "r", _ => "l" })));
+                if (paragraph.Alignment is not null || paragraph.DefaultRunStyle is not null || paragraph.Level is not null)
+                {
+                    var properties = WriteDefaults("pPr", new DrawingShapeTextParagraphDefaults(paragraph.Alignment, paragraph.DefaultRunStyle), authoredIds.GetValueOrDefault(paragraph));
+                    if (paragraph.Level is { } level) properties.SetAttributeValue("lvl", level);
+                    p.Add(properties);
+                }
                 foreach (var inline in paragraph.Inlines) p.Add(WriteInline(inline, authoredIds.GetValueOrDefault(inline)));
                 result.Add(p);
             }
@@ -167,6 +210,16 @@ internal static class XlsxShapeTextDocumentCodec
         return result;
     }
 
+    private static XElement WriteDefaults(string name, DrawingShapeTextParagraphDefaults defaults, string? relationshipId)
+    {
+        var properties = new XElement(A + name);
+        if (defaults.Alignment is { } align) properties.SetAttributeValue("algn", align switch
+        { DrawingShapeTextHAlign.Center => "ctr", DrawingShapeTextHAlign.Right => "r", _ => "l" });
+        if (defaults.RunStyle is { } style)
+            properties.Add(WriteStyle("defRPr", style, relationshipId));
+        return properties;
+    }
+
     private static XElement WriteInline(DrawingShapeTextInline inline, string? relationshipId)
     {
         if (inline.SourceXml is { } xml) return XElement.Parse(xml, LoadOptions.PreserveWhitespace);
@@ -179,22 +232,27 @@ internal static class XlsxShapeTextDocumentCodec
         }
         if (inline.Style is { } style)
         {
-            var p = new XElement(A + "rPr");
-            if (style.FontSizePoints is { } size) p.SetAttributeValue("sz", Math.Round(size * 100).ToString(CultureInfo.InvariantCulture));
-            if (style.Bold is { } bold) p.SetAttributeValue("b", bold ? "1" : "0");
-            if (style.Italic is { } italic) p.SetAttributeValue("i", italic ? "1" : "0");
-            if (style.Underline is not null) p.SetAttributeValue("u", style.Underline);
-            if (style.Baseline is { } baseline) p.SetAttributeValue("baseline", baseline.ToString(CultureInfo.InvariantCulture));
-            if (style.Language is not null) p.SetAttributeValue("lang", style.Language);
-            var fill = XlsxDrawingColorWriter.ToSolidFill(style.ThemeColor, style.Color, A);
-            if (fill is not null) p.Add(fill);
-            if ((style.ThemeFont ?? style.FontFamily) is { } font) p.Add(new XElement(A + "latin", new XAttribute("typeface", font)));
-            if (style.Hyperlink is { } hyperlink)
-                p.Add(new XElement(A + "hlinkClick", new XAttribute(R + "id", relationshipId ?? throw new InvalidOperationException("Missing shape text hyperlink relationship.")),
-                    hyperlink.Tooltip is null ? null : new XAttribute("tooltip", hyperlink.Tooltip)));
-            element.Add(p);
+            element.Add(WriteStyle("rPr", style, relationshipId));
         }
         if (inline.Kind != DrawingShapeTextInlineKind.Break) element.Add(new XElement(A + "t", inline.Text));
         return element;
+    }
+
+    private static XElement WriteStyle(string name, DrawingShapeTextRunStyle style, string? relationshipId)
+    {
+        var p = new XElement(A + name);
+        if (style.FontSizePoints is { } size) p.SetAttributeValue("sz", Math.Round(size * 100).ToString(CultureInfo.InvariantCulture));
+        if (style.Bold is { } bold) p.SetAttributeValue("b", bold ? "1" : "0");
+        if (style.Italic is { } italic) p.SetAttributeValue("i", italic ? "1" : "0");
+        if (style.Underline is not null) p.SetAttributeValue("u", style.Underline);
+        if (style.Baseline is { } baseline) p.SetAttributeValue("baseline", baseline.ToString(CultureInfo.InvariantCulture));
+        if (style.Language is not null) p.SetAttributeValue("lang", style.Language);
+        var fill = XlsxDrawingColorWriter.ToSolidFill(style.ThemeColor, style.Color, A);
+        if (fill is not null) p.Add(fill);
+        if ((style.ThemeFont ?? style.FontFamily) is { } font) p.Add(new XElement(A + "latin", new XAttribute("typeface", font)));
+        if (style.Hyperlink is { } hyperlink)
+            p.Add(new XElement(A + "hlinkClick", new XAttribute(R + "id", relationshipId ?? throw new InvalidOperationException("Missing shape text hyperlink relationship.")),
+                hyperlink.Tooltip is null ? null : new XAttribute("tooltip", hyperlink.Tooltip)));
+        return p;
     }
 }

@@ -19,6 +19,14 @@ public sealed record DrawingShapeTextRunStyle(
     string? Language = null,
     DrawingObjectHyperlink? Hyperlink = null);
 
+/// <summary>Text defaults for a DrawingML list level or its default paragraph properties.</summary>
+public sealed record DrawingShapeTextParagraphDefaults(
+    DrawingShapeTextHAlign? Alignment = null,
+    DrawingShapeTextRunStyle? RunStyle = null);
+
+/// <summary>Defaults for a zero-based DrawingML paragraph level (0 through 8).</summary>
+public sealed record DrawingShapeTextListLevel(int Level, DrawingShapeTextParagraphDefaults Defaults);
+
 /// <summary>One text run, field, or explicit line break.</summary>
 public sealed class DrawingShapeTextInline
 {
@@ -50,16 +58,22 @@ public sealed class DrawingShapeTextParagraph
 {
     private readonly ImmutableArray<DrawingShapeTextInline> _inlines;
 
-    public DrawingShapeTextParagraph(IEnumerable<DrawingShapeTextInline> inlines, DrawingShapeTextHAlign? alignment = null)
+    public DrawingShapeTextParagraph(IEnumerable<DrawingShapeTextInline> inlines, DrawingShapeTextHAlign? alignment = null,
+        DrawingShapeTextRunStyle? defaultRunStyle = null, int? level = null)
     {
         ArgumentNullException.ThrowIfNull(inlines);
+        if (level is < 0 or > 8) throw new ArgumentOutOfRangeException(nameof(level));
         _inlines = ImmutableArray.CreateRange(inlines);
         if (_inlines.Any(item => item is null)) throw new ArgumentException("Paragraph nodes cannot be null.", nameof(inlines));
         Alignment = alignment;
+        DefaultRunStyle = defaultRunStyle;
+        Level = level;
     }
 
     public IReadOnlyList<DrawingShapeTextInline> Inlines => _inlines;
     public DrawingShapeTextHAlign? Alignment { get; }
+    public DrawingShapeTextRunStyle? DefaultRunStyle { get; }
+    public int? Level { get; }
     internal string? SourceXml { get; init; }
 }
 
@@ -67,17 +81,27 @@ public sealed class DrawingShapeTextParagraph
 public sealed class DrawingShapeTextDocument
 {
     private readonly ImmutableArray<DrawingShapeTextParagraph> _paragraphs;
+    private readonly ImmutableArray<DrawingShapeTextListLevel> _listLevels;
 
-    public DrawingShapeTextDocument(IEnumerable<DrawingShapeTextParagraph> paragraphs)
+    public DrawingShapeTextDocument(IEnumerable<DrawingShapeTextParagraph> paragraphs,
+        DrawingShapeTextParagraphDefaults? defaultParagraph = null,
+        IEnumerable<DrawingShapeTextListLevel>? listLevels = null)
     {
         ArgumentNullException.ThrowIfNull(paragraphs);
         _paragraphs = ImmutableArray.CreateRange(paragraphs);
         if (_paragraphs.Any(item => item is null)) throw new ArgumentException("Paragraphs cannot be null.", nameof(paragraphs));
+        _listLevels = listLevels is null ? [] : ImmutableArray.CreateRange(listLevels);
+        if (_listLevels.Any(item => item is null || item.Defaults is null || item.Level is < 0 or > 8) ||
+            _listLevels.Select(item => item.Level).Distinct().Count() != _listLevels.Length)
+            throw new ArgumentException("List levels must be unique, non-null, and between 0 and 8.", nameof(listLevels));
+        DefaultParagraph = defaultParagraph;
         PlainText = string.Join("\n", _paragraphs.Select(paragraph => string.Concat(paragraph.Inlines.Select(node =>
             node.Kind == DrawingShapeTextInlineKind.Break ? "\n" : node.Text))));
     }
 
     public IReadOnlyList<DrawingShapeTextParagraph> Paragraphs => _paragraphs;
+    public DrawingShapeTextParagraphDefaults? DefaultParagraph { get; }
+    public IReadOnlyList<DrawingShapeTextListLevel> ListLevels => _listLevels;
     public string PlainText { get; }
     internal string? SourceXml { get; init; }
     internal Guid SourceOwnershipId { get; } = Guid.NewGuid();
