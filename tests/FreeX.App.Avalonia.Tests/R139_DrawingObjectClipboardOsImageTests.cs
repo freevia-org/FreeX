@@ -2,6 +2,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -53,6 +54,9 @@ public sealed class R139_DrawingObjectClipboardOsImageTests
                 fakeClipboard.LastWritten!.Image.Should().NotBeNull(
                     "external apps (or another FreeX instance) need a picture flavor to paste");
                 fakeClipboard.LastWritten!.Image!.PngBytes.Should().NotBeEmpty();
+                fakeClipboard.LastWritten.GetText(
+                    WorkbookClipboardSession.MarkerFormatName, PlatformClipboardFormatScope.Application)
+                    .Should().NotBeNullOrWhiteSpace();
             }
             finally
             {
@@ -159,6 +163,163 @@ public sealed class R139_DrawingObjectClipboardOsImageTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public Task CopyWithoutRenderablePreview_PublishesMarkerAndReplacesPendingCellClipboard() =>
+        WithClipboardAsync(async (window, clipboard) =>
+        {
+            var sheet = window.Session.ActiveSheet;
+            var anchor = new CellAddress(sheet.Id, 2, 2);
+            sheet.SetCell(anchor, new TextValue("previous cell copy"));
+            window.SelectCellForTest(anchor);
+            await ShortcutAsync(window, Key.C);
+            window.Session.HasPendingClipboardMarquee.Should().BeTrue();
+
+            var picture = new PictureModel { Kind = PictureKind.Image, Anchor = anchor, Width = 40, Height = 40 };
+            sheet.Pictures.Add(picture);
+            window.SelectDrawingObjectForTest(SelectionPaneObjectKind.Picture, picture.Id, anchor);
+            await ShortcutAsync(window, Key.C);
+
+            window.Session.HasPendingClipboardMarquee.Should().BeFalse();
+            clipboard.LastWritten!.Image.Should().BeNull();
+            clipboard.LastWritten.GetText(
+                WorkbookClipboardSession.MarkerFormatName, PlatformClipboardFormatScope.Application)
+                .Should().NotBeNullOrWhiteSpace();
+
+            window.SelectCellForTest(new CellAddress(sheet.Id, 12, 12));
+            await ShortcutAsync(window, Key.V);
+            sheet.Pictures.Should().HaveCount(2);
+        });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PasteAfterExternalCopy_UsesLatestTextOrImage_AndDoesNotMoveOldShape(bool externalImage) =>
+        WithClipboardAsync(async (window, clipboard) =>
+        {
+            var sheet = window.Session.ActiveSheet;
+            var anchor = new CellAddress(sheet.Id, 2, 2);
+            var destination = new CellAddress(sheet.Id, 12, 12);
+            var shape = AddObject(sheet, SelectionPaneObjectKind.Shape, anchor);
+            window.SelectDrawingObjectForTest(SelectionPaneObjectKind.Shape, shape, anchor);
+            await ShortcutAsync(window, Key.X);
+
+            clipboard.Current = externalImage
+                ? new PlatformClipboardContent(Image: new PlatformClipboardImage(BuildFullyTransparentPngBytes(4, 4), 4, 4))
+                : new PlatformClipboardContent(Text: "new external clipboard");
+            window.SelectCellForTest(destination);
+            await ShortcutAsync(window, Key.V);
+
+            sheet.DrawingShapes.Should().ContainSingle().Which.Id.Should().Be(shape);
+            if (externalImage)
+                sheet.Pictures.Should().ContainSingle().Which.Anchor.Should().Be(destination);
+            else
+                sheet.GetCell(destination)!.Value.Should().Be(new TextValue("new external clipboard"));
+        });
+
+    [Theory]
+    [InlineData(PlatformClipboardReadStatus.Failed)]
+    [InlineData(PlatformClipboardReadStatus.Unavailable)]
+    public Task PasteAfterClipboardReadFailure_LeavesDrawingAvailableForRetry(PlatformClipboardReadStatus failure) =>
+        WithClipboardAsync(async (window, clipboard) =>
+        {
+            var sheet = window.Session.ActiveSheet;
+            var anchor = new CellAddress(sheet.Id, 2, 2);
+            var shape = AddObject(sheet, SelectionPaneObjectKind.Shape, anchor);
+            window.SelectDrawingObjectForTest(SelectionPaneObjectKind.Shape, shape, anchor);
+            await ShortcutAsync(window, Key.C);
+
+            clipboard.ReadFailure = failure;
+            window.SelectCellForTest(new CellAddress(sheet.Id, 12, 12));
+            await ShortcutAsync(window, Key.V);
+            sheet.DrawingShapes.Should().ContainSingle();
+
+            clipboard.ReadFailure = null;
+            await ShortcutAsync(window, Key.V);
+            sheet.DrawingShapes.Should().HaveCount(2);
+        });
+
+    [Fact]
+    public Task PasteWaitsForThePendingDrawingClipboardWrite() =>
+        WithClipboardAsync(async (window, clipboard) =>
+        {
+            var sheet = window.Session.ActiveSheet;
+            var anchor = new CellAddress(sheet.Id, 2, 2);
+            var shape = AddObject(sheet, SelectionPaneObjectKind.Shape, anchor);
+            window.SelectDrawingObjectForTest(SelectionPaneObjectKind.Shape, shape, anchor);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            clipboard.WriteGate = release.Task;
+            var copy = ShortcutAsync(window, Key.C);
+            var paste = ShortcutAsync(window, Key.V);
+            try
+            {
+                sheet.DrawingShapes.Should().ContainSingle();
+            }
+            finally
+            {
+                release.TrySetResult();
+                await Task.WhenAll(copy, paste);
+            }
+            sheet.DrawingShapes.Should().HaveCount(2);
+        });
+
+    [Fact]
+    public Task OlderPasteRead_DoesNotClearNewerDrawingCopy() =>
+        WithClipboardAsync(async (window, clipboard) =>
+        {
+            var sheet = window.Session.ActiveSheet;
+            var anchor = new CellAddress(sheet.Id, 2, 2);
+            var first = AddObject(sheet, SelectionPaneObjectKind.Shape, anchor);
+            window.SelectDrawingObjectForTest(SelectionPaneObjectKind.Shape, first, anchor);
+            await ShortcutAsync(window, Key.C);
+
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            clipboard.ReadGate = release.Task;
+            var olderPaste = ShortcutAsync(window, Key.V);
+            try
+            {
+                olderPaste.IsCompleted.Should().BeFalse();
+                clipboard.ReadGate = null;
+                var newer = AddObject(sheet, SelectionPaneObjectKind.TextBox, anchor);
+                window.SelectDrawingObjectForTest(SelectionPaneObjectKind.TextBox, newer, anchor);
+                await ShortcutAsync(window, Key.C);
+            }
+            finally
+            {
+                release.TrySetResult();
+                await olderPaste;
+            }
+
+            await ShortcutAsync(window, Key.V);
+            sheet.DrawingShapes.Should().ContainSingle();
+            sheet.Pictures.Should().BeEmpty();
+            sheet.TextBoxes.Should().HaveCount(2);
+        });
+
+    private static Task WithClipboardAsync(Func<MainWindow, FakePlatformClipboard, Task> run) =>
+        Session.Dispatch(async () =>
+        {
+            var clipboard = new FakePlatformClipboard();
+            var window = CreateWindow(clipboard);
+            try
+            {
+                ClearSampleDrawingObjects(window.Session.ActiveSheet);
+                await run(window, clipboard);
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+            return true;
+        }, CancellationToken.None);
+
+    private static Task ShortcutAsync(MainWindow window, Key key) =>
+        window.RaiseKeyDownForTest(new KeyEventArgs
+        {
+            Key = key,
+            KeyModifiers = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control,
+        });
+
     private static MainWindow CreateWindow(IPlatformClipboard platformClipboard) => new(
         [],
         WorkbookShareSheetServiceFactory.Create("macOS Share Sheet"),
@@ -253,24 +414,48 @@ public sealed class R139_DrawingObjectClipboardOsImageTests
     private sealed class FakePlatformClipboard : IPlatformClipboard
     {
         public PlatformClipboardContent? LastWritten { get; private set; }
+        public PlatformClipboardContent? Current { get; set; }
+        public PlatformClipboardReadStatus? ReadFailure { get; set; }
+        public Task? ReadGate { get; set; }
+        public Task? WriteGate { get; set; }
         public int WriteCount { get; private set; }
 
-        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+        public async ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
             PlatformClipboardReadRequest request,
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(PlatformClipboardReadResult<PlatformClipboardContent>.Empty());
+            CancellationToken cancellationToken = default)
+        {
+            if (ReadFailure is { } status)
+                return new PlatformClipboardReadResult<PlatformClipboardContent>(status);
 
-        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            var payload = new PlatformClipboardContent(
+                Text: request.IncludeText ? Current?.Text : null,
+                Image: request.IncludeImage ? Current?.Image : null,
+                CustomData: Current?.CustomData.Where(data => request.CustomFormats.Contains(data.Format)).ToArray());
+            if (ReadGate is { } gate)
+                await gate.WaitAsync(cancellationToken);
+
+            return payload.IsEmpty
+                ? PlatformClipboardReadResult<PlatformClipboardContent>.Empty()
+                : PlatformClipboardReadResult<PlatformClipboardContent>.Success(payload);
+        }
+
+        public async ValueTask<PlatformClipboardWriteResult> WriteAsync(
             PlatformClipboardContent content,
             CancellationToken cancellationToken = default)
         {
-            LastWritten = content;
+            if (WriteGate is { } gate)
+                await gate.WaitAsync(cancellationToken);
+
+            Current = LastWritten = content;
             WriteCount++;
-            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+            return PlatformClipboardWriteResult.Success();
         }
 
         public ValueTask<PlatformClipboardWriteResult> ClearAsync(
-            CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+            CancellationToken cancellationToken = default)
+        {
+            Current = null;
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
     }
 }

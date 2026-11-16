@@ -25590,21 +25590,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        if (_drawingObjectClipboard.Content is { } objectClip)
-        {
-            PasteClipboardObject(objectClip);
-            return;
-        }
-
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        var pasteSession = _session;
+        var drawingMarker = _drawingObjectClipboard.Marker;
+        if (_drawingClipboardWrite is { } pendingCopy)
+            await pendingCopy;
+
         var textRead = await ReadClipboardTextForPastePlanningAsync();
+        // An asynchronous read can finish after a workbook change or a newer copy.
+        if (_isOpening || _isSaving || !ReferenceEquals(_session, pasteSession)
+            || _drawingObjectClipboard.Marker != drawingMarker)
+        {
+            return;
+        }
+
         if (!textRead.Available)
         {
             ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
+
+        if (TryHandleDrawingObjectPaste(textRead))
+            return;
 
         var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
         if (_session.ShouldPreferExternalClipboardImage(text) &&
