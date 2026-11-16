@@ -13891,7 +13891,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         sheetBox.DoubleTapped += (_, _) => Accept();
 
         var okButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")) };
-        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")) };
+        var cancelButton = new Button
+        {
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
+            IsCancel = true,
+        };
         ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
         ApplyDialogButtonChrome(cancelButton, width: 72);
         AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
