@@ -184,13 +184,20 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         var movingTables = sourceSheet.StructuredTables.Where(table => _sourceRange.Contains(table.Range)).ToList();
         var partialTables = sourceSheet.StructuredTables
             .Where(table => !movingTables.Contains(table) && _sourceRange.Overlaps(table.Range)).ToArray();
-        static bool CrossesHeader(GridRange range, StructuredTableModel table) =>
-            table.HeaderRowCount != 0 && range.Start.Row <= table.Range.Start.Row && range.End.Row >= table.Range.Start.Row;
-        if (partialTables.Length > 0 && (movingTables.Count > 0 || partialTables.Any(table => !CrossesHeader(_sourceRange, table))))
+        static bool CanMovePartial(GridRange range, StructuredTableModel table)
+        {
+            if (table.HeaderRowCount != 0 && range.Start.Row <= table.Range.Start.Row && range.End.Row >= table.Range.Start.Row)
+                return true;
+            var (first, last) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
+            var overlapFirst = Math.Max(range.Start.Row, table.Range.Start.Row);
+            var overlapLast = Math.Min(range.End.Row, table.Range.End.Row);
+            return first <= last && overlapFirst >= first && overlapLast <= last;
+        }
+        if (partialTables.Length > 0 && (movingTables.Count > 0 || partialTables.Any(table => !CanMovePartial(_sourceRange, table))))
             return new CommandOutcome(false, "Cannot move a range that intersects part of a table.");
         var destinationTables = destSheet.StructuredTables
             .Where(table => !movingTables.Contains(table) && targetRange.Overlaps(table.Range)).ToArray();
-        if (destinationTables.Length > 0 && (movingTables.Count > 0 || destinationTables.Any(table => !CrossesHeader(targetRange, table))))
+        if (destinationTables.Length > 0 && (movingTables.Count > 0 || destinationTables.Any(table => !CanMovePartial(targetRange, table))))
             return new CommandOutcome(false, "Cannot move a range that intersects a table.");
 
         var affected = CreateAffectedCellList(_sourceRange, targetRange);
