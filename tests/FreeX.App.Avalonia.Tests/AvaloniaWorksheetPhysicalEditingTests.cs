@@ -580,6 +580,60 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AutofillPreviewDisappearsWhenPointerReleasesOrLosesCapture(bool loseCapture)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            var options = GetField<FreeXOptionsRuntimeSession>(window, "_optionsRuntimeSession").LiveOptions;
+            var originalFillHandleEnabled = options.EnableFillHandleAndCellDragAndDrop;
+            try
+            {
+                options.EnableFillHandleAndCellDragAndDrop = true;
+                var source = new CellAddress(sheet.Id, 1, 2);
+                var target = new CellAddress(sheet.Id, 4, 2);
+                sheet.SetFormula(source, "A1+1");
+                window.Session.SelectCell(source);
+                Refresh(window);
+                await DrainInputAsync();
+
+                const string previewId = "WorksheetAutofillPreview";
+                var handle = FindByAutomationId<Border>(window, "WorksheetAutofillHandle");
+                var fillPoint = handle.TranslatePoint(
+                    new Point(handle.Bounds.Width / 2 - 2, handle.Bounds.Height / 2 - 2), window)!.Value;
+                var cell = FindByAutomationId<Border>(window, "Cell_B4");
+                var targetPoint = cell.TranslatePoint(
+                    new Point(cell.Bounds.Width / 2, cell.Bounds.Height / 2), window)!.Value;
+
+                window.MouseMove(fillPoint, RawInputModifiers.None);
+                window.MouseDown(fillPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseMove(targetPoint, RawInputModifiers.LeftMouseButton);
+                FindByAutomationId<Control>(window, previewId).IsVisible.Should().BeTrue();
+
+                if (loseCapture)
+                    GetField<IPointer>(window, "_cellDragSelectionPointer").Capture(null);
+
+                window.MouseUp(targetPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                window.GetVisualDescendants().OfType<Control>()
+                    .Should().NotContain(control => AutomationProperties.GetAutomationId(control) == previewId);
+                (sheet.GetCell(target)?.FormulaText).Should().Be(loseCapture ? null : "A4+1");
+                window.Session.SelectedRange.Should().Be(new GridRange(source, loseCapture ? source : target));
+            }
+            finally
+            {
+                options.EnableFillHandleAndCellDragAndDrop = originalFillHandleEnabled;
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+            return true;
+        }, CancellationToken.None);
+    }
+
     private static MainWindow CreateShownWindow(out Sheet sheet)
     {
         var window = new MainWindow([]);
