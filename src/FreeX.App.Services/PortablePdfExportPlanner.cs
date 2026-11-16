@@ -81,6 +81,15 @@ public sealed record PortablePdfExportPlan(
 
     public string? PdfLanguage { get; init; }
 
+    public int? RasterDpi => PublishOptions is { } options
+        ? ExportPlanner.ResolvePdfRasterDpi(options.Quality)
+        : null;
+
+    public bool IncludeSelectableText => PublishOptions?.BitmapTextWhenFontsMayNotBeEmbedded != true;
+
+    public bool RequiresSkiaRasterization =>
+        PublishOptions?.Quality == ExportQuality.MinimumSize || !IncludeSelectableText;
+
     internal ExportOptions? PublishOptions { get; init; }
 }
 
