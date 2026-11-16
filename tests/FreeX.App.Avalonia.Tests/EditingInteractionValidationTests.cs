@@ -1,4 +1,5 @@
 using Avalonia.Headless;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -13,7 +14,12 @@ public sealed class EditingInteractionValidationTests
     {
         await Session.Dispatch(async () =>
         {
-            var window = new MainWindow([]);
+            var options = new AppOptions();
+            var optionsSession = new FreeXOptionsRuntimeSession(
+                initialOptions: options,
+                load: () => options.Clone(),
+                save: _ => true);
+            var window = new MainWindow([], null!, optionsSession);
             window.Show();
             try
             {
