@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Drawing;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -7,6 +8,42 @@ namespace FreeX.App.Presentation.Tests.DrawingUI;
 
 public sealed class ShapeTextStyleResolverTests
 {
+    [Theory]
+    [InlineData("tint", 30, 80, 160)]
+    [InlineData("shade", 240, 160, 80)]
+    public void DrawingMlRgbTransformsRemainOpaqueAcrossNativeAndXlsx(string transform, byte red, byte green, byte blue)
+    {
+        var color = new CellColor(red, green, blue);
+        var theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent1, color);
+        var rgb = new DrawingMlRgbColor(red, green, blue);
+        var transformed = transform == "tint" ? DrawingMlColorTransform.ApplyTint(rgb, 0.5) : DrawingMlColorTransform.ApplyShade(rgb, 0.5);
+        var hsl = theme.ResolveColor(WorkbookThemeColorSlot.Accent1, transform == "tint" ? 0.5 : -0.5);
+        new CellColor(transformed.R, transformed.G, transformed.B).Should().NotBe(hsl);
+
+        var fillXml = $"<a:solidFill xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><a:schemeClr val=\"accent1\"><a:{transform} val=\"50000\"/></a:schemeClr></a:solidFill>";
+        var fill = new DrawingShapeTextFillOverride(DrawingShapeTextFillKind.Unsupported, fillXml);
+        var document = new DrawingShapeTextDocument(
+            [new DrawingShapeTextParagraph([new(DrawingShapeTextInlineKind.Run, "Text", style: new DrawingShapeTextRunStyle { FillOverride = fill })])],
+            new DrawingShapeTextParagraphDefaults(RunStyle: new DrawingShapeTextRunStyle(Color: new CellColor(1, 2, 3))));
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.DrawingShapes.Add(new DrawingShapeModel { Name = "Shape", Anchor = new CellAddress(sheet.Id, 1, 1), ShapeTextDocument = document });
+        using var nativeStream = new MemoryStream();
+        var native = new NativeJsonAdapter();
+        native.Save(workbook, nativeStream);
+        nativeStream.Position = 0;
+        using var xlsxStream = new MemoryStream();
+        var xlsx = new XlsxFileAdapter();
+        xlsx.Save(native.Load(nativeStream), xlsxStream);
+        xlsxStream.Position = 0;
+        var result = xlsx.Load(xlsxStream).Sheets.Single().DrawingShapes.Single().ShapeTextDocument!;
+        var style = ShapeTextStyleResolver.Resolve(result, theme).Single().Inlines.Single().Style;
+        style.Color.Should().BeNull();
+        style.ThemeColor.Should().BeNull();
+        style.FillOverride!.Kind.Should().Be(DrawingShapeTextFillKind.Unsupported);
+        style.FillOverride.SourceXml.Should().Contain(transform).And.Contain("50000");
+    }
+
     [Fact]
     public void XlsxDefaults_AreResolvedAfterReload()
     {

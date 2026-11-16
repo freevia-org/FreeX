@@ -104,8 +104,10 @@ internal static class XlsxShapeTextDocumentCodec
         if (transforms.Length == 0) return true;
         if (transforms.Any(element => element.Attributes().Count(attribute => !attribute.IsNamespaceDeclaration) != 1 ||
             !int.TryParse(element.Attribute("val")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var value) || value is < 0 or > 100000 || element.HasElements)) return false;
+        // tint/shade operate on RGB channels, while WorkbookThemeColorReference.Tint
+        // represents HSL luminance. They are not interchangeable for saturated colors.
         if (transforms.Length == 1)
-            return (transforms[0].Name == A + "lumMod" || transforms[0].Name == A + "tint" || transforms[0].Name == A + "shade") &&
+            return transforms[0].Name == A + "lumMod" &&
                 int.Parse(transforms[0].Attribute("val")!.Value, CultureInfo.InvariantCulture) != 0;
         if (transforms.Length != 2 || transforms[0].Name != A + "lumMod" || transforms[1].Name != A + "lumOff") return false;
         return int.Parse(transforms[0].Attribute("val")!.Value, CultureInfo.InvariantCulture) +

@@ -7,7 +7,24 @@ namespace FreeX.Core.IO.Tests;
 public sealed class ShapeTextFillOverrideTests
 {
     [Theory]
+    [InlineData("<a:lumMod val=\"50000\"/>", -0.5)]
+    [InlineData("<a:lumMod val=\"50000\"/><a:lumOff val=\"50000\"/>", 0.5)]
+    public void CanonicalLuminanceTransformsRemainResolvable(string transforms, double expectedTint)
+    {
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace xdr = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        var fill = XElement.Parse($"<a:solidFill xmlns:a=\"{a}\"><a:schemeClr val=\"accent1\">{transforms}</a:schemeClr></a:solidFill>");
+        var body = new XElement(xdr + "txBody", new XElement(a + "bodyPr"), new XElement(a + "lstStyle"),
+            new XElement(a + "p", new XElement(a + "r", new XElement(a + "rPr", fill), new XElement(a + "t", "x"))));
+        var style = XlsxShapeTextDocumentCodec.Read(body)!.Paragraphs.Single().Inlines.Single().Style!;
+        style.FillOverride.Should().BeNull();
+        style.ThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, expectedTint));
+    }
+
+    [Theory]
     [InlineData("<a:solidFill><a:schemeClr val=\"accent1\"><a:lumMod val=\"0\"/></a:schemeClr></a:solidFill>")]
+    [InlineData("<a:solidFill><a:schemeClr val=\"accent1\"><a:tint val=\"50000\"/></a:schemeClr></a:solidFill>")]
+    [InlineData("<a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"50000\"/></a:schemeClr></a:solidFill>")]
     [InlineData("<a:solidFill><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:solidFill>")]
     [InlineData("<a:solidFill><a:srgbClr val=\"FF0000\"><a:alpha val=\"50000\"/></a:srgbClr></a:solidFill>")]
     public void UnsupportedSolidColorOrTransformsRemainOpaque(string fillXml)
