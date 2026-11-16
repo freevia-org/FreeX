@@ -1065,7 +1065,11 @@ public sealed partial class MainWindow : Window
     private Task OpenWordCountDialogAsync() =>
         new WordCountDialog(_editor.ComputeStatistics()).ShowDialog(this);
 
-    private async Task OpenLegacyFormFieldOptionsAsync()
+    private Task OpenLegacyFormFieldOptionsAsync() =>
+        OpenLegacyFormFieldOptionsAsync(field => LegacyFormFieldOptionsDialog.ShowAsync(this, field));
+
+    private async Task OpenLegacyFormFieldOptionsAsync(
+        Func<LegacyFormField, Task<LegacyFormField?>> showDialogAsync)
     {
         if (_editor.LegacyFormFieldOptionsTargetAtCaret() is not { } target)
         {
@@ -1074,9 +1078,16 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var updated = await LegacyFormFieldOptionsDialog.ShowAsync(this, target.FormField);
-        if (updated is not null)
-            _editor.ApplyLegacyFormFieldOptions(target.Field, updated);
+        if (_editor.GetRestrictEditingDecision(RestrictEditingOperationKind.BodyTextEdit).IsBlocked)
+        {
+            _status.Text = LegacyFormFieldOptionsModel.Text("EditBlocked");
+            _editor.Focus();
+            return;
+        }
+
+        var updated = await showDialogAsync(target.FormField);
+        if (updated is not null && !_editor.ApplyLegacyFormFieldOptions(target.Field, updated))
+            _status.Text = LegacyFormFieldOptionsModel.Text("ChangeFailed");
         _editor.Focus();
     }
 

@@ -52,6 +52,9 @@ public sealed partial class DocumentView
                     continue;
 
                 var text = LegacyFormFieldInteractionPlanner.TextAfterOptions(current, updated, run.Text);
+                if (run.Text == text && Equals(current, updated))
+                    return true;
+
                 var command = new SetLegacyFormFieldCommand(target, text, updated);
                 _bus.Execute(command);
                 if (command.AppliedField is null)

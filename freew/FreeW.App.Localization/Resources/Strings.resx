@@ -1408,4 +1408,6 @@
   <data name="LegacyFormField_Error_Number" xml:space="preserve"><value>A number is required.</value></data>
   <data name="LegacyFormField_Error_Date" xml:space="preserve"><value>A valid date or time is required.</value></data>
   <data name="LegacyFormField_NoFieldAtCaret" xml:space="preserve"><value>Place the insertion point in a form field to change its options.</value></data>
+  <data name="LegacyFormField_EditBlocked" xml:space="preserve"><value>Form field options can't be changed because document editing is restricted.</value></data>
+  <data name="LegacyFormField_ChangeFailed" xml:space="preserve"><value>Form field options couldn't be applied because the document is protected or the field has changed.</value></data>
 </root>

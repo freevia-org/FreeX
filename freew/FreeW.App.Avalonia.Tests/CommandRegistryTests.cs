@@ -302,6 +302,21 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Legacy_form_field_options_unchanged_result_is_a_successful_no_op()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(TextDocument.CreateEmpty());
+        view.InsertLegacyFormField(LegacyFormFieldKind.Text);
+        var target = view.LegacyFormFieldOptionsTargetAtCaret();
+        target.Should().NotBeNull();
+
+        var captured = target!.Value;
+        view.ApplyLegacyFormFieldOptions(captured.Field, captured.FormField).Should().BeTrue();
+
+        LegacyFormField.Enumerate(view.Document).Single().Field.Should().BeSameAs(captured.Field);
+    }
+
+    [Fact]
     public void Home_definition_uses_wpf_command_ids_for_editing_and_paragraph_slice()
     {
         var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");
