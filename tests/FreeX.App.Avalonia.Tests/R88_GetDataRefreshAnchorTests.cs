@@ -1,11 +1,14 @@
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Avalonia.Headless;
 
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.Import;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -17,7 +20,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// <c>RefreshImportedData</c>, so moving the selection after the first import and then refreshing wrote
 /// the refreshed data wherever the cursor happened to be -- clobbering whatever the user had since typed
 /// there -- while the original block was left stale. Fixed by remembering the exact anchor
-/// (<see cref="ImportDataSource.Anchor"/>) the first import wrote to and re-targeting it on refresh.
+/// (<see cref="WorkbookImportRefreshSource.Anchor"/>) the first import wrote to and re-targeting it on refresh.
 /// </summary>
 [Collection("AvaloniaHeadless")]
 public sealed class R88_GetDataRefreshAnchorTests
@@ -71,12 +74,87 @@ public sealed class R88_GetDataRefreshAnchorTests
                 sheet.GetValue(new CellAddress(sheet.Id, 20, 1)).Should().Be(new NumberValue(2),
                     "Refresh All must not overwrite whatever the user has since typed at the current selection");
 
+                File.WriteAllText(path, "100\r\n");
+                await InvokePrivateTaskAsync(window, "RefreshImportedDataAsync");
+                sheet.GetValue(new CellAddress(sheet.Id, 2, 2)).Should().Be(new NumberValue(100));
+                sheet.GetValue(new CellAddress(sheet.Id, 2, 3)).Should().Be(BlankValue.Instance);
+                sheet.GetValue(new CellAddress(sheet.Id, 3, 2)).Should().Be(BlankValue.Instance);
+                sheet.GetValue(new CellAddress(sheet.Id, 3, 3)).Should().Be(BlankValue.Instance);
+                sheet.GetValue(new CellAddress(sheet.Id, 20, 1)).Should().Be(new NumberValue(2));
+
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 window.Close();
             }
             finally
             {
+                File.Delete(path);
+            }
+            return true;
+        }, CancellationToken.None);
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task RefreshImportedData_RejectsMissingWorkbookOrSheetBeforeAndAfterRead(
+        bool replaceWorkbook, bool whileReading) =>
+        Session.Dispatch(async () =>
+        {
+            var path = Path.Combine(Path.GetTempPath(), $"freex-getdata-refresh-missing-target-{Guid.NewGuid():N}.csv");
+            var window = new MainWindow([]);
+            var read = new TaskCompletionSource<FileByteReadResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                File.WriteAllText(path, "5,6\r\n");
+                var options = new ImportDataOptions
+                {
+                    Delimiter = ImportDelimiterKind.Comma,
+                    Destination = ImportDestinationKind.NewSheet,
+                };
+                InvokeTryImportFromText(window, path, "5,6\r\n", options).Should().BeTrue();
+                var importSheetId = window.Session.ActiveSheet.Id;
+
+                var readStarted = false;
+                Task<FileByteReadResult> ReadSource(string sourcePath)
+                {
+                    sourcePath.Should().Be(path);
+                    readStarted = true;
+                    return read.Task;
+                }
+
+                var refresh = whileReading ? window.RefreshImportedDataFromPathAsync(ReadSource) : null;
+                if (whileReading)
+                    readStarted.Should().BeTrue();
+
+                if (replaceWorkbook)
+                    window.ReplaceSession(new WorkbookSessionFactory().CreateNew(600, 800, includeObjects: true));
+                else
+                    window.Session.DeleteActiveSheet().Success.Should().BeTrue();
+
+                var workbook = window.Session.Workbook;
+                workbook.GetSheet(importSheetId).Should().BeNull();
+                var sheetCount = workbook.Sheets.Count;
+                var sheet = window.Session.ActiveSheet;
+                var address = new CellAddress(sheet.Id, 1, 1);
+                sheet.SetCell(address, new TextValue("Keep"));
+                window.Session.SelectCell(address);
+
+                refresh ??= window.RefreshImportedDataFromPathAsync(ReadSource);
+                read.SetResult(new FileByteReadResult(FileByteReadOutcome.Succeeded, Encoding.UTF8.GetBytes("99,88\r\n")));
+                await refresh;
+
+                readStarted.Should().Be(whileReading);
+                workbook.Sheets.Should().HaveCount(sheetCount);
+                sheet.GetValue(address).Should().Be(new TextValue("Keep"));
+                window.Session.ActiveCell.Should().Be(address);
+            }
+            finally
+            {
+                read.TrySetResult(new FileByteReadResult(FileByteReadOutcome.Canceled, []));
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
                 File.Delete(path);
             }
             return true;

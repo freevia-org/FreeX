@@ -50,7 +50,9 @@ public sealed partial class MainWindow
     }
 
     // The most recent file-backed import, remembered so Data ▸ Refresh All can re-run it without prompting.
-    private ImportDataSource? _lastImportSource;
+    private TextImportRefreshSource? _lastImportSource;
+
+    private sealed record TextImportRefreshSource(WorkbookImportRefreshSource Target, ImportDataOptions Options);
 
     // The delimiter dropdown order. The index maps to a kind; "Custom" reveals the custom-character box.
     private static readonly IReadOnlyList<(ImportDelimiterKind Kind, string Key)> GetDataDelimiterChoices =
@@ -394,40 +396,40 @@ public sealed partial class MainWindow
     /// <summary>
     /// Parses <paramref name="decodedText"/> into a workbook through the existing delimited-text reader
     /// (which performs the value coercion), then applies its first sheet at the resolved destination via
-    /// <see cref="ImportSheetCommand"/>. Remembers the source (including the exact anchor written to) so
-    /// Refresh can re-run it. When <paramref name="anchorOverride"/> is supplied and its sheet still
-    /// exists, the import re-targets that exact anchor instead of resolving a destination fresh (see
-    /// <see cref="RefreshImportedDataAsync"/> / R88-io-text-import-wizard-5-1) — this is what lets a refresh
-    /// land back on the original B2:D10-style block instead of the current selection, and what stops a
-    /// repeated new-sheet refresh from adding a new sheet on every run. Returns false with a user message
-    /// on failure.
+    /// <see cref="ImportSheetCommand"/>. Remembers the source and the exact workbook and cell it wrote
+    /// to so Refresh can re-run the import in place. Returns false with a user message on failure.
     /// </summary>
     private bool TryImportFromText(
         string filePath,
         string decodedText,
         ImportDataOptions options,
         out string? error,
-        CellAddress? anchorOverride = null)
+        WorkbookImportRefreshSource? refreshTarget = null)
     {
         error = null;
-        var delimiter = ImportDataPlanner.ResolveDelimiter(options, decodedText);
+        var workbook = _session.Workbook;
+        if (refreshTarget is not null && !refreshTarget.CanRefresh(workbook))
+        {
+            error = UiText.Get("GetData_RefreshNoSource");
+            return false;
+        }
 
+        var delimiter = ImportDataPlanner.ResolveDelimiter(options, decodedText);
+        // Resolve Detect again for each read. The delimiter, encoding and separator-directive policy
+        // must still match the wizard when the source file changes.
+        var allowSeparatorDirective = options.Delimiter == ImportDelimiterKind.Detect;
+
+        DelimitedTextFileAdapter adapter;
         Workbook imported;
         try
         {
+            adapter = new DelimitedTextFileAdapter(
+                ".csv", "Text", delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne);
             // Re-encode the decoded text as UTF-8 and hand it to the shared reader so the import shares the
             // exact value-coercion (formulas, errors, dates, numbers) used by a plain CSV file open.
             var utf8 = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
             using var stream = new MemoryStream(utf8.GetBytes(decodedText));
-            // R88-io-text-import-wizard-5-3: only let an embedded "sep=X" directive override the active
-            // delimiter when the user left the wizard's delimiter choice on Detect; an explicit pick (e.g.
-            // Comma) must win, or the confirmed preview and the actual import can silently disagree.
-            var allowSeparatorDirective = options.Delimiter == ImportDelimiterKind.Detect;
-            // R88-io-text-import-wizard-5-2: forward "treat consecutive delimiters as one" into the real
-            // parse too, so the committed import matches the preview grid the user just confirmed (the
-            // preview is built with the same option via ImportDataPlanner.BuildSplitOptions).
-            imported = new DelimitedTextFileAdapter(
-                ".csv", "Text", delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne).Load(stream);
+            imported = adapter.Load(stream);
         }
         catch (Exception ex) when (ex is IOException or InvalidOperationException or ArgumentException)
         {
@@ -444,26 +446,11 @@ public sealed partial class MainWindow
         var sourceSheet = imported.Sheets[0];
         var resolvedDestination = options.Destination;
 
-        // R88-io-text-import-wizard-5-1: a refresh re-targets the exact anchor the original import wrote
-        // to (same sheet, same cell) rather than resolving a destination fresh from the current selection
-        // or adding another new sheet. Only fall through to the fresh-resolve path below when there is no
-        // remembered anchor (first import) or its sheet has since been deleted.
         CellAddress destination;
-        // R134-io-getdata-refresh-shrink-1: the extent (row/col count) the PREVIOUS import wrote to this
-        // exact anchor, if this is a refresh reusing it. Handed to WorkbookImportWorkflow below so its
-        // shared command can clear leftover cells when the refreshed source has lost rows/columns -- otherwise
-        // those cells keep the prior, larger import's stale values and read as if they were still part
-        // of the current import. Only set when the remembered source's anchor still matches the one
-        // being reused; a stale _lastImportSource pointing elsewhere must never drive clearing here.
-        (uint RowCount, uint ColCount)? previousExtent = null;
-        if (anchorOverride is { } anchor && _session.Workbook.GetSheet(anchor.Sheet) is not null)
+        if (refreshTarget is not null)
         {
-            // The anchor's sheet still exists (SelectSheet's bool return only reports whether the active
-            // sheet/selection changed, not whether the sheet exists, so existence is checked directly).
-            _session.SelectSheet(anchor.Sheet);
-            destination = anchor;
-            if (_lastImportSource is { } previousSource && previousSource.Anchor == anchor)
-                previousExtent = (previousSource.LastRowCount, previousSource.LastColCount);
+            destination = refreshTarget.Anchor;
+            _session.SelectSheet(destination.Sheet);
         }
         else
         {
@@ -483,6 +470,8 @@ public sealed partial class MainWindow
                 : _session.SelectedRange.Start;
         }
 
+        // Let the import command clear cells left over from a larger prior result at this anchor.
+        var previousExtent = refreshTarget?.PreviousExtentFor(workbook.Id, destination);
         var importResult = WorkbookImportWorkflow.ApplyImportedWorkbookEdit(
             imported,
             destination.Sheet,
@@ -497,8 +486,10 @@ public sealed partial class MainWindow
 
         _session.SelectCell(destination);
         var used = sourceSheet.GetUsedRange()!.Value;
-        _lastImportSource = new ImportDataSource(
-            filePath, options, resolvedDestination, destination, used.RowCount, used.ColCount);
+        _lastImportSource = new TextImportRefreshSource(
+            new WorkbookImportRefreshSource(
+                workbook.Id, filePath, Path.GetExtension(filePath), adapter, adapter.FormatName, destination, used.RowCount, used.ColCount),
+            options);
 
         RefreshShell(UiText.Format(
             "GetData_ImportedStatus",
@@ -513,18 +504,33 @@ public sealed partial class MainWindow
     /// when one exists; otherwise reports that there is nothing to refresh. There is no external DB/web
     /// connection engine, so file re-import is the entire refresh surface.
     /// </summary>
-    private async Task RefreshImportedDataAsync()
+    private Task RefreshImportedDataAsync() =>
+        RefreshImportedDataFromPathAsync(static path => FileByteReadWorkflow.ReadLocalPathAsync(path));
+
+    internal async Task RefreshImportedDataFromPathAsync(Func<string, Task<FileByteReadResult>> readSourceAsync)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        if (_lastImportSource is not { CanRefresh: true } source || !File.Exists(source.FilePath))
+        var session = _session;
+        if (_lastImportSource is not { } source
+            || !source.Target.CanRefresh(session.Workbook)
+            || !File.Exists(source.Target.FilePath))
         {
             RefreshShell(UiText.Get("GetData_RefreshNoSource"));
             return;
         }
 
-        var readResult = await FileByteReadWorkflow.ReadLocalPathAsync(source.FilePath);
+        var readResult = await readSourceAsync(source.Target.FilePath);
+        // A workbook swap, another import, or a sheet deletion can invalidate this refresh.
+        if (_isOpening || _isSaving
+            || !ReferenceEquals(_session, session)
+            || !ReferenceEquals(_lastImportSource, source)
+            || !source.Target.CanRefresh(session.Workbook))
+        {
+            return;
+        }
+
         if (readResult.Outcome == FileByteReadOutcome.Canceled)
             return;
         if (!readResult.IsReadable)
@@ -534,13 +540,13 @@ public sealed partial class MainWindow
         }
 
         var decoded = ImportDataPlanner.DecodeBytes(readResult.Bytes, source.Options.Encoding);
-        if (!TryImportFromText(source.FilePath, decoded, source.Options, out var error, source.Anchor))
+        if (!TryImportFromText(source.Target.FilePath, decoded, source.Options, out var error, source.Target))
         {
             ShowEditIssue(error ?? UiText.Get("GetData_ImportFailed"));
             return;
         }
 
-        RefreshShell(UiText.Format("GetData_RefreshedStatus", System.IO.Path.GetFileName(source.FilePath)));
+        RefreshShell(UiText.Format("GetData_RefreshedStatus", System.IO.Path.GetFileName(source.Target.FilePath)));
     }
 
     /// <summary>Maps a resolved delimiter character to a readable label for the preview summary.</summary>
