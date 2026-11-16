@@ -267,6 +267,41 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Legacy_form_field_options_command_uses_the_host_dialog_callback()
+    {
+        var opened = 0;
+        var callbacks = NoopCallbacks() with { OpenLegacyFormFieldOptions = () => opened++ };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.ff-options");
+
+        opened.Should().Be(1);
+    }
+
+    [Fact]
+    public void Legacy_form_field_options_apply_and_undo_as_one_model_edit()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(TextDocument.CreateEmpty());
+        view.InsertLegacyFormField(LegacyFormFieldKind.Text);
+        var target = view.LegacyFormFieldOptionsTargetAtCaret();
+        target.Should().NotBeNull();
+
+        var captured = target!.Value;
+        var updated = captured.FormField with { DefaultText = "Revised default" };
+        view.ApplyLegacyFormFieldOptions(captured.Field, updated).Should().BeTrue();
+        LegacyFormField.Enumerate(view.Document).Single().Run.Text.Should().Be("Revised default");
+
+        view.Undo();
+        LegacyFormField.Enumerate(view.Document).Single().FormField.DefaultText.Should().BeNull();
+        LegacyFormField.Enumerate(view.Document).Single().Run.Text.Should().Be(captured.Text);
+
+        view.Redo();
+        LegacyFormField.Enumerate(view.Document).Single().FormField.DefaultText.Should().Be("Revised default");
+        LegacyFormField.Enumerate(view.Document).Single().Run.Text.Should().Be("Revised default");
+    }
+
+    [Fact]
     public void Home_definition_uses_wpf_command_ids_for_editing_and_paragraph_slice()
     {
         var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");
