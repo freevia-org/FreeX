@@ -59,7 +59,11 @@ public sealed class RendererLocalizationExhaustionTests
 
             foreach (Match assignment in RawStatusAssignment.Matches(source))
             foreach (Match literal in StringLiteral.Matches(assignment.Groups["expression"].Value))
+            {
+                if (IsLegacyFormFieldResourceKey(assignment.Groups["expression"].Value, literal))
+                    continue;
                 InspectLiteral(name, source, assignment, literal.Groups["text"].Value, failures, seenAllowlist);
+            }
 
             foreach (Match call in UserMessageCall.Matches(source))
             foreach (Match literal in StringLiteral.Matches(call.Groups["arguments"].Value))
@@ -73,6 +77,24 @@ public sealed class RendererLocalizationExhaustionTests
             AllowedRendererTokens.Keys,
             "the token allowlist must stay exact so stale exclusions cannot hide new localization debt");
     }
+
+    [Fact]
+    public void StatusAssignments_RecognizeOnlyExistingLegacyFormFieldResourceKeys()
+    {
+        const string source = "_status.Text = LegacyFormFieldOptionsModel.Text(\"NoFieldAtCaret\") + \"Untranslated message\";" +
+                              "_status.Text = LegacyFormFieldOptionsModel.Text(\"MissingKey\");";
+        var literals = RawStatusAssignment.Matches(source).Cast<Match>()
+            .SelectMany(assignment => StringLiteral.Matches(assignment.Groups["expression"].Value).Cast<Match>()
+                .Select(literal => (Expression: assignment.Groups["expression"].Value, Literal: literal)))
+            .ToArray();
+
+        literals.Select(item => IsLegacyFormFieldResourceKey(item.Expression, item.Literal))
+            .Should().Equal(true, false, false);
+    }
+
+    private static bool IsLegacyFormFieldResourceKey(string expression, Match literal) =>
+        Regex.IsMatch(expression[..literal.Index], @"\bLegacyFormFieldOptionsModel\.Text\(\s*$", RegexOptions.CultureInvariant) &&
+        UiText.GetNeutralResourceKeys().Contains("LegacyFormField_" + literal.Groups["text"].Value);
 
     [Fact]
     public void SharedRendererTextCatalogs_DeclareOnlyResolvableResourceKeys()

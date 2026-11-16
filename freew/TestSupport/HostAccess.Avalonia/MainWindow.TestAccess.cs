@@ -8,6 +8,7 @@ using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
@@ -105,6 +106,9 @@ public sealed partial class MainWindow
     internal Task<bool> SaveForTests() => SaveAsync();
     internal Task ExportXpsForTests() => ExportXpsAsync();
     internal Task InsertScreenClipForTestAsync() => InsertScreenClipAsync();
+    internal Task OpenLegacyFormFieldOptionsForTests(
+        Func<LegacyFormField, Task<LegacyFormField?>> showDialogAsync) =>
+        OpenLegacyFormFieldOptionsAsync(showDialogAsync);
 
     internal bool IsReadAloudActiveForTest => _readAloudSession?.IsActive == true;
     internal void ToggleReadAloudForTest() => ToggleReadAloud();

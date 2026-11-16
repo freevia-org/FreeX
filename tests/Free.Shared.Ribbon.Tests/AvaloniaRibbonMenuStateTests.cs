@@ -65,6 +65,90 @@ public sealed class AvaloniaRibbonMenuStateTests
     }
 
     [Fact]
+    public async Task DropdownMenu_RefreshesEnabledAndCheckedStateFromSharedStoreWhenOpened()
+    {
+        await Session.Dispatch(() =>
+        {
+            var store = new RibbonStateStore();
+            store.SetState("menu-item", new RibbonCommandState(IsEnabled: true, IsChecked: false));
+            var registry = new RibbonCommandRegistry();
+            registry.Register("menu", new NoOpCommand());
+            registry.Register("menu-item", new NoOpCommand());
+            var definition = new RibbonDefinitionBuilder()
+                .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                    group.Dropdown("menu", "Menu", new RibbonMenu(new[]
+                    {
+                        new RibbonMenuItem("Checkable", "menu-item") { IsChecked = false },
+                    }))))
+                .Build();
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                definition.FindTab("home")!, registry, stateStore: store);
+            var window = Show(content);
+            try
+            {
+                var button = content.GetLogicalDescendants().OfType<Button>()
+                    .Single(candidate => Equals(candidate.Tag, "menu"));
+                var flyout = Assert.IsType<MenuFlyout>(button.Flyout);
+                var item = Assert.Single(flyout.Items.OfType<MenuItem>());
+
+                Assert.True(item.IsEnabled);
+                Assert.Equal(MenuItemToggleType.CheckBox, item.ToggleType);
+                Assert.False(item.IsChecked);
+
+                store.SetState("menu-item", new RibbonCommandState(IsEnabled: false, IsChecked: true));
+                flyout.ShowAt(button);
+
+                Assert.False(item.IsEnabled);
+                Assert.True(item.IsChecked);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CollapsedGroup_RefreshesToggleProjectionFromSharedStoreWhenOpened()
+    {
+        await Session.Dispatch(() =>
+        {
+            var store = new RibbonStateStore();
+            store.SetState("toggle", new RibbonCommandState(IsEnabled: true, IsChecked: false));
+            var registry = new RibbonCommandRegistry();
+            registry.Register("toggle", new NoOpCommand());
+            var tab = new RibbonDefinitionBuilder()
+                .Tab("home", "Home", "H", builder => builder.Group("group", "Group", "G", 1, group =>
+                    group.Toggle("toggle", "Toggle")))
+                .Build()
+                .FindTab("home")!;
+            var content = AvaloniaRibbonRenderer.BuildTabContent(tab, registry, stateStore: store);
+            var window = new Window { Width = 90, Height = 160, Content = content };
+            window.Show();
+            window.Measure(new Size(90, 160));
+            window.Arrange(new Rect(0, 0, 90, 160));
+            try
+            {
+                var collapsed = content.GetLogicalDescendants().OfType<Button>()
+                    .Single(button => button.Classes.Contains("free-ribbon-collapsed-group"));
+                var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
+                var item = Assert.Single(flyout.Items.OfType<MenuItem>());
+
+                store.SetState("toggle", new RibbonCommandState(IsEnabled: false, IsChecked: true));
+                flyout.ShowAt(collapsed);
+
+                Assert.False(item.IsEnabled);
+                Assert.Equal(MenuItemToggleType.CheckBox, item.ToggleType);
+                Assert.True(item.IsChecked);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task StateStore_AppliesExplicitInitialToggleState_AndLiveComboValue()
     {
         await Session.Dispatch(() =>

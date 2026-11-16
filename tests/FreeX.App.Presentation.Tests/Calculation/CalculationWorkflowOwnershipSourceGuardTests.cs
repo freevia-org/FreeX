@@ -71,7 +71,7 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
             "[FreeXRibbonCommandIds.FormulasCalculationManual]",
             "CalculationCommandPolicy.ModeCommandState(");
         definition.Should().Contain("isChecked: false");
-        renderer.Should().Contain("flyout.Opened += (_, _) => RefreshMenuCommandStates(flyout, registry);");
+        renderer.Should().Contain("flyout.Opened += (_, _) => RefreshMenuCommandStates(flyout, registry, stateStore);");
         renderer.Should().Contain("RibbonMenuCommandStatePlanner.Plan(");
         renderer.Should().Contain("item.IsChecked = isChecked;");
         wpfRenderer.Should().Contain("contextMenu.Opened += (_, _) => RefreshMenuCommandStates(");
