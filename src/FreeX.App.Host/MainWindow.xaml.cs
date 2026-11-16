@@ -138,6 +138,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // R83-app-view-modes-5-1).
     private readonly FreeX.Core.Commands.WorksheetViewStateStore _worksheetViewStates = new();
     private bool _endMode;
+    private bool _lastWorksheetNavigationWasTab;
     // Captured from GridView.AutofillModifiersResolved immediately before the paired
     // AutofillRequested call, so OnAutofillRequested can pass Excel's Ctrl-flip state
     // (copy<->series) into AutofillCommand.

@@ -853,6 +853,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private CellAddress? _selectionExtensionAnchor;
     private CellAddress? _selectionExtensionCursor;
     private bool _endMode;
+    private bool _lastWorksheetNavigationWasTab;
     private bool _autofillDragging;
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
@@ -9851,10 +9852,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
         {
+            var enterAfterTab = args.Key == Key.Enter && _lastWorksheetNavigationWasTab;
+            _lastWorksheetNavigationWasTab = args.Key == Key.Tab;
             var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
                 _session.Workbook.GetSheet(address.Sheet),
                 address,
-                target);
+                enterAfterTab
+                    ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(address)
+                    : target);
             CommitInlineCellEdit(address, adjustedTarget, args.Key, args.KeyModifiers.HasFlag(KeyModifiers.Shift));
             args.Handled = true;
         }
@@ -28277,6 +28282,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (resolution is not { } resolvedNavigation)
             return;
+        var enterAfterTab = navigationKey == ExcelWorksheetNavigationKey.Enter && _lastWorksheetNavigationWasTab;
+        _lastWorksheetNavigationWasTab = navigationKey == ExcelWorksheetNavigationKey.Tab;
 
         // Presentation owns traversal order, multi-area wrapping, and merged-cell eligibility.
         // Avalonia retains native key conversion and applies only the returned active-cell target.
@@ -28298,7 +28305,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        var navigationTarget = resolvedNavigation.Target;
+        var navigationTarget = enterAfterTab
+            ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(current)
+            : resolvedNavigation.Target;
 
         // Arrow/Tab/Enter navigation on a protected sheet must SKIP a locked cell it would
         // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping

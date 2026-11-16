@@ -7,6 +7,9 @@ namespace FreeX.App.Host;
 
 public static class ExcelWorksheetNavigationPlanner
 {
+    public static CellAddress GetEnterAfterTabTarget(CellAddress current) =>
+        FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(current);
+
     public static bool TryToggleEndMode(Key key, ModifierKeys modifiers, bool current, out bool next)
     {
         return FreeX.App.Presentation.ExcelWorksheetNavigationPlanner.TryToggleEndMode(
