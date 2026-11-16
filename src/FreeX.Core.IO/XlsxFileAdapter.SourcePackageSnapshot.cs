@@ -272,6 +272,7 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintDictionary(stream, shape.DrawingLockAttributes);
         WriteFingerprintString(stream, shape.DrawingLockChildrenXml);
         WriteFingerprintString(stream, shape.ShapeText);
+        WriteFingerprintString(stream, XlsxShapeTextDocumentCodec.Fingerprint(shape.ShapeTextDocument));
         WriteFingerprintString(stream, shape.ShapeTextInsets?.Left?.ToString(CultureInfo.InvariantCulture));
         WriteFingerprintString(stream, shape.ShapeTextInsets?.Right?.ToString(CultureInfo.InvariantCulture));
         WriteFingerprintString(stream, shape.ShapeTextInsets?.Top?.ToString(CultureInfo.InvariantCulture));
@@ -3752,7 +3753,6 @@ public sealed partial class XlsxFileAdapter
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
             var contentPartElements = drawingXml.Descendants(spreadsheetDrawingNs + "contentPart").ToList();
-            var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
 
             // Loaded here (rather than alongside the relationship-graph walk further below) so the picture
             // anchors/geometry can be compared against the in-memory sheet before any drawing part is
@@ -3762,6 +3762,7 @@ public sealed partial class XlsxFileAdapter
             var drawingRelsXmlForPictures = drawingRelsEntry is not null
                 ? XlsxPackageXmlEditor.LoadXml(drawingRelsEntry)
                 : null;
+            var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml, drawingRelsXmlForPictures);
             var sourcePictures = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXmlForPictures);
 
             if (chartElements.Count != sheet.Charts.Count ||
@@ -4663,6 +4664,10 @@ public sealed partial class XlsxFileAdapter
                     source.DrawingLockChildrenXml != current.DrawingLockChildrenXml ||
                     source.Kind != current.Kind ||
                     !StringEquals(source.ShapeText ?? "", current.ShapeText ?? "") ||
+                    !StringEquals(XlsxShapeTextDocumentCodec.Fingerprint(source.ShapeTextDocument, includeOpaqueOwner: false),
+                        XlsxShapeTextDocumentCodec.Fingerprint(current.ShapeTextDocument, includeOpaqueOwner: false)) ||
+                    (current.ShapeTextDocument is { } currentRich && XlsxShapeTextDocumentCodec.HasOpaqueRelationships(currentRich) &&
+                        !ReferenceEquals(currentRich, current.OriginalSourceShapeTextDocument)) ||
                     source.ShapeTextInsets != current.ShapeTextInsets ||
                     !StringEquals(source.Name, current.Name) ||
                     !StringEquals(source.Title, current.Title) ||

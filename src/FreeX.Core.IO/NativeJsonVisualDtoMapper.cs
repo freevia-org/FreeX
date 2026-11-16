@@ -231,6 +231,7 @@ internal static class NativeJsonVisualDtoMapper
         Name = shape.Name,
         Anchor = shape.Anchor.ToA1(),
         Kind = ValidEnumOrDefault(shape.Kind, DrawingShapeKind.Rectangle),
+        SourceConnectorKind = shape.SourceConnectorKind,
         Width = PositiveFiniteOrDefault(shape.Width, 120),
         Height = PositiveFiniteOrDefault(shape.Height, 70),
         RotationDegrees = NormalizeRotation(shape.RotationDegrees),
@@ -266,6 +267,8 @@ internal static class NativeJsonVisualDtoMapper
             ? new ArrowheadDto { Type = ta.Type, Width = ta.Width, Length = ta.Length }
             : null,
         ShapeText = shape.ShapeText,
+        ShapeTextDocumentXml = shape.ShapeTextDocument is { } document ? XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: true).ToString(System.Xml.Linq.SaveOptions.DisableFormatting) : null,
+        ShapeTextDocumentRelationships = shape.ShapeTextDocument is { } richText ? XlsxShapeTextDocumentCodec.SourceRelationships(richText) : null,
         ShapeTextInsets = shape.ShapeTextInsets,
         ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
         ShapeTextBold = shape.ShapeTextBold,
@@ -308,6 +311,7 @@ internal static class NativeJsonVisualDtoMapper
                 Id = ExistingOrNewId(shapeDto.Id),
                 Anchor = CellAddress.Parse(shapeDto.Anchor, sheetId),
                 Name = shapeDto.Name,
+                SourceConnectorKind = shapeDto.SourceConnectorKind,
                 Kind = ValidEnumOrDefault(shapeDto.Kind, DrawingShapeKind.Rectangle),
                 Width = PositiveFiniteOrDefault(shapeDto.Width, 120),
                 Height = PositiveFiniteOrDefault(shapeDto.Height, 70),
@@ -344,6 +348,7 @@ internal static class NativeJsonVisualDtoMapper
                     ? new DrawingArrowhead(ta.Type, ta.Width, ta.Length)
                     : null,
                 ShapeText = shapeDto.ShapeText,
+                ShapeTextDocument = shapeDto.ShapeTextDocumentXml is { } textXml ? XlsxShapeTextDocumentCodec.Read(System.Xml.Linq.XElement.Parse(textXml), shapeDto.ShapeTextDocumentRelationships?.ToDictionary(pair => pair.Key, pair => (pair.Value.Target, pair.Value.TargetMode))) : null,
                 ShapeTextInsets = shapeDto.ShapeTextInsets,
                 ShapeTextFontSizePoints = shapeDto.ShapeTextFontSizePoints,
                 ShapeTextBold = shapeDto.ShapeTextBold,
@@ -547,6 +552,9 @@ internal class DrawingShapeDto
     public ArrowheadDto? TailArrowhead { get; set; }
     // ── Shape text ────────────────────────────────────────────────────────
     public string? ShapeText { get; set; }
+    public string? ShapeTextDocumentXml { get; set; }
+    public bool? SourceConnectorKind { get; set; }
+    public Dictionary<string, DrawingObjectHyperlink>? ShapeTextDocumentRelationships { get; set; }
     public DrawingShapeTextInsets? ShapeTextInsets { get; set; }
     public double ShapeTextFontSizePoints { get; set; }
     public bool ShapeTextBold { get; set; }

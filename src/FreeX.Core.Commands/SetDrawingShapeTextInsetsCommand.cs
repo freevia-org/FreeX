@@ -15,7 +15,7 @@ public sealed class SetDrawingShapeTextInsetsCommand(SheetId sheetId, Guid shape
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, shapeId, out var shape)) return DrawingShapeCommandGuards.DrawingShapeNotFound();
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } blocked) return blocked;
         var normalized = insets is { Left: null, Right: null, Top: null, Bottom: null } ? null : insets;
-        if (Free.Shared.Drawing.DrawingShapeKindSupport.IsLineLike(shape.Kind) && normalized is not null)
+        if (shape.IsDrawingConnector && normalized is not null)
             return new CommandOutcome(false, "Connector shapes cannot contain text insets.");
         if (Equals(shape.ShapeTextInsets, normalized)) return new CommandOutcome(true, IsNoOp: true);
         _previous = shape.ShapeTextInsets;

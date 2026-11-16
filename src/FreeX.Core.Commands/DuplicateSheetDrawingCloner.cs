@@ -540,6 +540,7 @@ internal static class DuplicateSheetDrawingCloner
             DrawingNoResize = shape.DrawingNoResize,
             DrawingLockAttributes = shape.DrawingLockAttributes is null ? null : new Dictionary<string, string>(shape.DrawingLockAttributes),
             DrawingLockChildrenXml = shape.DrawingLockChildrenXml,
+            SourceConnectorKind = shape.SourceConnectorKind,
             Title = shape.Title,
             AltText = shape.AltText,
             // R91-print-twin-two-tier-synthetic-sweep-2 precedent (see ClonePicture.IsDecorative
@@ -594,6 +595,7 @@ internal static class DuplicateSheetDrawingCloner
             ShapeTextOutlineThemeColor = shape.ShapeTextOutlineThemeColor,
             ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints,
             ShapeText = shape.ShapeText,
+            ShapeTextDocument = shape.ShapeTextDocument,
             ShapeTextInsets = shape.ShapeTextInsets,
             ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
             ShapeTextBold = shape.ShapeTextBold,

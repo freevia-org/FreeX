@@ -246,7 +246,9 @@ internal sealed record XlsxShapePackagePart(
     IReadOnlyDictionary<string, string>? DrawingLockAttributes = null,
     string? DrawingLockChildrenXml = null,
     bool PrintObject = true,
-    DrawingShapeTextInsets? ShapeTextInsets = null);
+    DrawingShapeTextInsets? ShapeTextInsets = null,
+    DrawingShapeTextDocument? ShapeTextDocument = null,
+    bool IsConnector = false);
 
 internal sealed record XlsxWorksheetDrawingPackageParts(
     IReadOnlyList<XlsxChartPackagePart> ChartParts,
@@ -1163,7 +1165,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
             DrawingLockAttributes: ReadOtherDrawingLockAttributes(shapeElement, "spLocks", includeAspect: false),
                 DrawingLockChildrenXml: ReadDrawingLockChildren(shapeElement, "spLocks"),
                 PrintObject: ReadPrintsWithSheet(shapeElement),
-                ShapeTextInsets: ReadShapeTextInsets(txBodyElement, drawingNs)));
+                ShapeTextInsets: ReadShapeTextInsets(txBodyElement, drawingNs),
+                ShapeTextDocument: XlsxShapeTextDocumentCodec.Read(txBodyElement, hyperlinkRelsById)));
     }
 
     /// <summary>
@@ -1485,7 +1488,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             DrawingNoResize: ReadDrawingLockFlag(cxnSpElement, "cxnSpLocks", "noResize"),
             DrawingLockAttributes: ReadOtherDrawingLockAttributes(cxnSpElement, "cxnSpLocks", includeAspect: false),
                 DrawingLockChildrenXml: ReadDrawingLockChildren(cxnSpElement, "cxnSpLocks"),
-                PrintObject: ReadPrintsWithSheet(cxnSpElement)));
+                PrintObject: ReadPrintsWithSheet(cxnSpElement), IsConnector: true));
     }
 
     private static bool ReadUsesThemeEffectStyle(

@@ -65,8 +65,35 @@ internal static class XlsxSourceDrawingGeometryRewriter
             if (drawingXml.Root is null)
                 continue;
 
-            if (RewriteDrawingGeometry(drawingXml.Root, sheet))
+            var separator = drawingPath.LastIndexOf('/');
+            var relsPath = drawingPath[..(separator + 1)] + "_rels/" + drawingPath[(separator + 1)..] + ".rels";
+            var relsEntry = archive.GetEntry(relsPath);
+            var rels = relsEntry is null ? new XDocument(new XElement(OpcRelationships.Namespace + "Relationships")) : XlsxPackageXmlEditor.LoadXml(relsEntry);
+            var relationshipsChanged = false;
+            string BindTextHyperlink(DrawingObjectHyperlink hyperlink)
+            {
+                const string hyperlinkType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
+                var existingRelationship = rels.Root!.Elements(OpcRelationships.Namespace + "Relationship").FirstOrDefault(element =>
+                    (string?)element.Attribute("Type") == hyperlinkType && (string?)element.Attribute("Target") == hyperlink.Target &&
+                    (string?)element.Attribute("TargetMode") == hyperlink.TargetMode);
+                if (existingRelationship?.Attribute("Id") is { } existingId) return existingId.Value;
+                var id = XlsxPackageXmlEditor.NextRelationshipId(rels, OpcRelationships.Namespace);
+                rels.Root!.Add(new XElement(OpcRelationships.Namespace + "Relationship",
+                    new XAttribute("Id", id),
+                    new XAttribute("Type", hyperlinkType),
+                    new XAttribute("Target", hyperlink.Target),
+                    string.IsNullOrWhiteSpace(hyperlink.TargetMode) ? null : new XAttribute("TargetMode", hyperlink.TargetMode)));
+                relationshipsChanged = true;
+                return id;
+            }
+            bool TextRelationshipsMatch(DrawingShapeTextDocument document) => XlsxShapeTextDocumentCodec.SourceRelationships(document).All(pair =>
+                rels.Root!.Elements(OpcRelationships.Namespace + "Relationship").Any(element =>
+                    (string?)element.Attribute("Id") == pair.Key && (string?)element.Attribute("Target") == pair.Value.Target &&
+                    (string?)element.Attribute("TargetMode") == pair.Value.TargetMode &&
+                    (string?)element.Attribute("Type") == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"));
+            if (RewriteDrawingGeometry(drawingXml.Root, sheet, BindTextHyperlink, TextRelationshipsMatch))
                 XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, drawingXml);
+            if (relationshipsChanged) XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, rels);
         }
     }
 
@@ -92,7 +119,8 @@ internal static class XlsxSourceDrawingGeometryRewriter
     /// </para>
     /// Returns true when at least one anchor was rewritten.
     /// </summary>
-    private static bool RewriteDrawingGeometry(XElement drawingRoot, Sheet sheet)
+    private static bool RewriteDrawingGeometry(XElement drawingRoot, Sheet sheet, Func<DrawingObjectHyperlink, string> bindTextRelationship,
+        Func<DrawingShapeTextDocument, bool> textRelationshipsMatch)
     {
         var changed = false;
 
@@ -236,7 +264,9 @@ internal static class XlsxSourceDrawingGeometryRewriter
                 changed = true;
             if (shapeElement.Name == SpreadsheetDrawingNs + "cxnSp" && (shape.HasShapeText || shape.ShapeTextInsets is not null))
                 throw new InvalidOperationException("Connector shapes cannot contain text or text insets in XLSX.");
-            if (shapeElement.Name != SpreadsheetDrawingNs + "cxnSp" && RewriteDrawingTextBody(shapeElement, shape.ShapeText ?? "", drawingNs))
+            if (shapeElement.Name != SpreadsheetDrawingNs + "cxnSp" && (shape.ShapeTextDocument is { } rich
+                    ? RewriteShapeRichText(shapeElement, rich, shape.OriginalSourceShapeTextDocument, drawingNs, bindTextRelationship, textRelationshipsMatch)
+                    : RewriteDrawingTextBody(shapeElement, shape.ShapeText ?? "", drawingNs, forceRewrite: true)))
                 changed = true;
             if (shapeElement.Name != SpreadsheetDrawingNs + "cxnSp" && RewriteShapeTextInsets(shapeElement, shape.ShapeTextInsets, drawingNs))
                 changed = true;
@@ -392,11 +422,13 @@ internal static class XlsxSourceDrawingGeometryRewriter
         return changed;
     }
 
-    private static bool RewriteDrawingTextBody(XElement shapeElement, string newText, XNamespace drawingNs)
+    private static bool RewriteDrawingTextBody(XElement shapeElement, string newText, XNamespace drawingNs, bool forceRewrite = false)
     {
         var changed = false;
         var txBody = shapeElement.Element(SpreadsheetDrawingNs + "txBody");
-        if (!string.Equals(XlsxWorksheetDrawingPartReader.ReadShapeTextBodyPlainText(txBody, drawingNs), newText, StringComparison.Ordinal))
+        if ((!forceRewrite || txBody is null) && string.Equals(XlsxWorksheetDrawingPartReader.ReadShapeTextBodyPlainText(txBody, drawingNs), newText, StringComparison.Ordinal))
+            return false;
+        if (forceRewrite || !string.Equals(XlsxWorksheetDrawingPartReader.ReadShapeTextBodyPlainText(txBody, drawingNs), newText, StringComparison.Ordinal))
         {
             if (txBody is null)
             {
@@ -450,6 +482,46 @@ internal static class XlsxSourceDrawingGeometryRewriter
             body.SetAttributeValue(name, next);
             changed = true;
         }
+    }
+
+    private static bool RewriteShapeRichText(XElement shapeElement, DrawingShapeTextDocument document, DrawingShapeTextDocument? originalDocument, XNamespace drawingNs,
+        Func<DrawingObjectHyperlink, string> bindTextRelationship, Func<DrawingShapeTextDocument, bool> textRelationshipsMatch)
+    {
+        var existing = shapeElement.Element(SpreadsheetDrawingNs + "txBody");
+        var candidate = XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: true);
+        // Insets can have changed on a previous save while the immutable rich-text source
+        // snapshot still reflects the original body. The current body properties belong to
+        // the live drawing, not the paragraph snapshot.
+        if (existing?.Element(drawingNs + "bodyPr") is { } currentProperties &&
+            candidate.Element(drawingNs + "bodyPr") is { } candidateProperties)
+            candidateProperties.ReplaceWith(new XElement(currentProperties));
+        if (existing is not null && ReferenceEquals(document, originalDocument))
+        {
+            // The package merger may renumber relationships while preserving their targets.
+            // When the original immutable document is otherwise unchanged, retain the merged
+            // body and its opaque IDs instead of trying to interpret unknown extensions.
+            XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            static XElement WithoutRelationshipAttributes(XElement element, XNamespace ns)
+            {
+                var clone = new XElement(element);
+                foreach (var attribute in clone.DescendantsAndSelf().Attributes().Where(a => a.Name.Namespace == ns || a.IsNamespaceDeclaration).ToArray()) attribute.Remove();
+                return clone;
+            }
+            if (XNode.DeepEquals(WithoutRelationshipAttributes(existing, relNs), WithoutRelationshipAttributes(candidate, relNs))) return false;
+        }
+        // Equal r:id text does not prove equal targets after copying across drawing parts.
+        if (existing is not null && XNode.DeepEquals(existing, candidate) && textRelationshipsMatch(document) &&
+            (!XlsxShapeTextDocumentCodec.HasOpaqueRelationships(document) || ReferenceEquals(document, originalDocument))) return false;
+        // Relationship IDs are owned by a drawing part; copying them from a different body can bind
+        // to the wrong target. Retain an identical source body above, but reject unsafe replacement.
+        candidate = XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: false, bindTextRelationship);
+        if (existing?.Element(drawingNs + "bodyPr") is { } properties &&
+            candidate.Element(drawingNs + "bodyPr") is { } replacementProperties)
+            replacementProperties.ReplaceWith(new XElement(properties));
+        if (existing is not null) existing.ReplaceWith(candidate);
+        else if (shapeElement.Element(SpreadsheetDrawingNs + "extLst") is { } extension) extension.AddBeforeSelf(candidate);
+        else shapeElement.Add(candidate);
+        return true;
     }
 
     /// <summary>

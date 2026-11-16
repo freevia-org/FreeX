@@ -597,6 +597,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 shape,
                 shapeIndex++,
                 BuildObjectHyperlinkElement(shape.Hyperlink, shape.Name),
+                link => BuildObjectHyperlinkElement(link, null)!.Attribute(relNs + "id")!.Value,
                 spreadsheetDrawingNs,
                 drawingNs));
         }
@@ -1235,6 +1236,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         DrawingShapeModel shape,
         int shapeIndex,
         XElement? hlinkClick,
+        Func<DrawingObjectHyperlink, string> bindTextRelationship,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs)
     {
@@ -1271,9 +1273,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         // otherwise Excel treats the object as a plain autoshape: no connection-site glue, and it is
         // listed as a generic shape rather than "Connector" in the Selection Pane. Connectors carry no
         // txBody per the OOXML CT_Connector schema, so text (which they never have anyway) is omitted.
-        if (DrawingShapeKindSupport.IsLineLike(shape.Kind) && (shape.HasShapeText || shape.ShapeTextInsets is not null))
+        if (shape.IsDrawingConnector && (shape.HasShapeText || shape.ShapeTextInsets is not null))
             throw new InvalidOperationException("Connector shapes cannot contain text or text insets in XLSX.");
-        XElement shapeOrConnectorElement = DrawingShapeKindSupport.IsLineLike(shape.Kind)
+        XElement shapeOrConnectorElement = shape.IsDrawingConnector
             ? new XElement(spreadsheetDrawingNs + "cxnSp",
                 new XElement(spreadsheetDrawingNs + "nvCxnSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -1308,7 +1310,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(spreadsheetDrawingNs + "cNvSpPr",
                         ToDrawingMovementLocks(drawingNs, "spLocks", shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml))),
                 shapeProperties,
-                shape.HasShapeText || shape.ShapeTextInsets is not null ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);
+                shape.HasShapeText || shape.ShapeTextInsets is not null || shape.ShapeTextDocument is not null ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs, bindTextRelationship) : null);
 
         return new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs, shape.AnchorOffsetX, shape.AnchorOffsetY),
@@ -1343,8 +1345,20 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement ToShapeTxBody(
         DrawingShapeModel shape,
         XNamespace drawingNs,
-        XNamespace spreadsheetDrawingNs)
+        XNamespace spreadsheetDrawingNs,
+        Func<DrawingObjectHyperlink, string> bindTextRelationship)
     {
+        if (shape.ShapeTextDocument is { } document)
+        {
+            var richBody = XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: false, bindTextRelationship);
+            var bodyProperties = richBody.Element(drawingNs + "bodyPr");
+            if (bodyProperties is null) { bodyProperties = new XElement(drawingNs + "bodyPr"); richBody.AddFirst(bodyProperties); }
+            bodyProperties.SetAttributeValue("lIns", shape.ShapeTextInsets?.Left?.ToString(CultureInfo.InvariantCulture));
+            bodyProperties.SetAttributeValue("rIns", shape.ShapeTextInsets?.Right?.ToString(CultureInfo.InvariantCulture));
+            bodyProperties.SetAttributeValue("tIns", shape.ShapeTextInsets?.Top?.ToString(CultureInfo.InvariantCulture));
+            bodyProperties.SetAttributeValue("bIns", shape.ShapeTextInsets?.Bottom?.ToString(CultureInfo.InvariantCulture));
+            return richBody;
+        }
         var anchorValue = shape.ShapeTextVAnchor switch
         {
             DrawingShapeTextVAnchor.Top => "t",

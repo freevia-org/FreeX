@@ -6,6 +6,7 @@ namespace FreeX.Core.Commands;
 public sealed class SetDrawingShapeTextCommand(SheetId sheetId, Guid shapeId, string? text) : IWorkbookCommand
 {
     private string? _previousText;
+    private DrawingShapeTextDocument? _previousDocument;
     private bool _applied;
 
     public string Label => "Edit Shape Text";
@@ -17,11 +18,12 @@ public sealed class SetDrawingShapeTextCommand(SheetId sheetId, Guid shapeId, st
             return DrawingShapeCommandGuards.DrawingShapeNotFound();
         if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } blocked)
             return blocked;
-        if (Free.Shared.Drawing.DrawingShapeKindSupport.IsLineLike(shape.Kind) && !string.IsNullOrEmpty(text))
+        if (shape.IsDrawingConnector && !string.IsNullOrEmpty(text))
             return new CommandOutcome(false, "Connector shapes cannot contain text.");
         if (string.Equals(shape.ShapeText ?? "", text ?? "", StringComparison.Ordinal))
             return new CommandOutcome(true, IsNoOp: true);
         _previousText = shape.ShapeText;
+        _previousDocument = shape.ShapeTextDocument;
         shape.ShapeText = text;
         _applied = true;
         return new CommandOutcome(true, AffectedCells: [shape.Anchor]);
@@ -31,6 +33,7 @@ public sealed class SetDrawingShapeTextCommand(SheetId sheetId, Guid shapeId, st
     {
         if (!_applied || !DrawingShapeCommandGuards.TryFindShape(ctx.GetSheet(sheetId), shapeId, out var shape)) return;
         shape.ShapeText = _previousText;
+        shape.ShapeTextDocument = _previousDocument;
         _applied = false;
     }
 }

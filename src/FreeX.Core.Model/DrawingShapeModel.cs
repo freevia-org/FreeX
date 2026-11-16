@@ -127,7 +127,17 @@ public sealed class DrawingShapeModel
     /// </summary>
     public double AnchorOffsetY { get; set; }
 
-    public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
+    private DrawingShapeKind _kind = DrawingShapeKind.Rectangle;
+    public DrawingShapeKind Kind
+    {
+        get => _kind;
+        set
+        {
+            if (_shapeTextDocument is not null && (SourceConnectorKind ?? Free.Shared.Drawing.DrawingShapeKindSupport.IsLineLike(value)))
+                throw new InvalidOperationException("Connector shapes cannot contain structured text.");
+            _kind = value;
+        }
+    }
     public double Width { get; set; } = 120;
     public double Height { get; set; } = 70;
     public double RotationDegrees { get; set; }
@@ -372,7 +382,35 @@ public sealed class DrawingShapeModel
     /// Concatenated plain text from all runs in the shape's <c>&lt;xdr:txBody&gt;</c>, or
     /// <see langword="null"/> / empty when the shape carries no text.
     /// </summary>
-    public string? ShapeText { get; set; }
+    private string? _shapeText;
+    private DrawingShapeTextDocument? _shapeTextDocument;
+    internal DrawingShapeTextDocument? OriginalSourceShapeTextDocument { get; set; }
+    internal bool? SourceConnectorKind { get; set; }
+    internal bool IsDrawingConnector => SourceConnectorKind ?? Free.Shared.Drawing.DrawingShapeKindSupport.IsLineLike(Kind);
+
+    public string? ShapeText
+    {
+        get => _shapeText;
+        set
+        {
+            if (string.Equals(_shapeText, value, StringComparison.Ordinal)) return;
+            _shapeText = value;
+            _shapeTextDocument = null;
+        }
+    }
+
+    /// <summary>Structured text, or null when the shape uses the legacy plain-text representation.</summary>
+    public DrawingShapeTextDocument? ShapeTextDocument
+    {
+        get => _shapeTextDocument;
+        set
+        {
+            if (value is not null && IsDrawingConnector)
+                throw new InvalidOperationException("Connector shapes cannot contain structured text.");
+            _shapeTextDocument = value;
+            if (value is not null) _shapeText = value.PlainText;
+        }
+    }
 
     /// <summary>Authored text margins; null preserves absence for each side.</summary>
     private DrawingShapeTextInsets? _shapeTextInsets;
