@@ -81,14 +81,17 @@ public sealed record PortablePdfExportPlan(
 
     public string? PdfLanguage { get; init; }
 
-    public int? RasterDpi => PublishOptions is { } options
+    public int? RasterDpi => OutputKind == WorkbookExportPrintOutputKind.Pdf && PublishOptions is { } options
         ? ExportPlanner.ResolvePdfRasterDpi(options.Quality)
         : null;
 
     public bool IncludeSelectableText => PublishOptions?.BitmapTextWhenFontsMayNotBeEmbedded != true;
 
     public bool RequiresSkiaRasterization =>
-        PublishOptions?.Quality == ExportQuality.MinimumSize || !IncludeSelectableText;
+        OutputKind == WorkbookExportPrintOutputKind.Pdf &&
+        (PublishOptions?.Quality == ExportQuality.MinimumSize || !IncludeSelectableText);
+
+    private WorkbookExportPrintOutputKind OutputKind => ExportPrintPlan.Intent.OutputKind;
 
     internal ExportOptions? PublishOptions { get; init; }
 }
@@ -106,16 +109,17 @@ public static class PortablePdfExportPlanner
         ArgumentNullException.ThrowIfNull(options);
 
         effectivePlan = exportPlan;
-        if (!ExportPlanner.TryValidatePublishOptions(options, ExportFormat.Pdf, out error, textResolver))
+        var format = ExportFormatCatalog.Get(exportPlan.ExportPrintPlan.Intent.OutputKind).Format;
+        if (!ExportPlanner.TryValidatePublishOptions(options, format, out error, textResolver))
             return false;
 
         if (!ExportPlanner.TryValidatePageRange(options.PageRange, exportPlan.TotalPageCount, out error, textResolver))
             return false;
 
-        var publishOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf);
+        var publishOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, format);
         effectivePlan = ApplyPageRange(exportPlan, publishOptions.PageRange) with
         {
-            PdfLanguage = publishOptions.PdfLanguage,
+            PdfLanguage = format == ExportFormat.Pdf ? publishOptions.PdfLanguage : null,
             PublishOptions = publishOptions
         };
         return true;
@@ -151,7 +155,7 @@ public static class PortablePdfExportPlanner
         return exportPlan with
         {
             PageRequests = pageRequests,
-            StatusText = $"Ready to export portable PDF: {pageRequests.Count} {(pageRequests.Count == 1 ? "page" : "pages")} from selected page range."
+            StatusText = $"Ready to export portable {exportPlan.ExportPrintPlan.Intent.OutputKind.ToString().ToUpperInvariant()}: {pageRequests.Count} {(pageRequests.Count == 1 ? "page" : "pages")} from selected page range."
         };
     }
 
@@ -163,24 +167,34 @@ public static class PortablePdfExportPlanner
     /// that sheet's grid pages (see <see cref="PrintCommentSummaryPlanner"/>). Without a workbook
     /// (legacy callers), comments are omitted exactly as before.
     /// </summary>
-    public static PortablePdfExportPlan CreatePlan(WorkbookExportPrintPlan exportPrintPlan, Workbook? workbook = null)
+    public static PortablePdfExportPlan CreatePlan(WorkbookExportPrintPlan exportPrintPlan, Workbook? workbook = null) =>
+        CreatePlan(exportPrintPlan, WorkbookExportPrintOutputKind.Pdf, workbook);
+
+    public static PortablePdfExportPlan CreateXpsPlan(WorkbookExportPrintPlan exportPrintPlan, Workbook? workbook = null) =>
+        CreatePlan(exportPrintPlan, WorkbookExportPrintOutputKind.Xps, workbook);
+
+    private static PortablePdfExportPlan CreatePlan(
+        WorkbookExportPrintPlan exportPrintPlan,
+        WorkbookExportPrintOutputKind outputKind,
+        Workbook? workbook)
     {
         ArgumentNullException.ThrowIfNull(exportPrintPlan);
+        var formatLabel = outputKind.ToString().ToUpperInvariant();
 
         if (!exportPrintPlan.IsReady)
         {
             return new PortablePdfExportPlan(
                 PortablePdfExportPlanStatus.ExportPrintPlanNotReady,
-                $"Portable PDF export cannot start because the export print plan is not ready: {exportPrintPlan.StatusText}",
+                $"Portable {formatLabel} export cannot start because the export print plan is not ready: {exportPrintPlan.StatusText}",
                 exportPrintPlan,
                 []);
         }
 
-        if (exportPrintPlan.Intent.OutputKind != WorkbookExportPrintOutputKind.Pdf)
+        if (exportPrintPlan.Intent.OutputKind != outputKind)
         {
             return new PortablePdfExportPlan(
                 PortablePdfExportPlanStatus.OutputKindUnavailable,
-                "Portable PDF export only accepts PDF export print plans; XPS remains Windows-only.",
+                $"Portable {formatLabel} export only accepts {formatLabel} export print plans.",
                 exportPrintPlan,
                 []);
         }
@@ -189,7 +203,7 @@ public static class PortablePdfExportPlanner
         {
             return new PortablePdfExportPlan(
                 PortablePdfExportPlanStatus.InvalidPageGrid,
-                "Portable PDF export requires positive row and column page counts for every planned sheet.",
+                $"Portable {formatLabel} export requires positive row and column page counts for every planned sheet.",
                 exportPrintPlan,
                 []);
         }
@@ -197,7 +211,7 @@ public static class PortablePdfExportPlanner
         var pageRequests = BuildPageRequests(exportPrintPlan.SheetPlans, workbook);
         return new PortablePdfExportPlan(
             PortablePdfExportPlanStatus.Ready,
-            $"Ready to export portable PDF: {pageRequests.Count} {Pluralize(pageRequests.Count, "page")} across {exportPrintPlan.SheetPlans.Count} {Pluralize(exportPrintPlan.SheetPlans.Count, "sheet")}.",
+            $"Ready to export portable {formatLabel}: {pageRequests.Count} {Pluralize(pageRequests.Count, "page")} across {exportPrintPlan.SheetPlans.Count} {Pluralize(exportPrintPlan.SheetPlans.Count, "sheet")}.",
             exportPrintPlan,
             pageRequests);
     }

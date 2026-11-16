@@ -33,6 +33,8 @@ public static class SkiaPdfDocumentExporter
             throw new ArgumentException("PDF export requires a writable stream.", nameof(stream));
         if (!exportPlan.IsReady)
             throw new InvalidOperationException(exportPlan.StatusText);
+        if (exportPlan.ExportPrintPlan.Intent.OutputKind != WorkbookExportPrintOutputKind.Pdf)
+            throw new ArgumentException("The export plan must target PDF.", nameof(exportPlan));
 
         // Use the page-setup-aware builder when the export plan was produced by
         // CreatePlanFromPageSetup (page dimensions/gridlines/header-footer honored per sheet).

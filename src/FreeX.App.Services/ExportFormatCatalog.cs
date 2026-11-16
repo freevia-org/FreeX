@@ -40,7 +40,7 @@ public static class ExportFormatCatalog
         XpsExtensionWithDot,
         XpsPickerDisplayName,
         PdfXpsDialogXpsFilterIndex,
-        IsPortable: false);
+        IsPortable: true);
 
     public static IReadOnlyList<ExportFormatDefinition> All { get; } = [Pdf, Xps];
 

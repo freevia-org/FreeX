@@ -56,7 +56,7 @@ public sealed class WorkbookExportPrintPlannerTests
     }
 
     [Fact]
-    public void CreatePlan_RejectsXpsOnMacOsAndReportsPdfAsSupported()
+    public void CreatePlan_PreparesXpsOnMacOs()
     {
         var workbook = new Workbook("Budget");
         var sheet = workbook.AddSheet("Sheet1");
@@ -70,12 +70,12 @@ public sealed class WorkbookExportPrintPlannerTests
             new WorkbookExportPrintPageCapacity(RowsPerPage: 20, ColumnsPerPage: 5),
             WorkbookExportPrintSurface.MacOs);
 
-        plan.IsReady.Should().BeFalse();
+        plan.IsReady.Should().BeTrue();
         plan.ExportReadiness.IsReady.Should().BeTrue();
-        plan.ValidationStatus.Should().Be(WorkbookExportPrintValidationStatus.OutputKindUnavailable);
-        plan.SupportedOutputKinds.Should().Equal(WorkbookExportPrintOutputKind.Pdf);
-        plan.SheetPlans.Should().BeEmpty();
-        plan.StatusText.Should().Be("macOS supports PDF export print planning; XPS is not available on this platform.");
+        plan.ValidationStatus.Should().Be(WorkbookExportPrintValidationStatus.Ready);
+        plan.SupportedOutputKinds.Should().Equal(WorkbookExportPrintOutputKind.Pdf, WorkbookExportPrintOutputKind.Xps);
+        plan.SheetPlans.Should().ContainSingle().Which.PrintRange.Should().Be(sheet.PrintArea);
+        plan.TotalPageCount.Should().Be(1);
     }
 
     [Fact]

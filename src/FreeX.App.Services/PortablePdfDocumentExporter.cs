@@ -91,6 +91,8 @@ public static class PortablePdfDocumentExporter
     {
         if (!exportPlan.IsReady)
             throw new InvalidOperationException(exportPlan.StatusText);
+        if (exportPlan.ExportPrintPlan.Intent.OutputKind != WorkbookExportPrintOutputKind.Pdf)
+            throw new ArgumentException("The export plan must target PDF.", nameof(exportPlan));
 
         if (exportPlan.RequiresSkiaRasterization)
         {

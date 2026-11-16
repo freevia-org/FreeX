@@ -223,13 +223,13 @@ public static class SkiaPdfWriter
         return pageCount;
     }
 
-    private static void ValidateRasterDpi(int dpi)
+    internal static void ValidateRasterDpi(int dpi)
     {
         if (dpi is < 36 or > 600)
             throw new ArgumentOutOfRangeException(nameof(dpi));
     }
 
-    private static SKImage RasterizePage(
+    internal static SKImage RasterizePage(
         PdfContentPage page,
         int dpi,
         PdfTypefaceSet typefaces,
@@ -708,7 +708,7 @@ public static class SkiaPdfWriter
                     // instead of leaving a silent hole, matching PortablePdfWriter's policy.
                     imageDiagnostics?.Add(
                         $"Image at ({FormatNumber(image.X)}, {FormatNumber(image.Y)}) [{image.ContentType}] could " +
-                        $"not be decoded and was omitted from the exported PDF.");
+                        $"not be decoded and was omitted from the exported document.");
                     break;
                 }
 
@@ -1215,7 +1215,7 @@ public static class SkiaPdfWriter
 
     private static SKColor ToSkColor(PdfColor color) => new(color.R, color.G, color.B);
 
-    private static byte ToAlphaByte(double opacity) =>
+    internal static byte ToAlphaByte(double opacity) =>
         (byte)Math.Clamp(Math.Round((double.IsFinite(opacity) ? opacity : 1.0) * 255.0), 0, 255);
 
     private static string FormatNumber(double value) =>
@@ -1303,20 +1303,22 @@ public static class SkiaPdfWriter
             var index = 0;
             while (index < text.Length)
             {
-                var runTypeface = Resolve(baseTypeface, CodepointAt(text, index));
-                var runStart = index;
-                index += AdvanceLength(text, index);
-                while (index < text.Length &&
-                       ReferenceEquals(Resolve(baseTypeface, CodepointAt(text, index)), runTypeface))
-                {
-                    index += AdvanceLength(text, index);
-                }
-
-                var run = text.Substring(runStart, index - runStart);
+                var runTypeface = ResolveRun(text, index, baseTypeface, out var runEnd);
+                var run = text[index..runEnd];
                 using var font = new SKFont(runTypeface, sizePoints);
                 canvas.DrawText(run, cursorX, baseline, font, paint);
                 cursorX += font.MeasureText(run);
+                index = runEnd;
             }
+        }
+
+        internal SKTypeface ResolveRun(string text, int start, SKTypeface baseTypeface, out int end)
+        {
+            var typeface = Resolve(baseTypeface, CodepointAt(text, start));
+            end = start + AdvanceLength(text, start);
+            while (end < text.Length && ReferenceEquals(Resolve(baseTypeface, CodepointAt(text, end)), typeface))
+                end += AdvanceLength(text, end);
+            return typeface;
         }
 
         private SKTypeface Resolve(SKTypeface baseTypeface, int codepoint)

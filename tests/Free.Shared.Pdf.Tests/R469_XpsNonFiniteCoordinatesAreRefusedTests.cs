@@ -101,7 +101,7 @@ public sealed class R469_XpsNonFiniteCoordinatesAreRefusedTests
         var bytes = PortableXpsWriter.WriteToBytes(DocumentWith(new PdfFillRect(10, 10, 100, 50, Black)));
 
         var markup = PageMarkup(bytes);
-        markup.Should().Contain("Width=\"612\"").And.Contain("Height=\"792\"");
+        markup.Should().Contain("Width=\"816\"").And.Contain("Height=\"1056\"");
         markup.Should().NotContain("NaN");
         markup.Should().NotContain("Infinity");
     }

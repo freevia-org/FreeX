@@ -327,8 +327,8 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.ExportPdf)");
         catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private Task ExportActiveSheetPdfAsync() =>");
-        source.Should().Contain("ExportWorkbookPdfAsync(");
-        source.Should().Contain("var storageFile = await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
+        source.Should().Contain("ExportWorkbookFixedLayoutAsync(");
+        source.Should().Contain("await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
         source.Should().Contain("private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
         source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
@@ -341,12 +341,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportInteractionPlanner.CreateSelectionPlan(");
         source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);");
         source.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
-        source.Should().Contain("CreatePortablePdfExportPlan(effectiveRequest.Options, outputKind)");
+        source.Should().Contain("CreatePortableFixedLayoutExportPlan(effectiveRequest.Options, outputKind)");
         source.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         source.Should().Contain("effectiveRequest.Options,");
         source.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         source.Should().Contain("if (resultPlan.ShouldOpenDestination)");
-        source.Should().Contain("await TryOpenExportedPdfAsync(resultPlan.DestinationPath);");
+        source.Should().Contain("await TryOpenExportedFileAsync(resultPlan.DestinationPath,");
         source.Should().Contain("var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(");
         source.Should().Contain("requestPlan.ShouldConfirmNormalizedOverwrite");
         source.Should().Contain("!await ConfirmNormalizedOverwriteAsync(");
@@ -372,8 +372,8 @@ public sealed class AvaloniaShellSourceTests
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
         // The real saved-file directory is threaded through so &Z/&[Path] header/footer tokens resolve
         // (R15-header-footer-print-titles-2) instead of always expanding to "".
-        source.Should().Contain("return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(");
-        source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));");
+        source.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(");
+        source.Should().Contain("var workbookDirectory = ResolveWorkbookDirectoryForHeaderFooter();");
         var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("target => SkiaPdfDocumentExporter.Save(");
@@ -522,11 +522,11 @@ public sealed class AvaloniaShellSourceTests
 
         source.ReplaceLineEndings("\n").Should().Contain(
             "private Task ExportActiveSheetPdfAsync() =>\n" +
-            "        ExportWorkbookPdfAsync(");
+            "        ExportWorkbookFixedLayoutAsync(");
 
         var workbookExportBlock = ExtractSourceBlock(
             source,
-            "private async Task ExportWorkbookPdfAsync(",
+            "private async Task ExportWorkbookFixedLayoutAsync(",
             "EndFileOperation();");
         workbookExportBlock.Should().Contain("if (!TryBeginFileOperation())");
         workbookExportBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)

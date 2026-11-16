@@ -33,14 +33,14 @@ public sealed class WorkbookExportScopePlannerTests
     }
 
     [Fact]
-    public void Build_MacOsSurface_OffersPdfOnly()
+    public void Build_MacOsSurface_OffersPdfAndXps()
     {
         var workbook = new Workbook("Budget");
         workbook.AddSheet("Sheet1");
 
         var plan = WorkbookExportScopePlanner.Build(workbook, hasSelection: true, WorkbookExportPrintSurface.MacOs);
 
-        plan.SupportedOutputKinds.Should().Equal(WorkbookExportPrintOutputKind.Pdf);
+        plan.SupportedOutputKinds.Should().Equal(WorkbookExportPrintOutputKind.Pdf, WorkbookExportPrintOutputKind.Xps);
         plan.DefaultOutputKind.Should().Be(WorkbookExportPrintOutputKind.Pdf);
     }
 
