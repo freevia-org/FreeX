@@ -8,23 +8,46 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class WorkbookPrintWorkflowTests
 {
-    [Fact]
-    public async Task ExecutePortableAsync_PrinterRouteRendersThenSubmitsValidatedJob()
+    [Theory]
+    [InlineData("office", "office", true)]
+    [InlineData(" OFFICE ", "office", true)]
+    [InlineData("office", "warehouse", false)]
+    [InlineData(null, "office", false)]
+    public async Task ExecutePortableAsync_PrinterRouteSubmitsOptionsOnlyForTheSelectedQueue(
+        string? printerId,
+        string optionsPrinter,
+        bool expectOptions)
     {
         var events = new List<string>();
         var printService = new RecordingPrintService(events);
         var workbook = PrintableWorkbook();
+        workbook.Sheets[0].RowPageBreaks.Add(2);
+        workbook.Sheets[0].RowPageBreaks.Add(3);
+        var printerOptions = new PrinterOptionSelection(optionsPrinter, new Dictionary<string, string>
+        {
+            ["ColorModel"] = "Gray",
+        });
         var plan = WorkbookPrintWorkflow.CreatePlan(
             workbook,
             hasSelection: false,
-            new PrintJobRequest(WorkbookExportPrintScope.ActiveSheet, Copies: 2, Collate: false),
+            new PrintJobRequest(
+                WorkbookExportPrintScope.ActiveSheet,
+                Copies: 2,
+                Collate: false,
+                PageRangeKind: PrintJobPageRangeKind.PageRange,
+                FromPage: 2,
+                ToPage: 3)
+            {
+                Sides = PrintSides.TwoSidedShortEdge,
+                PrinterOptions = printerOptions,
+            },
             PrintExportHostCapabilities.AvaloniaPortable(
                 canSubmitToPlatformPrinter: true,
                 hasPrinterDestination: true));
 
         var result = await WorkbookPrintWorkflow.ExecutePortableAsync(
             plan,
-            printerId: "office",
+            printerId,
             jobTitle: "Budget",
             (portable, _) =>
             {
@@ -43,6 +66,14 @@ public sealed class WorkbookPrintWorkflowTests
         events.Should().Equal("render", "submit");
         printService.SubmittedPath.Should().NotBeNull();
         File.Exists(printService.SubmittedPath!).Should().BeFalse();
+        var submitted = printService.SubmittedSelection!;
+        submitted.PrinterName.Should().Be(printerId?.Trim());
+        submitted.Copies.Should().Be(2);
+        submitted.Collate.Should().BeFalse();
+        submitted.Sides.Should().Be(PrintSides.TwoSidedShortEdge);
+        submitted.EffectivePageRange.Should().Be(PrintPageRange.Between(2, 3));
+        submitted.JobTitle.Should().Be("Budget");
+        submitted.PrinterOptions.Should().BeSameAs(expectOptions ? printerOptions : null);
     }
 
     [Fact]
@@ -253,6 +284,8 @@ public sealed class WorkbookPrintWorkflowTests
 
         public string? SubmittedPath { get; private set; }
 
+        public PrintSelection? SubmittedSelection { get; private set; }
+
         public Task<PrinterDiscoveryResult> DiscoverAsync(
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new PrinterDiscoveryResult(
@@ -267,14 +300,9 @@ public sealed class WorkbookPrintWorkflowTests
         {
             events.Add("submit");
             SubmittedPath = pdfPath;
+            SubmittedSelection = selection;
             File.Exists(pdfPath).Should().BeTrue();
             File.ReadAllBytes(pdfPath).Should().Equal(1, 2, 3);
-            selection.PrinterName.Should().Be("office");
-            selection.Copies.Should().Be(2);
-            selection.Collate.Should().BeFalse();
-            selection.EffectivePageRange.FirstPage.Should().Be(1);
-            selection.EffectivePageRange.LastPage.Should().Be(1);
-            selection.JobTitle.Should().Be("Budget");
             return Task.FromResult(new PrintSubmissionResult(
                 PrintSubmissionStatus.Submitted,
                 "office"));

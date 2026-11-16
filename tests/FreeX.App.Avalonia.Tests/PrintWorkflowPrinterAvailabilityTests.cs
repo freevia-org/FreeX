@@ -162,6 +162,118 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
             return true;
         }, CancellationToken.None);
 
+    [Fact]
+    public Task PrinterProperties_PreviewRestoresAcceptedOptionsAndSubmitsThemForTheSelectedQueue() =>
+        Session.Dispatch(async () =>
+        {
+            var service = new PrinterOptionsPrintService();
+            await WithWindowAsync(service, async window =>
+            {
+                ConfigureThreePrintPages(window.Session.ActiveSheet);
+                var preview = await OpenModalAsync(window, "ShowPrintPreviewDialogAsync", [null, null, null]);
+                var button = Find<Button>(preview, "PrintPreviewSettingsPrinterPropertiesButton");
+                var printer = Find<ComboBox>(preview, "PrintPreviewToolbarPrinter");
+                button.IsEnabled.Should().BeFalse();
+                service.OptionsRequests.Should().BeEmpty();
+
+                service.AllowDiscovery();
+                await SettleAsync();
+                button.IsEnabled.Should().BeTrue();
+                printer.SelectedItem = SecondQueueName;
+                var properties = await OpenPropertiesAsync(preview, button);
+                Find<ComboBox>(properties, "PrinterPropertiesOption-ColorModel").SelectedIndex = 2;
+                ClickButton(properties, "PrinterPropertiesOkButton");
+                await SettleAsync();
+
+                properties = await OpenPropertiesAsync(preview, button);
+                var selector = Find<ComboBox>(properties, "PrinterPropertiesOption-ColorModel");
+                selector.SelectedIndex.Should().Be(2);
+                selector.SelectedIndex = 1;
+                ClickButton(properties, "PrinterPropertiesCancelButton");
+                await SettleAsync();
+
+                printer.SelectedItem = QueueName;
+                properties = await OpenPropertiesAsync(preview, button);
+                Find<ComboBox>(properties, "PrinterPropertiesOption-ColorModel").SelectedIndex.Should().Be(0);
+                ClickButton(properties, "PrinterPropertiesCancelButton");
+                await SettleAsync();
+                service.OptionsRequests.Should().Equal(SecondQueueName, SecondQueueName, QueueName);
+                service.Submission.Should().BeNull();
+
+                printer.SelectedItem = SecondQueueName;
+                Find<TextBox>(preview, "PrintPreviewToolbarCopies").Text = "3";
+                Find<ComboBox>(preview, "PrintPreviewToolbarSides").SelectedIndex = 2;
+                Find<CheckBox>(preview, "PrintPreviewToolbarCollated").IsChecked = false;
+                Find<TextBox>(preview, "PrintPreviewSettingsFromPage").Text = "2";
+                Find<TextBox>(preview, "PrintPreviewSettingsToPage").Text = "3";
+                await SettleAsync();
+                ClickButton(preview, PrintPreviewDialogPlanner.PrintButtonAutomationId);
+
+                var submission = await service.WaitForSubmissionAsync();
+                submission.PrinterName.Should().Be(SecondQueueName);
+                submission.PrinterOptions!.Values.Should().ContainSingle().Which.Should()
+                    .Be(new KeyValuePair<string, string>("ColorModel", "Gray"));
+                submission.EffectivePageRange.Should().Be(PrintPageRange.Between(2, 3));
+                submission.Copies.Should().Be(3);
+                submission.Collate.Should().BeFalse();
+                submission.Sides.Should().Be(PrintSides.TwoSidedShortEdge);
+            });
+            return true;
+        }, CancellationToken.None);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task PrinterProperties_BackstageAndDirectPrintShareSettingsAndCanRestoreQueueDefaults(bool optionsAvailable) =>
+        Session.Dispatch(async () =>
+        {
+            var service = new PrinterOptionsPrintService();
+            service.AllowDiscovery();
+            await WithWindowAsync(service, async window =>
+            {
+                window.ShowBackstageOverlayForTest();
+                typeof(MainWindow).GetMethod("TryActivateBackstagePane", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(window, [FreeXBackstagePaneId.Print]);
+                await SettleAsync();
+                var frame = (AvaloniaBackstageFrame)typeof(MainWindow)
+                    .GetField("_backstageOverlay", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(window)!;
+                var properties = await OpenPropertiesAsync(
+                    window, Find<Button>(frame.CurrentPaneContent!, "BackstagePrinterPropertiesButton"));
+                Find<ComboBox>(properties, "PrinterPropertiesOption-ColorModel").SelectedIndex = 2;
+                ClickButton(properties, "PrinterPropertiesOkButton");
+                await SettleAsync();
+
+                service.OptionsAvailable = optionsAvailable;
+                var print = await OpenModalAsync(window, "ShowPrintDialogAsync", []);
+                properties = await OpenPropertiesAsync(print, Find<Button>(print, "PrintPrinterPropertiesButton"));
+                if (optionsAvailable)
+                {
+                    var selector = Find<ComboBox>(properties, "PrinterPropertiesOption-ColorModel");
+                    selector.SelectedIndex.Should().Be(2);
+                    selector.SelectedIndex = 0;
+                }
+                else
+                {
+                    Find<TextBlock>(properties, "PrinterPropertiesStatus").Text.Should()
+                        .Be(UiText.Get("Print_PrinterOptionsUnavailable"));
+                    var reset = Find<Button>(properties, "PrinterPropertiesOkButton");
+                    reset.IsEnabled.Should().BeTrue();
+                    AutomationProperties.GetName(reset).Should().Be(UiText.Get("Print_UsePrinterDefaults"));
+                }
+                ClickButton(properties, "PrinterPropertiesOkButton");
+                await SettleAsync();
+                service.OptionsRequests.Should().Equal(QueueName, QueueName);
+                service.Submission.Should().BeNull();
+                ClickButton(print, "PrintConfirmButton");
+
+                var submission = await service.WaitForSubmissionAsync();
+                submission.PrinterName.Should().Be(QueueName);
+                submission.PrinterOptions.Should().BeNull();
+            });
+            return true;
+        }, CancellationToken.None);
+
     [Theory]
     [InlineData(PrintPreviewPageRangeMode.AllPages, "2", "2", 1, 3)]
     [InlineData(PrintPreviewPageRangeMode.CurrentPage, "1", "1", 2, 2)]
@@ -374,6 +486,19 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
         return window.OwnedWindows.Single();
     }
 
+    private static async Task<Window> OpenPropertiesAsync(Window owner, Button propertiesButton)
+    {
+        propertiesButton.IsEnabled.Should().BeTrue();
+        propertiesButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await SettleAsync();
+        var dialog = owner.OwnedWindows.Should().ContainSingle().Which;
+        AutomationProperties.GetAutomationId(dialog).Should().Be("PrinterPropertiesDialog");
+        return dialog;
+    }
+
+    private static void ClickButton(Control owner, string id) =>
+        Find<Button>(owner, id).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
     private static async Task WithWindowAsync(FakePrintService service, Func<MainWindow, Task> body)
     {
         var originalProduct = AppProduct.Current;
@@ -418,7 +543,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
         }
     }
 
-    private sealed class FakePrintService(string shape) : IPlatformPrintService
+    private class FakePrintService(string shape) : IPlatformPrintService
     {
         private readonly TaskCompletionSource<PrintSelection> _submissionReceived =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -431,7 +556,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
 
         public bool IsSupported => shape != "unsupported";
 
-        public Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default)
+        public virtual Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default)
         {
             DiscoverCalls++;
             return shape switch
@@ -459,6 +584,39 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
             Submission = selection;
             _submissionReceived.TrySetResult(selection);
             return Task.FromResult(new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName));
+        }
+    }
+
+    private sealed class PrinterOptionsPrintService() : FakePrintService("two-printers"), IPlatformPrinterOptionsService
+    {
+        private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<string> OptionsRequests { get; } = [];
+        public bool OptionsAvailable { get; set; } = true;
+
+        public void AllowDiscovery() => _ready.TrySetResult();
+
+        public override async Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default)
+        {
+            await _ready.Task.WaitAsync(cancellationToken);
+            return await base.DiscoverAsync(cancellationToken);
+        }
+
+        public Task<PrinterOptionsResult> GetOptionsAsync(
+            string printerName,
+            CancellationToken cancellationToken = default)
+        {
+            OptionsRequests.Add(printerName);
+            if (!OptionsAvailable)
+                return Task.FromResult(new PrinterOptionsResult(PrinterOptionsStatus.Unavailable, []));
+
+            return Task.FromResult(new PrinterOptionsResult(
+                PrinterOptionsStatus.Available,
+                [new PrinterOptionDefinition(
+                    "ColorModel",
+                    "Color Mode",
+                    [new PrinterOptionChoice("RGB", "Color"), new PrinterOptionChoice("Gray", "Grayscale")],
+                    "RGB")]));
         }
     }
 }

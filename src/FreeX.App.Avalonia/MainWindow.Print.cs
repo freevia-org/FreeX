@@ -99,6 +99,7 @@ public sealed partial class MainWindow
                     LastPage: "PrintPagesTo"),
                 Collation = AvaloniaPrintDialogCollation.Selectable,
                 PageRangeKinds = [PrintPageRangeKind.All, PrintPageRangeKind.Range],
+                CreatePrinterAccessory = canSpool ? CreatePrintDialogPrinterPropertiesButton : null,
                 CreateAdditionalContent = () => CreatePrintScopePanel(
                     scopePlan,
                     scope => selectedScope = scope,
@@ -269,7 +270,7 @@ public sealed partial class MainWindow
         var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
             _session.Workbook,
             HasPrintSelection(_session.SelectedRange),
-            request,
+            request with { PrinterOptions = canSpool ? GetPrinterJobOptions(printerId) : null },
             PrintExportHostCapabilities.AvaloniaPortable(
                 canSubmitToPlatformPrinter: canSpool,
                 hasPrinterDestination: !string.IsNullOrWhiteSpace(printerId)));

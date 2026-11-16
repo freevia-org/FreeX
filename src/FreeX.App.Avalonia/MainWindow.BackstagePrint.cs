@@ -131,7 +131,10 @@ public sealed partial class MainWindow
                 _session.ActiveSheet.Id,
                 () => currentSettings,
                 updated => currentSettings = updated,
-                Repaginate),
+                Repaginate,
+                this,
+                () => ResolvePreviewPrinterName(currentSettings.PrinterName, canSpool, printerNames, defaultPrinterName),
+                "BackstagePrinterPropertiesButton"),
             printerBoxes.Add,
             out _);
         rail.Background = Brushes.Transparent;
