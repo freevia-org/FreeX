@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.Proofing;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
@@ -77,21 +78,54 @@ public sealed partial class DocumentView
                 return false;
         }
 
+        var originalCaret = _caret;
+        var originalSelectionAnchor = _selectionAnchor;
+        var caret = originalCaret;
         _bus.BeginUndoGroup();
         try
         {
             foreach (var replacement in replacements)
             {
-                _selectionAnchor = new DocPosition(replacement.BlockIndex, replacement.Offset);
-                _caret = new DocPosition(replacement.BlockIndex, replacement.Offset + replacement.Length);
-                ReplaceSelectionWith(replacement.Text);
+                var range = new DocumentTextRange(
+                    new DocumentTextPosition(replacement.BlockIndex, replacement.Offset),
+                    new DocumentTextPosition(replacement.BlockIndex, replacement.Offset + replacement.Length));
+                DocumentBodyEditorActionResult result;
+                var applied = replacement.Text.Length == 0
+                    ? _editingSession.Body.TryApplyDeletion(
+                        range,
+                        DocumentBodyDeleteDirection.Forward,
+                        TrackChangesEnabled,
+                        out result)
+                    : _editingSession.Body.TryApplyTextInput(
+                        range,
+                        new DocumentBodyTextInput(
+                            replacement.Text,
+                            TrackChangesEnabled,
+                            ActiveFormatting((Paragraph)_doc.Blocks[replacement.BlockIndex], replacement.Offset)),
+                        out result);
+                if (!applied)
+                {
+                    _bus.RollbackUndoGroup();
+                    _caret = originalCaret;
+                    _selectionAnchor = originalSelectionAnchor;
+                    return false;
+                }
+
+                caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
             }
+
             _bus.CommitUndoGroup(replacements.Count > 1 ? "Change All" : "Spelling and Grammar");
+            _caret = caret;
+            _selectionAnchor = caret;
+            PruneOrphanedCommentAndNoteAnchorsIfAny();
             return true;
         }
         catch
         {
-            _bus.RollbackUndoGroup();
+            if (_bus.IsUndoGroupOpen)
+                _bus.RollbackUndoGroup();
+            _caret = originalCaret;
+            _selectionAnchor = originalSelectionAnchor;
             throw;
         }
     }
@@ -99,12 +133,8 @@ public sealed partial class DocumentView
     private void IgnoreProofingReviewOnce(ProofingReviewIssue issue)
     {
         if (issue.Kind == ProofingReviewIssueKind.Spelling)
-        {
-            var normalized = ProofingDiagnosticPlanner.NormalizeWord(issue.Text);
-            if (normalized is not null)
-                _ignoredProofingWords.Add(normalized);
             return;
-        }
+
         if (issue.RuleId is not { } ruleId || issue.BlockIndex < 0 || issue.BlockIndex >= _doc.Blocks.Count
             || _doc.Blocks[issue.BlockIndex] is not Paragraph paragraph)
             return;

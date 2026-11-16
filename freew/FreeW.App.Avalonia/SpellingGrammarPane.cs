@@ -13,7 +13,7 @@ namespace FreeW.App.Avalonia;
 internal sealed class SpellingGrammarPane : Border
 {
     private readonly DocumentView _editor;
-    private readonly ProofingReviewSession _session;
+    private ProofingReviewSession _session;
     private readonly Action<string, string> _showMessage;
     private readonly TextBlock _title;
     private readonly TextBlock _heading;
@@ -34,6 +34,7 @@ internal sealed class SpellingGrammarPane : Border
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _showMessage = showMessage ?? throw new ArgumentNullException(nameof(showMessage));
         _session = new ProofingReviewSession(editor.CreateProofingReviewHost());
+        _editor.DocumentLoaded += ResetForDocument;
         Width = 260;
         Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFB));
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
@@ -90,6 +91,7 @@ internal sealed class SpellingGrammarPane : Border
     internal bool ChangeEnabled => _change.IsEnabled;
     internal bool IsPaneVisible => IsVisible;
     internal Button ChangeButtonForTests => _change;
+    internal Button IgnoreAllButtonForTests => _ignoreAll;
 
     internal void Start()
     {
@@ -113,6 +115,15 @@ internal sealed class SpellingGrammarPane : Border
         _editor.SetProofingReviewActive(false);
         Render(lastChangeFailed: false);
         _editor.Focus();
+    }
+
+    private void ResetForDocument()
+    {
+        _session.Close();
+        _session = new ProofingReviewSession(_editor.CreateProofingReviewHost());
+        IsVisible = false;
+        _editor.SetProofingReviewActive(false);
+        Render(lastChangeFailed: false);
     }
 
     private void Run(Func<bool> action, bool isEdit = true)
