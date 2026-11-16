@@ -2351,7 +2351,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         int durationMs,
         Action? onComplete = null,
         double startProgress = 0,
-        double endProgress = 1)
+        double endProgress = 1,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         if (durationMs <= 0)
         {
@@ -2371,7 +2372,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             var t = Math.Min(1.0, (double)frame / steps);
-            var progress = startProgress + (endProgress - startProgress) * EaseInOut(t);
+            var progress = startProgress + (endProgress - startProgress)
+                * ResolveAnimationProgress(t, animationPlan);
             target.Clip = BuildSplitGeometry(width, height, progress, horizontal, fromCenter);
             if (frame >= steps)
             {
@@ -2385,7 +2387,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     }
 
     private void AnimateOpacity(Control target, double from, double to, int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         target.Opacity = from;
         if (durationMs <= 0) { target.Opacity = to; onComplete?.Invoke(); return; }
@@ -2398,7 +2401,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ResolveAnimationProgress(t, animationPlan);
             target.Opacity = from + (to - from) * eased;
             if (frame >= steps)
             {
@@ -2416,7 +2419,9 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     /// </summary>
     private void AnimateTranslate(Control target,
         double fromX, double fromY, double toX, double toY,
-        int durationMs, Action? onComplete = null)
+        int durationMs,
+        Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         var translate = new TranslateTransform(fromX, fromY);
         target.RenderTransform = translate;
@@ -2430,7 +2435,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ResolveAnimationProgress(t, animationPlan);
             translate.X = fromX + (toX - fromX) * eased;
             translate.Y = fromY + (toY - fromY) * eased;
             if (frame >= steps)
@@ -2451,6 +2456,16 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         t = Math.Clamp(t, 0, 1);
         return t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
     }
+
+    private static double ResolveAnimationProgress(
+        double progress,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan) =>
+        animationPlan is null
+            ? EaseInOut(progress)
+            : AvaloniaSlideShowAnimationTiming.Apply(
+                progress,
+                animationPlan.Acceleration,
+                animationPlan.Deceleration);
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
 
@@ -2791,7 +2806,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void FlashEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan,
@@ -2813,7 +2829,10 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                         0.35,
                         plan.ToOpacity,
                         finalDuration,
-                        onComplete: CompleteReveal(plan, onReveal)))));
+                        onComplete: CompleteReveal(plan, onReveal),
+                        animationPlan: plan),
+                    animationPlan: plan),
+                animationPlan: plan));
     }
 
     private void DissolveEffect(Control element,
@@ -2858,14 +2877,16 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         DelayedAction(plan.DelayMs, () =>
         {
             AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,
-                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs);
+                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs,
+                animationPlan: plan);
             // Reveal in base canvas when the fade-in completes.
             AnimateOpacity(
                 el,
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan);
         });
     }
 
@@ -2891,13 +2912,19 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
 
         DelayedAction(playback.DelayMs, () =>
         {
-            AnimateOpacity(element, playback.FromOpacity, playback.ToOpacity, playback.DurationMs);
+            AnimateOpacity(
+                element,
+                playback.FromOpacity,
+                playback.ToOpacity,
+                playback.DurationMs,
+                animationPlan: playback);
             AnimateTrajectory(
                 translate,
                 trajectory,
                 width,
                 height,
                 playback.DurationMs,
+                playback,
                 CompleteReveal(playback, onReveal));
         });
     }
@@ -2908,6 +2935,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         double width,
         double height,
         int durationMs,
+        SlideShowShapeAnimationPlaybackPlan playback,
         Action? onComplete)
     {
         if (durationMs <= 0)
@@ -2929,7 +2957,11 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             var progress = Math.Min(1.0, (double)frame / steps);
-            var point = SlideShowAnimationEffectFramePlanner.SampleSmooth(trajectory, progress);
+            var easedProgress = AvaloniaSlideShowAnimationTiming.Apply(
+                progress,
+                playback.Acceleration,
+                playback.Deceleration);
+            var point = SlideShowAnimationEffectFramePlanner.SampleSmooth(trajectory, easedProgress);
             translate.X = point.NormalizedX * width;
             translate.Y = point.NormalizedY * height;
             if (frame >= steps)
@@ -2968,7 +3000,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 toX,
                 toY,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void CrawlEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null) =>
@@ -2997,7 +3030,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                     from,
                     to,
                     plan.DurationMs,
-                    onComplete: CompleteReveal(plan, onReveal)));
+                    onComplete: CompleteReveal(plan, onReveal),
+                    animationPlan: plan));
         }
         else
         {
@@ -3012,7 +3046,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                     from,
                     to,
                     plan.DurationMs,
-                    onComplete: CompleteReveal(plan, onReveal)));
+                    onComplete: CompleteReveal(plan, onReveal),
+                    animationPlan: plan));
         }
     }
 
@@ -3037,7 +3072,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal),
                 startProgress: fromProgress,
-                endProgress: toProgress));
+                endProgress: toProgress,
+                animationPlan: plan));
     }
 
     private void RandomBarsEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -3071,14 +3107,16 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 animatedBars,
                 el,
                 rendererPlan,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void AnimateRandomBarsClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> bars,
         Control opacityTarget,
         SlideShowRectMaskRendererPlan rendererPlan,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         var durationMs = rendererPlan.DurationMs;
         if (durationMs <= 0)
@@ -3103,7 +3141,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             {
                 var localElapsed = Math.Max(0, elapsedMs - delayMs);
                 var t = Math.Min(1.0, (double)localElapsed / barDurationMs);
-                var eased = EaseInOut(t);
+                var eased = ResolveAnimationProgress(t, animationPlan);
                 geometry.Rect = new Rect(
                     from.X + (to.X - from.X) * eased,
                     from.Y + (to.Y - from.Y) * eased,
@@ -3112,7 +3150,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             }
             opacityTarget.Opacity = SlideShowMaskTimelinePlanner.SampleOpacity(
                 rendererPlan,
-                (double)elapsedMs / durationMs);
+                ResolveAnimationProgress((double)elapsedMs / durationMs, animationPlan));
 
             if (elapsedMs >= durationMs)
             {
@@ -3153,7 +3191,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             AnimateBlindsClip(
                 animatedBands,
                 rendererPlan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void CheckerboardEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -3187,13 +3226,15 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             AnimateCheckerboardClip(
                 animatedCells,
                 rendererPlan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void AnimateCheckerboardClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> cells,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         if (durationMs <= 0)
         {
@@ -3216,7 +3257,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             {
                 var localElapsed = Math.Max(0, elapsedMs - delayMs);
                 var t = Math.Min(1.0, (double)localElapsed / cellDurationMs);
-                var e = EaseInOut(t);
+                var e = ResolveAnimationProgress(t, animationPlan);
                 geometry.Rect = new Rect(
                     from.X + (to.X - from.X) * e,
                     from.Y + (to.Y - from.Y) * e,
@@ -3239,7 +3280,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     private void AnimateBlindsClip(
         IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To)> bands,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         if (durationMs <= 0)
         {
@@ -3260,7 +3302,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double e = EaseInOut(t);
+            double e = ResolveAnimationProgress(t, animationPlan);
             foreach (var (geometry, from, to) in bands)
             {
                 geometry.Rect = new Rect(
@@ -3304,7 +3346,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 from,
                 to,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void GeometricMaskEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
@@ -3357,7 +3400,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 fromProgress,
                 toProgress,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal)));
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan));
     }
 
     private void AnimateGeometricMaskClip(
@@ -3371,7 +3415,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         double fromProgress,
         double toProgress,
         int durationMs,
-        Action? onComplete = null)
+        Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         if (durationMs <= 0)
         {
@@ -3391,7 +3436,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ResolveAnimationProgress(t, animationPlan);
             double progress = fromProgress + (toProgress - fromProgress) * eased;
             target.Clip = BuildGeometricMaskGeometry(maskKind, width, height, progress, spokeCount, stripCount, stripsSlopeDown);
             if (frame >= steps)
@@ -3618,7 +3663,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         new(point.X, point.Y);
 
     private void AnimateRectClip(Control target, RectangleGeometry clipRect,
-        Rect from, Rect to, int durationMs, Action? onComplete = null)
+        Rect from, Rect to, int durationMs, Action? onComplete = null,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         if (durationMs <= 0) { clipRect.Rect = to; onComplete?.Invoke(); return; }
 
@@ -3633,7 +3679,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double e = EaseInOut(t);
+            double e = ResolveAnimationProgress(t, animationPlan);
             clipRect.Rect = new Rect(
                 from.X + (to.X - from.X) * e,
                 from.Y + (to.Y - from.Y) * e,
@@ -3663,17 +3709,20 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 plan.FromOpacity,
                 plan.ToOpacity,
                 plan.DurationMs,
-                onComplete: CompleteReveal(plan, onReveal));
-            AnimateScale(el, scale, plan.FromScale, plan.ToScale, plan.DurationMs);
+                onComplete: CompleteReveal(plan, onReveal),
+                animationPlan: plan);
+            AnimateScale(el, scale, plan.FromScale, plan.ToScale, plan.DurationMs, plan);
         });
     }
 
     private void AnimateScale(Control target, ScaleTransform scale,
-        double from, double to, int durationMs) =>
-        AnimateScaleAxes(scale, from, from, to, to, durationMs);
+        double from, double to, int durationMs,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null) =>
+        AnimateScaleAxes(scale, from, from, to, to, durationMs, animationPlan);
 
     private void AnimateScaleAxes(ScaleTransform scale,
-        double fromX, double fromY, double toX, double toY, int durationMs)
+        double fromX, double fromY, double toX, double toY, int durationMs,
+        SlideShowShapeAnimationPlaybackPlan? animationPlan = null)
     {
         if (durationMs <= 0) { scale.ScaleX = toX; scale.ScaleY = toY; return; }
 
@@ -3688,7 +3737,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             double t = Math.Min(1.0, (double)frame / steps);
-            double eased = EaseInOut(t);
+            double eased = ResolveAnimationProgress(t, animationPlan);
             scale.ScaleX = fromX + (toX - fromX) * eased;
             scale.ScaleY = fromY + (toY - fromY) * eased;
             if (frame >= steps) { timer.Stop(); _activeTimers.Remove(timer); scale.ScaleX = toX; scale.ScaleY = toY; }
@@ -3701,6 +3750,23 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         SlideShowShapeAnimationPlaybackPlan playback)
     {
         var plan = _runtime.AnimationRendererSession.PlanEffectTracks(playback);
+        var timedPlan = plan with
+        {
+            Tracks = plan.Tracks
+                .Select(track => track with
+                {
+                    KeyFrames = track.KeyFrames
+                        .Select(keyFrame => keyFrame with
+                        {
+                            Progress = AvaloniaSlideShowAnimationTiming.RetimedKeyframeProgress(
+                                keyFrame.Progress,
+                                playback.Acceleration,
+                                playback.Deceleration)
+                        })
+                        .ToArray()
+                })
+                .ToArray()
+        };
         element.Opacity = 1;
         element.RenderTransformOrigin = RelativePoint.Center;
 
@@ -3731,7 +3797,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             var rotation = 0.0;
             var horizontalScale = 1.0;
-            foreach (var track in plan.Tracks)
+            foreach (var track in timedPlan.Tracks)
             {
                 var value = SlideShowAnimationEffectTrackPlanner.Sample(track, progress);
                 switch (track.PropertyKind)
@@ -3769,7 +3835,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         Apply(0);
         if (plan.AddAuthoredColorOverlay)
             AddAuthoredColorOverlay(element, playback);
-        DelayedAction(plan.DelayMs, () => AnimateScalarTracks(plan, Apply));
+        DelayedAction(plan.DelayMs, () => AnimateScalarTracks(timedPlan, Apply));
     }
 
     private void AnimateScalarTracks(
@@ -3826,7 +3892,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 track.Opacities
                     .Select(keyFrame => (keyFrame.Value, keyFrame.Progress))
                     .ToArray(),
-                value => rectangle.Opacity = value);
+                value => rectangle.Opacity = value,
+                plan);
         });
     }
 
@@ -3836,7 +3903,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         DelayedAction(plan.DelayMs, () => AnimateKeyframes(
             plan.DurationMs,
             new[] { (0.0, 0.0), (1.0, 1.0) },
-            value => element.Opacity = value));
+            value => element.Opacity = value,
+            plan));
     }
 
     private void FontStyleEffect(Control element, SlideShowShapeAnimationPlaybackPlan plan)
@@ -3890,7 +3958,8 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
                 track.Opacities
                     .Select(keyFrame => (keyFrame.Value, keyFrame.Progress))
                     .ToArray(),
-                value => tint.Opacity = value);
+                value => tint.Opacity = value,
+                plan);
         });
     }
 
@@ -3956,16 +4025,26 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
     private void AnimateKeyframes(
         int durationMs,
         IReadOnlyList<(double Value, double Progress)> keyframes,
-        Action<double> apply)
+        Action<double> apply,
+        SlideShowShapeAnimationPlaybackPlan animationPlan)
     {
         if (keyframes.Count == 0)
         {
             return;
         }
 
+        var retimedKeyframes = keyframes
+            .Select(keyframe => (
+                keyframe.Value,
+                Progress: AvaloniaSlideShowAnimationTiming.RetimedKeyframeProgress(
+                    keyframe.Progress,
+                    animationPlan.Acceleration,
+                    animationPlan.Deceleration)))
+            .ToArray();
+
         if (durationMs <= 0)
         {
-            apply(keyframes[^1].Value);
+            apply(retimedKeyframes[^1].Value);
             return;
         }
 
@@ -3980,24 +4059,24 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             var progress = Math.Min(1.0, (double)frame / steps);
-            var value = keyframes[0].Value;
-            for (var i = 1; i < keyframes.Count; i++)
+            var value = retimedKeyframes[0].Value;
+            for (var i = 1; i < retimedKeyframes.Length; i++)
             {
-                if (progress > keyframes[i].Progress)
+                if (progress > retimedKeyframes[i].Progress)
                 {
                     continue;
                 }
 
-                var previous = keyframes[i - 1];
-                var current = keyframes[i];
+                var previous = retimedKeyframes[i - 1];
+                var current = retimedKeyframes[i];
                 var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
-                value = previous.Value + (current.Value - previous.Value) * EaseInOut(local);
+                value = previous.Value + (current.Value - previous.Value) * local;
                 break;
             }
 
-            if (progress >= keyframes[^1].Progress)
+            if (progress >= retimedKeyframes[^1].Progress)
             {
-                value = keyframes[^1].Value;
+                value = retimedKeyframes[^1].Value;
             }
 
             apply(value);
@@ -4005,7 +4084,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
             {
                 timer.Stop();
                 _activeTimers.Remove(timer);
-                apply(keyframes[^1].Value);
+                apply(retimedKeyframes[^1].Value);
             }
         };
         timer.Start();
