@@ -18,7 +18,8 @@ public enum PortablePdfTextRunSource
     Cell,
     PageFooter,
     CommentSummary,
-    DisplayedComment
+    DisplayedComment,
+    Shape
 }
 
 public sealed record PortablePdfUnsupportedUnicodeTextDiagnostic(
@@ -114,6 +115,11 @@ public static class PortablePdfTextCapabilityPlanner
                     diagnostics,
                     ref textRunCount);
             }
+
+            var sheet = workbook.GetSheet(request.PrintRange.Start.Sheet) ?? workbook.GetSheetAt(request.SheetIndex);
+            foreach (var shape in WorkbookPdfContentBuilder.BuildLegacyShapeBlocks(workbook, sheet, contentPlan, options))
+                if (!string.IsNullOrEmpty(shape.Text))
+                    AddTextRun(PortablePdfTextRunSource.Shape, request, null, null, shape.Text, diagnostics, ref textRunCount);
 
             foreach (var comment in request.DisplayedComments)
             {

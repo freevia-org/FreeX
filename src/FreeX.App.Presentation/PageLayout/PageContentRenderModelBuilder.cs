@@ -284,7 +284,12 @@ public static class PageContentRenderModelBuilder
             footerRuns,
             pictures,
             [],
-            headerFooterPictures);
+            headerFooterPictures)
+        {
+            Shapes = sheet.PrintDraftQuality ? [] : PageShapeLayoutPlanner.Build(sheet.DrawingShapes, sheet, workbook.Theme, pageRows, pageColumns,
+                gridLeft, gridTop, measurement, scaleRatio, BuildSegmentIndexes(rowSegment), BuildSegmentIndexes(colSegment)),
+            DrawingOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet)
+        };
     }
 
     /// <summary>Scales a resolved cell font's size by the page's Scale%/Fit-to-pages ratio.</summary>

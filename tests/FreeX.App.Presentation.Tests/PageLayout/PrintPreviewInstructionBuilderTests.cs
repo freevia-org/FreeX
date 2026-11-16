@@ -55,6 +55,38 @@ public sealed class PrintPreviewInstructionBuilderTests
     }
 
     [Fact]
+    public void Build_EmitsClippedShapeInstruction()
+    {
+        var sheet = new Workbook("test").AddSheet("Sheet1");
+        var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1), RotationDegrees = 30 };
+        var shapes = PageShapeLayoutPlanner.Build([shape], sheet, WorkbookTheme.Office, [1], [1], 48, 48,
+            new PrintGridMeasurement(0, 0, 64, 20));
+        var clip = new LayoutRect(48, 48, 64, 20);
+        var painting = PrintPreviewInstructionBuilder.Build(EmptyLayout() with { Shapes = shapes, GridBounds = clip });
+        var instruction = painting.Instructions.Should().ContainSingle(item => item.Kind == PrintPreviewPaintKind.Shape).Subject;
+        instruction.ShapeBlock!.Id.Should().Be(shape.Id);
+        instruction.ShapeBlock.Appearance.Transform.RotationDegrees.Should().Be(30);
+        instruction.ShapeClip.Should().Be(clip);
+    }
+
+    [Fact]
+    public void Build_RespectsShapeAndTextBoxDrawingOrder()
+    {
+        var sheet = new Workbook("test").AddSheet("Sheet1");
+        var shape = new DrawingShapeModel { Anchor = new CellAddress(sheet.Id, 1, 1) };
+        var text = new TextBoxModel { Anchor = shape.Anchor, Text = "First" };
+        var measurement = new PrintGridMeasurement(0, 0, 64, 20);
+        var shapes = PageShapeLayoutPlanner.Build([shape], sheet, WorkbookTheme.Office, [1], [1], 48, 48, measurement);
+        var textBoxes = PageTextBoxLayoutPlanner.Build([text], WorkbookTheme.Office, [1], [1], 48, 48, measurement);
+        var layout = EmptyLayout() with { Shapes = shapes, TextBoxes = textBoxes,
+            DrawingOrder = [new(SelectionPaneObjectKind.TextBox, text.Id), new(SelectionPaneObjectKind.Shape, shape.Id)] };
+        var instructions = PrintPreviewInstructionBuilder.Build(layout).Instructions;
+        var textIndex = instructions.ToList().FindIndex(item => item.Kind == PrintPreviewPaintKind.Text && item.Text == "First");
+        var shapeIndex = instructions.ToList().FindIndex(item => item.Kind == PrintPreviewPaintKind.Shape);
+        textIndex.Should().BeGreaterThanOrEqualTo(0).And.BeLessThan(shapeIndex);
+    }
+
+    [Fact]
     public void Build_CellFillBecomesRectangleAndTextUsesPrintRendererAlignment()
     {
         var cellFill = new PresentationRgb(200, 100, 50);

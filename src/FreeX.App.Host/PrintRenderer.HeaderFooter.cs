@@ -101,27 +101,30 @@ public static partial class PrintRenderer
             cells.BlackAndWhite,
             sheet);
 
-        if (plan.Drawings.RenderCharts)
+        var shapes = plan.Drawings.Shapes.GroupBy(shape => shape.Id).ToDictionary(group => group.Key, group => group.First());
+        var pictures = plan.Drawings.Pictures.GroupBy(picture => picture.Id).ToDictionary(group => group.Key, group => group.First());
+        var textBoxes = plan.Drawings.TextBoxes.GroupBy(textBox => textBox.Id).ToDictionary(group => group.Key, group => group.First());
+        var charts = sheet.Charts.GroupBy(chart => chart.Id).ToDictionary(group => group.Key, group => group.First());
+        foreach (var entry in DrawingObjectZOrder.GetNormalizedOrder(sheet))
         {
-            DrawPrintedCharts(
-                dc,
-                textOverlays,
-                viewport,
-                cellLookup,
-                sheet,
-                sheet.Charts,
-                workbook.Theme,
-                cells.BodyRows,
-                cells.BodyColumns,
-                pageRows.Count - cells.BodyRows.Count,
-                pageColumns.Count - cells.BodyColumns.Count,
-                gridLeft,
-                gridTop,
-                measurement);
-            DrawPrintedPictures(dc, plan.Drawings.Pictures);
+            switch (entry.Kind)
+            {
+                case SelectionPaneObjectKind.Chart when plan.Drawings.RenderCharts && charts.TryGetValue(entry.Id, out var chart):
+                    DrawPrintedCharts(dc, textOverlays, viewport, cellLookup, sheet, [chart], workbook.Theme,
+                        cells.BodyRows, cells.BodyColumns, pageRows.Count - cells.BodyRows.Count,
+                        pageColumns.Count - cells.BodyColumns.Count, gridLeft, gridTop, measurement);
+                    break;
+                case SelectionPaneObjectKind.Picture when plan.Drawings.RenderCharts && pictures.TryGetValue(entry.Id, out var picture):
+                    DrawPrintedPictures(dc, [picture]);
+                    break;
+                case SelectionPaneObjectKind.TextBox when textBoxes.TryGetValue(entry.Id, out var textBox):
+                    DrawPrintedTextBoxes(dc, textOverlays, [textBox]);
+                    break;
+                case SelectionPaneObjectKind.Shape when shapes.TryGetValue(entry.Id, out var shape):
+                    DrawPrintedShapes(dc, textOverlays, [shape], cells.BlackAndWhite);
+                    break;
+            }
         }
-
-        DrawPrintedTextBoxes(dc, textOverlays, plan.Drawings.TextBoxes);
 
         if (plan.Comments.RenderDisplayedComments)
         {

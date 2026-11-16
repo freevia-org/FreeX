@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using Free.Shared.Drawing;
+using Free.Shared.Drawing.Wpf;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.UI;
@@ -11,6 +13,111 @@ namespace FreeX.App.Host;
 public static partial class PrintRenderer
 {
     private static readonly Typeface PrintedTextBoxTypeface = new("Segoe UI");
+
+    private static void DrawPrintedShapes(DrawingContext dc, ICollection<PdfTextOverlay> textOverlays, IReadOnlyList<PageShapeBlock> shapes, bool blackAndWhite)
+    {
+        if (shapes.Count == 0)
+            return;
+        foreach (var shape in shapes)
+        {
+            var bounds = ToRect(shape.Bounds);
+            var bodyClip = ToRect(shape.BodyClip);
+            if (shape.Geometry.Contours.Count == 0 || bodyClip.Width <= 0 || bodyClip.Height <= 0)
+                continue;
+            dc.PushClip(new RectangleGeometry(bodyClip));
+            var appearance = shape.Appearance;
+            var transform = new Matrix();
+            var centerX = bounds.X + bounds.Width / 2;
+            var centerY = bounds.Y + bounds.Height / 2;
+            transform.ScaleAt(appearance.Transform.FlipHorizontal ? -1 : 1,
+                appearance.Transform.FlipVertical ? -1 : 1, centerX, centerY);
+            if (double.IsFinite(appearance.Transform.RotationDegrees))
+                transform.RotateAt(appearance.Transform.RotationDegrees, centerX, centerY);
+            dc.PushTransform(new MatrixTransform(transform));
+
+            Brush? fill = appearance.Paint.HasFill && !blackAndWhite ? CreateFrozenBrush(PresentationRgb.FromCellColor(appearance.Paint.Fill)) : null;
+            if (fill is not null && appearance.FillGradient is { } gradient)
+            {
+                var end = gradient.EndColor;
+                var (startPoint, endPoint) = gradient.Direction switch
+                {
+                    DrawingShapeGradientDirection.Horizontal => (new Point(0, 0.5), new Point(1, 0.5)),
+                    DrawingShapeGradientDirection.Vertical => (new Point(0.5, 0), new Point(0.5, 1)),
+                    DrawingShapeGradientDirection.DiagonalUp => (new Point(0, 1), new Point(1, 0)),
+                    _ => (new Point(0, 0), new Point(1, 1))
+                };
+                fill = new LinearGradientBrush(Color.FromRgb(appearance.Paint.Fill.R, appearance.Paint.Fill.G, appearance.Paint.Fill.B),
+                    Color.FromRgb(end.R, end.G, end.B), startPoint, endPoint);
+            }
+            Pen? outline = null;
+            if (appearance.Paint.HasOutline && appearance.Outline.HasOutline)
+            {
+                outline = new Pen(blackAndWhite ? Brushes.Black : CreateFrozenBrush(PresentationRgb.FromCellColor(appearance.Paint.Outline)), appearance.Outline.ThicknessDip);
+                if (Enum.TryParse<DrawingMlPresetDash>(appearance.Outline.Dash.ToString(), out var dash) && DrawingMlPresetDashPattern.Get(dash) is { } pattern)
+                    outline.DashStyle = new DashStyle(pattern, 0);
+            }
+            dc.DrawGeometry(fill, outline, WpfShapeGeometryAdapter.ToGeometry(shape.Geometry, FillRule.Nonzero));
+            if (outline is not null)
+                foreach (var arrowhead in shape.Arrowheads)
+                    dc.DrawGeometry(outline.Brush, null, WpfShapeGeometryAdapter.ToGeometry(arrowhead, FillRule.Nonzero));
+            dc.Pop();
+
+            if (bounds.Width > 0 && bounds.Height > 0 && !string.IsNullOrEmpty(shape.Text))
+            {
+                // Flipping a shape mirrors its outline, but Excel keeps its text readable.
+                var textTransform = new Matrix();
+                if (double.IsFinite(appearance.Transform.RotationDegrees))
+                    textTransform.RotateAt(appearance.Transform.RotationDegrees, centerX, centerY);
+                dc.PushTransform(new MatrixTransform(textTransform));
+                var font = shape.TextFont;
+                var textColor = blackAndWhite ? Colors.Black : Color.FromRgb(font.Color.R, font.Color.G, font.Color.B);
+                var textBrush = new SolidColorBrush(textColor);
+                var typeface = new Typeface(new FontFamily(font.FontFamily), font.Italic ? FontStyles.Italic : FontStyles.Normal,
+                    font.Bold ? FontWeights.Bold : FontWeights.Normal, FontStretches.Normal);
+                var formatted = new FormattedText(shape.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                    typeface, font.FontSize, textBrush, 1.0)
+                {
+                    MaxTextWidth = bounds.Width,
+                    MaxTextHeight = bounds.Height,
+                    TextAlignment = shape.TextHorizontalAlignment switch
+                    {
+                        DrawingShapeTextHAlign.Center => TextAlignment.Center,
+                        DrawingShapeTextHAlign.Right => TextAlignment.Right,
+                        _ => TextAlignment.Left
+                    },
+                    Trimming = TextTrimming.CharacterEllipsis
+                };
+                var top = shape.TextVerticalAlignment switch
+                {
+                    DrawingShapeTextVAnchor.Middle => bounds.Top + Math.Max(0, (bounds.Height - formatted.Height) / 2),
+                    DrawingShapeTextVAnchor.Bottom => bounds.Bottom - Math.Min(bounds.Height, formatted.Height),
+                    _ => bounds.Top
+                };
+                dc.PushClip(new RectangleGeometry(bounds));
+                dc.DrawText(formatted, new Point(bounds.Left, top));
+                dc.Pop();
+                dc.Pop();
+                // PDF's selectable-text overlay has no clip geometry. Only include single-line,
+                // unrotated text fully contained by the body and shape to avoid hidden text leaks.
+                var unboundedText = new FormattedText(shape.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                    typeface, font.FontSize, textBrush, 1.0);
+                if (appearance.Transform.RotationDegrees == 0 && bodyClip.Contains(bounds) &&
+                    !shape.Text.Contains('\n') && !shape.Text.Contains('\r') &&
+                    unboundedText.Height <= bounds.Height && unboundedText.WidthIncludingTrailingWhitespace <= bounds.Width)
+                {
+                    var x = shape.TextHorizontalAlignment switch
+                    {
+                        DrawingShapeTextHAlign.Center => bounds.Left + (bounds.Width - formatted.WidthIncludingTrailingWhitespace) / 2,
+                        DrawingShapeTextHAlign.Right => bounds.Right - formatted.WidthIncludingTrailingWhitespace,
+                        _ => bounds.Left
+                    };
+                    textOverlays.Add(new PdfTextOverlay(shape.Text, x, top, font.FontSize, font.FontFamily,
+                        font.Bold, font.Italic, textColor));
+                }
+            }
+            dc.Pop();
+        }
+    }
 
     private static void DrawPrintedCharts(
         DrawingContext dc,
