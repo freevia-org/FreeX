@@ -18,7 +18,7 @@ public sealed partial class NativeJsonAdapter
         // Native files do not yet carry arbitrary drawing-part relationship graphs. Reject before
         // touching the destination so saving cannot silently discard an opaque target or part.
         if (workbook.Sheets.SelectMany(sheet => sheet.DrawingShapes)
-            .Any(shape => shape.ShapeTextDocument is { } document && XlsxShapeTextDocumentCodec.HasOpaqueRelationships(document)))
+            .Any(shape => shape is not null && shape.ShapeTextDocument is { } document && XlsxShapeTextDocumentCodec.HasOpaqueRelationships(document)))
             throw new InvalidOperationException("Native save cannot preserve opaque shape text relationships.");
         Save(workbook, stream, includeCells: true, includeStyleOnlyCells: true, includeCellStyles: true, includeWorksheetFilterState: true);
     }
