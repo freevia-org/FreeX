@@ -92,6 +92,13 @@ public static class PortablePdfDocumentExporter
         if (!exportPlan.IsReady)
             throw new InvalidOperationException(exportPlan.StatusText);
 
+        if (exportPlan.RequiresSkiaRasterization)
+        {
+            throw new NotSupportedException(
+                "Minimum Size and Bitmap Text require the Skia PDF renderer. " +
+                "To use the portable PDF fallback, select Standard quality and turn off Bitmap Text.");
+        }
+
         options ??= new PortablePdfDocumentOptions();
         var textCapabilityPlan = PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options);
         if (!textCapabilityPlan.IsReady)

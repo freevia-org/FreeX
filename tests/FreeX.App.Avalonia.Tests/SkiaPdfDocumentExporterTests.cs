@@ -5,6 +5,7 @@ using Free.Shared.Pdf.Skia;
 using FreeX.App.Avalonia.Pdf;
 using FreeX.App.Services;
 using FreeX.Core.Model;
+using SkiaSharp;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Outline;
 using UglyToad.PdfPig.Tokens;
@@ -13,6 +14,56 @@ namespace FreeX.App.Avalonia.Tests;
 
 public sealed class SkiaPdfDocumentExporterTests
 {
+    [Theory]
+    [InlineData(ExportQuality.Standard, false, 816, 1056)]
+    [InlineData(ExportQuality.Standard, true, 816, 1056)]
+    [InlineData(ExportQuality.MinimumSize, false, 612, 792)]
+    [InlineData(ExportQuality.MinimumSize, true, 612, 792)]
+    public void Publish_UsesSelectedRasterResolutionAndKeepsVisibleText(
+        ExportQuality quality,
+        bool bitmapText,
+        int expectedWidth,
+        int expectedHeight)
+    {
+        const string cellText = "Publish text";
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Data");
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheet.PrintGridlines = false;
+        sheet.ColumnWidths[1] = 24;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(cellText));
+        var plan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            Quality = quality,
+            BitmapTextWhenFontsMayNotBeEmbedded = bitmapText,
+        };
+        PortablePdfExportPlanner.TryApplyOptions(plan, options, out var effectivePlan, out var error)
+            .Should().BeTrue(error);
+
+        using var stream = new MemoryStream();
+        AvaloniaPdfDocumentExporter.Save(workbook, effectivePlan, stream).Backend.Should().Be(PdfExportBackend.Skia);
+
+        using var pdf = PdfDocument.Open(stream.ToArray());
+        pdf.NumberOfPages.Should().Be(1);
+        var page = pdf.GetPage(1);
+        page.Width.Should().Be(612);
+        page.Height.Should().Be(792);
+        var image = page.GetImages().Should().ContainSingle().Which;
+        image.WidthInSamples.Should().Be(expectedWidth);
+        image.HeightInSamples.Should().Be(expectedHeight);
+        image.TryGetPng(out var png).Should().BeTrue();
+        using var bitmap = SKBitmap.Decode(png);
+        bitmap.Pixels.Should().Contain(pixel => pixel.Red < 128 && pixel.Green < 128 && pixel.Blue < 128,
+            "the page raster contains the visible cell text");
+
+        if (bitmapText)
+            page.Letters.Should().BeEmpty();
+        else
+            page.Text.Should().Be(cellText);
+    }
+
     [Theory]
     [InlineData("  pt_br  ", "pt-BR", false)]
     [InlineData("", "en-US", true)]
