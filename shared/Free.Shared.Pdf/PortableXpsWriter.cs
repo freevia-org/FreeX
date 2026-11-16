@@ -30,7 +30,10 @@ public sealed record XpsWriterOptions(XpsFontResource? TextFont = null)
     public IReadOnlyDictionary<PdfText, XpsGlyphRun>? GlyphOverlays { get; init; }
 }
 
-public sealed record XpsGlyphRun(XpsFontResource Font, string? Indices = null, bool IsTransparent = true);
+public sealed record XpsGlyphRun(XpsFontResource Font, string? Indices = null)
+{
+    public bool IsTransparent { get; init; } = true;
+}
 
 public sealed record XpsExportabilityReport(
     bool IsExportable,

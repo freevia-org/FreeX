@@ -176,8 +176,8 @@ jobs:
           path: |
             **/obj
             obj-build-cache-commit.txt
-          key: buildcache-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
-          restore-keys: buildcache-v1-${{ runner.os }}-${{ matrix.displayGateId }}-
+          key: buildcache-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          restore-keys: buildcache-v2-${{ runner.os }}-${{ matrix.displayGateId }}-
       # Reusing that cache is ONLY safe after this runs. A checkout stamps every source file with
       # the checkout time and the cache is unpacked afterwards, so left alone every restored output
       # looks newer than every source and MSBuild silently skips compiling changed code -- a green
