@@ -1003,6 +1003,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ArgumentNullException.ThrowIfNull(printService);
 
         _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession();
+        _formulaBarExpanded = _optionsRuntimeSession.LiveOptions.FormulaBarExpanded;
+        _isFormulaBarHidden = !_optionsRuntimeSession.LiveOptions.ShowFormulaBar;
         _statusBarOptionVisibility = StatusBarOptionVisibilityStore
             .ToVisibility(_optionsRuntimeSession.LiveOptions)
             .ToDictionary();
@@ -3750,6 +3752,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = collapsedFormulaBarPlan.HostHeight;
         _formulaBarHost.Child = formulaDock;
         ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(!_isFormulaBarHidden);
         AutomationProperties.SetAutomationId(_formulaBarHost, "FormulaBarRow");
         AutomationProperties.SetName(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.AutomationNameResourceKey));
         AutomationProperties.SetHelpText(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.HelpTextResourceKey));
@@ -3840,14 +3843,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _formulaExpandButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _formulaExpandButton.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        _formulaExpandButton.Click += (_, _) =>
-        {
-            _formulaBarExpanded = !_formulaBarExpanded;
-            ApplyFormulaBarExpansion();
-        };
+        _formulaExpandButton.Click += (_, _) => ToggleFormulaBarExpansion();
         var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
         AutomationProperties.SetAutomationId(_formulaExpandButton, plan.Button.AutomationId);
         ApplyFormulaBarExpandAutomation(plan.Button);
+    }
+
+    private void ToggleFormulaBarExpansion()
+    {
+        var expanded = !_formulaBarExpanded;
+        var result = _optionsRuntimeSession.MutateFresh(options => options.FormulaBarExpanded = expanded);
+        _formulaBarExpanded = result.Options.FormulaBarExpanded;
+        ApplyFormulaBarExpansion();
+        if (!result.IsPersisted)
+            ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
+    }
+
+    private void ApplyFormulaBarOptions(AppOptions options)
+    {
+        _formulaBarExpanded = options.FormulaBarExpanded;
+        ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(options.ShowFormulaBar);
     }
 
     private void ApplyFormulaBarExpansion()
@@ -3860,6 +3876,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = plan.HostHeight;
         _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
         ApplyFormulaBarExpandAutomation(plan.Button);
+        ToolTip.SetTip(_formulaExpandButton,
+            $"{FormulaBarText(plan.TooltipTitleResourceKey)}\n{FormulaBarText(plan.TooltipDescriptionResourceKey)}");
     }
 
     private void ApplyFormulaBarExpandAutomation(FormulaBarChromeElementPlan plan)

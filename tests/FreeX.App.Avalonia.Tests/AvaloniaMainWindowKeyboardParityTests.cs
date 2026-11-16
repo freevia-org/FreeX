@@ -154,6 +154,14 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     [Fact]
     public async Task CalculationFormulaBarAndZoomShortcuts_ExecuteRealHandlers()
     {
+        var savedOptions = new AppOptions();
+        var optionsSession = new FreeXOptionsRuntimeSession(
+            load: () => savedOptions.Clone(),
+            save: options =>
+            {
+                savedOptions.CopyFrom(options);
+                return true;
+            });
         await Run(async (window, sheet) =>
         {
             var valueAddress = new CellAddress(sheet.Id, 1, 1);
@@ -167,6 +175,7 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
             window.FormulaBarExpandedForTest.Should().BeFalse();
             await Press(window, Key.U, KeyModifiers.Control | KeyModifiers.Shift);
             window.FormulaBarExpandedForTest.Should().BeTrue();
+            savedOptions.FormulaBarExpanded.Should().BeTrue();
 
             var zoom = window.Session.ZoomPercent;
             await Press(window, Key.OemPlus, KeyModifiers.Control | KeyModifiers.Alt);
@@ -178,7 +187,7 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
             window.Session.SelectCell(formulaAddress);
             await Press(window, Key.F2, KeyModifiers.Control);
             window.Session.FormulaEditAddress.Should().BeNull();
-        });
+        }, optionsSession);
     }
 
     [Fact]

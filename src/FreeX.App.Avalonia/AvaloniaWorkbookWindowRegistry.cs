@@ -130,6 +130,12 @@ internal sealed class AvaloniaWorkbookWindowRegistry
             static window => window.RefreshWindowVisibilityCommandStates());
     }
 
+    internal void NotifyFormulaBarVisibilityChanged(MainWindow origin, bool visible) =>
+        _core.Notify(
+            origin,
+            WorkbookWindowNotificationAudience.AllExceptOrigin,
+            window => window.ApplyFormulaBarVisibility(visible));
+
     /// <summary>
     /// Broadcasts a Quick Access Toolbar customization (command set or below-ribbon placement) to
     /// every OTHER registered window in the process, regardless of document. The QAT customization
