@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -108,6 +109,43 @@ internal static class AvaloniaSlideShowAnimationTiming
                 static frame => frame.StoryboardInterpolation,
                 static frame => frame.StoryboardSpline));
     }
+
+    internal static Color SampleColorKeyframes(
+        IReadOnlyList<(Color Value, double Progress)> keyframes,
+        double progress)
+    {
+        // WPF uses LinearColorKeyFrame here; authored host easing applies only to the separate scalar track.
+        ArgumentNullException.ThrowIfNull(keyframes);
+        if (keyframes.Count == 0)
+            return Colors.Transparent;
+
+        var clamped = Math.Clamp(progress, 0, 1);
+        if (clamped <= keyframes[0].Progress)
+            return keyframes[0].Value;
+
+        for (var index = 1; index < keyframes.Count; index++)
+        {
+            var current = keyframes[index];
+            if (clamped > current.Progress)
+                continue;
+
+            var previous = keyframes[index - 1];
+            var localProgress = Math.Clamp(
+                (clamped - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress),
+                0,
+                1);
+            return InterpolateColor(previous.Value, current.Value, localProgress);
+        }
+
+        return keyframes[^1].Value;
+    }
+
+    private static Color InterpolateColor(Color from, Color to, double progress) =>
+        Color.FromArgb(
+            (byte)(from.A + (to.A - from.A) * progress),
+            (byte)(from.R + (to.R - from.R) * progress),
+            (byte)(from.G + (to.G - from.G) * progress),
+            (byte)(from.B + (to.B - from.B) * progress));
 
     private static double Sample<TFrame>(
         IReadOnlyList<TFrame> frames,

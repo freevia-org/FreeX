@@ -195,7 +195,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 PrepareExecution: () => editor.Focus(),
                 InsertFormField: editor.InsertLegacyFormField,
                 ShowFormFieldOptions: callbacks.OpenLegacyFormFieldOptions ?? (() => { }),
-                ToggleFormFieldShading: () => { },
+                ToggleFormFieldShading: editor.ToggleLegacyFormFieldShading,
                 ResetFormFields: editor.ResetLegacyFormFields));
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).
