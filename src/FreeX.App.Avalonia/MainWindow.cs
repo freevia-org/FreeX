@@ -7694,6 +7694,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RequestCellDragAutoScroll(args);
 
+        if (_autofillDragging)
+        {
+            ContinueAutofillDrag(args);
+            return;
+        }
+
         var target = TryResolveCellPointerAddress(args, out var pointerAddress)
             ? pointerAddress
             : address;
@@ -7701,12 +7707,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_selectionMoveDragging)
         {
             ContinueSelectionMoveDrag(args, target);
-            return;
-        }
-
-        if (_autofillDragging)
-        {
-            ContinueAutofillDrag(args, target);
             return;
         }
 
@@ -8410,13 +8410,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             hitPadding: hitPadding);
     }
 
-    private void ContinueAutofillDrag(PointerEventArgs args, CellAddress target)
+    private void ContinueAutofillDrag(PointerEventArgs args)
     {
-        if (_autofillSourceRange is null)
+        args.Handled = true;
+        if (_autofillSourceRange is not { } source)
             return;
 
+        var viewport = _session.Viewport;
+        var pointer = args.GetPosition(_sheetGridHost);
+        var geometry = CreateAvaloniaViewportGeometrySettings(viewport, _session.IsShowingHeadings, GetActiveZoomFactor());
+        if (GridAutofillPlanner.CalculateDragTarget(viewport, source, new GridPoint(pointer.X, pointer.Y), geometry)
+            is not { } target)
+        {
+            return;
+        }
+
+        // A real hit inside a linear source can still retract the fill handle and clear the tail.
+        if (target == source.End && source.Start != source.End && (source.RowCount == 1 || source.ColCount == 1) &&
+            ViewportGeometryPlanner.HitTestCell(viewport, source.Start.Sheet, new LayoutPoint(pointer.X, pointer.Y), geometry)
+                is { } hit && source.Contains(hit))
+        {
+            target = hit;
+        }
+
         ContinueAutofillDragCore(target);
-        args.Handled = true;
     }
 
     /// <summary>

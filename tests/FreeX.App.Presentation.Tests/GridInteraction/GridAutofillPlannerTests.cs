@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Rendering;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.GridInteraction;
@@ -408,6 +409,76 @@ public sealed class GridAutofillPlannerTests
                 columnHeaderHeight: 18)
             .Should()
             .Be(new CellAddress(default, 4, 4));
+    }
+
+    [Theory]
+    [InlineData(51.9, 43.9, 1u, 1u)]
+    [InlineData(52, 44, 7u, 6u)]
+    [InlineData(120, 150, 9u, 8u)]
+    public void CalculateDragTarget_UsesDisplayedMidpointsAcrossFrozenPanes(
+        double x,
+        double y,
+        uint expectedRow,
+        uint expectedColumn)
+    {
+        var sheet = SheetId.New();
+        var anchor = new CellAddress(sheet, 1, 1);
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 4, 0), new RowMetric(7, 10, 4), new RowMetric(9, 6, 14)],
+            [new ColMetric(1, 5, 0), new ColMetric(6, 12, 5), new ColMetric(8, 6, 17)],
+            FrozenPanes: new FrozenPaneState(1, 1));
+        var settings = new ViewportGeometrySettings(
+            RowHeaderWidth: 20,
+            ColumnHeaderHeight: 18,
+            Scale: 2,
+            MinimumColumnWidth: 10,
+            MinimumRowHeight: 8,
+            MetricPlacement: ViewportMetricPlacement.Sequential);
+
+        GridAutofillPlanner.CalculateDragTarget(
+                viewport,
+                new GridRange(anchor, anchor),
+                new GridPoint(x, y),
+                settings)
+            .Should()
+            .Be(new CellAddress(sheet, expectedRow, expectedColumn));
+    }
+
+    [Fact]
+    public void CalculateDragTarget_UsesPinnedSplitMetricsInBothDirections()
+    {
+        var sheet = SheetId.New();
+        var pinned = new CellAddress(sheet, 1, 1);
+        var scrollable = new CellAddress(sheet, 8, 8);
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 100, 0), new RowMetric(8, 20, 100)],
+            [new ColMetric(1, 100, 0), new ColMetric(8, 40, 100)],
+            SplitPanes: new SplitPaneState(
+                Row: 1,
+                Column: 1,
+                TopRows: [new RowMetric(1, 20, 0)],
+                LeftColumns: [new ColMetric(1, 40, 0)]));
+        var settings = new ViewportGeometrySettings(0, 0, MetricPlacement: ViewportMetricPlacement.Sequential);
+
+        GridAutofillPlanner.CalculateDragTarget(viewport, new GridRange(pinned, pinned), new GridPoint(60, 30), settings)
+            .Should().Be(scrollable);
+        GridAutofillPlanner.CalculateDragTarget(viewport, new GridRange(scrollable, scrollable), new GridPoint(-1, -1), settings)
+            .Should().Be(pinned);
+    }
+
+    [Fact]
+    public void CalculateDragTarget_ReturnsNullWhenAProjectedSourceEndpointScrollsOutOfView()
+    {
+        var sheet = SheetId.New();
+        var source = new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 3, 3));
+        var viewport = CreateViewport();
+        viewport = viewport with { RowMetrics = viewport.RowMetrics.Skip(2).ToArray() };
+        var settings = new ViewportGeometrySettings(30, 18, MetricPlacement: ViewportMetricPlacement.Sequential);
+
+        GridAutofillPlanner.CalculateDragTarget(viewport, source, new GridPoint(240, 130), settings)
+            .Should().BeNull();
     }
 
     [Fact]
