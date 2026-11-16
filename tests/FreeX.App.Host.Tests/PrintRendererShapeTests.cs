@@ -15,6 +15,52 @@ namespace FreeX.App.Host.Tests;
 public sealed class PrintRendererShapeTests
 {
     [Fact]
+    public void DrawPrintedShapes_NoWrapClipsInsteadOfAddingLinesOrEllipsis()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var model = new DrawingShapeModel { HasFill = false, OutlineHasNoFill = true };
+            var bounds = new LayoutRect(10, 10, 45, 65);
+            var block = new PageShapeBlock(model.Id, bounds, ShapeGeometryBuilder.Build(model.Kind, bounds),
+                DrawingObjectRenderMetadataPlanner.ResolveDrawingShapeRenderMetadata(model, new Workbook("test").Theme),
+                "One two three four five", new PageTextFont("Segoe UI", 12, false, false, new PresentationRgb(0, 0, 0)),
+                DrawingShapeTextHAlign.Left, DrawingShapeTextVAnchor.Top, false)
+            { BodyClip = new LayoutRect(0, 0, 100, 90) };
+
+            var noWrap = Render(block);
+            var wrap = Render(block with { TextWrap = true });
+            noWrap.Should().Contain(pixel => pixel.Y >= 10 && pixel.Y < 28);
+            noWrap.Should().NotContain(pixel => pixel.Y >= 30, "a no-wrap line must be clipped rather than broken into additional lines");
+            wrap.Should().Contain(pixel => pixel.Y >= 30, "wrapped text does create further lines");
+            noWrap.Should().OnlyContain(pixel => pixel.X >= 10 && pixel.X < 55 && pixel.Y >= 10 && pixel.Y < 75);
+
+            var explicitLines = Render(block with { Text = "One\nTwo" });
+            explicitLines.Should().Contain(pixel => pixel.Y >= 25, "explicit line breaks remain effective without word wrapping");
+
+            var rightAligned = block with { TextHorizontalAlignment = DrawingShapeTextHAlign.Right };
+            var longSuffix = Render(rightAligned with { Text = "iiiiiiiiWWWW" }).Where(pixel => pixel.X >= 40).ToHashSet();
+            var shortSuffix = Render(rightAligned with { Text = "WWWW" }).Where(pixel => pixel.X >= 40).ToHashSet();
+            longSuffix.Should().NotBeEmpty();
+            longSuffix.Intersect(shortSuffix).Count().Should().BeGreaterThan((int)(shortSuffix.Count * 0.85),
+                "right alignment must retain the end of an overflowing line");
+        });
+
+        static (int X, int Y)[] Render(PageShapeBlock block)
+        {
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+                typeof(PrintRenderer).GetMethod("DrawPrintedShapes", BindingFlags.NonPublic | BindingFlags.Static)!
+                    .Invoke(null, [dc, new List<PdfTextOverlay>(), new[] { block }, false]);
+            var bitmap = new RenderTargetBitmap(100, 90, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(visual);
+            var bytes = new byte[100 * 90 * 4];
+            bitmap.CopyPixels(bytes, 100 * 4, 0);
+            return Enumerable.Range(0, 100 * 90).Where(i => bytes[i * 4 + 3] != 0)
+                .Select(i => (i % 100, i / 100)).ToArray();
+        }
+    }
+
+    [Fact]
     public void DrawPrintedShapes_RespectsInsetsAndPositionsSelectableText()
     {
         StaTestRunner.Run(() =>

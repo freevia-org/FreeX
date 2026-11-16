@@ -80,10 +80,15 @@ public static partial class PrintRenderer
                 var textBrush = new SolidColorBrush(textColor);
                 var typeface = new Typeface(new FontFamily(font.FontFamily), font.Italic ? FontStyles.Italic : FontStyles.Normal,
                     font.Bold ? FontWeights.Bold : FontWeights.Normal, FontStretches.Normal);
+                var unboundedText = new FormattedText(shape.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+                    typeface, font.FontSize, textBrush, 1.0);
+                // WPF wraps at MaxTextWidth. For no-wrap text use the longest unwrapped line as
+                // the layout width, then position that layout within the shape before clipping.
+                var layoutWidth = shape.TextWrap ? innerWidth : Math.Max(innerWidth, unboundedText.WidthIncludingTrailingWhitespace + 0.01);
                 var formatted = new FormattedText(shape.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
                     typeface, font.FontSize, textBrush, 1.0)
                 {
-                    MaxTextWidth = innerWidth,
+                    MaxTextWidth = layoutWidth,
                     MaxTextHeight = innerHeight,
                     TextAlignment = shape.TextHorizontalAlignment switch
                     {
@@ -91,8 +96,14 @@ public static partial class PrintRenderer
                         DrawingShapeTextHAlign.Right => TextAlignment.Right,
                         _ => TextAlignment.Left
                     },
-                    Trimming = TextTrimming.CharacterEllipsis
+                    Trimming = TextTrimming.None
                 };
+                var left = bounds.Left + leftInset + (shape.TextHorizontalAlignment switch
+                {
+                    DrawingShapeTextHAlign.Center => (innerWidth - layoutWidth) / 2,
+                    DrawingShapeTextHAlign.Right => innerWidth - layoutWidth,
+                    _ => 0
+                });
                 var top = shape.TextVerticalAlignment switch
                 {
                     DrawingShapeTextVAnchor.Middle => bounds.Top + topInset + Math.Max(0, (innerHeight - formatted.Height) / 2),
@@ -100,13 +111,11 @@ public static partial class PrintRenderer
                     _ => bounds.Top + topInset
                 };
                 dc.PushClip(new RectangleGeometry(bounds));
-                dc.DrawText(formatted, new Point(bounds.Left + leftInset, top));
+                dc.DrawText(formatted, new Point(left, top));
                 dc.Pop();
                 dc.Pop();
                 // PDF's selectable-text overlay has no clip geometry. Only include single-line,
                 // unrotated text fully contained by the body and shape to avoid hidden text leaks.
-                var unboundedText = new FormattedText(shape.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                    typeface, font.FontSize, textBrush, 1.0);
                 if (appearance.Transform.RotationDegrees == 0 && bodyClip.Contains(bounds) &&
                     !shape.Text.Contains('\n') && !shape.Text.Contains('\r') &&
                     unboundedText.Height <= innerHeight && unboundedText.WidthIncludingTrailingWhitespace <= innerWidth)
