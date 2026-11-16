@@ -487,6 +487,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private readonly uint _count;
     private List<CellStateSnapshot>? _deletedSnapshot;
     private List<CellStateSnapshot>? _shiftedSnapshot;
+    private StructuredTableColumnDeleteEffects? _structuredDeleteEffects;
     // R96-commands-undo-affected-cells-1: mutated by both Apply (post-shift addresses) and Revert
     // (original, pre-delete addresses of both the shifted-back and the restored-deleted formula
     // cells) so CommandBus.Undo can report the CURRENT set of formula cells needing dependency-graph
@@ -515,7 +516,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
 
     /// <inheritdoc/>
     public int EstimatedBytes =>
-        (int)Math.Min(((long)(_deletedSnapshot?.Count ?? 0) + (_shiftedSnapshot?.Count ?? 0)) * BytesPerCell, int.MaxValue);
+        (int)Math.Min(((long)(_deletedSnapshot?.Count ?? 0) + (_shiftedSnapshot?.Count ?? 0)) * BytesPerCell + (_structuredDeleteEffects?.EstimatedBytes ?? 0), int.MaxValue);
 
     public DeleteColumnsCommand(SheetId sheetId, uint startCol, uint count = 1)
     {
@@ -554,6 +555,20 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // remaining Table[DeletedColumn] reference into #REF! instead of leaving the stale column
         // name to fail as #NAME? once StructuredReferenceResolver can no longer find it.
         var deletedColumnNamesByTable = RowColumnShiftHelpers.FindStructuredTableColumnsRemovedByColumnDelete(sheet, _startCol, _count);
+
+        _deletedSnapshot = null;
+        _shiftedSnapshot = null;
+        _mutationSnapshot = null;
+        _structuredDeleteEffects = null;
+        try
+        {
+            _structuredDeleteEffects = StructuredTableColumnDeleteEffects.Capture(sheet, _startCol, _count);
+            _structuredDeleteEffects.Apply(ctx.Workbook);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new CommandOutcome(false, ex.Message);
+        }
 
         _mutationSnapshot = RowColumnMutationSnapshot.Capture(
             ctx.Workbook,
@@ -659,7 +674,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _affectedCells = _mutationSnapshot.BuildAffectedCells(
             RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _mutationSnapshot!.FormulaTexts)
                 .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot))
-                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId))));
+                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId)))
+                .Concat(_structuredDeleteEffects.Affected
+                    .Where(a => a.Sheet != _sheetId || a.Col < _startCol || a.Col > endCol)
+                    .Select(a => a.Sheet == _sheetId && a.Col > endCol ? a with { Col = a.Col - _count } : a)));
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -756,7 +774,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
 
     public void Revert(ICommandContext ctx)
     {
-        if (_deletedSnapshot is null || _shiftedSnapshot is null) return;
+        if (_deletedSnapshot is null || _shiftedSnapshot is null)
+        {
+            _structuredDeleteEffects?.Revert();
+            return;
+        }
         var sheet = ctx.GetSheet(_sheetId);
 
         // R92-commands-undo-structural-format-5-2: undo the reband repaint FIRST -- it was the very
@@ -817,6 +839,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreSortedSet(sheet.ColumnPageBreaks, _columnPageBreakSnapshot);
         _mutationSnapshot.RestoreChartStructuralState(ctx.Workbook);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
+        _structuredDeleteEffects?.Revert();
 
         // R96-commands-undo-affected-cells-1: recompute AffectedCells to reflect where every
         // formula cell ACTUALLY ended up after this Revert -- the shifted-back cells' original
@@ -836,6 +859,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
                 .Concat(RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_deletedSnapshot, _sheetId))
                 .Concat(_tableRebandSnapshot?.Select(f => f.Address) ?? [])
                 .Concat(formulaSnapshotAddressesBeforeRestore)
+                .Concat(_structuredDeleteEffects?.Affected ?? [])
                 .Concat(VacatedAddressesAfterRevertForShiftedCells(_sheetId, _shiftedSnapshot, _count)),
             includeRewrittenFormulaAddresses: false);
     }

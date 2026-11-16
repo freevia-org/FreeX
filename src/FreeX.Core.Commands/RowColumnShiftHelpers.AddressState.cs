@@ -1826,7 +1826,11 @@ internal static partial class RowColumnShiftHelpers
         foreach (var table in sheet.StructuredTables)
         {
             if (ShiftRangeColumnsDown(table.Range, startCol, count) is null)
+            {
                 (removed ??= []).Add(table.Name);
+                if (!string.IsNullOrWhiteSpace(table.DisplayName) && !string.Equals(table.Name, table.DisplayName, StringComparison.OrdinalIgnoreCase))
+                    removed.Add(table.DisplayName);
+            }
         }
         return removed ?? [];
     }
@@ -1854,20 +1858,15 @@ internal static partial class RowColumnShiftHelpers
         {
             if (ShiftRangeColumnsDown(table.Range, startCol, count) is null)
                 continue; // fully consumed -- handled via DeletedTableNames, not here.
+            if (table.Range.End.Col < startCol || table.Range.Start.Col > endCol)
+                continue;
 
-            List<string>? removedNames = null;
-            for (var col = table.Range.Start.Col; col <= table.Range.End.Col; col++)
+            var removedNames = StructuredTableColumnDeleteEffects.FindRemovedNames(sheet, table, startCol, endCol);
+            if (removedNames.Length > 0)
             {
-                if (col < startCol || col > endCol)
-                    continue;
-
-                var index = (int)(col - table.Range.Start.Col);
-                if (index < table.Columns.Count)
-                    (removedNames ??= []).Add(table.Columns[index].Name);
-            }
-
-            if (removedNames is { Count: > 0 })
                 result[table.Name] = removedNames;
+                if (!string.IsNullOrWhiteSpace(table.DisplayName)) result[table.DisplayName] = removedNames;
+            }
         }
 
         return result;
