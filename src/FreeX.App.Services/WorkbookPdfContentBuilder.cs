@@ -1180,8 +1180,13 @@ public static class WorkbookPdfContentBuilder
         var chartMap = layout.Charts.ToDictionary(item => item.Id);
         var pictureMap = layout.Pictures.ToDictionary(item => item.Id);
         var textMap = layout.TextBoxes.ToDictionary(item => item.Id);
-        var chartCellAccessor = layout.Charts.Count > 0 ? BuildChartCellAccessor(workbook, sheet) : null;
-        var seriesPalette = layout.Charts.Count > 0 ? ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme) : null;
+        ChartLayoutRequestBuilder.ChartCellAccessor? chartCellAccessor = null;
+        CellColor[]? seriesPalette = null;
+        if (layout.Charts.Count > 0)
+        {
+            chartCellAccessor = BuildChartCellAccessor(workbook, sheet);
+            seriesPalette = ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme);
+        }
         foreach (var entry in layout.GetDrawingOrder())
         {
             switch (entry.Kind)
