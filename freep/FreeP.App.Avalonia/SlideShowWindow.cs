@@ -2814,25 +2814,46 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         Action? onReveal = null)
     {
         InvokeRevealAtStart(plan, onReveal);
-
-        var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        var firstOpacity = isExit ? plan.FromOpacity : 0;
-        var firstDuration = Math.Max(1, (int)(plan.DurationMs * 0.2));
-        var secondDuration = Math.Max(1, (int)(plan.DurationMs * 0.35));
-        var finalDuration = Math.Max(1, plan.DurationMs - firstDuration - secondDuration);
-
+        var timeline = AvaloniaSlideShowAnimationTiming.BuildFlashTimeline(plan);
+        el.Opacity = AvaloniaSlideShowAnimationTiming.SampleFlash(timeline, 0);
         DelayedAction(plan.DelayMs, () =>
-            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, onComplete: () =>
-                AnimateOpacity(el, 0.7, 0.35, secondDuration, onComplete: () =>
-                    AnimateOpacity(
-                        el,
-                        0.35,
-                        plan.ToOpacity,
-                        finalDuration,
-                        onComplete: CompleteReveal(plan, onReveal),
-                        animationPlan: plan),
-                    animationPlan: plan),
-                animationPlan: plan));
+            AnimateFlashOpacity(el, plan, timeline, CompleteReveal(plan, onReveal)));
+    }
+
+    private void AnimateFlashOpacity(
+        Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        IReadOnlyList<AvaloniaSlideShowAnimationTiming.DoubleFrame> timeline,
+        Action? onComplete)
+    {
+        if (plan.DurationMs <= 0)
+        {
+            element.Opacity = AvaloniaSlideShowAnimationTiming.SampleFlash(timeline, 1);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, plan.DurationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = Math.Min(1, frame / (double)steps);
+            element.Opacity = AvaloniaSlideShowAnimationTiming.SampleFlash(timeline, progress);
+            if (frame < steps)
+                return;
+
+            timer.Stop();
+            _activeTimers.Remove(timer);
+            element.Opacity = AvaloniaSlideShowAnimationTiming.SampleFlash(timeline, 1);
+            onComplete?.Invoke();
+        };
+        timer.Start();
     }
 
     private void DissolveEffect(Control element,
@@ -2938,6 +2959,10 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         SlideShowShapeAnimationPlaybackPlan playback,
         Action? onComplete)
     {
+        var timeline = AvaloniaSlideShowAnimationTiming.BuildTrajectoryTimeline(
+            trajectory,
+            playback.Acceleration,
+            playback.Deceleration);
         if (durationMs <= 0)
         {
             translate.X = trajectory.End.NormalizedX * width;
@@ -2957,11 +2982,9 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             var progress = Math.Min(1.0, (double)frame / steps);
-            var easedProgress = AvaloniaSlideShowAnimationTiming.Apply(
-                progress,
-                playback.Acceleration,
-                playback.Deceleration);
-            var point = SlideShowAnimationEffectFramePlanner.SampleSmooth(trajectory, easedProgress);
+            var point = AvaloniaSlideShowAnimationTiming.SampleTrajectory(
+                timeline,
+                progress);
             translate.X = point.NormalizedX * width;
             translate.Y = point.NormalizedY * height;
             if (frame >= steps)
