@@ -19,7 +19,15 @@ public partial class MainWindow
             new WorkbookApplicationFrameCommandHandlers(
                 NewWorkbookAsync: _ => RequestNewWorkbookAsync(),
                 OpenWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
-                    OpenButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
+                {
+                    if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                    {
+                        OpenWorkbookBackstageForKeyboard();
+                        return;
+                    }
+
+                    OpenButton_Click(NativeSource(invocation), RoutedArgs(invocation));
+                }),
                 SaveWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
                     SaveButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
                 SaveWorkbookAsAsync: invocation => RunApplicationFrameCommand(() =>

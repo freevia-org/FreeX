@@ -329,6 +329,9 @@ public partial class MainWindow
             if (!button.IsEnabled)
                 return false;
 
+            if (TryFocusBackstageSaveAsKeyTip(button))
+                return true;
+
             if (TryEnterMenuKeyTipScope(button))
                 return false;
 
@@ -360,6 +363,22 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    internal bool TryFocusBackstageSaveAsKeyTip(ButtonBase button)
+    {
+        if (StartScreenOverlay.Visibility != Visibility.Visible ||
+            !string.Equals(
+                System.Windows.Automation.AutomationProperties.GetAutomationId(button),
+                "BackstageSaveAsButton",
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        button.Focus();
+        Keyboard.Focus(button);
+        return true;
     }
 
     private bool TryEnterMenuKeyTipScope(ButtonBase button)

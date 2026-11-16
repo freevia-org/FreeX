@@ -80,6 +80,24 @@ internal sealed class BackstageRailHarness : IDisposable
     public bool IsBackstageVisible =>
         ((UIElement)_window.FindName("StartScreenOverlay")).Visibility == Visibility.Visible;
 
+    public Workbook Workbook => _window.Session.Workbook;
+
+    public void OpenWorkbookBackstageForKeyboard()
+    {
+        _window.OpenWorkbookBackstageForKeyboard();
+        _window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    public bool FocusSaveAsFromKeyTip()
+    {
+        var button = RailButton("BackstageSaveAsButton")
+            ?? throw new InvalidOperationException("Backstage Save As button was not found.");
+        var focused = _window.TryFocusBackstageSaveAsKeyTip(button);
+        PumpDispatcher();
+        return focused;
+    }
+
     public string? CurrentEntryId =>
         (string?)_frame.GetType()
             .GetProperty("CurrentEntryId", BindingFlags.Instance | BindingFlags.Public)!
