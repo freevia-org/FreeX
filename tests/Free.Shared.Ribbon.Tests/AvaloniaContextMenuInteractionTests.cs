@@ -58,6 +58,52 @@ public sealed class AvaloniaContextMenuInteractionTests
     }
 
     [Fact]
+    public async Task ContextMenu_NestedCloseDoesNotReclaimFocusAfterLaterNavigation()
+    {
+        await Session.Dispatch(() =>
+        {
+            var anchor = new Button();
+            var window = Show(anchor);
+            var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+                new RibbonMenu(
+                [
+                    new RibbonMenuItem("More", Children:
+                    [
+                        new RibbonMenuItem("Child"),
+                    ]),
+                    new RibbonMenuItem("Other"),
+                ]),
+                _ => { });
+            var items = menu.Items.OfType<MenuItem>().ToArray();
+            var parent = items[0];
+            var other = items[1];
+            var child = Assert.Single(parent.Items.OfType<MenuItem>());
+            menu.PlacementTarget = anchor;
+
+            try
+            {
+                menu.Open(anchor);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                parent.IsSubMenuOpen = true;
+                child.Focus(NavigationMethod.Directional);
+                RaiseKey(child, Key.Left);
+
+                other.Focus(NavigationMethod.Directional);
+                Assert.True(other.IsFocused);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.ContextIdle);
+
+                Assert.True(other.IsFocused);
+                Assert.False(parent.IsFocused);
+            }
+            finally
+            {
+                menu.Close();
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ContextMenu_DownSkipsDisabledItemsAndSeparators()
     {
         await Session.Dispatch(() =>

@@ -166,6 +166,7 @@ public static class AvaloniaContextMenuRenderer
                 parent.IsSubMenuOpen = false;
                 AvaloniaMenuFocusRestorer.RestoreToParentAfterSubmenuClose(
                     parent,
+                    currentItem,
                     () => contextMenu.IsOpen);
                 args.Handled = true;
                 return;

@@ -3691,6 +3691,7 @@ public static class AvaloniaRibbonRenderer
                 if (contract.Submenu.RestoreFocusToParentOnClose)
                     AvaloniaMenuFocusRestorer.RestoreToParentAfterSubmenuClose(
                         parent,
+                        currentItem,
                         () => flyout.IsOpen);
                 args.Handled = true;
                 return;

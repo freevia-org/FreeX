@@ -9,9 +9,11 @@ internal static class AvaloniaMenuFocusRestorer
 {
     public static void RestoreToParentAfterSubmenuClose(
         MenuItem parent,
+        IInputElement closingSubmenuFocusOwner,
         Func<bool> isRootPopupOpen)
     {
         ArgumentNullException.ThrowIfNull(parent);
+        ArgumentNullException.ThrowIfNull(closingSubmenuFocusOwner);
         ArgumentNullException.ThrowIfNull(isRootPopupOpen);
 
         parent.Focusable = true;
@@ -22,7 +24,17 @@ internal static class AvaloniaMenuFocusRestorer
                 if (!isRootPopupOpen() || parent.IsSubMenuOpen)
                     return;
 
-                TopLevel.GetTopLevel(parent)?.FocusManager?.Focus(parent, NavigationMethod.Tab);
+                var focusManager = TopLevel.GetTopLevel(parent)?.FocusManager;
+                var focused = focusManager?.GetFocusedElement();
+                if (focusManager is null ||
+                    focused is not null &&
+                    !ReferenceEquals(focused, closingSubmenuFocusOwner) &&
+                    !ReferenceEquals(focused, parent))
+                {
+                    return;
+                }
+
+                focusManager.Focus(parent, NavigationMethod.Tab);
             },
             DispatcherPriority.ContextIdle);
     }
