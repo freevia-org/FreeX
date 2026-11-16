@@ -431,12 +431,7 @@ function Test-AvaloniaProject {
     $macOsSourceRemoves = @(Get-ProjectItemNodes -Project $project -Name "Compile" | Where-Object {
         $_.GetAttribute("Remove").Replace('\', '/') -eq "MacOs/**/*.cs"
     })
-    Assert-True -Condition ($macOsSourceRemoves.Count -eq 1) -Message "Avalonia app project must exclude MacOs source from non-macOS target frameworks."
-    Assert-True -Condition ((Get-ProjectNodeCondition $macOsSourceRemoves[0]) -eq "'`$(TargetFramework)' != 'net10.0-macos'") -Message "Avalonia app MacOs source exclusion must apply outside net10.0-macos."
-
-    $macOsDefineConstants = @(Get-ProjectPropertyNodes -Project $project -Name "DefineConstants" | Where-Object { [string]$_.InnerText -match "(^|;)FREEX_MACOS_SHARE_SHEET(;|$)" })
-    Assert-True -Condition ($macOsDefineConstants.Count -eq 1) -Message "Avalonia app project must define FREEX_MACOS_SHARE_SHEET for the native macOS share sheet."
-    Assert-True -Condition ((Get-ProjectNodeCondition $macOsDefineConstants[0]) -eq "'`$(TargetFramework)' == 'net10.0-macos'") -Message "Avalonia app FREEX_MACOS_SHARE_SHEET constant must be scoped to net10.0-macos."
+    Assert-True -Condition ($macOsSourceRemoves.Count -eq 0) -Message "Avalonia app must include macOS share-sheet source in the shipping net10.0 build."
 
     $allowedProjectReferences = @(
         "Free.Shared.Drawing",
@@ -1346,7 +1341,7 @@ function Test-SourceWiring {
                 "AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)",
                 "var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(",
                 "AtomicExportExecutor",
-                ".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(",
+                ".ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(",
                 "ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);",
                 "_workbookStatisticsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.WorkbookStatistics));",
                 "ApplyNativeFileMenuAvailability(isIdle);",
@@ -3327,7 +3322,9 @@ function Test-PortableSourceHygiene {
         "Foundation",
         "ObjCRuntime",
         "NSSharingServicePicker",
-        "NSSharingService"
+        "NSSharingService",
+        "libobjc.A.dylib",
+        "objc_msgSend"
     )
     $extensions = @(".cs", ".csproj", ".axaml", ".xaml")
     $sourceFiles = New-Object System.Collections.Generic.List[System.IO.FileInfo]

@@ -77,8 +77,8 @@ public sealed class FreeXR12Q2Tests
     /// any "at end of sheet" comment-summary pages appended after the grid pages, matching the WPF
     /// PrintRenderer path (totalPages = printPlan.GridPageCount + commentSummaryPages.Count) and Excel.
     /// Pre-fix, ResolveEffectiveSheetTotalPages summed only sheetPlan.PageCount (grid pages), so a
-    /// sheet with 1 grid page + 1 appended comment-summary page rendered "Page X of 1" on every page
-    /// instead of "Page X of 2".
+    /// sheet with one grid page and one comment-summary page rendered "Page 1 of 1" on the grid
+    /// instead of "Page 1 of 2".
     /// </summary>
     [Fact]
     public void BuildWithPageSetup_PrintCommentsAtEnd_TotalPagesIncludesCommentSummaryPage()
@@ -109,12 +109,14 @@ public sealed class FreeXR12Q2Tests
         var doc = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, pdfPlan);
         doc.Pages.Should().HaveCount(2);
 
-        // Pre-fix: both pages' footer read "Page X of 1" (grid-page-count only).
-        // Post-fix: both pages must agree the sheet has 2 total pages, same as the WPF path.
+        // The worksheet footer counts the appendix. The appendix itself only renders comments,
+        // as does WPF's comment summary page.
         var gridPageFooter = doc.Pages[0].Ops.OfType<PdfText>().First(t => t.Text.StartsWith("Page "));
         gridPageFooter.Text.Should().Be("Page 1 of 2");
 
-        var commentPageFooter = doc.Pages[1].Ops.OfType<PdfText>().First(t => t.Text.StartsWith("Page "));
-        commentPageFooter.Text.Should().Be("Page 2 of 2");
+        var appendixText = doc.Pages[1].Ops.OfType<PdfText>().Select(run => run.Text).ToArray();
+        appendixText.Should().Contain("Comments");
+        string.Join(" ", appendixText).Should().Contain("Please verify");
+        appendixText.Should().NotContain(text => text.StartsWith("Page "));
     }
 }

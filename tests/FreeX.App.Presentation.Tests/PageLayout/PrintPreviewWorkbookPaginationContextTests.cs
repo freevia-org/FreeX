@@ -11,25 +11,30 @@ public sealed class PrintPreviewWorkbookPaginationContextTests
     private static readonly FakeTextMeasurer Measurer = new();
 
     [Fact]
-    public void TryCreate_UsesVisibleSheetsInWorkbookOrder_AndSkipsEmptyAndHiddenSheets()
+    public void TryCreate_IncludesBlankVisibleSheetsInWorkbookOrderAndSkipsHiddenSheets()
     {
         var workbook = new Workbook("Book");
         var first = workbook.AddSheet("First");
         var empty = workbook.AddSheet("Empty");
         var hidden = workbook.AddSheet("Hidden");
+        var veryHidden = workbook.AddSheet("Very hidden");
         var second = workbook.AddSheet("Second");
 
         first.SetCell(new CellAddress(first.Id, 1, 1), new TextValue("first"));
         second.SetCell(new CellAddress(second.Id, 1, 1), new TextValue("second"));
         hidden.SetCell(new CellAddress(hidden.Id, 1, 1), new TextValue("hidden"));
         hidden.IsHidden = true;
+        veryHidden.IsVeryHidden = true;
+        empty.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
 
         PrintPreviewWorkbookPaginationContext.TryCreate(workbook, Measurer, out var context)
             .Should().BeTrue();
 
         context.Pages.Select(page => page.SheetName)
-            .Should().Equal("First", "Second");
+            .Should().Equal("First", "Empty", "Second");
+        context.Pages.Select(page => page.PrintedPageNumber).Should().Equal(1, 2, 3);
         context.Pages.Should().OnlyContain(page => page.Kind == PrintPreviewWorkbookPageKind.Worksheet);
+        context.BuildPage(1)!.FooterRuns.Select(run => run.Text).Should().ContainSingle("Page 2 of 3");
     }
 
     [Fact]
@@ -119,13 +124,14 @@ public sealed class PrintPreviewWorkbookPaginationContextTests
     }
 
     [Fact]
-    public void TryCreate_AllEmptySheetsReturnsFalse()
+    public void TryCreate_AllBlankVisibleSheetsContributeOnePageEach()
     {
         var workbook = new Workbook("Book");
         workbook.AddSheet("Empty 1");
         workbook.AddSheet("Empty 2");
 
-        PrintPreviewWorkbookPaginationContext.TryCreate(workbook, Measurer, out _)
-            .Should().BeFalse();
+        PrintPreviewWorkbookPaginationContext.TryCreate(workbook, Measurer, out var context)
+            .Should().BeTrue();
+        context.Pages.Select(page => page.SheetName).Should().Equal("Empty 1", "Empty 2");
     }
 }

@@ -132,7 +132,8 @@ public sealed partial class MainWindow
                 () => currentSettings,
                 updated => currentSettings = updated,
                 Repaginate),
-            printerBoxes.Add);
+            printerBoxes.Add,
+            out _);
         rail.Background = Brushes.Transparent;
         // The shared rail insets its rows by 10 px for the preview window; flush them with the Print button here.
         rail.Margin = new Thickness(-10, 0, 0, 0);

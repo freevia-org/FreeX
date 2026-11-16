@@ -248,7 +248,8 @@ public enum NativeMenuGestureKey
     OemComma,
     OemMinus,
     OemPlus,
-    Oem3
+    Oem3,
+    K
 }
 
 [Flags]
@@ -565,7 +566,7 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.GoTo, "Go To...", NativeMenuGesture(WorkbookShortcutRoute.GoTo)),
         new(NativeMenuItemId.GoToSpecial, "Go To Special...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.OpenHyperlink, "Open Hyperlink", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.InsertHyperlink, "Hyperlink...", RequiresGestureInSmoke: false),
+        new(NativeMenuItemId.InsertHyperlink, "Hyperlink...", new NativeMenuGesturePlan(NativeMenuGestureKey.K, NativeMenuGestureModifiers.Meta)),
         new(NativeMenuItemId.InsertColumnChart, "Column Chart", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.InsertBarChart, "Bar Chart", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.InsertLineChart, "Line Chart", RequiresGestureInSmoke: false),

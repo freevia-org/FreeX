@@ -60,12 +60,12 @@ public sealed class PrintRendererContentPolicySourceGuardTests
         comments.Should().Contain("IReadOnlyList<PageDisplayedCommentBlock> comments");
         comments.Should().NotContain("WorksheetPageLayout.GetDisplayedCommentOverlays");
 
-        avalonia.Should().Contain("WorksheetPrintPageContentPlanner.Build(");
-        avalonia.Should().Contain("WorksheetPrintMaterializationProfile.AvaloniaPreview");
+        avalonia.Should().Contain("PrintPreviewPaginationContext.TryCreate(");
+        avalonia.Should().Contain("_sheetContext?.BuildPainting(");
         sharedContext.Should().Contain("WorksheetPrintPageContentPlanner.Build(");
-        sharedContext.Should().Contain("BuildContentPlan(");
-        workbookContext.Should().Contain("BuildContentPlan(");
-        workbookContext.Should().Contain("PrintPreviewInstructionBuilder.Build(plan)");
+        sharedContext.Should().Contain("WorksheetPrintMaterializationProfile.AvaloniaPreview");
+        sharedContext.Should().Contain("PrintPreviewInstructionBuilder.Build(content)");
+        workbookContext.Should().Contain("entry.SheetContext.BuildPainting(");
         portableBuilder.Should().Contain("WorksheetPrintPageContentPlanner.ResolveHeaderFooterVariant(");
         portableBuilder.Should().Contain("WorksheetPrintHeaderFooterGeometryPlanner.BuildBand(");
         portableBuilder.Should().Contain("WorksheetPrintCellGeometryPlanner.MeasureMergedColumnSpan(");

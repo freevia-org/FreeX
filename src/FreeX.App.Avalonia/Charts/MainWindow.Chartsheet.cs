@@ -7,6 +7,7 @@ using Avalonia.Media;
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -72,16 +73,18 @@ public sealed partial class MainWindow
         if (!ChartLayoutEngine.IsSupported(chart.Type))
             return null;
 
-        // The chart's data usually lives on a worksheet; the session viewport carries the active
-        // sheet's chart data cells (ChartDataCells span other sheets), keyed by data sheet id.
-        var dataSheetId = chart.DataRange.Start.Sheet;
-        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(_session.Viewport, dataSheetId);
+        var readCell = ViewportService.CreateChartDataCellReader(_session.Workbook, chart);
+        bool ReadCell(uint row, uint col, out ScalarValue? rawValue, out double value, out string text)
+        {
+            (rawValue, text) = readCell(row, col);
+            return ChartRenderPolicyPlanner.TryGetNumericValue(rawValue, text, out value);
+        }
 
         width = Math.Max(1, width);
         height = Math.Max(1, height);
         var inset = Math.Min(28, Math.Min(width, height) / 4);
         var plotArea = new PlotRect(inset, inset, Math.Max(1, width - (2 * inset)), Math.Max(1, height - (2 * inset)));
-        var request = ChartLayoutRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
+        var request = ChartLayoutRequestBuilder.TryBuild(chart, plotArea, ReadCell, ChartTextMeasurer);
         if (request is null)
             return null;
 

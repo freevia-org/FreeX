@@ -348,11 +348,11 @@ public static class WorkbookKeyboardShortcutCatalog
         new(
             WorkbookShortcutRoute.FillDown,
             new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Meta)),
         new(
             WorkbookShortcutRoute.FillRight,
             new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Meta)),
         new(
             WorkbookShortcutRoute.FlashFill,
             new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control),

@@ -46,6 +46,12 @@ public sealed class PageLayoutCommandSession
 
     public IReadOnlyList<SheetId> TargetSheetIds => _targetSheetIds;
 
+    public PageLayoutCommandExecutionPlan PlanMargins(WorksheetPageMargins margins) =>
+        PlanForTargets(
+            PageLayoutRibbonActionPlanner.PageMarginsCommandLabel,
+            sheetId => PageLayoutRibbonCommandPlanner.BuildMarginsCommand(sheetId, margins),
+            PageLayoutStatusPlanner.PageSetupSubmission);
+
     public PageLayoutCommandExecutionPlan PlanMarginsPreset(PageLayoutMarginPreset preset)
     {
         var presetPlan = PageLayoutRibbonActionPlanner.PlanMarginsPreset(preset);

@@ -11,60 +11,35 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    // Page Layout ▸ Themes: the workbook theme editor (MainWindow.ThemeCustomize.cs) with the three
-    // built-in presets (Office / FreeX Colorful / Grayscale) and the customise fields; saving runs
-    // SetWorkbookThemeCommand (undo/redo). Built-in theme recipes come from WorkbookThemeCatalog so
-    // Avalonia and WPF stay aligned.
+    private Task ShowThemesGalleryAsync() =>
+        CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Theme);
 
-    private async Task ShowThemesGalleryAsync()
+    private async Task CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode mode)
     {
-        // The WPF WorkbookThemeDialog: the preset row loads a built-in theme into the editor and the
-        // theme (preset or customised) is applied when the dialog is saved.
-        var picked = await ShowWorkbookThemeDialogAsync(_session.Workbook.Theme);
-        if (picked is not { } chosen)
-            return;
-
-        var plan = WorkbookThemeCommandPlanner.PlanApply(chosen);
-        var result = _session.ExecuteReviewCommand(plan.Command);
-        // R175: a WorkbookTheme swap carries no AffectedCells, so the generic executor's own
-        // sheet-tab refresh (which only re-derives SheetTabs when an edit crosses to a different
-        // sheet) never runs for it -- force it explicitly so a theme-colored worksheet tab
-        // (Sheet.TabColor set via the Theme Colors picker) re-resolves against the new theme
-        // instead of keeping its previous color until the user happens to switch sheets.
-        if (result.Success)
-            _session.RefreshSheetTabsForActiveSheet();
-        RefreshShell(result.Success
-            ? UiText.Format("WTA_Theme_Applied", chosen.Name)
-            : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
+        var picked = await ShowWorkbookThemeDialogAsync(_session.Workbook.Theme, mode);
+        if (picked is { } chosen)
+            ApplyWorkbookTheme(chosen);
     }
-
-    // Page Layout ▸ Themes ▸ Theme Colors / Theme Fonts / Theme Effects child galleries.
-    // The Core model carries a single WorkbookTheme; SetWorkbookThemeCommand applies the whole
-    // theme (undo/redo). To represent "apply only this color/font/effect set" we derive a new theme
-    // from the current workbook theme via WorkbookTheme.WithColor / WithFonts / WithEffects (keeping
-    // the rest unchanged) and apply that through the shared WorkbookThemeWorkflow/catalog.
 
     private async Task ShowThemeColorsGalleryAsync()
     {
-        var options = WorkbookThemeCatalog.ColorPresets
-            .Where(option => !option.IsCustomizeAction)
-            .ToArray();
-        var labels = options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray();
-        var index = await ShowThemePartPickerAsync(UiText.Get("WTA_ThemeColors_Title"), labels);
+        var options = WorkbookThemeCatalog.ColorPresets;
+        var index = await ShowThemePartPickerAsync(
+            UiText.Get("WTA_ThemeColors_Title"),
+            options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray());
         if (index is not { } chosen)
             return;
 
         var option = options[chosen];
-        ApplyDerivedTheme(
-            option.ApplyColors(_session.Workbook.Theme),
-            UiText.Format("WTA_ThemeColors_Applied", UiText.Get(option.LabelResourceKey)));
+        if (option.IsCustomizeAction)
+            await CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Colors);
+        else
+            ApplyWorkbookThemeColorPreset(option);
     }
 
     private async Task ShowThemeFontsGalleryAsync()
     {
-        var options = WorkbookThemeCatalog.FontPresets
-            .Where(option => !option.IsCustomizeAction)
-            .ToArray();
+        var options = WorkbookThemeCatalog.FontPresets;
         var index = await ShowThemePartPickerAsync(
             UiText.Get("WTA_ThemeFonts_Title"),
             options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray());
@@ -72,16 +47,15 @@ public sealed partial class MainWindow
             return;
 
         var option = options[chosen];
-        ApplyDerivedTheme(
-            option.ApplyFonts(_session.Workbook.Theme),
-            UiText.Format("WTA_ThemeFonts_Applied", UiText.Get(option.LabelResourceKey)));
+        if (option.IsCustomizeAction)
+            await ShowThemesGalleryAsync();
+        else
+            ApplyWorkbookThemeFontPreset(option);
     }
 
     private async Task ShowThemeEffectsGalleryAsync()
     {
-        var options = WorkbookThemeCatalog.EffectPresets
-            .Where(option => !option.IsCustomizeAction)
-            .ToArray();
+        var options = WorkbookThemeCatalog.EffectPresets;
         var index = await ShowThemePartPickerAsync(
             UiText.Get("WTA_ThemeEffects_Title"),
             options.Select(option => UiText.Get(option.LabelResourceKey)).ToArray());
@@ -89,20 +63,37 @@ public sealed partial class MainWindow
             return;
 
         var option = options[chosen];
-        ApplyDerivedTheme(
-            option.ApplyEffects(_session.Workbook.Theme),
-            UiText.Format("WTA_ThemeEffects_Applied", UiText.Get(option.LabelResourceKey)));
+        if (option.IsCustomizeAction)
+            await CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Effects);
+        else
+            ApplyWorkbookThemeEffectPreset(option);
     }
 
-    private void ApplyDerivedTheme(WorkbookTheme theme, string successMessage)
+    private void ApplyWorkbookThemeColorPreset(WorkbookThemeColorPresetOption option) =>
+        ApplyWorkbookTheme(
+            option.ApplyColors(_session.Workbook.Theme),
+            UiText.Format("WTA_ThemeColors_Applied", UiText.Get(option.LabelResourceKey)));
+
+    private void ApplyWorkbookThemeFontPreset(WorkbookThemeFontPresetOption option) =>
+        ApplyWorkbookTheme(
+            option.ApplyFonts(_session.Workbook.Theme),
+            UiText.Format("WTA_ThemeFonts_Applied", UiText.Get(option.LabelResourceKey)));
+
+    private void ApplyWorkbookThemeEffectPreset(WorkbookThemeEffectPresetOption option) =>
+        ApplyWorkbookTheme(
+            option.ApplyEffects(_session.Workbook.Theme),
+            UiText.Format("WTA_ThemeEffects_Applied", UiText.Get(option.LabelResourceKey)));
+
+    private void ApplyWorkbookTheme(WorkbookTheme theme, string? successMessage = null)
     {
         var plan = WorkbookThemeCommandPlanner.PlanApply(theme);
         var result = _session.ExecuteReviewCommand(plan.Command);
-        // See the matching comment in ShowThemesGalleryAsync: force the sheet-tab refresh a plain
-        // theme command's generic ExecuteReviewCommand path otherwise skips.
+        // A theme command does not affect cell addresses, so refresh theme-colored tabs explicitly.
         if (result.Success)
             _session.RefreshSheetTabsForActiveSheet();
-        RefreshShell(result.Success ? successMessage : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
+        RefreshShell(result.Success
+            ? successMessage ?? UiText.Format("WTA_Theme_Applied", theme.Name)
+            : result.ErrorMessage ?? UiText.Get("WTA_Theme_ApplyFailed"));
     }
 
     private async Task<int?> ShowThemePartPickerAsync(string title, string[] labels)

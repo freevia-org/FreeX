@@ -32,7 +32,7 @@ public sealed partial class MainWindow
 
         var showHeadings = sheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
-        var accessor = ChartViewportCellAccessorBuilder.BuildValueAccessor(viewport, sheet.Id);
+        var accessors = new Dictionary<SheetId, ChartLayoutRequestBuilder.ChartCellValueAccessor>();
         var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
         var headerTop = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
 
@@ -48,6 +48,13 @@ public sealed partial class MainWindow
             // area so axis tick labels and the title have room inside the box.
             var inset = Math.Min(28 * zoomFactor, Math.Min(width, height) / 4);
             var plotArea = new PlotRect(inset, inset, Math.Max(1, width - (2 * inset)), Math.Max(1, height - (2 * inset)));
+
+            var sourceSheetId = chart.DataRange.Start.Sheet;
+            if (!accessors.TryGetValue(sourceSheetId, out var accessor))
+            {
+                accessor = BuildChartSourceAccessor(viewport, sheet.Id, sourceSheetId);
+                accessors.Add(sourceSheetId, accessor);
+            }
 
             var request = ChartLayoutRequestBuilder.TryBuild(chart, plotArea, accessor, ChartTextMeasurer);
             if (request is null)
@@ -73,6 +80,17 @@ public sealed partial class MainWindow
             Canvas.SetTop(container, headerTop + (chart.Top * zoomFactor));
             overlay.Children.Add(container);
         }
+    }
+
+    private static ChartLayoutRequestBuilder.ChartCellValueAccessor BuildChartSourceAccessor(
+        ViewportModel viewport,
+        SheetId visibleSheetId,
+        SheetId sourceSheetId)
+    {
+        // Only ChartDataCells carry a sheet ID. Visible worksheet cells can fill in missing values
+        // for a local chart, but must never be used as fallback for a chart on another sheet.
+        var sourceViewport = sourceSheetId == visibleSheetId ? viewport : viewport with { Cells = [] };
+        return ChartViewportCellAccessorBuilder.BuildValueAccessor(sourceViewport, sourceSheetId);
     }
 
     private Control CreateSelectableChartContainer(

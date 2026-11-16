@@ -247,15 +247,19 @@ public static class PrintPreviewInstructionBuilder
     /// <summary>
     /// Flattens one page's <see cref="PageContentLayout"/> into an ordered list of paint primitives.
     /// Paint order mirrors the source print renderer: page background, heading band fills, cell fills,
-    /// gridlines, cell border edges, cell text, charts, text boxes, then header/footer bands on top.
+    /// gridlines, cell border edges, cell text, charts, text boxes, header/footer bands, and comments.
     /// </summary>
     public static PrintPreviewPagePainting Build(WorksheetPrintPageContentPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return Build(plan.PortableLayout) with { PageBounds = plan.Transform.PageClip };
+        return Build(plan.PortableLayout, plan.Comments.PreviewInstructions) with { PageBounds = plan.Transform.PageClip };
     }
 
-    public static PrintPreviewPagePainting Build(PageContentLayout layout)
+    public static PrintPreviewPagePainting Build(PageContentLayout layout) => Build(layout, []);
+
+    private static PrintPreviewPagePainting Build(
+        PageContentLayout layout,
+        IReadOnlyList<PrintPreviewPaintInstruction> commentInstructions)
     {
         ArgumentNullException.ThrowIfNull(layout);
 
@@ -407,6 +411,8 @@ public static class PrintPreviewInstructionBuilder
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));
 
+        // Comments are painted over the worksheet and its other drawing layers.
+        instructions.AddRange(commentInstructions);
         return new PrintPreviewPagePainting(layout.PageNumber, layout.PageBounds, instructions);
     }
 

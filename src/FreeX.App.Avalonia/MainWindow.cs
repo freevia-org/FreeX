@@ -48,6 +48,7 @@ using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -1544,22 +1545,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Page Layout ▸ Themes preset submenu ids + customize entries.
-                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeThemePreset.CreateTheme()),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()),
+                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()),
                     [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.OfficeColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.FreeXColorfulColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.GrayscaleColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(() => CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Colors)),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.OfficeFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.ArialFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.TimesNewRomanFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.OfficeEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.SubtleEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.RefinedEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(() => CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Effects)),
 
                     // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
                     // declared here so the hygiene guard finds them in this file's ExtraCommands block).
@@ -1828,6 +1829,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
         _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
         AttachSplitPanePointerHandlers();
+        AttachPageLayoutRulerPointerHandlers();
 
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -3060,6 +3062,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             NativeMenuGestureKey.G => Key.G,
             NativeMenuGestureKey.H => Key.H,
             NativeMenuGestureKey.I => Key.I,
+            NativeMenuGestureKey.K => Key.K,
             NativeMenuGestureKey.M => Key.M,
             NativeMenuGestureKey.R => Key.R,
             NativeMenuGestureKey.U => Key.U,
@@ -5054,6 +5057,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildSheetGrid()
     {
         RecordSheetGridBuilt();
+        _pageLayoutRuler = null;
         if (IsChartsheet(_session.ActiveSheet))
             return BuildChartsheetView();
         _formulaReferenceGridOverlay = null;
@@ -12879,7 +12883,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Resolves a plain worksheet cell click to either an extend (<see cref="SelectRange"/>) or a
     /// collapse (<see cref="SelectCell"/>), matching Excel: a physical Shift+click always extends,
     /// and so does a plain click while F8 (Extend Selection mode, <see cref="ExcelSelectionMode.Extend"/>)
-    /// is active -- mirroring the keyboard path (<c>TryHandleStickySelectionNavigation</c>), which
+    /// is active -- mirroring the keyboard path (<c>NavigateActiveCell</c>), which
     /// likewise treats Extend mode as an implicit Shift on arrow-key navigation. Before this fix a
     /// plain click always collapsed the selection even with F8 armed (R68-app-selection-
     /// navigation-6-1).
@@ -13365,8 +13369,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ZoomToSelection()
     {
-        var zoomPercent = CalculateZoomToSelectionPercent();
-        ApplyZoomPercent(zoomPercent, "Zoom to Selection failed.");
+        if (!CanApplyZoom())
+            return;
+
+        var range = ZoomSelectionPlanner.ResolveFitRange(_session.SelectedRange, _session.SelectedRanges);
+        var zoomPercent = CalculateZoomToSelectionPercent(range);
+        ApplyPreparedZoomPercent(zoomPercent, "Zoom to Selection failed.", range.Start);
     }
 
     private async Task ShowZoomDialogAsync()
@@ -13638,12 +13646,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ApplyZoomPercent(int zoomPercent, string errorMessage)
     {
-        if (_isOpening || _isSaving)
-            return;
+        if (CanApplyZoom())
+            ApplyPreparedZoomPercent(zoomPercent, errorMessage);
+    }
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
+    private bool CanApplyZoom() => !_isOpening && !_isSaving && TryCommitPendingFormulaEdit();
 
+    private void ApplyPreparedZoomPercent(int zoomPercent, string errorMessage, CellAddress? revealCell = null)
+    {
         ClearSelectedDrawingObject();
         zoomPercent = StatusBarZoomSliderPlanner.ClampZoomPercent(zoomPercent);
         var result = _session.SetZoomPercent(zoomPercent);
@@ -13654,99 +13664,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshViewportSizeForZoom();
+        if (revealCell is { } cell)
+            _session.RevealCellInViewport(cell);
+
         RefreshShell(UiText.Format(
             "MainLoc_ActionRangeStatusFormat",
             UiText.Get("MainWindow_Text_Zoom"),
             StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)));
     }
 
-    /// <summary>
-    /// Selections larger than this (e.g. an entire selected row/column, which can span up to a
-    /// million+ cells) fall back to the default-cell-size overload instead of building a per-cell
-    /// pixel list — Excel's own Zoom-to-Selection degenerates to the minimum zoom for such
-    /// selections anyway, and there is no benefit to walking that many dictionary lookups.
-    /// </summary>
-    private const int ZoomToSelectionMetricsCap = 4096;
+    private int CalculateZoomToSelectionPercent() =>
+        CalculateZoomToSelectionPercent(_session.SelectedRange);
 
-    private int CalculateZoomToSelectionPercent()
+    private int CalculateZoomToSelectionPercent(GridRange range)
     {
         if (!TryGetSheetViewportDisplaySize(out var viewportHeight, out var viewportWidth))
             return 100;
 
-        var range = _session.SelectedRange;
-        if (range.ColCount > ZoomToSelectionMetricsCap || range.RowCount > ZoomToSelectionMetricsCap)
-        {
-            return ZoomSelectionPlanner.CalculateFitWholePercent(
-                viewportWidth,
-                viewportHeight,
-                range.ColCount,
-                range.RowCount);
-        }
-
-        var columnWidths = BuildSelectionColumnWidthsPixels(range);
-        var rowHeights = BuildSelectionRowHeightsPixels(range);
         return ZoomSelectionPlanner.CalculateFitWholePercent(
             viewportWidth,
             viewportHeight,
-            columnWidths,
-            rowHeights);
-    }
-
-    /// <summary>
-    /// Builds the selection's actual per-column pixel widths: prefers the currently materialized
-    /// <see cref="ViewportModel.ColMetrics"/> (already-computed display pixels, accounting for any
-    /// custom width), falling back to <see cref="Sheet.ColumnWidths"/>/<see cref="Sheet.DefaultColumnWidth"/>
-    /// converted via <see cref="ColumnWidthPixelMapper"/> for columns outside the materialized
-    /// viewport — so Zoom to Selection fits the selection's real extent instead of assuming every
-    /// column is the Excel default width (M24).
-    /// </summary>
-    private IReadOnlyList<double> BuildSelectionColumnWidthsPixels(GridRange range)
-    {
-        var metricsByCol = new Dictionary<uint, double>();
-        foreach (var metric in _session.Viewport.ColMetrics)
-        {
-            if (metric.Col >= range.Start.Col && metric.Col <= range.End.Col)
-                metricsByCol[metric.Col] = metric.Width;
-        }
-
-        var sheet = _session.ActiveSheet;
-        var widths = new List<double>((int)range.ColCount);
-        for (var col = range.Start.Col; col <= range.End.Col; col++)
-        {
-            widths.Add(metricsByCol.TryGetValue(col, out var width)
-                ? width
-                : ColumnWidthPixelMapper.ColumnWidthToPixels(
-                    sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth)));
-        }
-
-        return widths;
-    }
-
-    /// <summary>
-    /// Builds the selection's actual per-row pixel heights: prefers the currently materialized
-    /// <see cref="ViewportModel.RowMetrics"/>, falling back to <see cref="Sheet.RowHeights"/>/
-    /// <see cref="Sheet.DefaultRowHeight"/> (already stored in pixels) for rows outside the
-    /// materialized viewport — the row analogue of <see cref="BuildSelectionColumnWidthsPixels"/>.
-    /// </summary>
-    private IReadOnlyList<double> BuildSelectionRowHeightsPixels(GridRange range)
-    {
-        var metricsByRow = new Dictionary<uint, double>();
-        foreach (var metric in _session.Viewport.RowMetrics)
-        {
-            if (metric.Row >= range.Start.Row && metric.Row <= range.End.Row)
-                metricsByRow[metric.Row] = metric.Height;
-        }
-
-        var sheet = _session.ActiveSheet;
-        var heights = new List<double>((int)range.RowCount);
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            heights.Add(metricsByRow.TryGetValue(row, out var height)
-                ? height
-                : sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight));
-        }
-
-        return heights;
+            _session.ActiveSheet,
+            range);
     }
 
     private void ToggleShowFormulas()
@@ -27358,9 +27297,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         args.Key == Key.F6 &&
         (args.KeyModifiers == KeyModifiers.None || args.KeyModifiers == KeyModifiers.Shift);
 
-    private static bool HasOnlyControlModifier(KeyModifiers modifiers) =>
-        modifiers == KeyModifiers.Control;
-
     private static bool IsAutoSumShortcut(KeyEventArgs args) =>
         args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;
 
@@ -27757,7 +27693,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             FindNext();
         }
-        else if (e.Key == Key.K && HasOnlyControlModifier(e.KeyModifiers))
+        else if (e.Key == Key.K && e.KeyModifiers is KeyModifiers.Control or KeyModifiers.Meta)
         {
             e.Handled = true;
             await ShowInsertHyperlinkDialogAsync();
@@ -28215,8 +28151,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(navigationKey, navigationModifiers, _endMode, out var nextEndMode))
         {
             _endMode = nextEndMode;
+            if (nextEndMode)
+                _keyboardSelectionMode = ExcelSelectionMode.Normal;
             e.Handled = true;
-            RefreshShell(UiText.Get("MainLoc_Ready"));
+            RefreshShell(UiText.Get(ExcelSelectionModePlanner.EndModeStatusBarResourceKey(nextEndMode)));
             return;
         }
 
@@ -28227,12 +28165,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.Viewport, _session.ActiveSheet) - 1);
         var pageCols = Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(
             _session.Viewport, _session.ActiveSheet) - 1);
-        var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var extendSelection = ExcelSelectionModePlanner.ShouldExtendSelection(_keyboardSelectionMode, navigationModifiers);
         var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
+        var addArea = _keyboardSelectionMode == ExcelSelectionMode.Add && !moveOnly;
         var sheet = _session.Workbook.GetSheet(_session.ActiveSheet.Id);
-        var current = extendSelection && !moveOnly && _selectionExtensionCursor is { } cursor
-            ? cursor
+        var current = _keyboardSelectionMode == ExcelSelectionMode.Add
+            ? _session.SelectedRange.Start
             : _session.ActiveCell;
+        if (extendSelection && !moveOnly)
+        {
+            if (_selectionExtensionCursor is { } cursor && _session.SelectedRange.Contains(cursor))
+                current = cursor;
+            else if (addArea)
+                current = _session.SelectedRange.End;
+        }
 
         // The shared planner owns the whole key -> target decision. r188: it reads the End-mode value
         // passed in the request, which is captured BEFORE the flag is cleared below -- Home's target
@@ -28259,7 +28205,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // Presentation owns traversal order, multi-area wrapping, and merged-cell eligibility.
         // Avalonia retains native key conversion and applies only the returned active-cell target.
-        var cyclePlan = moveOnly && resolvedNavigation.CycleKey is { } cycleKey
+        var cyclePlan = _keyboardSelectionMode == ExcelSelectionMode.Normal && resolvedNavigation.CycleKey is { } cycleKey
             ? GridSelectionNavigationPlanner.PlanCycle(
                 sheet,
                 _session.SelectedRange,
@@ -28285,18 +28231,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Excel -- rather than moving onto it (R75-services-protection-security-4-1). This also
         // applies to Shift/F8 "extend selection" (extendSelection && !moveOnly): the extending
         // end of the selection must not land on/pass a locked cell either, matching the WPF
-        // host's willSetActiveCell || willExtendSelection gating
-        // (MainWindow.Selection.cs, R87-commands-protection-lock-5-1). Avalonia's keyboard
-        // navigation has no Add-selection-mode branch (unlike WPF's), so unlike WPF there is no
-        // case here where the guard should be skipped -- it always applies on a protected sheet.
-        if (sheet is { IsProtected: true })
+        // host's guard. Additional-area navigation follows the WPF Add Selection path.
+        if (!addArea && sheet is { IsProtected: true })
         {
             var adjustedTarget = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
                 _session.Workbook,
                 sheet,
                 navigationTarget,
                 navigationKey,
-                extendSelection);
+                navigationModifiers.HasFlag(ExcelWorksheetNavigationModifiers.Shift));
             if (adjustedTarget is null)
             {
                 // No selectable cell exists further in this direction (e.g. every remaining cell
@@ -28308,10 +28251,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             navigationTarget = adjustedTarget.Value;
         }
 
-        MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
+        if (addArea)
+            AddOrExtendKeyboardSelection(navigationTarget, extendSelection);
+        else
+            MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
         ClearSelectedDrawingObject();
         e.Handled = true;
-        RefreshShell(UiText.Get("MainLoc_Ready"));
+        RefreshShell(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(_keyboardSelectionMode)));
     }
 
     private static ExcelWorksheetNavigationKey ToWorksheetNavigationKey(Key key) =>
@@ -29441,6 +29387,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     outputKind,
                     exportOptions,
                     File.Exists);
+                PersistPdfExportLanguage(requestPlan);
                 if (requestPlan.ShouldConfirmNormalizedOverwrite &&
                     !await ConfirmNormalizedOverwriteAsync(
                         requestPlan.Request.Path,
@@ -29460,8 +29407,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             _statusText.Text = UiText.Get("Progress_ExportingPdf");
                             _statusText.Foreground = Brush(67, 113, 83);
 
-                            var exportPrintPlan = CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind);
-                            var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                            var exportPlan = CreatePortablePdfExportPlan(effectiveRequest.Options, outputKind);
                             if (!exportPlan.IsReady)
                             {
                                 adapterFailureMessage = exportPlan.StatusText;
@@ -29480,11 +29426,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             }
 
                             var exportExecution = await new AtomicExportExecutor()
-                                .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                                .ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
                                 effectiveRequest.Path,
-                                (output, token) =>
+                                (temporaryPath, token) =>
                                 {
                                     token.ThrowIfCancellationRequested();
+                                    // The Skia backend adds catalog metadata to the PDF it just wrote.
+                                    using var output = new FileStream(temporaryPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
                                     return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(
                                         _session.Workbook,
                                         effectiveExportPlan,
@@ -29540,24 +29488,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private WorkbookExportPrintPlan CreatePortablePdfPrintPlan(
+    private PortablePdfExportPlan CreatePortablePdfExportPlan(
         ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
+        var workbook = _session.Workbook;
         var scope = ExportFormatCatalog.ToPrintScope(options.Scope);
         var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
             ? _session.SelectedRange
             : (GridRange?)null;
+        var activeSheetIds = scope == WorkbookExportPrintScope.ActiveSheet
+            ? WorkbookExportSheetSelectionPlanner.ResolveSheetIds(
+                workbook, options, _session.ActiveSheet.Id, _session.GetCurrentGroupedStructureSheetIds())
+            : [];
+        var groupedSheetIds = activeSheetIds.Count > 1 ? activeSheetIds.ToHashSet() : null;
 
-        return WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
-            _session.Workbook,
+        var exportPrintPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
             new WorkbookExportPrintIntent(
-                scope,
+                groupedSheetIds is null ? scope : WorkbookExportPrintScope.GroupedSheets,
                 outputKind,
                 ActiveSheetIndex: ResolveActiveSheetIndex(),
                 SelectedRange: selectedRange,
-                IgnorePrintAreas: options.IgnorePrintAreas),
+                IgnorePrintAreas: options.IgnorePrintAreas)
+            {
+                GroupedSheetIds = groupedSheetIds,
+                UseSheetPageNumbering = groupedSheetIds is not null
+            },
             WorkbookExportPrintSurface.MacOs);
+        return PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook);
     }
 
     private int ResolveActiveSheetIndex()

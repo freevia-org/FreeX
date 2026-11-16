@@ -38,6 +38,12 @@ public sealed record PortablePdfExportPageRequest(
 
     public int ColumnPageNumber => ColumnPageIndex + 1;
 
+    // Retain the sheet's unfiltered page position for printed headers and footers.
+    internal (int PageIndex, int PageCount)? OriginalSheetPagination { get; init; }
+
+    // Document order includes comment appendices and every printed worksheet.
+    internal (int PageNumber, int PageCount)? OriginalDocumentPagination { get; init; }
+
     public IReadOnlyList<uint> TitleRows => PageSpans.TitleRows;
 
     public IReadOnlyList<uint> BodyRows => PageSpans.BodyRows;
@@ -72,6 +78,10 @@ public sealed record PortablePdfExportPlan(
     public bool IsReady => Status == PortablePdfExportPlanStatus.Ready;
 
     public int TotalPageCount => PageRequests.Count;
+
+    public string? PdfLanguage { get; init; }
+
+    internal ExportOptions? PublishOptions { get; init; }
 }
 
 public static class PortablePdfExportPlanner
@@ -93,7 +103,12 @@ public static class PortablePdfExportPlanner
         if (!ExportPlanner.TryValidatePageRange(options.PageRange, exportPlan.TotalPageCount, out error, textResolver))
             return false;
 
-        effectivePlan = ApplyPageRange(exportPlan, options.PageRange);
+        var publishOptions = ExportPlanner.CreateEffectiveOptionsForFormat(options, ExportFormat.Pdf);
+        effectivePlan = ApplyPageRange(exportPlan, publishOptions.PageRange) with
+        {
+            PdfLanguage = publishOptions.PdfLanguage,
+            PublishOptions = publishOptions
+        };
         return true;
     }
 
@@ -105,14 +120,29 @@ public static class PortablePdfExportPlanner
         if (pageRange is null)
             return exportPlan;
 
-        var pageRequests = exportPlan.PageRequests
-            .Where(page => page.ExportPageNumber >= pageRange.FromPage && page.ExportPageNumber <= pageRange.ToPage)
-            .Select((page, index) => page with { ExportPageNumber = index + 1 })
-            .ToArray();
+        var sheetPageCounts = exportPlan.PageRequests.CountBy(page => page.PrintRange.Start.Sheet).ToDictionary();
+        var sheetPageOffsets = new Dictionary<SheetId, int>();
+        var pageRequests = new List<PortablePdfExportPageRequest>();
+        foreach (var page in exportPlan.PageRequests)
+        {
+            var sheetId = page.PrintRange.Start.Sheet;
+            var sheetPageIndex = sheetPageOffsets.GetValueOrDefault(sheetId);
+            sheetPageOffsets[sheetId] = sheetPageIndex + 1;
+
+            if (page.ExportPageNumber < pageRange.FromPage || page.ExportPageNumber > pageRange.ToPage)
+                continue;
+
+            pageRequests.Add(page with
+            {
+                ExportPageNumber = pageRequests.Count + 1,
+                OriginalSheetPagination = page.OriginalSheetPagination ?? (sheetPageIndex, sheetPageCounts[sheetId]),
+                OriginalDocumentPagination = page.OriginalDocumentPagination ?? (page.ExportPageNumber, exportPlan.TotalPageCount)
+            });
+        }
         return exportPlan with
         {
             PageRequests = pageRequests,
-            StatusText = $"Ready to export portable PDF: {pageRequests.Length} {(pageRequests.Length == 1 ? "page" : "pages")} from selected page range."
+            StatusText = $"Ready to export portable PDF: {pageRequests.Count} {(pageRequests.Count == 1 ? "page" : "pages")} from selected page range."
         };
     }
 
@@ -188,6 +218,7 @@ public static class PortablePdfExportPlanner
         Workbook? workbook)
     {
         var pageRequests = new List<PortablePdfExportPageRequest>();
+        var firstAreaIndex = 0;
         for (var sheetIndex = 0; sheetIndex < sheetPlans.Count; sheetIndex++)
         {
             var sheetPlan = sheetPlans[sheetIndex];
@@ -211,8 +242,13 @@ public static class PortablePdfExportPlanner
             // grid pages instead of interleaving a copy after each area.
             var isLastAreaForSheet = sheetIndex == sheetPlans.Count - 1 ||
                 sheetPlans[sheetIndex + 1].PrintRange.Start.Sheet != sheetPlan.PrintRange.Start.Sheet;
-            if (isLastAreaForSheet && sheet is { PrintComments: WorksheetPrintComments.AtEnd })
-                AddCommentSummaryPageRequests(sheetPlan, sheetIndex, sheet, pageRequests);
+            if (!isLastAreaForSheet)
+                continue;
+
+            if (sheet is { PrintComments: WorksheetPrintComments.AtEnd })
+                AddCommentSummaryPageRequests(sheetPlans, firstAreaIndex, sheetIndex, sheet, pageRequests);
+
+            firstAreaIndex = sheetIndex + 1;
         }
 
         return pageRequests;
@@ -238,13 +274,11 @@ public static class PortablePdfExportPlanner
         PrintPageGridEntry page,
         List<PortablePdfExportPageRequest> pageRequests)
     {
-        var displayedComments = sheet is { PrintComments: WorksheetPrintComments.AsDisplayed }
-            ? WorksheetPageLayout.GetDisplayedCommentOverlays(
-                sheet.Comments,
-                sheet.ThreadedComments,
+        var displayedComments = sheet is not null && sheet.ShownComments.Count > 0
+            ? PrintDisplayedCommentPlanner.GetOverlays(
+                sheet,
                 CombineSpan(page.RowPlan.TitleRows, page.RowPlan.BodyRows),
-                CombineSpan(page.ColumnPlan.TitleColumns, page.ColumnPlan.BodyColumns),
-                sheet.ShownComments)
+                CombineSpan(page.ColumnPlan.TitleColumns, page.ColumnPlan.BodyColumns))
             : [];
 
         pageRequests.Add(new PortablePdfExportPageRequest(
@@ -267,34 +301,36 @@ public static class PortablePdfExportPlanner
             DisplayedComments: displayedComments));
     }
 
-    /// <summary>
-    /// Appends "at end of sheet" comment-summary page requests for one sheet, mirroring
-    /// PrintRenderer's AddCommentSummaryPage: paginate every note/threaded-comment on the sheet via
-    /// <see cref="PrintCommentSummaryPlanner.BuildPages"/> and add one page request per resulting
-    /// summary page, right after that sheet's grid pages.
-    /// </summary>
     private static void AddCommentSummaryPageRequests(
-        WorkbookSheetExportPrintPlanSummary sheetPlan,
-        int sheetIndex,
+        IReadOnlyList<WorkbookSheetExportPrintPlanSummary> sheetPlans,
+        int firstAreaIndex,
+        int lastAreaIndex,
         Sheet sheet,
         List<PortablePdfExportPageRequest> pageRequests)
     {
-        var (_, pageHeightPt) = SheetPdfPageSetupResolver.ResolvePageSizePoints(sheet);
-        var marginTopPt = sheet.PageMargins.Top * SheetPdfPageSetupResolver.PdfPointsPerInch;
+        var areas = sheetPlans.Skip(firstAreaIndex).Take(lastAreaIndex - firstAreaIndex + 1).ToArray();
+        var printedComments = PrintCommentSummaryPlanner.FilterToPrintedCells(
+            sheet,
+            areas.Select(area => (
+                area.RowPagePlans.SelectMany(page => CombineSpan(page.TitleRows, page.BodyRows)),
+                area.ColumnPagePlans.SelectMany(page => CombineSpan(page.TitleColumns, page.BodyColumns)))));
+        var metrics = WorksheetPrintRenderPlanner.BuildMetrics(sheet);
         var summaryPages = PrintCommentSummaryPlanner.BuildPages(
-            sheet.Comments,
-            sheet.ThreadedComments,
-            pageHeightPt,
-            marginTopPt);
+            printedComments.Comments,
+            printedComments.ThreadedComments,
+            metrics.PageHeight,
+            metrics.MarginTop);
 
+        var sheetPlan = sheetPlans[lastAreaIndex];
+        var gridPageCount = areas.Sum(area => area.PageCount);
         var emptySpans = new PortablePdfExportPageSpans([], [], [], []);
         foreach (var summaryPage in summaryPages)
         {
             pageRequests.Add(new PortablePdfExportPageRequest(
                 pageRequests.Count + 1,
-                sheetIndex,
+                lastAreaIndex,
                 sheetPlan.SheetName,
-                sheetPlan.PageCount + summaryPage.PageIndex + 1,
+                gridPageCount + summaryPage.PageIndex + 1,
                 sheetPlan.PrintRange,
                 sheetPlan.RangeSource,
                 sheetPlan.RowPageCount,

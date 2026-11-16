@@ -14,10 +14,11 @@ public sealed class AvaloniaExportOptionsSourceTests
 
         mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateSelectionPlan(");
         mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
+        mainSource.Should().Contain("PersistPdfExportLanguage(requestPlan);");
         mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         mainSource.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         mainSource.Should().Contain("var exportExecution = await new AtomicExportExecutor()");
-        mainSource.Should().Contain(".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(");
+        mainSource.Should().Contain(".ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(");
         mainSource.Should().Contain("return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(");
         mainSource.Should().Contain("effectiveExportPlan,");
         mainSource.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));");

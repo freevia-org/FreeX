@@ -15,29 +15,44 @@ using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 namespace FreeX.App.Avalonia;
 
 /// <summary>
-/// The workbook theme editor (WPF <c>WorkbookThemeDialog</c>, theme mode): preset row, theme name /
+/// The workbook theme editor (WPF <c>WorkbookThemeDialog</c>): preset row, theme name /
 /// effects / heading and body fonts, a live sample pane and the twelve theme colour boxes, each with
 /// a swatch button that opens the colour picker. Theme construction and colour validation go through
 /// the shared <see cref="WorkbookThemeDialogPlanner"/> and <see cref="WorkbookThemeDialogColorCodec"/>.
 /// </summary>
 public sealed partial class MainWindow
 {
+    private enum WorkbookThemeEditorMode
+    {
+        Theme,
+        Colors,
+        Effects,
+    }
+
     /// <summary>Shows the editor seeded with <paramref name="initialTheme"/>; null when cancelled.</summary>
-    private async Task<WorkbookTheme?> ShowWorkbookThemeDialogAsync(WorkbookTheme initialTheme)
+    private async Task<WorkbookTheme?> ShowWorkbookThemeDialogAsync(
+        WorkbookTheme initialTheme,
+        WorkbookThemeEditorMode mode)
     {
         ArgumentNullException.ThrowIfNull(initialTheme);
 
-        // WPF WorkbookThemeDialog.xaml: a 760x600 *outer* NoResize window with a 14px root margin and
-        // a bottom-right row of two 86px buttons 12px below the content.
+        var headingKey = mode switch
+        {
+            WorkbookThemeEditorMode.Colors => "WorkbookTheme_ThemeColors",
+            WorkbookThemeEditorMode.Effects => "WorkbookTheme_Effects2",
+            _ => "WorkbookTheme_Theme",
+        };
+        var title = UiText.Get(mode == WorkbookThemeEditorMode.Theme ? "WorkbookTheme_CustomizeTheme" : headingKey);
+        var height = (mode == WorkbookThemeEditorMode.Effects ? 360 : 600) - WpfNoResizeClientFrameHeight;
         var dialog = new Window
         {
-            Title = UiText.Get("WorkbookTheme_CustomizeTheme"),
+            Title = title,
             Width = 760 - WpfNoResizeFrameWidth,
-            Height = 600 - WpfNoResizeClientFrameHeight,
+            Height = height,
             MinWidth = 760 - WpfNoResizeFrameWidth,
-            MinHeight = 600 - WpfNoResizeClientFrameHeight,
+            MinHeight = height,
             MaxWidth = 760 - WpfNoResizeFrameWidth,
-            MaxHeight = 600 - WpfNoResizeClientFrameHeight,
+            MaxHeight = height,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -59,7 +74,7 @@ public sealed partial class MainWindow
         // --- Row 0: heading -------------------------------------------------------------------
         var heading = new TextBlock
         {
-            Text = StripDisplayMnemonic(UiText.Get("WorkbookTheme_Theme")),
+            Text = StripDisplayMnemonic(UiText.Get(headingKey)),
             FontSize = 18,
             FontWeight = FontWeight.SemiBold,
             FontFamily = FormulaBarFontFamily,
@@ -116,14 +131,23 @@ public sealed partial class MainWindow
             metadataPanel.Children.Add(control);
         }
 
-        AddMetadata(Caption("WorkbookTheme_Name", new Thickness(0, 0, 8, 8)), 0, 0);
-        AddMetadata(themeNameBox, 0, 1);
-        AddMetadata(Caption("WorkbookTheme_Effects", new Thickness(0, 0, 8, 8)), 0, 2);
-        AddMetadata(effectsBox, 0, 3);
-        AddMetadata(Caption("WorkbookTheme_HeadingFont", new Thickness(0, 0, 8, 0)), 1, 0);
-        AddMetadata(headingFontBox, 1, 1);
-        AddMetadata(Caption("WorkbookTheme_BodyFont", new Thickness(0, 0, 8, 0)), 1, 2);
-        AddMetadata(bodyFontBox, 1, 3);
+        if (mode == WorkbookThemeEditorMode.Effects)
+        {
+            AddMetadata(Caption("WorkbookTheme_Effects", new Thickness(0, 0, 8, 8)), 0, 0);
+            Grid.SetColumnSpan(effectsBox, 3);
+            AddMetadata(effectsBox, 0, 1);
+        }
+        else if (mode == WorkbookThemeEditorMode.Theme)
+        {
+            AddMetadata(Caption("WorkbookTheme_Name", new Thickness(0, 0, 8, 8)), 0, 0);
+            AddMetadata(themeNameBox, 0, 1);
+            AddMetadata(Caption("WorkbookTheme_Effects", new Thickness(0, 0, 8, 8)), 0, 2);
+            AddMetadata(effectsBox, 0, 3);
+            AddMetadata(Caption("WorkbookTheme_HeadingFont", new Thickness(0, 0, 8, 0)), 1, 0);
+            AddMetadata(headingFontBox, 1, 1);
+            AddMetadata(Caption("WorkbookTheme_BodyFont", new Thickness(0, 0, 8, 0)), 1, 2);
+            AddMetadata(bodyFontBox, 1, 3);
+        }
 
         // --- Row 3: live sample pane ----------------------------------------------------------
         var previewHeadingText = new TextBlock
@@ -376,7 +400,8 @@ public sealed partial class MainWindow
                     var choice = await ShowColorPickerDialogAsync(
                         UiText.Get("ColorPicker_SelectColor"),
                         initialColor,
-                        allowNoColor: false);
+                        allowNoColor: false,
+                        owner: dialog);
                     if (choice?.Color is { } pickedColor)
                     {
                         colorBox.Text = WorkbookThemeDialogColorCodec.FormatColor(pickedColor);
@@ -445,6 +470,59 @@ public sealed partial class MainWindow
             };
         }
 
+        bool TryReadTheme(out WorkbookTheme theme, out WorkbookThemeDialogValidationError? error)
+        {
+            if (mode == WorkbookThemeEditorMode.Effects)
+            {
+                theme = initialTheme.WithEffects(effectsBox.Text ?? string.Empty);
+                if (theme.EffectsName == initialTheme.EffectsName)
+                    theme = initialTheme;
+                error = null;
+                return true;
+            }
+
+            var colorTextBySlot = colorFields.ToDictionary(
+                field => field.Slot,
+                field => field.TextBox.Text ?? string.Empty);
+            if (!WorkbookThemeDialogPlanner.TryCreateTheme(
+                    initialTheme,
+                    themeNameBox.Text,
+                    headingFontBox.Text,
+                    bodyFontBox.Text,
+                    effectsBox.Text,
+                    colorTextBySlot,
+                    out theme,
+                    out error))
+                return false;
+
+            if (mode == WorkbookThemeEditorMode.Colors)
+            {
+                theme = initialTheme with
+                {
+                    Colors = theme.Colors,
+                    NativeColorSchemeXml = theme.NativeColorSchemeXml,
+                };
+            }
+            else
+            {
+                // Keep imported native schemes byte-for-byte when only another field changed.
+                if (theme.MajorFontName == initialTheme.MajorFontName &&
+                    theme.MinorFontName == initialTheme.MinorFontName)
+                    theme = theme with { NativeFontSchemeXml = initialTheme.NativeFontSchemeXml };
+                if (theme.EffectsName == initialTheme.EffectsName)
+                    theme = theme with
+                    {
+                        NativeFormatSchemeXml = initialTheme.NativeFormatSchemeXml,
+                        EffectDefaults = initialTheme.EffectDefaults,
+                    };
+            }
+
+            return true;
+        }
+
+        WorkbookTheme ReadThemeOrInitial() =>
+            TryReadTheme(out var current, out _) ? current : initialTheme;
+
         // --- Row 1: preset buttons (92 / 126 / 92 px, 8px apart) load a built-in theme ----------
         var presetRow = new StackPanel
         {
@@ -453,9 +531,23 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 10),
         };
         AutomationProperties.SetAutomationId(presetRow, "ThemePresetPanel");
-        double[] presetWidths = [92, 126, 92];
-        string[] presetAutomationIds = ["OfficePresetButton", "ColorfulPresetButton", "GrayscalePresetButton"];
-        foreach (var option in WorkbookThemeCatalog.ThemePresets.Where(option => !option.IsCustomizeAction))
+        IEnumerable<(string LabelResourceKey, Func<WorkbookTheme> CreateTheme)> presets = mode switch
+        {
+            WorkbookThemeEditorMode.Colors => WorkbookThemeCatalog.ColorPresets
+                .Where(option => !option.IsCustomizeAction)
+                .Select(option => (option.LabelResourceKey, (Func<WorkbookTheme>)(() => option.ApplyColors(ReadThemeOrInitial())))),
+            WorkbookThemeEditorMode.Effects => WorkbookThemeCatalog.EffectPresets
+                .Where(option => !option.IsCustomizeAction)
+                .Select(option => (option.LabelResourceKey, (Func<WorkbookTheme>)(() => option.ApplyEffects(initialTheme)))),
+            _ => WorkbookThemeCatalog.ThemePresets
+                .Where(option => !option.IsCustomizeAction)
+                .Select(option => (option.LabelResourceKey, option.CreateTheme)),
+        };
+        double[] presetWidths = mode == WorkbookThemeEditorMode.Effects ? [92, 92, 92] : [92, 126, 92];
+        string[] presetAutomationIds = mode == WorkbookThemeEditorMode.Effects
+            ? ["OfficePresetButton", "SubtlePresetButton", "RefinedPresetButton"]
+            : ["OfficePresetButton", "ColorfulPresetButton", "GrayscalePresetButton"];
+        foreach (var option in presets)
         {
             var presetIndex = presetRow.Children.Count;
             var width = presetIndex < presetWidths.Length ? presetWidths[presetIndex] : 92;
@@ -485,20 +577,9 @@ public sealed partial class MainWindow
             // Keep the dialog responsive if the handler fails; RunGuarded reports anything that escapes.
             try
             {
-                var colorTextBySlot = colorFields.ToDictionary(
-                    field => field.Slot,
-                    field => field.TextBox.Text ?? string.Empty);
-                if (WorkbookThemeDialogPlanner.TryCreateTheme(
-                        initialTheme,
-                        themeNameBox.Text,
-                        headingFontBox.Text,
-                        bodyFontBox.Text,
-                        effectsBox.Text,
-                        colorTextBySlot,
-                        out var theme,
-                        out var error))
+                if (TryReadTheme(out var theme, out var error))
                 {
-                    dialog.Close(theme);
+                    dialog.Close(theme == initialTheme ? initialTheme : theme);
                     return;
                 }
 
@@ -509,7 +590,7 @@ public sealed partial class MainWindow
                 await AvaloniaUserMessageDialog.ShowWarningAsync(
                     dialog,
                     error.Message,
-                    UiText.Get("WorkbookTheme_CustomizeThemeTitle"));
+                    title);
                 foreach (var field in colorFields)
                 {
                     if (field.Slot != error.Slot)
@@ -539,13 +620,12 @@ public sealed partial class MainWindow
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([saveButton, cancelButton]);
         buttons.Margin = new Thickness(0, 12, 0, 0);
 
-        var content = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto") };
-        Control[] contentRows = [heading, presetRow, metadataPanel, previewPane, colorsSection];
-        for (var row = 0; row < contentRows.Length; row++)
-        {
-            Grid.SetRow(contentRows[row], row);
-            content.Children.Add(contentRows[row]);
-        }
+        var content = new StackPanel { Children = { heading, presetRow } };
+        if (mode != WorkbookThemeEditorMode.Colors)
+            content.Children.Add(metadataPanel);
+        content.Children.Add(previewPane);
+        if (mode != WorkbookThemeEditorMode.Effects)
+            content.Children.Add(colorsSection);
 
         var root = new Grid
         {
@@ -560,11 +640,20 @@ public sealed partial class MainWindow
 
         LoadTheme(initialTheme);
 
-        // WPF FocusInitialKeyboardTarget (theme mode): the name box, with its text selected.
         dialog.Opened += (_, _) =>
         {
-            themeNameBox.Focus();
-            themeNameBox.SelectAll();
+            if (mode == WorkbookThemeEditorMode.Effects)
+            {
+                effectsBox.Focus();
+                effectsBox.IsDropDownOpen = true;
+                return;
+            }
+
+            var target = mode == WorkbookThemeEditorMode.Colors
+                ? colorFields.First(field => field.Slot == WorkbookThemeColorSlot.Accent1).TextBox
+                : themeNameBox;
+            target.Focus();
+            target.SelectAll();
         };
 
         return await dialog.ShowDialog<WorkbookTheme?>(this);

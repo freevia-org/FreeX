@@ -118,7 +118,11 @@ public sealed partial class MainWindow
             "ExportOptions_Normal",
             "ExportOptions_BookmarksVisible",
             "ExportOptions_FullScreen");
-        var pdfLanguageBox = CreateExportOptionsTextBox(88, availability.PdfLanguageEnabled, ExportPlanner.DefaultPdfLanguage);
+        var pdfLanguageBox = CreateExportOptionsTextBox(
+            88,
+            availability.PdfLanguageEnabled,
+            ExportPlanner.NormalizePdfLanguage(_optionsRuntimeSession.LiveOptions.PdfExportLanguage));
+        AutomationProperties.SetAutomationId(pdfLanguageBox, "PdfExportLanguageBox");
         var bitmapTextBox = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("ExportOptions_BitmapTextWhenFontsMayNotBeEmbedded")),
@@ -329,6 +333,15 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
 
         return result;
+    }
+
+    private void PersistPdfExportLanguage(WorkbookExportRequestPlan requestPlan)
+    {
+        if (requestPlan.ShouldPersistPdfLanguage)
+        {
+            _optionsRuntimeSession.MutateFresh(options =>
+                options.PdfExportLanguage = requestPlan.Request.Options.PdfLanguage);
+        }
     }
 
     private async Task TryOpenExportedPdfAsync(string path)

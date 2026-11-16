@@ -211,7 +211,7 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void MainWindow_WiresWorkbookSharePlannerToAvaloniaFallback()
+    public void MainWindow_WiresWorkbookSharePlannerToNativeShareAndFallback()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -275,19 +275,18 @@ public sealed class AvaloniaShellSourceTests
         serviceSource.Should().Contain("internal interface IWorkbookShareSheetService");
         serviceSource.Should().Contain("Task<WorkbookShareSheetResult> ShowShareSheetAsync(Window owner, string filePath);");
         serviceSource.Should().Contain("internal static class WorkbookShareSheetServiceFactory");
-        serviceSource.Should().Contain("#if FREEX_MACOS_SHARE_SHEET");
-        serviceSource.Should().Contain("return new MacOsWorkbookShareSheetService(shareSheetLabel);");
+        serviceSource.Should().Contain("OperatingSystem.IsMacOS()");
+        serviceSource.Should().Contain("? new MacOsWorkbookShareSheetService(shareSheetLabel)");
         serviceSource.Should().Contain("internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService");
         serviceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: false);");
         serviceSource.Should().Contain("WorkbookShareSheetResult.Unavailable(_unavailableMessage)");
-        macOsServiceSource.Should().Contain("internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetService");
-        macOsServiceSource.Should().Contain("Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: true);");
-        macOsServiceSource.Should().Contain("NSSharingServicePicker");
-        macOsServiceSource.Should().Contain("NSUrl.FromFilename(filePath)");
+        macOsServiceSource.Should().Contain("[SupportedOSPlatform(\"macos\")]");
+        macOsServiceSource.Should().Contain("CanShowShareSheet: true");
+        macOsServiceSource.Should().Contain("Allocate(\"NSSharingServicePicker\")");
+        macOsServiceSource.Should().Contain("fileURLWithPath:");
         macOsServiceSource.Should().Contain("owner.TryGetPlatformHandle()");
-        macOsServiceSource.Should().Contain("platformHandle?.HandleDescriptor != \"NSWindow\"");
-        macOsServiceSource.Should().Contain("Runtime.GetNSObject<NSWindow>(platformHandle.Handle)");
-        macOsServiceSource.Should().Contain("ShowRelativeToRect(anchorView.Bounds, anchorView, NSRectEdge.MinYEdge)");
+        macOsServiceSource.Should().Contain("IMacOSTopLevelPlatformHandle { NSView: not 0 }");
+        macOsServiceSource.Should().Contain("showRelativeToRect:ofView:preferredEdge:");
 
         source.Should().NotContain("DataTransferManager");
         source.Should().NotContain("WindowInteropHelper");
@@ -342,7 +341,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorkbookExportInteractionPlanner.CreateSelectionPlan(");
         source.Should().Contain("var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);");
         source.Should().Contain("WorkbookExportWorkflow.ExecuteBooleanAsync(");
-        source.Should().Contain("CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind)");
+        source.Should().Contain("CreatePortablePdfExportPlan(effectiveRequest.Options, outputKind)");
         source.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         source.Should().Contain("effectiveRequest.Options,");
         source.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
@@ -369,12 +368,12 @@ public sealed class AvaloniaShellSourceTests
          source.Contains("WorkbookExportPrintPlanner.CreatePlanFromPageSetup("))
             .Should().BeTrue("MainWindow must call WorkbookExportPrintPlanner to build the export-print plan");
         source.Should().Contain("WorkbookExportPrintSurface.MacOs");
-        source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan)");
+        source.Should().Contain("PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook)");
         // The menu handler routes through a single PDF export seam; the Skia-vs-portable decision lives there.
         // The real saved-file directory is threaded through so &Z/&[Path] header/footer tokens resolve
         // (R15-header-footer-print-titles-2) instead of always expanding to "".
-        source.Should().Contain("var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(");
-        source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter())");
+        source.Should().Contain("return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(");
+        source.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));");
         var pdfRouterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Pdf", "AvaloniaPdfDocumentExporter.cs"));
         // Unicode-capable export goes through Skia (auto font embedding); portable WinAnsi is the fallback.
         pdfRouterSource.Should().Contain("target => SkiaPdfDocumentExporter.Save(");
@@ -4091,7 +4090,7 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("return ToCommand(\"Insert Hyperlink\", commands);");
 
         source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", RequiresGestureInSmoke: false)");
+        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", new NativeMenuGesturePlan(NativeMenuGestureKey.K, NativeMenuGestureModifiers.Meta))");
         source.Should().Contain("_insertHyperlinkMenuItem.Click += (_, _) => RunGuarded(ShowInsertHyperlinkDialogAsync);");
         source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.InsertHyperlink)");

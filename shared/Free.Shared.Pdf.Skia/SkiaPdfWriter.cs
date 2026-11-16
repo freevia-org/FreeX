@@ -135,6 +135,29 @@ public static class SkiaPdfWriter
             stream.SetLength(0);
         }
 
+        if (document.Properties is not { } properties ||
+            (string.IsNullOrWhiteSpace(properties.Language) && properties.ViewerSettings is null && properties.Outlines.Count == 0))
+            return WriteDocument(document, stream, imageDiagnostics);
+
+        if (stream.CanRead && stream.CanSeek)
+        {
+            var pageCount = WriteDocument(document, stream, imageDiagnostics);
+            SkiaPdfCatalog.AppendUpdate(stream, properties, pageCount);
+            return pageCount;
+        }
+
+        // The catalog update must read the generated PDF. Stage only for destinations that
+        // cannot be read and repositioned, such as write-only and non-seekable output streams.
+        using var buffer = new MemoryStream();
+        var bufferedPageCount = WriteDocument(document, buffer, imageDiagnostics);
+        SkiaPdfCatalog.AppendUpdate(buffer, properties, bufferedPageCount);
+        buffer.Position = 0;
+        buffer.CopyTo(stream);
+        return bufferedPageCount;
+    }
+
+    private static int WriteDocument(PdfContentDocument document, Stream stream, ICollection<string>? imageDiagnostics)
+    {
         using var typefaces = PdfTypefaceSet.Create();
 
         var pageCount = 0;

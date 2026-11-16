@@ -42,7 +42,7 @@ public sealed record WorksheetPrintMaterializationProfile(
     public static WorksheetPrintMaterializationProfile AvaloniaPreview { get; } = new(
         BakeScaleIntoGeometry: true,
         RenderHeaderFooterPictures: true,
-        RenderDisplayedComments: false,
+        RenderDisplayedComments: true,
         RenderPrintableLinks: false,
         PreserveNativeCellFidelity: false,
         PreserveNativeChartFidelity: false,
@@ -103,7 +103,10 @@ public sealed record WorksheetPrintDrawingLayerPlan(
 public sealed record WorksheetPrintCommentLayerPlan(
     bool RenderDisplayedComments,
     IReadOnlyDictionary<CellAddress, string> DisplayedCommentText,
-    IReadOnlyList<PageDisplayedCommentBlock> DisplayedComments);
+    IReadOnlyList<PageDisplayedCommentBlock> DisplayedComments)
+{
+    internal IReadOnlyList<PrintPreviewPaintInstruction> PreviewInstructions { get; init; } = [];
+}
 
 public sealed record WorksheetPrintHyperlinkPlan(
     string Target,
@@ -132,9 +135,6 @@ public sealed record WorksheetPrintPageContentPlan(
 
 public static class WorksheetPrintPageContentPlanner
 {
-    private static readonly IReadOnlyDictionary<CellAddress, ThreadedComment> EmptyThreadedComments =
-        new Dictionary<CellAddress, ThreadedComment>();
-
     public static WorksheetPrintPageContentPlan? Build(
         Workbook workbook,
         Sheet sheet,
@@ -267,20 +267,16 @@ public static class WorksheetPrintPageContentPlanner
             fontScale: headerFooterFontScale,
             baseLineHeight: profile.HeaderFooterBaseLineHeight,
             sizeToContent: profile.SizeHeaderFooterBandsToContent);
-        var displayedCommentText = ResolveDisplayedCommentText(sheet);
-        var displayedComments = profile.RenderDisplayedComments &&
-                                !sheet.PrintDraftQuality &&
-                                sheet.PrintComments == WorksheetPrintComments.AsDisplayed
-            ? BuildDisplayedComments(
-                displayedCommentText,
-                sheet.ShownComments,
-                page.Rows,
-                page.Columns,
-                measurement,
-                gridLeft,
-                gridTop,
-                metrics.PageWidth,
-                metrics.PageHeight)
+        var commentScale = profile.BakeScaleIntoGeometry ? scaleRatio : 1;
+        // WPF lays out comments before scaling the worksheet at its content origin. Give the
+        // preview's baked geometry the same scaled page bounds for clamping comment boxes.
+        var commentPageBounds = new LayoutRect(
+            contentLeft * (1 - commentScale),
+            contentTop * (1 - commentScale),
+            metrics.PageWidth * commentScale,
+            metrics.PageHeight * commentScale);
+        var displayedComments = profile.RenderDisplayedComments
+            ? BuildDisplayedComments(sheet, page, measurement, gridLeft, gridTop, commentPageBounds, commentScale)
             : [];
         layout = layout with { Comments = displayedComments };
 
@@ -347,8 +343,14 @@ public static class WorksheetPrintPageContentPlanner
                 TextBoxes: textBoxes),
             new WorksheetPrintCommentLayerPlan(
                 displayedComments.Count > 0,
-                displayedCommentText,
-                displayedComments),
+                ResolveDisplayedCommentText(sheet),
+                displayedComments)
+            {
+                PreviewInstructions = profile.BakeScaleIntoGeometry
+                    ? displayedComments.SelectMany(comment => PrintDisplayedCommentPlanner.BuildInstructions(
+                        comment, sheet.PrintBlackAndWhite, textMeasurer, commentScale)).ToArray()
+                    : [],
+            },
             profile.RenderPrintableLinks
                 ? WorksheetPrintHyperlinkPlanner.BuildPrintableHyperlinks(workbook, sheet)
                 : new Dictionary<(uint Row, uint Col), WorksheetPrintHyperlinkPlan>(),
@@ -482,41 +484,24 @@ public static class WorksheetPrintPageContentPlanner
     }
 
     private static IReadOnlyList<PageDisplayedCommentBlock> BuildDisplayedComments(
-        IReadOnlyDictionary<CellAddress, string> comments,
-        IReadOnlySet<CellAddress> shownComments,
-        IReadOnlyList<uint> pageRows,
-        IReadOnlyList<uint> pageColumns,
+        Sheet sheet,
+        WorksheetPrintPagePlan page,
         PrintGridMeasurement measurement,
         double gridLeft,
         double gridTop,
-        double pageWidth,
-        double pageHeight)
+        LayoutRect pageBounds,
+        double scale)
     {
-        var overlays = WorksheetPageLayout.GetDisplayedCommentOverlays(
-            comments,
-            EmptyThreadedComments,
-            pageRows,
-            pageColumns,
-            shownComments);
+        var overlays = PrintDisplayedCommentPlanner.GetOverlays(sheet, page.Rows, page.Columns);
         var result = new List<PageDisplayedCommentBlock>(overlays.Count);
         foreach (var overlay in overlays)
         {
-            var columnWidth = measurement.ColumnWidthAt(overlay.ColumnIndex);
-            var cellLeft = gridLeft + measurement.ColumnOffset(overlay.ColumnIndex);
-            var cellTop = gridTop + measurement.RowOffset(overlay.RowIndex);
-            var boxWidth = Math.Min(180, Math.Max(80, columnWidth * 2.2));
-            const double boxHeight = 48.0;
-            var boxLeft = Math.Min(pageWidth - boxWidth - 8, cellLeft + columnWidth + 4);
-            var boxTop = Math.Min(pageHeight - boxHeight - 8, cellTop + 4);
-            result.Add(new PageDisplayedCommentBlock(
-                overlay.Kind,
-                overlay.Text,
-                [
-                    new LayoutPoint(cellLeft + columnWidth - 7, cellTop),
-                    new LayoutPoint(cellLeft + columnWidth, cellTop),
-                    new LayoutPoint(cellLeft + columnWidth, cellTop + 7),
-                ],
-                new LayoutRect(Math.Max(8, boxLeft), Math.Max(8, boxTop), boxWidth, boxHeight)));
+            var cellBounds = new LayoutRect(
+                gridLeft + measurement.ColumnOffset(overlay.ColumnIndex),
+                gridTop + measurement.RowOffset(overlay.RowIndex),
+                measurement.ColumnWidthAt(overlay.ColumnIndex),
+                measurement.RowHeightAt(overlay.RowIndex));
+            result.Add(PrintDisplayedCommentPlanner.BuildBlock(overlay, cellBounds, pageBounds, scale));
         }
 
         return result;

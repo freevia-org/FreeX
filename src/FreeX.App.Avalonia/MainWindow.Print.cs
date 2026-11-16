@@ -54,15 +54,8 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
-        var hasSelection = HasPrintSelection(_session.SelectedRange);
-        var workflowPlan = WorkbookPrintWorkflow.CreatePlan(
-            _session.Workbook,
-            hasSelection,
-            new PrintJobRequest(
-                WorkbookExportPrintScope.ActiveSheet,
-                ActiveSheetIndex: ResolveActiveSheetIndex()),
-            PrintExportHostCapabilities.AvaloniaPortable());
-        var scopePlan = workflowPlan.Readiness.ScopePlan;
+        var scopePlan = WorkbookExportScopePlanner.Build(
+            _session.Workbook, HasPrintSelection(_session.SelectedRange), WorkbookExportPrintSurface.MacOs);
 
         if (!scopePlan.CanExport)
         {
@@ -245,16 +238,23 @@ public sealed partial class MainWindow
             ? _session.SelectedRange
             : (GridRange?)null;
 
+        var groupedSheetIds = scope == WorkbookExportPrintScope.ActiveSheet ? GetGroupedPrintSheetIds() : null;
         return new PrintJobRequest(
-            scope,
+            groupedSheetIds is null ? scope : WorkbookExportPrintScope.GroupedSheets,
             copies,
             collate,
             pageRangeKind,
             fromPage,
             toPage,
             ActiveSheetIndex: ResolveActiveSheetIndex(),
-            SelectedRange: selectedRange);
+            SelectedRange: selectedRange)
+        {
+            GroupedSheetIds = groupedSheetIds
+        };
     }
+
+    private IReadOnlySet<SheetId>? GetGroupedPrintSheetIds() =>
+        _session.IsWorkbookGrouped ? _session.GetCurrentGroupedEditSheetIds().ToHashSet() : null;
 
     /// <summary>
     /// Renders the chosen scope to a print-ready PDF (the same exporter File ▸ Export uses), then either
@@ -419,13 +419,15 @@ public sealed partial class MainWindow
         return string.IsNullOrWhiteSpace(name) ? "FreeX" : name;
     }
 
-    private static string FormatPrintScopeLabel(WorkbookExportPrintScope scope, bool isAvailable) =>
+    private string FormatPrintScopeLabel(WorkbookExportPrintScope scope, bool isAvailable) =>
         scope switch
         {
             WorkbookExportPrintScope.SelectedRange => isAvailable
                 ? UiText.Get("Print_ScopeSelection")
                 : UiText.Get("Print_ScopeSelectionUnavailable"),
             WorkbookExportPrintScope.VisibleWorkbook => UiText.Get("Print_ScopeWorkbook"),
+            WorkbookExportPrintScope.ActiveSheet when _session.IsWorkbookGrouped =>
+                UiText.Get("PrintPreview_PrintWhatActiveSheets"),
             _ => UiText.Get("Print_ScopeActiveSheet")
         };
 

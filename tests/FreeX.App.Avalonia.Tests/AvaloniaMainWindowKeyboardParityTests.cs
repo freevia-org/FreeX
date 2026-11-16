@@ -3,12 +3,15 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 
 using FluentAssertions;
 
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -66,6 +69,54 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     public void ApplicationMatcher_RejectsExtraOrWrongModifiers(Key key, KeyModifiers modifiers)
     {
         MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(Key.D, KeyModifiers.Meta, 2, 1)]
+    [InlineData(Key.R, KeyModifiers.Meta, 1, 2)]
+    [InlineData(Key.D, KeyModifiers.Control, 2, 1)]
+    [InlineData(Key.R, KeyModifiers.Control, 1, 2)]
+    public async Task FillShortcut_CopiesTheSourceToTheSelectedDestination(
+        Key key,
+        KeyModifiers modifiers,
+        int row,
+        int column)
+    {
+        await Run(async (window, sheet) =>
+        {
+            var source = new CellAddress(sheet.Id, 1, 1);
+            var destination = new CellAddress(sheet.Id, (uint)row, (uint)column);
+            sheet.SetCell(source, new TextValue("Fill source"));
+            window.Session.SelectRange(new GridRange(source, destination));
+
+            await Press(window, key, modifiers);
+
+            sheet.GetValue(destination).Should().Be(new TextValue("Fill source"));
+        });
+    }
+
+    [Theory]
+    [InlineData(KeyModifiers.Meta)]
+    [InlineData(KeyModifiers.Control)]
+    public async Task InsertHyperlinkShortcut_OpensTheWorkbookHyperlinkDialog(KeyModifiers modifiers)
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+            var shortcut = Press(window, Key.K, modifiers);
+            try
+            {
+                var dialog = window.OwnedWindows.OfType<Window>().Should().ContainSingle().Which;
+                dialog.Title.Should().Be(UiText.Get("Hyperlink_InsertHyperlink"));
+            }
+            finally
+            {
+                foreach (var dialog in window.OwnedWindows.ToArray())
+                    dialog.Close();
+            }
+
+            await shortcut;
+        });
     }
 
     [Fact]
@@ -338,6 +389,85 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
         });
     }
 
+    [Fact]
+    public async Task ShiftF8_AddsAreasAndResizesOnlyTheLastArea()
+    {
+        await Run(async (window, sheet) =>
+        {
+            var b2 = new CellAddress(sheet.Id, 2, 2);
+            var b3 = new CellAddress(sheet.Id, 3, 2);
+            var a3 = new CellAddress(sheet.Id, 3, 1);
+            var c3 = new CellAddress(sheet.Id, 3, 3);
+            var originalArea = new GridRange(b2, b2);
+            var additionalArea = new GridRange(b3, b3);
+            window.Session.SelectCell(b2);
+
+            await Press(window, Key.F8, KeyModifiers.Shift);
+            await Press(window, Key.Down, KeyModifiers.None);
+            AssertSelection(additionalArea, b3);
+
+            await Press(window, Key.Left, KeyModifiers.Shift);
+            AssertSelection(new GridRange(a3, b3), b3);
+
+            await Press(window, Key.Right, KeyModifiers.Shift);
+            AssertSelection(additionalArea, b3);
+
+            await Press(window, Key.Right, KeyModifiers.Shift);
+            var finalArea = new GridRange(b3, c3);
+            AssertSelection(finalArea, b3);
+
+            await Press(window, Key.Escape, KeyModifiers.None);
+            window.KeyboardSelectionModeForTest.Should().Be(ExcelSelectionMode.Normal);
+            AssertSelection(finalArea, b3);
+
+            void AssertSelection(GridRange primary, CellAddress activeCell)
+            {
+                window.Session.SelectedRanges.Should().Equal(originalArea, primary);
+                window.Session.SelectedRange.Should().Be(primary);
+                window.Session.ActiveCell.Should().Be(activeCell);
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData(Key.Enter, KeyModifiers.None, 4u, 2u)]
+    [InlineData(Key.Enter, KeyModifiers.Shift, 2u, 2u)]
+    [InlineData(Key.Tab, KeyModifiers.None, 3u, 3u)]
+    [InlineData(Key.Tab, KeyModifiers.Shift, 3u, 1u)]
+    public async Task ShiftF8_EnterAndTabMoveFromPrimaryRangeAndLeaveModeArmed(
+        Key key,
+        KeyModifiers modifiers,
+        uint expectedRow,
+        uint expectedCol)
+    {
+        var options = new AppOptions { MoveSelectionAfterEnter = true, AfterEnterDirection = AppOptionsEnterDirection.Down };
+        var optionsSession = new FreeXOptionsRuntimeSession(
+            initialOptions: options,
+            load: () => options.Clone(),
+            save: _ => true);
+        await Run(async (window, sheet) =>
+        {
+            var c2 = new CellAddress(sheet.Id, 2, 3);
+            var b3 = new CellAddress(sheet.Id, 3, 2);
+            var c3 = new CellAddress(sheet.Id, 3, 3);
+            window.Session.SelectCell(c2);
+            await Press(window, Key.F8, KeyModifiers.Shift);
+            await Press(window, Key.Down, KeyModifiers.None);
+            await Press(window, Key.Left, KeyModifiers.Shift);
+            window.Session.SelectedRanges.Should().Equal(new GridRange(c2, c2), new GridRange(b3, c3));
+            window.Session.ActiveCell.Should().Be(c3);
+
+            await Press(window, key, modifiers);
+
+            var expected = new CellAddress(sheet.Id, expectedRow, expectedCol);
+            var expectedRange = new GridRange(expected, expected);
+            window.Session.SelectedRanges.Should().Equal(expectedRange);
+            window.Session.SelectedRange.Should().Be(expectedRange);
+            window.Session.ActiveCell.Should().Be(expected);
+            window.KeyboardSelectionModeForTest.Should().Be(ExcelSelectionMode.Add);
+        }, optionsSession);
+    }
+
     private static object[] Route(
         Key key,
         KeyModifiers modifiers,
@@ -353,11 +483,13 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
         return result;
     }
 
-    private static async Task Run(Func<MainWindow, Sheet, Task> test)
+    private static async Task Run(
+        Func<MainWindow, Sheet, Task> test,
+        FreeXOptionsRuntimeSession? optionsSession = null)
     {
         await Session.Dispatch(async () =>
         {
-            var window = new MainWindow([]);
+            var window = new MainWindow([], null!, optionsSession);
             var sheet = window.Session.Workbook.AddSheet("KeyboardParity");
             window.Session.SelectSheet(sheet.Id);
             try

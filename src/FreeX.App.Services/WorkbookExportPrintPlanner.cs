@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -12,7 +13,8 @@ public enum WorkbookExportPrintScope
 {
     ActiveSheet,
     SelectedRange,
-    VisibleWorkbook
+    VisibleWorkbook,
+    GroupedSheets
 }
 
 public enum WorkbookExportPrintRangeSource
@@ -86,7 +88,16 @@ public sealed record WorkbookExportPrintIntent(
     WorkbookExportPrintOutputKind OutputKind,
     int? ActiveSheetIndex = null,
     GridRange? SelectedRange = null,
-    bool IgnorePrintAreas = false);
+    bool IgnorePrintAreas = false)
+{
+    public IReadOnlySet<SheetId>? GroupedSheetIds { get; init; }
+
+    /// <summary>
+    /// Resolves header and footer page numbers and totals independently for each worksheet.
+    /// Windows PDF export of grouped active sheets uses this numbering.
+    /// </summary>
+    public bool UseSheetPageNumbering { get; init; }
+}
 
 public sealed record WorkbookExportPrintPageCapacity(
     uint RowsPerPage,
@@ -169,7 +180,8 @@ public static class WorkbookExportPrintPlanner
                 []);
         }
 
-        var requestedRanges = ResolveRequestedRanges(workbook, intent, out var invalidStatus, out var invalidStatusText);
+        var requestedRanges = ResolveRequestedRanges(
+            workbook, intent, includeBlankSheets: true, out var invalidStatus, out var invalidStatusText);
         if (invalidStatus is not null)
         {
             return CreatePlan(
@@ -257,7 +269,8 @@ public static class WorkbookExportPrintPlanner
                 []);
         }
 
-        var requestedRanges = ResolveRequestedRanges(workbook, intent, out var invalidStatus, out var invalidStatusText);
+        var requestedRanges = ResolveRequestedRanges(
+            workbook, intent, includeBlankSheets: false, out var invalidStatus, out var invalidStatusText);
         if (invalidStatus is not null)
         {
             return CreatePlan(
@@ -313,6 +326,7 @@ public static class WorkbookExportPrintPlanner
     private static IReadOnlyList<SheetRangeRequest> ResolveRequestedRanges(
         Workbook workbook,
         WorkbookExportPrintIntent intent,
+        bool includeBlankSheets,
         out WorkbookExportPrintValidationStatus? invalidStatus,
         out string invalidStatusText)
     {
@@ -324,9 +338,12 @@ public static class WorkbookExportPrintPlanner
             WorkbookExportPrintScope.SelectedRange =>
                 ResolveSelectedRange(workbook, intent.SelectedRange, out invalidStatus, out invalidStatusText),
             WorkbookExportPrintScope.VisibleWorkbook =>
-                ResolveVisibleWorkbookRanges(workbook, intent.IgnorePrintAreas),
+                ResolveVisibleWorkbookRanges(workbook, intent.IgnorePrintAreas, includeBlankSheets),
+            WorkbookExportPrintScope.GroupedSheets => intent.GroupedSheetIds is { Count: > 0 } sheetIds
+                ? ResolveVisibleWorkbookRanges(workbook, intent.IgnorePrintAreas, includeBlankSheets: true, sheetIds)
+                : [],
             _ =>
-                ResolveActiveSheetRange(workbook, intent, out invalidStatus, out invalidStatusText)
+                ResolveActiveSheetRange(workbook, intent, includeBlankSheets, out invalidStatus, out invalidStatusText)
         };
     }
 
@@ -359,15 +376,17 @@ public static class WorkbookExportPrintPlanner
 
     private static IReadOnlyList<SheetRangeRequest> ResolveVisibleWorkbookRanges(
         Workbook workbook,
-        bool ignorePrintAreas)
+        bool ignorePrintAreas,
+        bool includeBlankSheets,
+        IReadOnlySet<SheetId>? sheetFilter = null)
     {
         var requests = new List<SheetRangeRequest>();
         foreach (var sheet in workbook.Sheets)
         {
-            if (sheet.IsHidden)
+            if (sheet.IsHidden || sheet.IsVeryHidden || (sheetFilter is not null && !sheetFilter.Contains(sheet.Id)))
                 continue;
 
-            requests.AddRange(ResolveSheetPrintRanges(sheet, ignorePrintAreas));
+            requests.AddRange(ResolveSheetPrintRanges(sheet, ignorePrintAreas, includeBlankSheets));
         }
 
         return requests;
@@ -376,6 +395,7 @@ public static class WorkbookExportPrintPlanner
     private static IReadOnlyList<SheetRangeRequest> ResolveActiveSheetRange(
         Workbook workbook,
         WorkbookExportPrintIntent intent,
+        bool includeBlankSheets,
         out WorkbookExportPrintValidationStatus? invalidStatus,
         out string invalidStatusText)
     {
@@ -390,8 +410,7 @@ public static class WorkbookExportPrintPlanner
             return [];
         }
 
-        var ranges = ResolveSheetPrintRanges(sheet, intent.IgnorePrintAreas);
-        return ranges.Count > 0 ? ranges : [];
+        return ResolveSheetPrintRanges(sheet, intent.IgnorePrintAreas, includeBlankSheets);
     }
 
     private static Sheet? ResolveActiveSheet(Workbook workbook, int? requestedIndex)
@@ -407,7 +426,7 @@ public static class WorkbookExportPrintPlanner
 
         foreach (var sheet in workbook.Sheets)
         {
-            if (!sheet.IsHidden)
+            if (!sheet.IsHidden && !sheet.IsVeryHidden)
                 return sheet;
         }
 
@@ -420,7 +439,7 @@ public static class WorkbookExportPrintPlanner
             return null;
 
         var sheet = workbook.GetSheetAt(sheetIndex);
-        return sheet.IsHidden ? null : sheet;
+        return sheet.IsHidden || sheet.IsVeryHidden ? null : sheet;
     }
 
     private static bool TryResolvePrintRange(
@@ -456,8 +475,19 @@ public static class WorkbookExportPrintPlanner
     /// </summary>
     private static IReadOnlyList<SheetRangeRequest> ResolveSheetPrintRanges(
         Sheet sheet,
-        bool ignorePrintAreas)
+        bool ignorePrintAreas,
+        bool includeBlankSheets)
     {
+        if (includeBlankSheets)
+        {
+            var rangeSource = !ignorePrintAreas && sheet.PrintAreas.Count > 0
+                ? WorkbookExportPrintRangeSource.PrintArea
+                : WorkbookExportPrintRangeSource.UsedRange;
+            return WorksheetPrintRenderPlanner.ResolvePrintRanges(sheet, printRangeOverride: null, ignorePrintArea: ignorePrintAreas)
+                .Select(range => new SheetRangeRequest(sheet, range, rangeSource))
+                .ToList();
+        }
+
         if (!ignorePrintAreas && sheet.PrintAreas.Count > 0)
         {
             var areas = sheet.PrintAreas
@@ -493,6 +523,10 @@ public static class WorkbookExportPrintPlanner
                 pageCapacity.ColumnsPerPage,
                 request.Sheet.ColumnPageBreaks,
                 request.Sheet.IsColEffectivelyHidden);
+
+            // A fully hidden area contributes no pages to the worksheet print stream.
+            if (rowPlans.Count == 0 || columnPlans.Count == 0)
+                continue;
 
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
                 request.Sheet.Name,
@@ -546,6 +580,10 @@ public static class WorkbookExportPrintPlanner
                 columnBreaks,
                 request.Sheet.IsColEffectivelyHidden);
 
+            // A fully hidden area contributes no pages to the worksheet print stream.
+            if (rowPlans.Count == 0 || columnPlans.Count == 0)
+                continue;
+
             sheetPlans.Add(new WorkbookSheetExportPrintPlanSummary(
                 request.Sheet.Name,
                 request.PrintRange,
@@ -597,6 +635,7 @@ public static class WorkbookExportPrintPlanner
         {
             WorkbookExportPrintScope.SelectedRange => "selected range",
             WorkbookExportPrintScope.VisibleWorkbook => "visible workbook",
+            WorkbookExportPrintScope.GroupedSheets => "grouped worksheets",
             _ => "active sheet"
         };
 

@@ -31,7 +31,8 @@ public sealed class MacOsHumanValidationChecklistPreflightTests
         checklist.Should().Contain("-ExpectedRunId <run-id>");
         checklist.Should().Contain("-ExpectedRunAttempt <run-attempt>");
         checklist.Should().Contain("## Future Native Share Sheet Readiness");
-        checklist.Should().Contain("a native AppKit share sheet is not implemented yet");
+        checklist.Should().Contain("FreeX opens the native macOS Share sheet for saved workbooks");
+        checklist.Should().Contain("For older candidates that only reveal the workbook in Finder, record `Not implemented` for each row");
         checklist.Should().Contain("| Native AppKit share sheet implementation status |");
         checklist.Should().Contain("## Accessibility Known Issues");
     }
