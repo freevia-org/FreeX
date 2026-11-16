@@ -566,34 +566,32 @@ public sealed partial class MainWindow
         if (optionIndex < 0)
             return Failed(row, "AutoFilter criterion is absent from the production menu model.");
         var criteriaBox = new TextBox();
-        var panel = CreateAutoFilterCriteriaPanel(model, criteriaBox);
+        var panel = CreateAutoFilterCriteriaPanel(model, criteriaBox, savedCriteria: null);
         var selector = panel.GetVisualDescendants()
             .OfType<ComboBox>()
             .Single(combo => AutomationProperties.GetAutomationId(combo) == "AutoFilterCriteriaOperatorBox");
         selector.SelectedIndex = optionIndex;
         var option = model.CriteriaOptions[optionIndex];
-        string? sampleValue = null;
-        string? sampleSecondValue = null;
-        var valueBox = panel.GetVisualDescendants()
-            .OfType<TextBox>()
-            .Single(textBox => !ReferenceEquals(textBox, criteriaBox) && textBox.PlaceholderText != "Maximum");
         if (option.RequiresValue)
         {
-            sampleValue = AutoFilterMenuPlanner.RequiresCountCriteriaValue(option) ? "1" : "Value";
-            valueBox.Text = sampleValue;
+            var valueBox = panel.GetVisualDescendants()
+                .OfType<TextBox>()
+                .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AutoFilterCriteriaValueBox");
+            valueBox.Text = kind switch
+            {
+                AutoFilterMenuFilterKind.Date => "2026-01-01",
+                AutoFilterMenuFilterKind.Number => "1",
+                _ => "Value",
+            };
             if (AutoFilterMenuPlanner.RequiresSecondCriteriaValue(option))
             {
-                var secondValueBox = panel.GetVisualDescendants()
+                var maximumBox = panel.GetVisualDescendants()
                     .OfType<TextBox>()
-                    .Single(textBox => textBox.PlaceholderText == "Maximum");
-                sampleSecondValue = "2";
-                secondValueBox.Text = sampleSecondValue;
+                    .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AutoFilterCriteriaMaximumBox");
+                maximumBox.Text = kind == AutoFilterMenuFilterKind.Date ? "2026-02-01" : "2";
             }
         }
-        // The panel is intentionally created off-tree for this bounded route probe. On the Linux
-        // Skia host an unattached TextBox does not raise TextChanged for programmatic fixture input,
-        // so apply the same production completion rule explicitly after selecting and seeding it.
-        criteriaBox.Text = AutoFilterMenuPlanner.BuildCompletedCriteriaText(option, sampleValue, sampleSecondValue);
+
         var prefixObserved = criteriaBox.Text?.StartsWith(parts[1], StringComparison.OrdinalIgnoreCase) == true ||
             string.Equals(criteriaBox.Text, parts[1], StringComparison.OrdinalIgnoreCase);
         return prefixObserved

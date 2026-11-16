@@ -507,7 +507,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
 
         autoFilterSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);");
         autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);");
-        autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0))");
+        autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AutoFilterDialogChromeStyle, 72);");
+        autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 6, 0, 0))");
 
         errorCheckingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);");
