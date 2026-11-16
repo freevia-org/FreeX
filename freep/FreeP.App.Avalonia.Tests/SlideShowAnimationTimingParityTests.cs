@@ -113,6 +113,20 @@ public sealed class SlideShowAnimationTimingParityTests
                 "WPF retimes trajectory key times and preserves their interpolation instead of easing global elapsed progress");
     }
 
+    [Fact]
+    public void Color_keyframe_sampling_matches_wpf_linear_color_interpolation()
+    {
+        var from = global::Avalonia.Media.Color.FromArgb(255, 0, 20, 40);
+        var to = global::Avalonia.Media.Color.FromArgb(255, 100, 180, 240);
+
+        var sampled = AvaloniaSlideShowAnimationTiming.SampleColorKeyframes(
+            [(from, 0), (to, 1)],
+            0.25);
+
+        sampled.Should().Be(global::Avalonia.Media.Color.FromArgb(255, 25, 60, 90),
+            "WPF uses LinearColorKeyFrame, while easing each Avalonia segment changes authored playback timing");
+    }
+
     private static double Lerp(double from, double to, double progress) =>
         from + (to - from) * progress;
 

@@ -4011,23 +4011,7 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         {
             frame++;
             var progress = Math.Min(1.0, (double)frame / steps);
-            var value = keyframes[0].Value;
-            for (var i = 1; i < keyframes.Count; i++)
-            {
-                if (progress > keyframes[i].Progress)
-                    continue;
-
-                var previous = keyframes[i - 1];
-                var current = keyframes[i];
-                var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
-                value = InterpolateAnimationColor(previous.Value, current.Value, EaseInOut(local));
-                break;
-            }
-
-            if (progress >= keyframes[^1].Progress)
-                value = keyframes[^1].Value;
-
-            apply(value);
+            apply(AvaloniaSlideShowAnimationTiming.SampleColorKeyframes(keyframes, progress));
             if (frame >= steps)
             {
                 timer.Stop();
@@ -4037,13 +4021,6 @@ public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlayba
         };
         timer.Start();
     }
-
-    private static Color InterpolateAnimationColor(Color from, Color to, double progress) =>
-        Color.FromArgb(
-            (byte)(from.A + (to.A - from.A) * progress),
-            (byte)(from.R + (to.R - from.R) * progress),
-            (byte)(from.G + (to.G - from.G) * progress),
-            (byte)(from.B + (to.B - from.B) * progress));
 
     private void AnimateKeyframes(
         int durationMs,
