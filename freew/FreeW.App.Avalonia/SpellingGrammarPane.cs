@@ -10,7 +10,7 @@ using FreeW.App.Presentation.Proofing;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class SpellingGrammarPane : Border
+internal sealed partial class SpellingGrammarPane : Border
 {
     private readonly DocumentView _editor;
     private ProofingReviewSession _session;
@@ -90,8 +90,6 @@ internal sealed class SpellingGrammarPane : Border
     internal IReadOnlyList<string> Suggestions => _suggestions.Items.Cast<object>().Select(item => item.ToString() ?? string.Empty).ToArray();
     internal bool ChangeEnabled => _change.IsEnabled;
     internal bool IsPaneVisible => IsVisible;
-    internal Button ChangeButtonForTests => _change;
-    internal Button IgnoreAllButtonForTests => _ignoreAll;
 
     internal void Start()
     {

@@ -457,3 +457,9 @@ internal sealed partial class ThesaurusPane
             : Task.FromResult(false);
     }
 }
+
+internal sealed partial class SpellingGrammarPane
+{
+    internal Button ChangeButtonForTests => _change;
+    internal Button IgnoreAllButtonForTests => _ignoreAll;
+}
