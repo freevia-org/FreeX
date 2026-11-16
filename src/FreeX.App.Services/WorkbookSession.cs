@@ -3874,6 +3874,8 @@ public sealed class WorkbookSession : IDisposable
         return result.Text!;
     }
 
+    public void DiscardCellClipboard() => _workbookClipboardSession.Clear();
+
     public WorkbookClipboardTextResult TryCopySelectedRangeText()
     {
         if (SelectedRanges.Count > 1)
