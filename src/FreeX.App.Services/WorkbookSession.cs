@@ -7546,7 +7546,7 @@ public sealed class WorkbookSession : IDisposable
                     if (TryGetRectangleEnd(start, cutRows, cutCols, out var end))
                         headerRanges.Add(new GridRange(start, end));
                 }
-                command = new TableHeaderCutCommand(command, headerRanges);
+                command = new TableHeaderBatchCommand(command, headerRanges);
             }
         }
 
@@ -7611,6 +7611,10 @@ public sealed class WorkbookSession : IDisposable
             mode,
             options,
             keepSourceColumnWidths);
+        var headerRanges = CurrentGroupedEditSheetIds()
+            .SelectMany(sheetId => selectedRanges.Select(range => RemapRangeToSheet(range, sheetId)))
+            .ToArray();
+        command = new TableHeaderBatchCommand(command, headerRanges);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;

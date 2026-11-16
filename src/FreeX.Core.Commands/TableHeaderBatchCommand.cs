@@ -2,8 +2,8 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-/// <summary>Runs a composite cut with a single table-header transaction for all its cells.</summary>
-public sealed class TableHeaderCutCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
+/// <summary>Runs a composite cell operation with one table-header transaction for all its cells.</summary>
+public sealed class TableHeaderBatchCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
     private readonly IWorkbookCommand _inner;
     private readonly IReadOnlyList<GridRange> _ranges;
@@ -11,7 +11,7 @@ public sealed class TableHeaderCutCommand : IWorkbookCommand, IAffectedCellsComm
     private IReadOnlyList<CellAddress> _affected = [];
     private bool _applied;
 
-    public TableHeaderCutCommand(IWorkbookCommand inner, IReadOnlyList<GridRange> ranges)
+    public TableHeaderBatchCommand(IWorkbookCommand inner, IReadOnlyList<GridRange> ranges)
     {
         _inner = inner;
         _ranges = ranges;
@@ -29,21 +29,41 @@ public sealed class TableHeaderCutCommand : IWorkbookCommand, IAffectedCellsComm
         {
             var sheet = ctx.GetSheet(range.Start.Sheet);
             return TableHeaderRenameTransaction.IntersectingHeaders(sheet, range);
-        });
+        }).Distinct().ToArray();
         _headerRename = TableHeaderRenameTransaction.Capture(ctx, headers);
+        var originalHeaders = headers.Select(address =>
+        {
+            var sheet = ctx.GetSheet(address.Sheet);
+            return (Address: address, Formula: sheet.GetCell(address)?.FormulaText, Value: sheet.GetValue(address));
+        }).ToArray();
         CommandOutcome outcome;
         try { outcome = TableHeaderRenameTransaction.Suppress(() => _inner.Apply(ctx)); }
         catch
         {
-            TableHeaderRenameTransaction.Suppress(() => _inner.Revert(ctx));
+            try { TableHeaderRenameTransaction.Suppress(() => _inner.Revert(ctx)); }
+            catch { /* Preserve the original apply failure. */ }
             throw;
         }
         if (!outcome.Success || outcome.IsNoOp) return outcome;
         _applied = true;
-        try { _headerRename.Apply(ctx); }
+        // A formatting-only batch may touch table headers without changing their content.
+        // It must not normalize those headers or reject unrelated malformed table metadata.
+        var changedHeaders = originalHeaders.Where(original =>
+        {
+            var sheet = ctx.GetSheet(original.Address.Sheet);
+            return sheet.GetCell(original.Address)?.FormulaText != original.Formula ||
+                !Equals(sheet.GetValue(original.Address), original.Value);
+        }).Select(original => original.Address).ToHashSet();
+        if (changedHeaders.Count == 0)
+        {
+            _affected = outcome.AffectedCells ?? [];
+            return outcome;
+        }
+        try { _headerRename.Apply(ctx, changedHeaders); }
         catch (InvalidOperationException ex)
         {
-            Revert(ctx);
+            try { Revert(ctx); }
+            catch { /* Preserve the original header reconciliation failure. */ }
             return new CommandOutcome(false, ex.Message);
         }
         _affected = (outcome.AffectedCells ?? []).Concat(_headerRename.Affected).Distinct().ToArray();

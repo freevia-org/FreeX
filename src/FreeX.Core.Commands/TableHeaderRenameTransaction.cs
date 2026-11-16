@@ -26,8 +26,8 @@ internal sealed class TableHeaderRenameTransaction
     private readonly List<Action> _undo = [];
     private readonly HashSet<CellAddress> _affected = [];
     internal IReadOnlyCollection<CellAddress> Affected => _affected;
-    private bool _invalidTable;
-    internal bool HasCandidates => _invalidTable || _candidates.Count != 0;
+    private readonly List<GridRange> _invalidTables = [];
+    internal bool HasCandidates => _invalidTables.Count != 0 || _candidates.Count != 0;
     internal int EstimatedBytes => (int)Math.Min(int.MaxValue, 256L * _undo.Count + _estimatedTextBytes);
     private long _estimatedTextBytes;
 
@@ -69,7 +69,7 @@ internal sealed class TableHeaderRenameTransaction
                 if (indices.Count == 0) continue;
                 if (table.Columns.Count != table.Range.ColCount)
                 {
-                    result._invalidTable = true;
+                    result._invalidTables.Add(table.Range);
                     continue;
                 }
                 var names = table.Columns.Select((c, i) => HeaderName(sheet, table, i, c.Name)).ToArray();
@@ -89,13 +89,19 @@ internal sealed class TableHeaderRenameTransaction
     private static string? OwnerForRanges(Sheet sheet, GridRange primary, IEnumerable<GridRange> additional)
         => sheet.StructuredTables.FirstOrDefault(t => t.Range.Contains(primary) && additional.All(t.Range.Contains))?.Name;
 
-    internal void Apply(ICommandContext ctx)
+    private static bool ContainsChangedHeader(GridRange tableRange, IReadOnlySet<CellAddress> changedHeaders)
+        => changedHeaders.Any(address => address.Sheet == tableRange.Start.Sheet &&
+            address.Row == tableRange.Start.Row && address.Col >= tableRange.Start.Col && address.Col <= tableRange.End.Col);
+
+    internal void Apply(ICommandContext ctx, IReadOnlySet<CellAddress>? changedHeaders = null)
     {
-        if (_invalidTable)
+        if (_invalidTables.Any(tableRange => changedHeaders is null || ContainsChangedHeader(tableRange, changedHeaders)))
             throw new InvalidOperationException("The table's column metadata does not match its header range.");
         var renames = new List<Rename>();
         foreach (var candidate in _candidates)
         {
+            if (changedHeaders is not null && !ContainsChangedHeader(candidate.Table.Range, changedHeaders))
+                continue;
             var sheet = candidate.Sheet;
             var index = sheet.StructuredTables.FindIndex(t => t.Id == candidate.Table.Id);
             if (index < 0)

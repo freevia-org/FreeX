@@ -6,6 +6,42 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed class TableHeaderRenameCommandTests
 {
+    [Fact]
+    public void CompositeCut_PreservesOriginalApplyExceptionWhenRollbackAlsoThrows()
+    {
+        var workbook = new Workbook("test");
+        workbook.AddSheet("Sheet1");
+        var command = new TableHeaderBatchCommand(new ThrowingCutChild(throwOnApply: true), []);
+        var error = Assert.Throws<InvalidOperationException>(() => command.Apply(new TestCommandContext(workbook)));
+        error.Message.Should().Be("original apply failure");
+    }
+
+    [Fact]
+    public void CompositeCut_PreservesHeaderErrorWhenRollbackAlsoThrows()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var a = new CellAddress(sheet.Id, 1, 1);
+        var b = new CellAddress(sheet.Id, 1, 2);
+        sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "SalesTable", DisplayName = "SalesTable", Range = new GridRange(a, new CellAddress(sheet.Id, 2, 2)), Columns = { new StructuredTableColumnModel(1, "Sales") } });
+        var command = new TableHeaderBatchCommand(new ThrowingCutChild(throwOnApply: false, writeAddress: b), [new GridRange(b, b)]);
+        var result = command.Apply(new TestCommandContext(workbook));
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("column metadata");
+    }
+
+    private sealed class ThrowingCutChild(bool throwOnApply, CellAddress? writeAddress = null) : IWorkbookCommand
+    {
+        public string Label => "Test cut";
+        public CommandOutcome Apply(ICommandContext ctx)
+        {
+            if (throwOnApply) throw new InvalidOperationException("original apply failure");
+            if (writeAddress is { } address) ctx.GetSheet(address.Sheet).SetCell(address, new TextValue("Changed"));
+            return new CommandOutcome(true);
+        }
+        public void Revert(ICommandContext ctx) => throw new InvalidOperationException("rollback failure");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -108,7 +144,7 @@ public sealed class TableHeaderRenameCommandTests
         var source = new GridRange(a, a);
         var destination = new GridRange(b, b);
         var composite = new CompositeWorkbookCommand("Cut", [new PasteCellsCommand(sheet.Id, [(b, Cell.FromValue(new TextValue("Sales")))]), new ClearContentsCommand(sheet.Id, source, isCutSource: true)]);
-        var command = new TableHeaderCutCommand(composite, [source, destination]);
+        var command = new TableHeaderBatchCommand(composite, [source, destination]);
         var ctx = new TestCommandContext(workbook);
         var outcome = command.Apply(ctx);
         outcome.Success.Should().BeTrue(outcome.ErrorMessage);
