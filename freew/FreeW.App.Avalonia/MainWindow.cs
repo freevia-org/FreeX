@@ -121,6 +121,7 @@ public sealed partial class MainWindow : Window
     private readonly RevealFormattingPane _revealPane;
     private readonly NotesPane _notesPane;
     private readonly ThesaurusPane _thesaurusPane;
+    private readonly SpellingGrammarPane _spellingGrammarPane;
     private readonly OutlineView _outlineView;
     private Control? _ribbonControl;
     private IRibbonCommandRegistry? _ribbonRegistry;
@@ -344,7 +345,7 @@ public sealed partial class MainWindow : Window
             Undo: () => ResolveHistoryDocumentEditor().Undo(),
             Redo: () => ResolveHistoryDocumentEditor().Redo(),
             RevealFormatting: ToggleRevealFormatting,
-            SpellingAndGrammar: ShowSpellingAndGrammarUnavailable,
+            SpellingAndGrammar: StartSpellingAndGrammarCheck,
             Thesaurus: ToggleThesaurusPane,
             LockCurrentField: () => _editor.SetFieldLockAtCaret(true),
             UnlockCurrentField: () => _editor.SetFieldLockAtCaret(false),
@@ -384,6 +385,9 @@ public sealed partial class MainWindow : Window
             _editor,
             async text => (await _platformClipboard.WriteAsync(
                 new PlatformClipboardContent(Text: text))).IsSuccess);
+        _spellingGrammarPane = new SpellingGrammarPane(
+            _editor,
+            (message, title) => RunUiTask(() => FreeWInfoDialog.ShowAsync(this, message, title)));
         _outlineView = new OutlineView(_editor);
 
         var ribbon = BuildRibbon();
@@ -419,6 +423,9 @@ public sealed partial class MainWindow : Window
 
         DockPanel.SetDock(_thesaurusPane, Dock.Right);
         workArea.Children.Add(_thesaurusPane);
+
+        DockPanel.SetDock(_spellingGrammarPane, Dock.Right);
+        workArea.Children.Add(_spellingGrammarPane);
 
         DockPanel.SetDock(_notesPane, Dock.Bottom);
         workArea.Children.Add(_notesPane);
@@ -1255,10 +1262,7 @@ public sealed partial class MainWindow : Window
 
     private void ToggleThesaurusPane() => _thesaurusPane.Toggle();
 
-    // F7 (Spelling & Grammar walk-through) is WPF-first: the shared ProofingReviewSession exists, but this
-    // shell has no pane for it yet, so the gesture reports that honestly instead of doing nothing.
-    private void ShowSpellingAndGrammarUnavailable() =>
-        _status.Text = UiText.Get("Proofing_Review_Unavailable_Status");
+    private void StartSpellingAndGrammarCheck() => _spellingGrammarPane.Start();
 
     private async Task OpenProofingLanguageDialogAsync()
     {

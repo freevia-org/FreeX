@@ -648,6 +648,7 @@ public sealed partial class DocumentView : Control
         // AV-PROOFING: Ignore All is session-scoped to the OPEN DOCUMENT, not the editor instance —
         // without this, words ignored in one document stayed silently ignored after loading another.
         _ignoredProofingWords.Clear();
+        ResetProofingReviewState();
         _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
