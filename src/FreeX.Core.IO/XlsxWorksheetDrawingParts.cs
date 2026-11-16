@@ -1177,7 +1177,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// single flat <c>ShapeText</c> string with one set of formatting fields, not a per-run model.
     /// </para>
     /// </summary>
-    private static string ReadShapeTextBodyPlainText(XElement? txBody, XNamespace drawingNs)
+    internal static string ReadShapeTextBodyPlainText(XElement? txBody, XNamespace drawingNs)
     {
         if (txBody is null)
             return "";

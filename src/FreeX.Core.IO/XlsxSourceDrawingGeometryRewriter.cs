@@ -383,8 +383,20 @@ internal static class XlsxSourceDrawingGeometryRewriter
         var changed = RewriteShapeAltTextAndTitle(textBoxElement, textBox.AltText, textBox.Title);
 
         var txBody = textBoxElement.Element(SpreadsheetDrawingNs + "txBody");
-        if (txBody is not null && RewriteTextBodyPlainText(txBody, textBox.Text ?? "", drawingNs))
-            changed = true;
+        var newText = textBox.Text ?? "";
+        if (!string.Equals(XlsxWorksheetDrawingPartReader.ReadShapeTextBodyPlainText(txBody, drawingNs), newText, StringComparison.Ordinal))
+        {
+            if (txBody is null)
+            {
+                txBody = new XElement(SpreadsheetDrawingNs + "txBody", new XElement(drawingNs + "bodyPr"),
+                    new XElement(drawingNs + "lstStyle"), new XElement(drawingNs + "p"));
+                var extensionList = textBoxElement.Element(SpreadsheetDrawingNs + "extLst");
+                if (extensionList is null) textBoxElement.Add(txBody);
+                else extensionList.AddBeforeSelf(txBody);
+                changed = true;
+            }
+            if (RewriteTextBodyPlainText(txBody, newText, drawingNs)) changed = true;
+        }
 
         return changed;
     }
@@ -427,11 +439,16 @@ internal static class XlsxSourceDrawingGeometryRewriter
     private static bool RewriteTextBodyPlainText(XElement txBody, string newText, XNamespace drawingNs)
     {
         var paragraphs = txBody.Elements(drawingNs + "p").ToList();
+        var changed = false;
         if (paragraphs.Count == 0)
-            return false;
+        {
+            var paragraph = new XElement(drawingNs + "p");
+            txBody.Add(paragraph);
+            paragraphs.Add(paragraph);
+            changed = true;
+        }
 
         var lines = newText.Split('\n');
-        var changed = false;
 
         // Grow: clone the last paragraph as a formatting template for any extra new lines.
         var template = paragraphs[^1];
@@ -478,6 +495,15 @@ internal static class XlsxSourceDrawingGeometryRewriter
         if (contentNodes.Count > 0)
         {
             firstRun = contentNodes[0];
+            if (firstRun.Name == drawingNs + "fld")
+            {
+                var replacement = new XElement(drawingNs + "r",
+                    firstRun.Element(drawingNs + "rPr") is { } formatting ? new XElement(formatting) : null,
+                    new XElement(drawingNs + "t", text));
+                firstRun.ReplaceWith(replacement);
+                firstRun = replacement;
+                changed = true;
+            }
             for (var i = 1; i < contentNodes.Count; i++)
             {
                 contentNodes[i].Remove();
@@ -486,8 +512,12 @@ internal static class XlsxSourceDrawingGeometryRewriter
         }
         else
         {
+            foreach (var lineBreak in paragraph.Elements(drawingNs + "br").ToList())
+                lineBreak.Remove();
             firstRun = new XElement(drawingNs + "r", new XElement(drawingNs + "t", text));
-            paragraph.Add(firstRun);
+            var endFormatting = paragraph.Element(drawingNs + "endParaRPr");
+            if (endFormatting is null) paragraph.Add(firstRun);
+            else endFormatting.AddBeforeSelf(firstRun);
             return true;
         }
 
