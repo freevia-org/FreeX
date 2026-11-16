@@ -25,8 +25,7 @@ namespace FreeX.App.Avalonia;
 ///
 /// A custom view captures the per-sheet view state the model can represent today (view mode, frozen/split panes,
 /// gridlines/headings/rulers/formulas, zoom, the active cell and the scrolled top-left cell) plus the active-sheet
-/// index. The two inclusion flags are recorded so they round-trip (matching Excel's customWorkbookView toggles),
-/// but this shell does not yet snapshot the underlying page-setup or hidden-rows/filter state behind them.
+/// index. The optional inclusion flags also capture print settings and hidden rows, columns and filters.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -131,6 +130,7 @@ public sealed partial class MainWindow
                 return;
             }
 
+            RefreshViewportSizeForZoom();
             RefreshShell(UiText.Format("CustomViews_Applied", name));
             dialog.Close();
         }

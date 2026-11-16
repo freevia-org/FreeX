@@ -195,6 +195,148 @@ public sealed class WorkbookSessionCommandExecutionOwnershipTests
         session.IsShowingGridlines.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ApplyCustomView_RestoresBothScrollAxesAndKeepsTheSavedActiveCellThroughResize(bool saveWithCellOffscreen)
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(440, 900);
+        var sheet = session.ActiveSheet;
+        var savedCell = new CellAddress(sheet.Id, 12, 8);
+        var savedOrigin = saveWithCellOffscreen ? (TopRow: 40u, LeftCol: 20u) : (TopRow: 6u, LeftCol: 4u);
+
+        Select(session, savedCell);
+        session.SetViewportOrigin(savedOrigin.TopRow, savedOrigin.LeftCol);
+        session.ExecuteCustomViewCommand(new SaveCustomViewCommand("Saved viewport")).Success.Should().BeTrue();
+
+        session.SetViewportOrigin(9, 6);
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Saved viewport")).Success.Should().BeTrue();
+
+        session.ActiveCell.Should().Be(savedCell);
+        session.ViewportOrigin.Should().Be(savedOrigin);
+        session.Viewport.RowMetrics[0].Row.Should().Be(savedOrigin.TopRow);
+        session.Viewport.ColMetrics[0].Col.Should().Be(savedOrigin.LeftCol);
+
+        session.UpdateViewportSize(320, 720).Should().BeTrue();
+
+        session.ActiveCell.Should().Be(savedCell);
+        session.ViewportOrigin.Should().Be(savedOrigin);
+        session.Viewport.RowMetrics[0].Row.Should().Be(savedOrigin.TopRow);
+        session.Viewport.ColMetrics[0].Col.Should().Be(savedOrigin.LeftCol);
+    }
+
+    [Fact]
+    public void ApplyCustomView_ModelNoOpStillRestoresCallingViewWithoutChangingHistoryOrSiblingViewport()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(440, 900);
+        var sheet = session.ActiveSheet;
+        var savedCell = new CellAddress(sheet.Id, 12, 8);
+        Select(session, savedCell);
+        session.SetViewportOrigin(6, 4);
+        session.ExecuteCustomViewCommand(new SaveCustomViewCommand("Saved viewport")).Success.Should().BeTrue();
+        session.MarkSavedFromHost();
+        var historyDepth = session.GetUndoHistory(10).Count;
+
+        using var sibling = session.CreateSiblingView(440, 900);
+        sibling.SetViewportOrigin(9, 6);
+        sibling.ActiveCell.Should().NotBe(savedCell);
+
+        var result = sibling.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Saved viewport"));
+
+        result.Success.Should().BeTrue();
+        result.IsNoOp.Should().BeTrue();
+        sibling.ActiveCell.Should().Be(savedCell);
+        sibling.ViewportOrigin.Should().Be((6u, 4u));
+        sibling.IsDirty.Should().BeFalse();
+        sibling.GetUndoHistory(10).Should().HaveCount(historyDepth);
+
+        sibling.SetViewportOrigin(9, 6);
+        session.SetViewportOrigin(8, 5);
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Saved viewport")).Success.Should().BeTrue();
+
+        session.ViewportOrigin.Should().Be((6u, 4u));
+        sibling.ViewportOrigin.Should().Be((9u, 6u));
+    }
+
+    [Fact]
+    public void CustomViewHistory_RestoresSavedSheetSelectionScrollAndPaneStateOnShowUndoAndRedo()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(440, 900);
+        var otherSheet = session.ActiveSheet;
+        var otherSavedCell = new CellAddress(otherSheet.Id, 11, 5);
+        Select(session, otherSavedCell);
+        session.SetViewportOrigin(4, 3);
+
+        session.AddSheet().Success.Should().BeTrue();
+        var savedSheet = session.ActiveSheet;
+        var savedCell = new CellAddress(savedSheet.Id, 15, 7);
+        Select(session, savedCell);
+        session.SetFreezePanes(2, 1).Success.Should().BeTrue();
+        session.SetZoomPercent(175).Success.Should().BeTrue();
+        session.SetViewportOrigin(8, 5);
+        session.ExecuteCustomViewCommand(new SaveCustomViewCommand("Two sheets")).Success.Should().BeTrue();
+
+        session.SetFreezePanes(0, 0).Success.Should().BeTrue();
+        session.SetZoomPercent(80).Success.Should().BeTrue();
+        session.SelectSheet(otherSheet.Id).Should().BeTrue();
+        var beforeShowCell = new CellAddress(otherSheet.Id, 18, 9);
+        Select(session, beforeShowCell);
+        session.SetViewportOrigin(13, 6);
+
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Two sheets")).Success.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(savedSheet);
+        session.ActiveCell.Should().Be(savedCell);
+        session.ViewportOrigin.Should().Be((8u, 5u));
+        session.ZoomPercent.Should().Be(175);
+        session.GetEffectiveFrozenRows().Should().Be(2);
+        session.GetEffectiveFrozenCols().Should().Be(1);
+
+        session.SelectSheet(otherSheet.Id).Should().BeTrue();
+        session.ActiveCell.Should().Be(otherSavedCell);
+        session.ViewportOrigin.Should().Be((4u, 3u));
+        session.SelectSheet(savedSheet.Id).Should().BeTrue();
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(otherSheet);
+        session.ActiveCell.Should().Be(beforeShowCell);
+        session.ViewportOrigin.Should().Be((13u, 6u));
+        savedSheet.ZoomPercent.Should().Be(80);
+        savedSheet.FrozenRows.Should().Be(0);
+
+        session.RedoLastEdit().Success.Should().BeTrue();
+        session.ActiveSheet.Should().BeSameAs(savedSheet);
+        session.ActiveCell.Should().Be(savedCell);
+        session.ViewportOrigin.Should().Be((8u, 5u));
+        session.ZoomPercent.Should().Be(175);
+        session.GetEffectiveFrozenRows().Should().Be(2);
+        session.GetEffectiveFrozenCols().Should().Be(1);
+    }
+
+    [Fact]
+    public void UndoCustomView_LeavesScrollOnASheetOutsideTheSavedViewIntact()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(440, 900);
+        var otherSheet = session.ActiveSheet;
+        session.AddSheet().Success.Should().BeTrue();
+        var capturedSheet = session.ActiveSheet;
+        session.SelectSheet(otherSheet.Id).Should().BeTrue();
+        session.Workbook.CustomViews.Add(new WorkbookCustomView(
+            "Partial",
+            [CustomViewStatePlanner.CaptureSheetState(capturedSheet) with { ViewTopRow = 8, ViewLeftCol = 5 }],
+            ActiveSheetIndex: 1));
+
+        session.ExecuteCustomViewCommand(new ApplyCustomViewCommand("Partial")).Success.Should().BeTrue();
+        session.SelectSheet(otherSheet.Id).Should().BeTrue();
+        session.SetViewportOrigin(30, 9);
+
+        session.UndoLastEdit().Success.Should().BeTrue();
+
+        session.ActiveSheet.Should().BeSameAs(otherSheet);
+        session.ViewportOrigin.Should().Be((30u, 9u));
+        otherSheet.ViewTopRow.Should().Be(30);
+        otherSheet.ViewLeftCol.Should().Be(9);
+    }
+
     [Fact]
     public void Dispose_RetiresCommandHistoryOnlyAfterLastSiblingViewCloses()
     {

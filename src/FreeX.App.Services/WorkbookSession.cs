@@ -1583,9 +1583,14 @@ public sealed class WorkbookSession : IDisposable
             return ExecuteCommandPreservingSelection(command);
 
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
-        if (!result.Success || result.IsNoOp)
-            return result;
+        if (result.Success && result.RestoredCustomViewSheetIds is { } sheetIds)
+            AdoptRestoredCustomView(result, sheetIds);
 
+        return result;
+    }
+
+    private void AdoptRestoredCustomView(WorkbookCellEditResult result, IReadOnlyList<SheetId> restoredSheetIds)
+    {
         var activeSheet = Workbook.ActiveSheetIndex is { } index &&
             index >= 0 &&
             index < Workbook.Sheets.Count &&
@@ -1594,28 +1599,48 @@ public sealed class WorkbookSession : IDisposable
                 ? Workbook.Sheets[index]
                 : ActiveSheet;
 
-        if (ActiveSheet.Id != activeSheet.Id)
+        var sheetChanged = ActiveSheet.Id != activeSheet.Id;
+        if (sheetChanged)
             RememberActiveWorksheetSelection();
+
+        foreach (var sheetId in restoredSheetIds)
+        {
+            if (Workbook.GetSheet(sheetId) is not { } sheet)
+                continue;
+
+            InvalidateAllPerViewOverridesForSheet(sheetId);
+            _splitPaneViewportOffsets.Remove(sheetId);
+            var firstScrollableRow = Math.Min(sheet.FrozenRows, CellAddress.MaxRow - 1) + 1;
+            var firstScrollableCol = Math.Min(sheet.FrozenCols, CellAddress.MaxCol - 1) + 1;
+            _viewViewportOrigins[sheetId] = (
+                Math.Clamp(sheet.ViewTopRow ?? firstScrollableRow, firstScrollableRow, CellAddress.MaxRow),
+                Math.Clamp(sheet.ViewLeftCol ?? firstScrollableCol, firstScrollableCol, CellAddress.MaxCol));
+
+            var cell = GetInitialActiveCell(sheet);
+            _worksheetSelections.Save(sheetId,
+                new WorksheetSelectionSnapshot(cell, cell, new GridRange(cell, cell), AdditionalRanges: null));
+        }
 
         var selection = _sheetSelectionService.SelectSheet(Workbook, activeSheet.Id, _groupedSheetIds);
         ActiveSheet = selection.Sheet;
         SelectSingleSheetGroup(ActiveSheet.Id);
         RefreshSheetTabsForActiveSheet();
 
-        ActiveCell = new CellAddress(
-            ActiveSheet.Id,
-            Math.Clamp(ActiveSheet.ActiveRow ?? 1u, 1u, CellAddress.MaxRow),
-            Math.Clamp(ActiveSheet.ActiveCol ?? 1u, 1u, CellAddress.MaxCol));
-        SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        if ((sheetChanged || restoredSheetIds.Contains(ActiveSheet.Id)) && !TryRestoreActiveWorksheetSelection())
+        {
+            ActiveCell = GetInitialActiveCell(ActiveSheet);
+            SetSingleSelectedRange(new GridRange(ActiveCell, ActiveCell));
+        }
+
         FormulaEditAddress = null;
-        RefreshLinkedPicturesForEditedCells(result);
-        MarkDirty();
         _selectionStatsRevision++;
-        foreach (var sheet in Workbook.Sheets)
-            InvalidateAllPerViewOverridesForSheet(sheet.Id);
+        // The saved viewport may intentionally be scrolled away from the active cell.
         RefreshViewport();
-        EnsureActiveCellVisible();
-        return result;
+        if (!result.IsNoOp)
+        {
+            RefreshLinkedPicturesForEditedCells(result);
+            MarkDirty();
+        }
     }
 
     /// <summary>
@@ -2460,10 +2485,16 @@ public sealed class WorkbookSession : IDisposable
         if (normalizedHeight == _viewportHeight && normalizedWidth == _viewportWidth)
             return false;
 
+        // Reflow can keep a visible selection in view without undoing an intentional scroll
+        // away from it, such as the top-left cell restored by a Custom View.
+        var keepActiveCellVisible = Viewport.RowMetrics.Any(row => row.Row == ActiveCell.Row) &&
+            Viewport.ColMetrics.Any(col => col.Col == ActiveCell.Col);
         _viewportHeight = normalizedHeight;
         _viewportWidth = normalizedWidth;
         RefreshViewport();
-        EnsureActiveCellVisible();
+        if (keepActiveCellVisible)
+            EnsureActiveCellVisible();
+
         return true;
     }
 
@@ -5877,6 +5908,12 @@ public sealed class WorkbookSession : IDisposable
         IReadOnlySet<SheetId> sheetIdsBefore,
         IReadOnlyDictionary<SheetId, bool>? hiddenStatesBefore = null)
     {
+        if (result.RestoredCustomViewSheetIds is { } restoredSheetIds)
+        {
+            AdoptRestoredCustomView(result, restoredSheetIds);
+            return;
+        }
+
         if (FindNewSheetId(sheetIdsBefore) is { } newSheetId)
         {
             ApplySuccessfulNewWorksheetResult(newSheetId);

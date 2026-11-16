@@ -475,6 +475,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Border? _activeCellBorder;
     private Border? _activeSelectionOutlineVisual;
     private Border? _autofillHandleVisual;
+    private AvaloniaRectangle? _autofillPreviewVisual;
     // R75-render-selection-marquee-4-2: minimal port of the WPF host's GridView.ClipboardRange/
     // ClipboardIsCut (GridView.Overlays.cs RenderMarchingAnts) -- this shell drew NO Copy/Cut
     // marquee at all. Set by CopySelectedRangeToClipboardAsync/CutSelectedRangeToClipboardAsync,
@@ -1003,6 +1004,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ArgumentNullException.ThrowIfNull(printService);
 
         _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession();
+        _formulaBarExpanded = _optionsRuntimeSession.LiveOptions.FormulaBarExpanded;
+        _isFormulaBarHidden = !_optionsRuntimeSession.LiveOptions.ShowFormulaBar;
         _statusBarOptionVisibility = StatusBarOptionVisibilityStore
             .ToVisibility(_optionsRuntimeSession.LiveOptions)
             .ToDictionary();
@@ -3750,6 +3753,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = collapsedFormulaBarPlan.HostHeight;
         _formulaBarHost.Child = formulaDock;
         ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(!_isFormulaBarHidden);
         AutomationProperties.SetAutomationId(_formulaBarHost, "FormulaBarRow");
         AutomationProperties.SetName(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.AutomationNameResourceKey));
         AutomationProperties.SetHelpText(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.HelpTextResourceKey));
@@ -3840,14 +3844,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _formulaExpandButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _formulaExpandButton.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        _formulaExpandButton.Click += (_, _) =>
-        {
-            _formulaBarExpanded = !_formulaBarExpanded;
-            ApplyFormulaBarExpansion();
-        };
+        _formulaExpandButton.Click += (_, _) => ToggleFormulaBarExpansion();
         var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
         AutomationProperties.SetAutomationId(_formulaExpandButton, plan.Button.AutomationId);
         ApplyFormulaBarExpandAutomation(plan.Button);
+    }
+
+    private void ToggleFormulaBarExpansion()
+    {
+        var expanded = !_formulaBarExpanded;
+        var result = _optionsRuntimeSession.MutateFresh(options => options.FormulaBarExpanded = expanded);
+        _formulaBarExpanded = result.Options.FormulaBarExpanded;
+        ApplyFormulaBarExpansion();
+        if (!result.IsPersisted)
+            ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
+    }
+
+    private void ApplyFormulaBarOptions(AppOptions options)
+    {
+        _formulaBarExpanded = options.FormulaBarExpanded;
+        ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(options.ShowFormulaBar);
     }
 
     private void ApplyFormulaBarExpansion()
@@ -3860,6 +3877,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = plan.HostHeight;
         _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
         ApplyFormulaBarExpandAutomation(plan.Button);
+        ToolTip.SetTip(_formulaExpandButton,
+            $"{FormulaBarText(plan.TooltipTitleResourceKey)}\n{FormulaBarText(plan.TooltipDescriptionResourceKey)}");
     }
 
     private void ApplyFormulaBarExpandAutomation(FormulaBarChromeElementPlan plan)
@@ -5058,6 +5077,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         RecordSheetGridBuilt();
         _pageLayoutRuler = null;
+        _autofillPreviewVisual = null;
         if (IsChartsheet(_session.ActiveSheet))
             return BuildChartsheetView();
         _formulaReferenceGridOverlay = null;
@@ -7576,7 +7596,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DetachCellSelectionDragHandlers();
         // Also defensively clear stale drag-state flags so a stranded autofill/move drag cannot
         // accidentally commit against a stale source range on the next drag.
-        _autofillDragging = false;
+        ClearAutofillPreview();
         _autofillSourceRange = null;
         _autofillTarget = null;
         _selectionMoveDragging = false;
@@ -7631,7 +7651,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
-        _autofillDragging = false;
+        ClearAutofillPreview();
         _autofillSourceRange = null;
         _autofillTarget = null;
         _selectionMoveDragging = false;
@@ -7796,7 +7816,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var formulaRangeEditor = GetFormulaRangeEntryEditor();
         if (_autofillDragging)
+        {
+            ClearAutofillPreview();
             CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
+        }
         else if (_selectionMoveDragging)
             await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control));
 
@@ -7810,7 +7833,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
-        _autofillDragging = false;
         _autofillSourceRange = null;
         _autofillTarget = null;
         _selectionMoveDragging = false;
@@ -8415,6 +8437,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _autofillTarget = constrainedTarget;
         RefreshShellForGridPreview();
+    }
+
+    private void ClearAutofillPreview()
+    {
+        _autofillDragging = false;
+        if (_autofillPreviewVisual is { Parent: AvaloniaGrid grid } preview)
+            grid.Children.Remove(preview);
+
+        _autofillPreviewVisual = null;
     }
 
     private void CommitAutofillDrag(bool ctrlHeld = false)
@@ -10785,6 +10816,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaGrid.SetColumn(preview, colIndex + headerOffset);
         AvaloniaGrid.SetColumnSpan(preview, colSpan);
         grid.Children.Add(preview);
+        _autofillPreviewVisual = preview;
     }
 
     /// <summary>
@@ -25340,6 +25372,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditHistoryUnavailable"));
             return;
         }
+
+        if (result.RestoredCustomViewSheetIds is not null)
+            RefreshViewportSizeForZoom();
 
         // R127C-avalonia-clipboard-marquee-undo-redo-1: WorkbookSession.UndoLastEdit/RedoLastEdit
         // already retire the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit,

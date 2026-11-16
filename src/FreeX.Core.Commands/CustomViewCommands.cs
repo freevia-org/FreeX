@@ -325,10 +325,11 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
 public sealed class ApplyCustomViewCommand : IWorkbookCommand
 {
     private readonly string _name;
-    private List<WorksheetCustomViewState>? _previousStates;
+    private List<(SheetId SheetId, WorksheetCustomViewState State)>? _previousStates;
     private int? _previousActiveSheetIndex;
 
     public string Label => "Apply Custom View";
+    internal IReadOnlyList<SheetId> RestoredSheetIds { get; private set; } = [];
 
     public ApplyCustomViewCommand(string name)
     {
@@ -345,20 +346,23 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
             return new CommandOutcome(false, $"Custom view '{_name}' was not found.");
 
         var view = ctx.Workbook.CustomViews[index];
-
-        // N14: undo must restore exactly what was on each sheet before Apply, independent of
-        // which fields this particular view captured — always snapshot the full extended state,
-        // not just the subset view.IncludePrintSettings/IncludeHiddenRowsColumnsAndFilterSettings
-        // gate for the forward apply below.
-        _previousStates = ctx.Workbook.Sheets
-            .Select(sheet => SaveCustomViewCommand.CaptureExtendedState(sheet, CustomViewStatePlanner.CaptureSheetState(sheet)))
-            .ToList();
-        _previousActiveSheetIndex = CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook);
-
+        var targets = new List<(Sheet Sheet, WorksheetCustomViewState State)>();
         foreach (var state in view.Sheets)
         {
-            var sheet = ctx.Workbook.GetSheet(state.SheetName);
-            if (sheet is null) continue;
+            if (ctx.Workbook.GetSheet(state.SheetName) is { } sheet)
+                targets.Add((sheet, state));
+        }
+
+        // Capture the full state of each affected sheet for Undo, including extended state.
+        _previousStates = targets
+            .DistinctBy(target => target.Sheet.Id)
+            .Select(target => (target.Sheet.Id, CaptureState(target.Sheet)))
+            .ToList();
+        RestoredSheetIds = _previousStates.Select(snapshot => snapshot.SheetId).ToArray();
+        _previousActiveSheetIndex = CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook);
+
+        foreach (var (sheet, state) in targets)
+        {
             ApplyState(sheet, state, view);
             if (view.IncludePrintSettings)
                 ApplyOpaquePrintReferences(ctx.Workbook, sheet, state);
@@ -371,37 +375,32 @@ public sealed class ApplyCustomViewCommand : IWorkbookCommand
         // comparison goes through WorksheetCustomViewStateComparer rather than the record's
         // own ==, because that record carries list members which records compare by
         // REFERENCE, and every capture builds fresh lists.
-        if (NothingChanged(ctx))
-            return new CommandOutcome(true, IsNoOp: true);
-
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: NothingChanged(ctx.Workbook))
+        {
+            RestoredCustomViewSheetIds = RestoredSheetIds
+        };
     }
+
     /// <summary>r248: every snapshot this command keeps -- see the r237 invariant.</summary>
-    private bool NothingChanged(ICommandContext ctx)
+    private bool NothingChanged(Workbook workbook)
     {
-        if (_previousActiveSheetIndex != CustomViewStatePlanner.CaptureActiveSheetIndex(ctx.Workbook))
+        if (_previousActiveSheetIndex != CustomViewStatePlanner.CaptureActiveSheetIndex(workbook))
             return false;
 
-        if (_previousStates is null)
-            return true;
-
-        var live = ctx.Workbook.Sheets
-            .Select(sheet => SaveCustomViewCommand.CaptureExtendedState(
-                sheet, CustomViewStatePlanner.CaptureSheetState(sheet)))
-            .ToList();
-
-        return live.Count == _previousStates.Count
-            && live.Zip(_previousStates).All(pair =>
-                WorksheetCustomViewStateComparer.Same(pair.First, pair.Second));
+        return _previousStates is null || _previousStates.All(snapshot =>
+            workbook.GetSheet(snapshot.SheetId) is { } sheet &&
+            WorksheetCustomViewStateComparer.Same(snapshot.State, CaptureState(sheet)));
     }
 
+    private static WorksheetCustomViewState CaptureState(Sheet sheet) =>
+        SaveCustomViewCommand.CaptureExtendedState(sheet, CustomViewStatePlanner.CaptureSheetState(sheet));
 
     public void Revert(ICommandContext ctx)
     {
         if (_previousStates is null) return;
-        foreach (var state in _previousStates)
+        foreach (var (sheetId, state) in _previousStates)
         {
-            var sheet = ctx.Workbook.GetSheet(state.SheetName);
+            var sheet = ctx.Workbook.GetSheet(sheetId);
             if (sheet is null) continue;
             // Undo always restores the full previously-captured state (both base and extended
             // fields were captured unconditionally in Apply above), so no view flags gate this.

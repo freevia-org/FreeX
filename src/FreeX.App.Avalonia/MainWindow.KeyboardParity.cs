@@ -245,8 +245,7 @@ public sealed partial class MainWindow
                 await CheckFormulaErrorsAsync();
                 break;
             case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
-                _formulaBarExpanded = !_formulaBarExpanded;
-                ApplyFormulaBarExpansion();
+                ToggleFormulaBarExpansion();
                 break;
             case KeyboardCommandShortcut.ToggleFilter:
                 ToggleAutoFilter();
