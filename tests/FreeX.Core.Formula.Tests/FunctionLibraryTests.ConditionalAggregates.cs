@@ -552,14 +552,14 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Countif_NotEqualZeroCriteria_DoesNotCountBlanks()
+    public void Countif_NotEqualZeroCriteria_CountsBlanks()
     {
-        // A1=blank, A2=0, A3="text" → only "text" should match
+        // Excel counts the blank and text, but not numeric zero.
         var sheet = MakeSheet(
             (2, 1, new NumberValue(0)),
             (3, 1, new TextValue("text")));
 
-        _eval.Evaluate("=COUNTIF(A1:A3,\"<>0\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=COUNTIF(A1:A3,\"<>0\")", sheet).Should().Be(new NumberValue(2));
     }
 
     [Fact]
