@@ -232,9 +232,10 @@ standard/minimum-size quality option is modeled explicitly. The Excel-style "Ign
 while active-sheet and workbook export can bypass each sheet's stored `PrintArea` and render the used range. PDF export
 honors the quality choice by changing raster page DPI while preserving the physical page size; XPS keeps the
 print-pipeline paginator path. The Avalonia Export dialog shares its workbook scopes, print areas,
-pagination, and page-range filtering between PDF and XPS. The Avalonia XPS writer uses 144 DPI Skia
-page artwork with embedded Unicode glyph runs where the font permits embedding. It preserves print
-dimensions and writes workbook document properties when the user requests them. `ExportPlanner`
+pagination, and page-range filtering between PDF and XPS. Avalonia XPS writes native paths, brushes,
+images, and glyphs where the font permits embedding. Skia renders effects and other unsupported drawing
+operations as localized 144 DPI layers in drawing order. XPS preserves print dimensions and writes
+workbook document properties when the user requests them. `ExportPlanner`
 validates requested page-range starts and ends against the rendered page count before file creation, so out-of-range requests surface
 as export-option errors instead of half-written files. `ExportReadinessPlanner` supplies the local Backstage status text
 for PDF/XPS export readiness, selected-range availability, supported local options, and the no-Microsoft-account/cloud

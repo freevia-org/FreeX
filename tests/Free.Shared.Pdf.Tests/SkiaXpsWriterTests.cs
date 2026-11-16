@@ -13,7 +13,7 @@ public sealed class SkiaXpsWriterTests
     private static readonly XNamespace Xps = "http://schemas.microsoft.com/xps/2005/06";
 
     [Fact]
-    public void WriteToBytes_PreservesRasterArtworkAndAnAlignedFontBackedTextLayer()
+    public void WriteToBytes_LeavesAnEffectRasterBetweenNativeFillAndVisibleGlyphs()
     {
         const string text = "Budget café";
         var red = new PdfColor(220, 30, 20);
@@ -40,15 +40,18 @@ public sealed class SkiaXpsWriterTests
         var imagePath = imageBrush.Attribute("ImageSource")!.Value.TrimStart('/');
         using var artwork = SKBitmap.Decode(ReadPart(package, imagePath))
             ?? throw new InvalidOperationException("The XPS artwork could not be decoded.");
-        artwork.Width.Should().Be(144);
-        artwork.Height.Should().Be(144);
-        artwork.GetPixel(10, 128).Should().Be(new SKColor(red.R, red.G, red.B));
+        artwork.Width.Should().BeLessThan(144);
+        artwork.Height.Should().BeLessThan(144);
+        artwork.Pixels.Should().Contain(pixel => pixel.Alpha > 0);
+        artwork.Pixels.Should().Contain(pixel => pixel.Alpha == 0);
+        fixedPage.Descendants(Xps + "Path").Should().Contain(path =>
+            (string?)path.Attribute("Fill") == "#DC1E14");
 
         var glyph = fixedPage.Descendants(Xps + "Glyphs").Should().ContainSingle().Which;
         glyph.Attribute("UnicodeString")!.Value.Should().Be(text);
         glyph.Attribute("OriginX")!.Value.Should().Be("28");
         glyph.Attribute("OriginY")!.Value.Should().Be("32");
-        glyph.Attribute("Fill")!.Value.Should().Be("#00000000");
+        glyph.Attribute("Fill")!.Value.Should().Be("#000000");
         var rotation = glyph.Parent!;
         var clip = rotation.Parent!;
         rotation.Attribute("RenderTransform").Should().NotBeNull();
@@ -68,6 +71,33 @@ public sealed class SkiaXpsWriterTests
         var glyphIds = glyph.Attribute("Indices")!.Value.Split(';')
             .Select(entry => ushort.Parse(entry.Split(',')[0], CultureInfo.InvariantCulture));
         glyphIds.Should().Equal(text.Select(character => typeface!.GetGlyph(character)));
+    }
+
+    [Fact]
+    public void WriteToBytes_KeepsOriginalImageAndNativeDashedBorder()
+    {
+        using var source = new SKBitmap(new SKImageInfo(8, 6));
+        source.Erase(SKColors.DarkCyan);
+        using var encoded = source.Encode(SKEncodedImageFormat.Png, 100);
+        var sourcePng = encoded.ToArray();
+        var dash = new PdfDashPattern([6, 2], Phase: 1);
+        var page = new PdfContentPage(72, 72, [
+            new PdfImage(4, 8, 20, 12, sourcePng, "image/png"),
+            new PdfStrokeRect(4, 8, 20, 12, PdfColor.Black, 2, dash),
+            new PdfText(4, 42, 12, PdfFontFace.Bold, PdfColor.Black, "Quarterly report", "Arial"),
+        ]);
+
+        using var package = new ZipArchive(new MemoryStream(SkiaXpsWriter.WriteToBytes(new PdfContentDocument([page]))));
+        using var pagePart = package.GetEntry("Documents/1/Pages/1.fpage")!.Open();
+        var fixedPage = XDocument.Load(pagePart);
+        var imageBrush = fixedPage.Descendants(Xps + "ImageBrush").Should().ContainSingle().Which;
+        ReadPart(package, imageBrush.Attribute("ImageSource")!.Value.TrimStart('/')).Should().Equal(sourcePng);
+        var dashedPath = fixedPage.Descendants(Xps + "Path").Should()
+            .ContainSingle(path => path.Attribute("StrokeDashArray") != null).Which;
+        dashedPath.Attribute("StrokeDashArray")!.Value.Should().Be("3 1");
+        dashedPath.Attribute("StrokeDashOffset")!.Value.Should().Be("0.5");
+        fixedPage.Descendants(Xps + "Glyphs").Should().ContainSingle().Which
+            .Attribute("Fill")!.Value.Should().Be("#000000");
     }
 
     [Theory]
