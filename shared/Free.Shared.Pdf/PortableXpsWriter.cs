@@ -161,6 +161,30 @@ public static class PortableXpsWriter
         ref int textCount,
         ref int imageCount)
     {
+        var dash = op switch
+        {
+            PdfStrokeRect value => value.Dash,
+            PdfStrokeRectLinearGradient value => value.Dash,
+            PdfStrokeEllipse value => value.Dash,
+            PdfStrokeEllipseLinearGradient value => value.Dash,
+            PdfPath { StrokeColor: not null } value => value.StrokeDash,
+            PdfPathPattern { StrokeColor: not null } value => value.StrokeDash,
+            PdfPathLinearGradient value when value.StrokeGradient is not null || value.StrokeFallbackColor is not null => value.StrokeDash,
+            _ => null
+        };
+        var dashWidth = op switch
+        {
+            PdfStrokeRect value => value.LineWidth,
+            PdfStrokeRectLinearGradient value => value.LineWidth,
+            PdfStrokeEllipse value => value.LineWidth,
+            PdfStrokeEllipseLinearGradient value => value.LineWidth,
+            PdfPath value => Math.Max(0.1, value.StrokeWidth),
+            PdfPathPattern value => Math.Max(0.1, value.StrokeWidth),
+            PdfPathLinearGradient value => Math.Max(0.1, value.StrokeWidth),
+            _ => 1
+        };
+        if (dash is not null && !CanRenderDash(dash, dashWidth))
+            requirements.Add("PdfDashPattern requires representable finite nonnegative segments, a positive segment, and a finite phase");
         switch (op)
         {
             case PdfText text:
@@ -193,7 +217,18 @@ public static class PortableXpsWriter
                 foreach (var child in group.Ops)
                     AnalyzeOperation(child, options, requirements, ref textCount, ref imageCount);
                 break;
+            case PdfPathLinearGradient gradient when
+                (gradient.FillGradient is { } fill && !CanRenderLinearGradient(fill) && gradient.FillFallbackColor is null) ||
+                (gradient.StrokeGradient is { } stroke && !CanRenderLinearGradient(stroke) && gradient.StrokeFallbackColor is null):
+                requirements.Add("PdfPathLinearGradient requires a representable gradient or a solid fallback");
+                break;
+            case PdfFillRect or PdfFillRectPattern or PdfFillRectLinearGradient or
+                PdfStrokeRect or PdfStrokeRectLinearGradient or PdfFillEllipse or PdfFillEllipsePattern or
+                PdfFillEllipseLinearGradient or PdfStrokeEllipse or PdfStrokeEllipseLinearGradient or
+                PdfLine or PdfLineLinearGradient or PdfFilledTriangle or PdfPath or PdfPathPattern or PdfPathLinearGradient:
+                break;
             default:
+                requirements.Add($"Unsupported draw operation: {op.GetType().Name}");
                 break;
         }
     }
@@ -288,11 +323,19 @@ public static class PortableXpsWriter
 
     private static XElement BuildPath(PdfPathLinearGradient path, double pageHeight) =>
         PathElement(PathData(path.Contours, pageHeight),
-            path.FillFallbackColor is { } fill ? Fill(path.FillGradient, fill, pageHeight) : null,
-            path.StrokeFallbackColor is { } stroke
-                ? Stroke(path.StrokeGradient, stroke, Math.Max(0.1, path.StrokeWidth), pageHeight)
-                : null,
+            OptionalGradientBrush(path.FillGradient, path.FillFallbackColor, pageHeight, null),
+            OptionalGradientBrush(path.StrokeGradient, path.StrokeFallbackColor, pageHeight, Math.Max(0.1, path.StrokeWidth)),
             dash: path.StrokeDash);
+
+    private static XElement? OptionalGradientBrush(PdfLinearGradient? gradient, PdfColor? fallback, double pageHeight, double? width)
+    {
+        XElement? brush = gradient is not null && TryGetGradientStops(gradient, out var stops)
+            ? LinearGradientBrush(gradient, stops, pageHeight)
+            : fallback is { } color ? Fill(color) : null;
+        if (brush is not null && width is { } value)
+            brush.SetAttributeValue("data-stroke-thickness", TransformNumber(value));
+        return brush;
+    }
 
     private static XElement BuildText(
         PdfText text,
@@ -631,16 +674,30 @@ public static class PortableXpsWriter
     {
         if (strokeWidth <= 0)
             return;
-        var segments = dash.Segments.Where(segment => double.IsFinite(segment) && segment > 0).ToArray();
-        if (segments.Length == 0 || segments.Length % 2 != 0)
+        if (dash.Segments.Count == 0)
             return;
+        var segments = dash.Segments.Count % 2 == 0 ? dash.Segments.ToArray() : dash.Segments.Concat(dash.Segments).ToArray();
 
         // The shared pattern is measured in points. XPS measures its lengths and phase
         // in multiples of the stroke thickness.
         path.SetAttributeValue("StrokeDashArray", string.Join(" ", segments.Select(segment => TransformNumber(segment / strokeWidth))));
-        if (double.IsFinite(dash.Phase) && dash.Phase != 0)
+        if (dash.Phase != 0)
             path.SetAttributeValue("StrokeDashOffset", TransformNumber(dash.Phase / strokeWidth));
     }
+
+    /// <summary>Whether a PDF dash pattern can be represented as an XPS stroke dash array.</summary>
+    public static bool CanRenderDash(PdfDashPattern? dash, double width)
+    {
+        if (dash is null) return true;
+        if (dash.Segments.Count == 0) return true;
+        if (!double.IsFinite(width) || width <= 0 || !double.IsFinite(dash.Phase) ||
+            !RepresentableDashRatio(dash.Phase / width)) return false;
+        return dash.Segments.All(segment => double.IsFinite(segment) && segment >= 0 && RepresentableDashRatio(segment / width)) &&
+            dash.Segments.Any(segment => segment > 0);
+    }
+
+    private static bool RepresentableDashRatio(double ratio) => double.IsFinite(ratio) &&
+        Math.Abs(ratio) <= MaxGradientCoordinate && (ratio == 0 || Math.Abs(ratio) >= 1e-12);
 
     private static void SetPathBrush(XElement path, string propertyName, XElement brush)
     {

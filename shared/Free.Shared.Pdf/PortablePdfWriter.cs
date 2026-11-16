@@ -220,7 +220,10 @@ public static class PortablePdfWriter
                 break;
             case PdfPathLinearGradient path:
                 if (colorOverride is { } pathGradientColor)
-                    AppendPath(content, new PdfPath(path.Contours, path.FillFallbackColor is not null ? pathGradientColor : null, path.StrokeFallbackColor is not null ? pathGradientColor : null, path.StrokeWidth, path.StrokeDash));
+                    AppendPath(content, new PdfPath(path.Contours,
+                        path.FillGradient is not null || path.FillFallbackColor is not null ? pathGradientColor : null,
+                        path.StrokeGradient is not null || path.StrokeFallbackColor is not null ? pathGradientColor : null,
+                        path.StrokeWidth, path.StrokeDash));
                 else
                     AppendPathLinearGradient(content, path, patternResources);
                 break;
@@ -2038,16 +2041,24 @@ public static class PortablePdfWriter
         PdfPathLinearGradient path,
         PatternResourceSet patternResources)
     {
-        if (path.Contours.Count == 0 || (path.FillGradient is null && path.StrokeGradient is null))
+        if (path.Contours.Count == 0)
             return;
 
-        content.AppendLine("q");
         PdfPatternResource? fillPattern = null;
         var hasFillPattern = path.FillGradient is { } fillGradient &&
             patternResources.ByGradient.TryGetValue(fillGradient, out fillPattern);
         PdfPatternResource? strokePattern = null;
         var hasStrokePattern = path.StrokeGradient is { } strokeGradient &&
             patternResources.ByGradient.TryGetValue(strokeGradient, out strokePattern);
+
+        if ((path.FillGradient is not null && !hasFillPattern && path.FillFallbackColor is null) ||
+            (path.StrokeGradient is not null && !hasStrokePattern && path.StrokeFallbackColor is null))
+            throw new InvalidOperationException("A path gradient must be representable or provide a solid fallback.");
+
+        var hasFill = hasFillPattern || path.FillFallbackColor is not null;
+        var hasStroke = hasStrokePattern || path.StrokeFallbackColor is not null;
+        if (!hasFill && !hasStroke) return;
+        content.AppendLine("q");
 
         if (hasFillPattern)
             AppendFillPattern(content, fillPattern!.ResourceName);
@@ -2069,8 +2080,6 @@ public static class PortablePdfWriter
 
         AppendPathContours(content, path.Contours);
 
-        var hasFill = hasFillPattern || path.FillFallbackColor is not null;
-        var hasStroke = hasStrokePattern || path.StrokeFallbackColor is not null;
         content.AppendLine(hasFill && hasStroke ? "B" : hasFill ? "f" : "S");
         content.AppendLine("Q");
     }
@@ -2133,12 +2142,11 @@ public static class PortablePdfWriter
         if (dash is null || dash.Segments.Count == 0)
             return;
 
-        var segments = dash.Segments
-            .Where(segment => double.IsFinite(segment) && segment > 0)
-            .Select(FormatNumber)
-            .ToArray();
-        if (segments.Length == 0)
+        // Zero-length dashes/gaps are valid and affect alternating paint/gap parity.
+        if (dash.Segments.Any(segment => !double.IsFinite(segment) || segment < 0) ||
+            !dash.Segments.Any(segment => segment > 0))
             return;
+        var segments = dash.Segments.Select(FormatNumber).ToArray();
 
         var phase = double.IsFinite(dash.Phase) ? dash.Phase : 0;
         content.AppendLine($"[{string.Join(" ", segments)}] {FormatNumber(phase)} d");

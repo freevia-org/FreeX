@@ -592,12 +592,12 @@ public static class SkiaPdfWriter
                         canvas.DrawPath(skPath, fillPaint);
                     }
                 }
-                else if (pdfPath.FillFallbackColor is { } fillFallback)
+                else if (pdfPath.FillGradient is not null || pdfPath.FillFallbackColor is not null)
                 {
                     if (pdfPath.FillGradient is { } fillGradient)
-                        ApplyLinearGradient(fillPaint, fillGradient, pageHeight, fillFallback);
+                        ApplyLinearGradient(fillPaint, fillGradient, pageHeight, pdfPath.FillFallbackColor);
                     else
-                        fillPaint.Color = ToSkColor(fillFallback);
+                        fillPaint.Color = ToSkColor(pdfPath.FillFallbackColor!.Value);
                     canvas.DrawPath(skPath, fillPaint);
                     fillPaint.Shader = null;
                 }
@@ -615,12 +615,12 @@ public static class SkiaPdfWriter
                         strokePaint.PathEffect = null;
                     }
                 }
-                else if (pdfPath.StrokeFallbackColor is { } strokeFallback)
+                else if (pdfPath.StrokeGradient is not null || pdfPath.StrokeFallbackColor is not null)
                 {
                     if (pdfPath.StrokeGradient is { } strokeGradient)
-                        ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, strokeFallback);
+                        ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, pdfPath.StrokeFallbackColor);
                     else
-                        strokePaint.Color = ToSkColor(strokeFallback);
+                        strokePaint.Color = ToSkColor(pdfPath.StrokeFallbackColor!.Value);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
                     using var gradientPathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
                     strokePaint.PathEffect = gradientPathStrokeDash;
@@ -1062,12 +1062,17 @@ public static class SkiaPdfWriter
         SKPaint paint,
         PdfLinearGradient gradient,
         float pageHeight,
-        PdfColor fallbackColor)
+        PdfColor? fallbackColor)
     {
-        paint.Color = ToSkColor(fallbackColor);
+        paint.Color = ToSkColor(fallbackColor ?? PdfColor.Black);
         paint.Shader = null;
-        if (!PdfRenderGeometry.TryNormalizeGradient(gradient, out var stops))
+        if (!PdfRenderGeometry.TryNormalizeGradient(gradient, out var stops) ||
+            Math.Abs(gradient.StartX) > float.MaxValue || Math.Abs(gradient.StartY) > float.MaxValue ||
+            Math.Abs(gradient.EndX) > float.MaxValue || Math.Abs(gradient.EndY) > float.MaxValue)
+        {
+            if (fallbackColor is null) throw new InvalidOperationException("A path gradient must be representable or provide a solid fallback.");
             return;
+        }
 
         var colors = stops.Select(stop => ToSkColor(stop.Color)).ToArray();
         var positions = stops.Select(stop => (float)stop.Position).ToArray();
@@ -1077,6 +1082,8 @@ public static class SkiaPdfWriter
             colors,
             positions,
             SKShaderTileMode.Clamp);
+        if (paint.Shader is null && fallbackColor is null)
+            throw new InvalidOperationException("A path gradient must be representable or provide a solid fallback.");
     }
 
     private static void DrawPattern(SKCanvas canvas, SKPaint paint, PdfPatternFill pattern, Action draw)
@@ -1148,13 +1155,12 @@ public static class SkiaPdfWriter
         if (dash is null)
             return null;
 
-        var segments = dash.Segments
-            .Where(segment => double.IsFinite(segment) && segment > 0)
-            .Select(segment => (float)segment)
-            .ToArray();
-        return segments.Length == 0
-            ? null
-            : SKPathEffect.CreateDash(segments, (float)(double.IsFinite(dash.Phase) ? dash.Phase : 0));
+        if (dash.Segments.Count == 0 || dash.Segments.Any(segment => !double.IsFinite(segment) || segment < 0 || segment > float.MaxValue) ||
+            !dash.Segments.Any(segment => segment > 0)) return null;
+        // Skia requires an even count; PDF repeats an odd pattern in its entirety.
+        var values = dash.Segments.Count % 2 == 0 ? dash.Segments : dash.Segments.Concat(dash.Segments);
+        var segments = values.Select(segment => (float)segment).ToArray();
+        return SKPathEffect.CreateDash(segments, (float)(double.IsFinite(dash.Phase) && Math.Abs(dash.Phase) <= float.MaxValue ? dash.Phase : 0));
     }
 
     private static SKPaint CreateImagePaint(double opacity) =>
