@@ -81,6 +81,9 @@ public sealed record PrintSelection(
     /// </summary>
     public PrintSides Sides { get; init; } = PrintSides.PrinterDefault;
 
+    /// <summary>Overrides for this job only. Kept outside the positional record signature.</summary>
+    public PrinterOptionSelection? PrinterOptions { get; init; }
+
     public PrintPageRange EffectivePageRange => PageRange ?? PrintPageRange.All;
 
     public void Validate()
@@ -94,6 +97,40 @@ public sealed record PrintSelection(
 }
 
 public sealed record PrinterInfo(string Name, bool IsDefault = false);
+
+public sealed record PrinterOptionChoice(string Value, string Label);
+
+public sealed record PrinterOptionDefinition(
+    string Key,
+    string Label,
+    IReadOnlyList<PrinterOptionChoice> Choices,
+    string? DefaultValue = null);
+
+public sealed record PrinterOptionSelection(
+    string PrinterName,
+    IReadOnlyDictionary<string, string> Values);
+
+public enum PrinterOptionsStatus
+{
+    Available,
+    NoOptions,
+    Unavailable,
+    Failed,
+    Cancelled,
+}
+
+public sealed record PrinterOptionsResult(
+    PrinterOptionsStatus Status,
+    IReadOnlyList<PrinterOptionDefinition> Options,
+    string? Message = null);
+
+/// <summary>Optional platform support for reading printer-specific options.</summary>
+public interface IPlatformPrinterOptionsService
+{
+    Task<PrinterOptionsResult> GetOptionsAsync(
+        string printerName,
+        CancellationToken cancellationToken = default);
+}
 
 public enum PrinterDiscoveryStatus
 {

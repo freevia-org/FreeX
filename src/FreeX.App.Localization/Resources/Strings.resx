@@ -2414,6 +2414,24 @@
   <data name="Print_PrinterHeader" xml:space="preserve">
     <value>Printer</value>
   </data>
+  <data name="Print_ConnectingToPrinter" xml:space="preserve">
+    <value>Reading printer settings…</value>
+  </data>
+  <data name="Print_PrinterOptionDefault" xml:space="preserve">
+    <value>Printer default</value>
+  </data>
+  <data name="Print_PrinterOptionDefaultWithValue" xml:space="preserve">
+    <value>Printer default ({0})</value>
+  </data>
+  <data name="Print_PrinterOptionsEmpty" xml:space="preserve">
+    <value>This printer has no additional settings.</value>
+  </data>
+  <data name="Print_PrinterOptionsUnavailable" xml:space="preserve">
+    <value>Printer settings could not be read.</value>
+  </data>
+  <data name="Print_UsePrinterDefaults" xml:space="preserve">
+    <value>Use Printer Defaults</value>
+  </data>
   <data name="Print_NoPrinterNote" xml:space="preserve">
     <value>No printer was found on this device. Print will save a print-ready PDF instead.</value>
   </data>

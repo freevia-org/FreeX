@@ -53,6 +53,9 @@ public sealed record PrintJobRequest(
     /// <summary>Init-only so the positional constructor keeps its signature for already-compiled callers.</summary>
     public PrintSides Sides { get; init; } = PrintSides.PrinterDefault;
 
+    /// <summary>Job-only overrides from the selected printer's properties.</summary>
+    public PrinterOptionSelection? PrinterOptions { get; init; }
+
     public IReadOnlySet<SheetId>? GroupedSheetIds { get; init; }
 
     internal WorkbookExportPrintIntent CreateExportIntent(WorkbookExportPrintOutputKind outputKind) =>

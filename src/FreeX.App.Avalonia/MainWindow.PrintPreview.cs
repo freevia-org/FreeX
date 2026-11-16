@@ -563,7 +563,10 @@ public sealed partial class MainWindow
                     _session.ActiveSheet.Id,
                     () => currentSettings,
                     updated => currentSettings = updated,
-                    RepaginateAndRender),
+                    RepaginateAndRender,
+                    dialog,
+                    () => ResolvePreviewPrinterName(currentSettings.PrinterName, canSpool, printerNames, defaultPrinterName),
+                    "PrintPreviewSettingsPrinterPropertiesButton"),
             printerBoxes.Add,
             out var rangeFields,
             hasExternalPageSource ? null : toolbarControls);
@@ -727,12 +730,19 @@ public sealed partial class MainWindow
                 _ => PrintSides.OneSided,
             },
         };
-        var targetPrinter = canSpool
-            ? printerNames.FirstOrDefault(name => string.Equals(name, settings.PrinterName, StringComparison.Ordinal))
-                ?? defaultPrinterName
-            : null;
+        var targetPrinter = ResolvePreviewPrinterName(settings.PrinterName, canSpool, printerNames, defaultPrinterName);
         await ExecutePrintJobAsync(request, targetPrinter, canSpool);
     }
+
+    private static string? ResolvePreviewPrinterName(
+        string? selectedPrinterName,
+        bool canSpool,
+        IReadOnlyList<string> printerNames,
+        string? defaultPrinterName) =>
+        canSpool
+            ? printerNames.FirstOrDefault(name => string.Equals(name, selectedPrinterName, StringComparison.Ordinal))
+                ?? defaultPrinterName
+            : null;
 
     private static async Task ShowPrintPreviewWarningAsync(Window owner, string message, TextBox target)
     {
@@ -888,7 +898,10 @@ public sealed partial class MainWindow
         SheetId SheetId,
         Func<PrintPreviewSettings> GetSettings,
         Action<PrintPreviewSettings> SetSettings,
-        Action Repaginate);
+        Action Repaginate,
+        Window Owner,
+        Func<string?> ResolvePrinterName,
+        string PrinterPropertiesAutomationId);
 
     private async Task ShowPrintPreviewPageSetupAsync(
         PageLayoutPageSetupOpenSource source,
@@ -990,10 +1003,15 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
-        // CUPS has no driver properties sheet to open, so a live preview shows the button disabled
-        // rather than enabled and inert. (The static parity capture keeps the WPF-matching look.)
         if (interaction is not null)
-            printerPropertiesButton.IsEnabled = false;
+        {
+            ConfigurePrinterPropertiesButton(
+                printerPropertiesButton,
+                interaction.PrinterPropertiesAutomationId,
+                interaction.Owner,
+                printerBox,
+                interaction.ResolvePrinterName);
+        }
 
         // Entire Workbook is backed by the shared workbook page stream, so changing this choice
         // repaginates the live preview instead of merely changing a disabled-looking option.
@@ -1057,13 +1075,19 @@ public sealed partial class MainWindow
             // and only copy a printer after that printer is present in the other selector.
             toolbarControls.Printer.SelectionChanged += (_, _) =>
             {
-                if (toolbarControls.Printer.SelectedItem is string name && printerBox.Items.Contains(name))
+                if (toolbarControls.Printer.SelectedItem is string name &&
+                    !Equals(printerBox.SelectedItem, name) && printerBox.Items.Contains(name))
+                {
                     printerBox.SelectedItem = name;
+                }
             };
             printerBox.SelectionChanged += (_, _) =>
             {
-                if (printerBox.SelectedItem is string name && toolbarControls.Printer.Items.Contains(name))
+                if (printerBox.SelectedItem is string name &&
+                    !Equals(toolbarControls.Printer.SelectedItem, name) && toolbarControls.Printer.Items.Contains(name))
+                {
                     toolbarControls.Printer.SelectedItem = name;
+                }
             };
             toolbarControls.Collated.IsCheckedChanged += (_, _) =>
                 collationBox.SelectedIndex = toolbarControls.Collated.IsChecked == true ? 0 : 1;

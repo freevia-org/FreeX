@@ -119,8 +119,10 @@ public static class WorkbookPrintWorkflow
             {
                 var job = plan.Readiness.NativePrintPlan.JobPlan;
                 WorkbookPrintRenderResult? platformRenderedDocument = null;
+                var requestedPrinter = string.IsNullOrWhiteSpace(printerId) ? null : printerId.Trim();
+                var printerOptions = job.Request.PrinterOptions;
                 var requestedSelection = new PrintSelection(
-                    PrinterName: string.IsNullOrWhiteSpace(printerId) ? null : printerId.Trim(),
+                    PrinterName: requestedPrinter,
                     Copies: job.Copies,
                     PageRange: job.FirstPage == job.LastPage
                         ? PrintPageRange.Single(job.FirstPage)
@@ -129,6 +131,10 @@ public static class WorkbookPrintWorkflow
                     JobTitle: jobTitle)
                 {
                     Sides = job.Request.Sides,
+                    PrinterOptions = requestedPrinter is not null &&
+                        string.Equals(requestedPrinter, printerOptions?.PrinterName, StringComparison.OrdinalIgnoreCase)
+                            ? printerOptions
+                            : null,
                 };
                 var portableExecution = await new PortablePrintSubmissionWorkflow(printService).ExecuteAsync(
                     static (intent, _) => Task.FromResult<PrintSelection?>(intent.RequestedSelection),
