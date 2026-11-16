@@ -6,7 +6,7 @@ namespace FreeX.Core.Commands;
 /// <summary>Invalidates structured references before a column deletion relocates their owners.</summary>
 internal sealed class StructuredTableColumnDeleteEffects
 {
-    private sealed record Target(StructuredTableModel Table, string[] Removed, string[] MatchNames, bool Whole);
+    private sealed record Target(StructuredTableModel Table, string[] Removed, string[] MatchNames, string[] Ambiguous, bool Whole);
     private readonly List<Target> _targets = [];
     private readonly List<Action> _undo = [];
     private readonly HashSet<CellAddress> _affected = [];
@@ -21,14 +21,34 @@ internal sealed class StructuredTableColumnDeleteEffects
         foreach (var table in sheet.StructuredTables)
         {
             if ((ulong)table.Range.End.Col < start || table.Range.Start.Col > end) continue;
-            if (table.Columns.Count != table.Range.ColCount)
+            // The reader and table model allow a legacy table with no column metadata;
+            // structural reconciliation already supplies columns for that state. A
+            // partially populated list, however, leaves column identity ambiguous.
+            if (table.Columns.Count != 0 && table.Columns.Count != table.Range.ColCount)
                 throw new InvalidOperationException("The table's column metadata does not match its range.");
             var whole = start <= table.Range.Start.Col && end >= table.Range.End.Col;
             var removed = FindRemovedNames(sheet, table, start, end);
+            var ambiguous = !whole && table.Columns.Count == 0
+                ? FindAmbiguousHeaderNames(sheet, table, start, end, removed) : [];
             result._targets.Add(new Target(table, removed,
-                removed.Select(name => name.Replace("'", "", StringComparison.Ordinal)).ToArray(), whole));
+                removed.Select(name => name.Replace("'", "", StringComparison.Ordinal)).ToArray(), ambiguous, whole));
         }
         return result;
+    }
+
+    private static string[] FindAmbiguousHeaderNames(Sheet sheet, StructuredTableModel table, uint start, ulong end, string[] removed)
+    {
+        if (table.HeaderRowCount == 0 || removed.Length == 0) return [];
+        var removedNames = removed.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var ambiguous = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var col = table.Range.Start.Col; ; col++)
+        {
+            if (((ulong)col < start || (ulong)col > end) &&
+                sheet.GetCell(table.Range.Start.Row, col)?.Value is TextValue { Value.Length: > 0 } text &&
+                removedNames.Contains(text.Value)) ambiguous.Add(text.Value);
+            if (col == table.Range.End.Col) break;
+        }
+        return ambiguous.ToArray();
     }
 
     // Mirror StructuredReferenceResolver's canonical-live, stale-model, then live
@@ -36,6 +56,21 @@ internal sealed class StructuredTableColumnDeleteEffects
     // its actual resolved owner was deleted.
     internal static string[] FindRemovedNames(Sheet sheet, StructuredTableModel table, uint start, ulong end)
     {
+        if (table.Columns.Count == 0)
+        {
+            if (table.HeaderRowCount == 0) return [];
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var first = Math.Max(table.Range.Start.Col, start);
+            var last = (uint)Math.Min(table.Range.End.Col, end);
+            if (first > last) return [];
+            for (var col = first; ; col++)
+            {
+                if (sheet.GetCell(table.Range.Start.Row, col)?.Value is TextValue { Value.Length: > 0 } text)
+                    names.Add(text.Value);
+                if (col == last) break;
+            }
+            return names.ToArray();
+        }
         string Live(int index) => table.HeaderRowCount != 0 &&
             sheet.GetCell(table.Range.Start.Row, table.Range.Start.Col + (uint)index)?.Value is TextValue { Value.Length: > 0 } text
                 ? text.Value : table.Columns[index].Name;
@@ -83,6 +118,10 @@ internal sealed class StructuredTableColumnDeleteEffects
             // cannot refer to the deleted columns. Whole-table unqualified selectors with
             // unknown owner remain ambiguous and must still be checked conservatively.
             if (!namesTarget && !namesColumn && !ownerMatches && !(target.Whole && owner is null)) continue;
+            if (target.Ambiguous.Length > 0 &&
+                StructuredFormulaColumnDelete.TryRewrite(current, target.Table.Name, target.Table.DisplayName, owner,
+                    target.Ambiguous, false, out var ambiguousRewrite) && ambiguousRewrite != current)
+                throw new InvalidOperationException("A structured reference has ambiguous ownership in a table without column metadata.");
             if (StructuredFormulaColumnDelete.TryRewrite(current, target.Table.Name, target.Table.DisplayName, owner,
                     target.Removed, target.Whole, out var rewritten))
             {

@@ -6,6 +6,80 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed class StructuredTableColumnDeletionTransactionTests
 {
+    [Theory]
+    [InlineData("SUM(SalesTable[X])", false)]
+    [InlineData("SUM(SalesTable[#All])", true)]
+    [InlineData("SUM(OtherTable[X])", true)]
+    public void MetadataLessDuplicateHeaders_RejectsOnlyReferencesWithAmbiguousOwnership(string formulaText, bool succeeds)
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Data");
+        var other = workbook.AddSheet("Other");
+        var a = new CellAddress(sheet.Id, 1, 1);
+        var b = new CellAddress(sheet.Id, 1, 2);
+        var formula = new CellAddress(other.Id, 1, 1);
+        sheet.SetCell(a, new TextValue("X"));
+        sheet.SetCell(b, new TextValue("X"));
+        sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "SalesTable", DisplayName = "SalesTable", Range = new GridRange(a, new CellAddress(sheet.Id, 2, 2)) });
+        other.SetCell(formula, Cell.FromFormula(formulaText));
+        var command = new DeleteColumnsCommand(sheet.Id, 2);
+        var ctx = new TestCommandContext(workbook);
+        var result = command.Apply(ctx);
+        result.Success.Should().Be(succeeds, result.ErrorMessage);
+        other.GetCell(formula)!.FormulaText.Should().Be(formulaText);
+        if (succeeds) command.Revert(ctx);
+        sheet.GetValue(b).Should().Be(new TextValue("X"));
+        sheet.StructuredTables[0].Columns.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeleteColumnFromPartiallyDescribedTable_RejectsWithoutMutation()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Data");
+        var a = new CellAddress(sheet.Id, 1, 1);
+        var b = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a, new TextValue("Alpha"));
+        sheet.SetCell(b, new TextValue("Bravo"));
+        sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "SalesTable", DisplayName = "SalesTable", Range = new GridRange(a, new CellAddress(sheet.Id, 2, 2)), Columns = { new StructuredTableColumnModel(1, "Alpha") } });
+        var result = new DeleteColumnsCommand(sheet.Id, 2).Apply(new TestCommandContext(workbook));
+        result.Success.Should().BeFalse();
+        sheet.GetValue(a).Should().Be(new TextValue("Alpha"));
+        sheet.GetValue(b).Should().Be(new TextValue("Bravo"));
+        sheet.StructuredTables[0].Columns.Should().ContainSingle().Which.Name.Should().Be("Alpha");
+    }
+
+    [Fact]
+    public void DeleteColumnFromMetadataLessTable_UsesLiveHeaderAndRestoresOnUndo()
+    {
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Data");
+        var other = workbook.AddSheet("Other");
+        var a = new CellAddress(sheet.Id, 1, 1);
+        var b = new CellAddress(sheet.Id, 1, 2);
+        var c = new CellAddress(sheet.Id, 1, 3);
+        sheet.SetCell(a, new TextValue("Alpha"));
+        sheet.SetCell(b, new TextValue("Bravo"));
+        sheet.SetCell(c, new TextValue("Charlie"));
+        sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "SalesTable", DisplayName = "SalesTable", Range = new GridRange(a, new CellAddress(sheet.Id, 2, 3)) });
+        var deleted = new CellAddress(other.Id, 1, 1);
+        var retained = new CellAddress(other.Id, 2, 1);
+        var whole = new CellAddress(other.Id, 3, 1);
+        other.SetCell(deleted, Cell.FromFormula("SUM(SalesTable[Bravo])"));
+        other.SetCell(retained, Cell.FromFormula("SUM(SalesTable[Charlie])"));
+        other.SetCell(whole, Cell.FromFormula("SUM(SalesTable[#All])"));
+        var command = new DeleteColumnsCommand(sheet.Id, 2);
+        var ctx = new TestCommandContext(workbook);
+        var result = command.Apply(ctx);
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        other.GetCell(deleted)!.FormulaText.Should().Be("SUM(#REF!)");
+        other.GetCell(retained)!.FormulaText.Should().Be("SUM(SalesTable[Charlie])");
+        other.GetCell(whole)!.FormulaText.Should().Be("SUM(SalesTable[#All])");
+        command.Revert(ctx);
+        sheet.StructuredTables[0].Columns.Should().BeEmpty();
+        other.GetCell(deleted)!.FormulaText.Should().Be("SUM(SalesTable[Bravo])");
+    }
+
     [Fact]
     public void DeleteEscapedColumn_WithUnknownImplicitOwner_RejectsWithoutMutation()
     {
