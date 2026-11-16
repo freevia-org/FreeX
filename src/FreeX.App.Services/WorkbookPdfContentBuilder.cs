@@ -596,6 +596,13 @@ public static class WorkbookPdfContentBuilder
             return new(pages, plan.PdfLanguage is { } language ? new PdfDocumentProperties { Language = language } : null);
 
         var metadata = ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options);
+        if (plan.ExportPrintPlan.Intent.OutputKind == WorkbookExportPrintOutputKind.Xps)
+        {
+            return new PdfContentDocument(pages, metadata is null
+                ? null
+                : new PdfDocumentProperties(metadata.Title, metadata.Creator, metadata.Subject, metadata.Keywords));
+        }
+
         var pageLayout = options.InitialView switch
         {
             PdfInitialView.OneColumn => PdfViewerPageLayout.OneColumn,

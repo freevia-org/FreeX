@@ -13,6 +13,12 @@ public sealed class NormalizedOverwritePromptPlannerTests
         "PdfExportOverwriteReplaceButton",
         "PdfExportOverwriteCancelButton")]
     [InlineData(
+        NormalizedOverwriteTargetKind.Xps,
+        "NormalizedOverwrite_ReplaceXpsTitle",
+        "NormalizedOverwrite_XpsDetail",
+        "XpsExportOverwriteReplaceButton",
+        "XpsExportOverwriteCancelButton")]
+    [InlineData(
         NormalizedOverwriteTargetKind.Workbook,
         "NormalizedOverwrite_ReplaceWorkbookTitle",
         "NormalizedOverwrite_WorkbookDetail",

@@ -29173,7 +29173,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private Task ExportActiveSheetPdfAsync() =>
-        ExportWorkbookPdfAsync(
+        ExportWorkbookFixedLayoutAsync(
             WorkbookExportPrintScope.ActiveSheet,
             WorkbookExportPrintOutputKind.Pdf);
 
@@ -29323,14 +29323,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
             WorkbookExportPrintSurface.MacOs);
 
-    /// <summary>
-    /// Scoped variant of <see cref="ExportActiveSheetPdfAsync"/> used by the backstage Export pane. Reuses
-    /// the same picker → <see cref="WorkbookExportPrintPlanner"/> → <see cref="PortablePdfExportPlanner"/>
-    /// → <see cref="Pdf.AvaloniaPdfDocumentExporter"/> path; the only addition is honoring the user's chosen
-    /// scope (selection / active sheet / whole visible workbook). Output kind is currently PDF on this
-    /// surface (XPS is offered only where the surface advertises it, which macOS does not).
-    /// </summary>
-    private async Task ExportWorkbookPdfAsync(
+    private async Task ExportWorkbookFixedLayoutAsync(
         WorkbookExportPrintScope scope,
         WorkbookExportPrintOutputKind outputKind)
     {
@@ -29342,16 +29335,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!TryCommitPendingFormulaEdit())
                 return;
 
-            if (!StorageProvider.CanSave)
-            {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
-                return;
-            }
-
             var format = ExportFormatCatalog.Get(outputKind);
-            if (!format.IsPortable)
+            var isXps = format.OutputKind == WorkbookExportPrintOutputKind.Xps;
+            if (!StorageProvider.CanSave || !format.IsPortable)
             {
-                ShowExportIssue("Portable export supports PDF only; XPS remains Windows-only.");
+                ShowExportIssue(UiText.Get(isXps ? "MainLoc_XpsExportUnavailable" : "MainLoc_PdfExportUnavailable"));
                 return;
             }
 
@@ -29368,7 +29356,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (exportOptions is null)
                 return;
 
-            var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
+            var storageFile = isXps
+                ? await ShowPortableExportSavePickerAsync(
+                    UiText.Get("MainWindowMessage_ExportXpsTitle"),
+                    ExportFilePickerPlanner.BuildPortablePickerPlan(_session.DisplayName, ApplicationTitle, format.FileFormat))
+                : await ShowPortablePdfSavePickerAsync("Export to PDF");
 
             if (storageFile is null)
                 return;
@@ -29378,7 +29370,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
+                    ShowExportIssue(UiText.Get(isXps ? "MainLoc_XpsExportRequiresLocalPath" : "MainLoc_PdfExportRequiresLocalPath"));
                     return;
                 }
 
@@ -29388,12 +29380,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     exportOptions,
                     File.Exists);
                 PersistPdfExportLanguage(requestPlan);
+                var canceledKey = isXps ? "MainLoc_XpsExportCanceled" : "MainLoc_PdfExportCanceled";
+                var failureKey = isXps ? "MainWindowMessage_ExportXpsFailed" : "MainLoc_PdfExportFailed";
                 if (requestPlan.ShouldConfirmNormalizedOverwrite &&
                     !await ConfirmNormalizedOverwriteAsync(
                         requestPlan.Request.Path,
-                        NormalizedOverwriteTargetKind.Pdf))
+                        isXps ? NormalizedOverwriteTargetKind.Xps : NormalizedOverwriteTargetKind.Pdf))
                 {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                    ShowExportIssue(UiText.Get(canceledKey));
                     return;
                 }
 
@@ -29404,10 +29398,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         requestPlan.Request,
                         async (effectiveRequest, cancellationToken) =>
                         {
-                            _statusText.Text = UiText.Get("Progress_ExportingPdf");
+                            _statusText.Text = UiText.Get(isXps ? "Progress_ExportingFile" : "Progress_ExportingPdf");
                             _statusText.Foreground = Brush(67, 113, 83);
 
-                            var exportPlan = CreatePortablePdfExportPlan(effectiveRequest.Options, outputKind);
+                            var exportPlan = CreatePortableFixedLayoutExportPlan(effectiveRequest.Options, outputKind);
                             if (!exportPlan.IsReady)
                             {
                                 adapterFailureMessage = exportPlan.StatusText;
@@ -29426,19 +29420,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             }
 
                             var exportExecution = await new AtomicExportExecutor()
-                                .ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                                .ExecutePathAsync<string>(
                                 effectiveRequest.Path,
                                 (temporaryPath, token) =>
                                 {
                                     token.ThrowIfCancellationRequested();
                                     // The Skia backend adds catalog metadata to the PDF it just wrote.
                                     using var output = new FileStream(temporaryPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
-                                    return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(
-                                        _session.Workbook,
-                                        effectiveExportPlan,
-                                        output,
-                                        options: null,
-                                        workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));
+                                    var workbookDirectory = ResolveWorkbookDirectoryForHeaderFooter();
+                                    var statusText = isXps
+                                        ? Pdf.AvaloniaXpsDocumentExporter.Save(
+                                            _session.Workbook, effectiveExportPlan, output, workbookDirectory).StatusText
+                                        : Pdf.AvaloniaPdfDocumentExporter.Save(
+                                            _session.Workbook, effectiveExportPlan, output, workbookDirectory: workbookDirectory).Result.StatusText;
+                                    return ValueTask.FromResult(statusText);
                                 },
                                 cancellationToken);
                             if (!exportExecution.Succeeded)
@@ -29447,12 +29442,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                                 throw exportExecution.Exception ?? new IOException(
                                     exportExecution.Error?.Detail.Message ??
                                     exportExecution.Validation?.Detail.ToString() ??
-                                    "PDF export did not complete.");
+                                    "File export did not complete.");
                             }
 
                             RefreshShell(UiText.Format(
                                 "MainLoc_StatusFileName",
-                                exportExecution.Value!.Result.StatusText,
+                                exportExecution.Value!,
                                 Path.GetFileName(effectiveRequest.Path)));
                             return true;
                         });
@@ -29465,20 +29460,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         var message = resultPlan.IssueKind switch
                         {
                             WorkbookExportResultIssueKind.Failure when adapterFailureMessage is null => UiText.Format(
-                                "MainLoc_PdfExportFailed",
+                                failureKey,
                                 workflowResult.Exception?.Message ?? resultPlan.Message),
-                            WorkbookExportResultIssueKind.Canceled => UiText.Get("MainLoc_PdfExportCanceled"),
+                            WorkbookExportResultIssueKind.Canceled => UiText.Get(canceledKey),
                             _ => resultPlan.Message
                         };
                         ShowExportIssue(message);
                     }
 
                     if (resultPlan.ShouldOpenDestination)
-                        await TryOpenExportedPdfAsync(resultPlan.DestinationPath);
+                        await TryOpenExportedFileAsync(resultPlan.DestinationPath, isXps ? "XPS" : "PDF");
                 }
                 catch (Exception ex)
                 {
-                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
+                    ShowExportIssue(UiText.Format(failureKey, ex.Message));
                 }
             }
         }
@@ -29488,7 +29483,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private PortablePdfExportPlan CreatePortablePdfExportPlan(
+    private PortablePdfExportPlan CreatePortableFixedLayoutExportPlan(
         ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
@@ -29516,7 +29511,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 UseSheetPageNumbering = groupedSheetIds is not null
             },
             WorkbookExportPrintSurface.MacOs);
-        return PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook);
+        return outputKind == WorkbookExportPrintOutputKind.Xps
+            ? PortablePdfExportPlanner.CreateXpsPlan(exportPrintPlan, workbook)
+            : PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook);
     }
 
     private int ResolveActiveSheetIndex()
@@ -29525,10 +29522,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return index >= 0 ? index : _session.Workbook.ActiveSheetIndex ?? 0;
     }
 
-    private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)
-    {
-        var pickerPlan = ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle);
-        return AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+    private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title) =>
+        ShowPortableExportSavePickerAsync(
+            title,
+            ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle));
+
+    private Task<AvaloniaPickedStorageFile?> ShowPortableExportSavePickerAsync(
+        string title,
+        ExportSavePickerPlan pickerPlan) =>
+        AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerSaveRequest.FromDescriptors(
                 title,
@@ -29537,7 +29539,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 pickerPlan.DefaultExtensionWithoutDot,
                 showOverwritePrompt: true,
                 suggestFirstFileType: true));
-    }
 
     private async Task<bool> SaveWorkbookToTargetAsync(
         FileSaveTarget target,

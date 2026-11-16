@@ -18,12 +18,12 @@ public sealed class AvaloniaExportOptionsSourceTests
         mainSource.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");
         mainSource.Should().Contain("PortablePdfExportPlanner.TryApplyOptions(");
         mainSource.Should().Contain("var exportExecution = await new AtomicExportExecutor()");
-        mainSource.Should().Contain(".ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(");
-        mainSource.Should().Contain("return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(");
+        mainSource.Should().Contain(".ExecutePathAsync<string>(");
+        mainSource.Should().Contain("Pdf.AvaloniaPdfDocumentExporter.Save(");
         mainSource.Should().Contain("effectiveExportPlan,");
-        mainSource.Should().Contain("workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));");
-        mainSource.Should().Contain("exportExecution.Value!.Result.StatusText");
-        mainSource.Should().Contain("await TryOpenExportedPdfAsync(resultPlan.DestinationPath)");
+        mainSource.Should().Contain("workbookDirectory: workbookDirectory");
+        mainSource.Should().Contain("return ValueTask.FromResult(statusText)");
+        mainSource.Should().Contain("await TryOpenExportedFileAsync(resultPlan.DestinationPath,");
         mainSource.Should().NotContain("private static ExportContentScope ToExportContentScope(");
         mainSource.Should().NotContain("private static WorkbookExportPrintScope ToWorkbookExportPrintScope(");
 

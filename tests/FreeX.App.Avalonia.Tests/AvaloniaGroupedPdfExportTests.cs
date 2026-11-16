@@ -17,8 +17,11 @@ public sealed class AvaloniaGroupedPdfExportTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
-    [Fact]
-    public async Task ExportActiveSheets_UsesWorkbookOrderAndIncludesBlankAndCommentPagesInTheRange()
+    [Theory]
+    [InlineData(WorkbookExportPrintOutputKind.Pdf)]
+    [InlineData(WorkbookExportPrintOutputKind.Xps)]
+    public async Task ExportActiveSheets_UsesWorkbookOrderAndIncludesBlankAndCommentPagesInTheRange(
+        WorkbookExportPrintOutputKind outputKind)
     {
         await Session.Dispatch(() =>
         {
@@ -42,7 +45,7 @@ public sealed class AvaloniaGroupedPdfExportTests
                 window.Session.ActiveSheet.Id.Should().Be(blank.Id);
                 var options = ExportOptions.ExcelLikeDefault with { Scope = ExportContentScope.ActiveSheet };
 
-                var fullPlan = CreateExportPlan(window, options);
+                var fullPlan = CreateExportPlan(window, options, outputKind);
                 fullPlan.IsReady.Should().BeTrue();
                 fullPlan.PageRequests.Select(page => page.PrintRange.Start.Sheet)
                     .Should().Equal(first.Id, first.Id, blank.Id);
@@ -71,9 +74,14 @@ public sealed class AvaloniaGroupedPdfExportTests
     }
 
     [Theory]
-    [InlineData(ExportContentScope.Selection, 1)]
-    [InlineData(ExportContentScope.EntireWorkbook, 3)]
-    public async Task GroupedTabsDoNotChangeOtherExportScopes(ExportContentScope scope, int pageCount)
+    [InlineData(ExportContentScope.Selection, WorkbookExportPrintOutputKind.Pdf, 1)]
+    [InlineData(ExportContentScope.Selection, WorkbookExportPrintOutputKind.Xps, 1)]
+    [InlineData(ExportContentScope.EntireWorkbook, WorkbookExportPrintOutputKind.Pdf, 3)]
+    [InlineData(ExportContentScope.EntireWorkbook, WorkbookExportPrintOutputKind.Xps, 3)]
+    public async Task GroupedTabsDoNotChangeOtherExportScopes(
+        ExportContentScope scope,
+        WorkbookExportPrintOutputKind outputKind,
+        int pageCount)
     {
         await Session.Dispatch(() =>
         {
@@ -89,7 +97,7 @@ public sealed class AvaloniaGroupedPdfExportTests
                 var selection = GridRange.Parse("B2:C3", active.Id);
                 window.Session.SelectRange(selection);
 
-                var plan = CreateExportPlan(window, ExportOptions.ExcelLikeDefault with { Scope = scope });
+                var plan = CreateExportPlan(window, ExportOptions.ExcelLikeDefault with { Scope = scope }, outputKind);
 
                 plan.IsReady.Should().BeTrue();
                 plan.TotalPageCount.Should().Be(pageCount);
@@ -107,8 +115,11 @@ public sealed class AvaloniaGroupedPdfExportTests
         }, CancellationToken.None);
     }
 
-    private static PortablePdfExportPlan CreateExportPlan(MainWindow window, ExportOptions options) =>
+    private static PortablePdfExportPlan CreateExportPlan(
+        MainWindow window,
+        ExportOptions options,
+        WorkbookExportPrintOutputKind outputKind) =>
         (PortablePdfExportPlan)typeof(MainWindow)
-            .GetMethod("CreatePortablePdfExportPlan", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(window, [options, WorkbookExportPrintOutputKind.Pdf])!;
+            .GetMethod("CreatePortableFixedLayoutExportPlan", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [options, outputKind])!;
 }

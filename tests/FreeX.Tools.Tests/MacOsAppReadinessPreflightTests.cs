@@ -2559,7 +2559,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
                     private Task ExportActiveSheetPdfAsync() =>
-                    ExportWorkbookPdfAsync(
+                    ExportWorkbookFixedLayoutAsync(
                     var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
                     requestPlan.ShouldConfirmNormalizedOverwrite
                     !await ConfirmNormalizedOverwriteAsync(
@@ -2570,10 +2570,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)
                     AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
+                    Pdf.AvaloniaPdfDocumentExporter.Save(
+                    Pdf.AvaloniaXpsDocumentExporter.Save(
                     var exportExecutor = new AtomicExportExecutor();
                     var exportExecution = await exportExecutor
-                        .ExecutePathAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                        .ExecutePathAsync<string>(
                     StatusBarReadoutKind.Average,
                     StatusBarReadoutKind.NumericalCount,
                     StatusBarReadoutKind.Maximum,

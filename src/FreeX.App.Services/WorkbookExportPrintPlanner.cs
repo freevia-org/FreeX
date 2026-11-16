@@ -43,7 +43,7 @@ public sealed record WorkbookExportPrintSurface(
 {
     public static WorkbookExportPrintSurface PortablePdf { get; } = new("Portable PDF");
     public static WorkbookExportPrintSurface WindowsDesktop { get; } = new("Windows desktop", SupportsXps: true);
-    public static WorkbookExportPrintSurface MacOs { get; } = new("macOS");
+    public static WorkbookExportPrintSurface MacOs { get; } = new("macOS", SupportsXps: true);
 
     // App-specific output-kind vocabulary maps onto the neutral shared capability core, so the
     // label normalization and supported-kind selection live in one place reusable by FreeP/FreeW.

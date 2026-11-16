@@ -3620,11 +3620,20 @@
   <data name="MainLoc_DataValidationDropdownFailed" xml:space="preserve">
     <value>Data validation dropdown failed.</value>
   </data>
+  <data name="MainLoc_XpsExportUnavailable" xml:space="preserve">
+    <value>XPS export unavailable on this platform.</value>
+  </data>
   <data name="MainLoc_PdfExportUnavailable" xml:space="preserve">
     <value>PDF export unavailable on this platform.</value>
   </data>
+  <data name="MainLoc_XpsExportRequiresLocalPath" xml:space="preserve">
+    <value>XPS export requires a local file path.</value>
+  </data>
   <data name="MainLoc_PdfExportRequiresLocalPath" xml:space="preserve">
     <value>PDF export requires a local file path.</value>
+  </data>
+  <data name="MainLoc_XpsExportCanceled" xml:space="preserve">
+    <value>XPS export canceled.</value>
   </data>
   <data name="MainLoc_PdfExportCanceled" xml:space="preserve">
     <value>PDF export canceled.</value>
@@ -19916,6 +19925,9 @@ and {0} more.</value>
   <data name="GoalSeek_ValidationHelpText" xml:space="preserve">
     <value>Shows Goal Seek input validation messages.</value>
   </data>
+  <data name="NormalizedOverwrite_CancelXpsHelpText" xml:space="preserve">
+    <value>Return without exporting the XPS file.</value>
+  </data>
   <data name="NormalizedOverwrite_CancelPdfHelpText" xml:space="preserve">
     <value>Return without exporting the PDF.</value>
   </data>
@@ -19925,11 +19937,20 @@ and {0} more.</value>
   <data name="NormalizedOverwrite_FileAlreadyExistsFormat" xml:space="preserve">
     <value>{0} already exists.</value>
   </data>
+  <data name="NormalizedOverwrite_XpsDetail" xml:space="preserve">
+    <value>FreeX changed the selected file name to use the .xps extension. Replace the existing XPS file?</value>
+  </data>
   <data name="NormalizedOverwrite_PdfDetail" xml:space="preserve">
     <value>FreeX changed the selected file name to use the .pdf extension. Replace the existing PDF file?</value>
   </data>
+  <data name="NormalizedOverwrite_ReplaceXpsHelpText" xml:space="preserve">
+    <value>Replace the existing normalized XPS file.</value>
+  </data>
   <data name="NormalizedOverwrite_ReplacePdfHelpText" xml:space="preserve">
     <value>Replace the existing normalized PDF file.</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplaceXpsTitle" xml:space="preserve">
+    <value>Replace XPS file?</value>
   </data>
   <data name="NormalizedOverwrite_ReplacePdfTitle" xml:space="preserve">
     <value>Replace PDF?</value>

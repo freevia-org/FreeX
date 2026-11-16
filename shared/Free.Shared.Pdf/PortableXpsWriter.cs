@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -6,12 +7,30 @@ using Free.Shared.Pdf;
 
 namespace Free.Shared.Xps;
 
+/// <summary>An embedded font part. Bytes for an obfuscated part must already be encoded.</summary>
 public sealed record XpsFontResource(string PackagePath, byte[] FontBytes)
 {
-    public string FontUri => PackagePath.StartsWith('/') ? PackagePath : "/" + PackagePath;
+    public XpsFontResource(string packagePath, byte[] fontBytes, int fontFaceIndex)
+        : this(packagePath, fontBytes) => FontFaceIndex = fontFaceIndex;
+
+    public int FontFaceIndex { get; init; }
+
+    public bool IsRestricted { get; init; }
+
+    internal string PartUri => "/" + PackagePath.TrimStart('/', '\\').Replace('\\', '/');
+
+    public string FontUri => FontFaceIndex == 0
+        ? PartUri
+        : FormattableString.Invariant($"{PartUri}#{FontFaceIndex}");
 }
 
-public sealed record XpsWriterOptions(XpsFontResource? TextFont = null);
+public sealed record XpsWriterOptions(XpsFontResource? TextFont = null)
+{
+    /// <summary>Text operations rendered as transparent glyphs with their own embedded fonts.</summary>
+    public IReadOnlyDictionary<PdfText, XpsGlyphRun>? GlyphOverlays { get; init; }
+}
+
+public sealed record XpsGlyphRun(XpsFontResource Font, string? Indices = null);
 
 public sealed record XpsExportabilityReport(
     bool IsExportable,
@@ -36,16 +55,18 @@ public sealed class XpsUnsupportedContentException : InvalidOperationException
 /// Writes a standards-shaped OPC XPS package from the shared fixed-layout draw-op model.
 /// This is deliberately separate from PDF: it never copies or relabels PDF bytes.
 ///
-/// The existing FreeW Avalonia model does not carry an embedded font resource, glyph indices, or
-/// font-subsetting metadata. Therefore text pages require an explicit <see cref="XpsFontResource"/>
-/// and fail truthfully when one is absent. Vector geometry and supported PNG/JPEG images are still
-/// emitted as real FixedPage content, which is the maximum truthful shared adapter for the model.
+/// Ordinary text requires a caller-supplied <see cref="XpsWriterOptions.TextFont"/>. Raster-backed
+/// pages can carry selectable <see cref="XpsWriterOptions.GlyphOverlays"/> with per-run font resources.
 /// </summary>
 public static class PortableXpsWriter
 {
+    private const double XpsUnitsPerPoint = 96d / 72d;
+    private const string CorePropertiesPath = "docProps/core.xml";
     private static readonly XNamespace Xps = "http://schemas.microsoft.com/xps/2005/06";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace ContentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
+    private static readonly XNamespace CoreProperties = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+    private static readonly XNamespace DublinCore = "http://purl.org/dc/elements/1.1/";
 
     public static XpsExportabilityReport Analyze(
         PdfContentDocument document,
@@ -82,26 +103,45 @@ public static class PortableXpsWriter
         using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            WriteEntry(archive, "[Content_Types].xml", BuildContentTypes(document, options));
-            WriteEntry(archive, "_rels/.rels", BuildRootRelationships());
-            WriteEntry(archive, "FixedDocSeq.fdseq", BuildFixedDocumentSequence(document.Pages.Count));
+            var properties = BuildCoreProperties(document.Properties);
+            WriteEntry(archive, "_rels/.rels", BuildRootRelationships(properties is not null));
+            if (properties is not null)
+                WriteEntry(archive, CorePropertiesPath, properties);
+
+            WriteEntry(archive, "FixedDocSeq.fdseq", BuildFixedDocumentSequence());
             WriteEntry(archive, "Documents/1/FixedDocument.fdoc", BuildFixedDocument(document.Pages.Count));
+            var fonts = new Dictionary<string, XpsFontResource>(StringComparer.OrdinalIgnoreCase);
             if (options.TextFont is { } font)
-                WriteEntry(archive, NormalizePackagePath(font.PackagePath), font.FontBytes);
+                fonts.Add(font.PartUri, font);
 
             var imageIndex = 0;
+            var language = document.Properties?.Language?.Trim();
+            if (string.IsNullOrEmpty(language))
+                language = "und";
             for (var pageIndex = 0; pageIndex < document.Pages.Count; pageIndex++)
             {
                 var page = document.Pages[pageIndex];
-                var images = new List<(string Path, byte[] Bytes)>();
-                var fixedPage = BuildFixedPage(page, options, images, ref imageIndex);
-                WriteEntry(
-                    archive,
-                    $"Documents/1/Pages/{pageIndex + 1}.fpage",
-                    Encoding.UTF8.GetBytes(fixedPage.ToString(SaveOptions.DisableFormatting)));
-                foreach (var image in images)
+                var resources = new PageResources(fonts, imageIndex);
+                var fixedPage = BuildFixedPage(page, language, options, resources);
+                var pageNumber = pageIndex + 1;
+                WriteEntry(archive, $"Documents/1/Pages/{pageNumber}.fpage", fixedPage);
+                var targets = resources.FontPartUris.Concat(resources.Images.Select(image => "/" + image.Path));
+                var relationships = BuildPartRelationships(targets, Xps.NamespaceName + "/required-resource");
+                if (relationships.HasElements)
+                    WriteEntry(archive, $"Documents/1/Pages/_rels/{pageNumber}.fpage.rels", relationships);
+                foreach (var image in resources.Images)
                     WriteEntry(archive, image.Path, image.Bytes);
+                imageIndex += resources.Images.Count;
             }
+
+            foreach (var (partUri, resource) in fonts)
+                WriteEntry(archive, partUri, resource.FontBytes);
+            var restrictedFonts = fonts.Where(part => part.Value.IsRestricted).Select(part => part.Key);
+            var documentRelationships = BuildPartRelationships(restrictedFonts, Xps.NamespaceName + "/restricted-font");
+            if (documentRelationships.HasElements)
+                WriteEntry(archive, "Documents/1/_rels/FixedDocument.fdoc.rels", documentRelationships);
+
+            WriteEntry(archive, "[Content_Types].xml", BuildContentTypes(document.Pages.Count, fonts.Keys, properties is not null));
         }
 
         return stream.ToArray();
@@ -116,9 +156,9 @@ public static class PortableXpsWriter
     {
         switch (op)
         {
-            case PdfText:
+            case PdfText text:
                 textCount++;
-                if (options.TextFont is null)
+                if (options.TextFont is null && options.GlyphOverlays?.ContainsKey(text) != true)
                 {
                     requirements.Add(
                         "PdfText requires an embedded XPS font resource; the current renderer exposes text strings but no font bytes/glyph mapping");
@@ -126,10 +166,14 @@ public static class PortableXpsWriter
                 break;
             case PdfImage image:
                 imageCount++;
-                if (!IsSupportedImage(image))
+                if (!TryGetSupportedImageSize(image, out _, out _))
                     requirements.Add("PdfImage requires readable PNG or JPEG bytes without clip, color effects, or rotation");
                 break;
             case PdfRotationGroup group:
+                foreach (var child in group.Ops)
+                    AnalyzeOperation(child, options, requirements, ref textCount, ref imageCount);
+                break;
+            case PdfClipGroup group:
                 foreach (var child in group.Ops)
                     AnalyzeOperation(child, options, requirements, ref textCount, ref imageCount);
                 break;
@@ -144,26 +188,32 @@ public static class PortableXpsWriter
 
     private static XElement BuildFixedPage(
         PdfContentPage page,
+        string language,
         XpsWriterOptions options,
-        List<(string Path, byte[] Bytes)> images,
-        ref int imageIndex)
+        PageResources resources)
     {
         var fixedPage = new XElement(
             Xps + "FixedPage",
-            new XAttribute("Width", F(page.WidthPoints)),
-            new XAttribute("Height", F(page.HeightPoints)));
-        foreach (var op in page.Ops)
-            fixedPage.Add(BuildOperation(op, page.WidthPoints, page.HeightPoints, options, images, ref imageIndex));
+            new XAttribute(XNamespace.Xml + "lang", language),
+            new XAttribute("Width", F(page.WidthPoints * XpsUnitsPerPoint)),
+            new XAttribute("Height", F(page.HeightPoints * XpsUnitsPerPoint)));
+        if (page.Ops.Count > 0)
+        {
+            // Page content uses PDF points. One scale applied to its canvas also converts
+            // stroke weights, glyph advances and the translations in nested transforms.
+            var scale = TransformNumber(XpsUnitsPerPoint);
+            fixedPage.Add(BuildCanvas(page.Ops, page.HeightPoints, options, resources,
+                new XAttribute("RenderTransform", $"{scale},0,0,{scale},0,0")));
+        }
+
         return fixedPage;
     }
 
-    private static XElement BuildOperation(
+    private static XElement? BuildOperation(
         PdfDrawOp op,
-        double pageWidth,
         double pageHeight,
         XpsWriterOptions options,
-        List<(string Path, byte[] Bytes)> images,
-        ref int imageIndex)
+        PageResources resources)
     {
         return op switch
         {
@@ -197,10 +247,13 @@ public static class PortableXpsWriter
                 Fill(triangle.Color)),
             PdfPath path => BuildPath(path, pageHeight),
             PdfPathLinearGradient path => BuildPath(path, pageHeight),
-            PdfText text => BuildText(text, pageHeight, options),
-            PdfImage image => BuildImage(image, pageHeight, images, ref imageIndex),
-            PdfRotationGroup rotation => BuildCanvas(rotation.Ops, pageWidth, pageHeight, options, images, ref imageIndex, rotation),
-            PdfOpacityGroup opacity => BuildCanvas(opacity.Ops, pageWidth, pageHeight, options, images, ref imageIndex, opacity),
+            PdfText text => BuildText(text, pageHeight, options, resources),
+            PdfImage image => BuildImage(image, pageHeight, resources),
+            PdfRotationGroup rotation => BuildCanvas(rotation.Ops, pageHeight, options, resources,
+                new XAttribute("RenderTransform", RotationMatrix(rotation, pageHeight))),
+            PdfClipGroup clip => BuildClippedCanvas(clip, pageHeight, options, resources),
+            PdfOpacityGroup opacity => BuildCanvas(opacity.Ops, pageHeight, options, resources,
+                new XAttribute("Opacity", F(Math.Clamp(opacity.Opacity, 0, 1)))),
             _ => throw new XpsUnsupportedContentException(new XpsExportabilityReport(
                 false, [$"Unsupported draw operation: {op.GetType().Name}"], 1, 0, 0)),
         };
@@ -216,40 +269,46 @@ public static class PortableXpsWriter
             path.FillFallbackColor is { } fill ? Fill(fill) : null,
             path.StrokeFallbackColor is { } stroke ? Stroke(stroke, path.StrokeWidth) : null);
 
-    private static XElement BuildText(PdfText text, double pageHeight, XpsWriterOptions options)
+    private static XElement BuildText(
+        PdfText text,
+        double pageHeight,
+        XpsWriterOptions options,
+        PageResources resources)
     {
-        if (options.TextFont is null)
-            throw new InvalidOperationException("PdfText cannot be written without an embedded XPS font resource.");
+        var overlay = options.GlyphOverlays?.GetValueOrDefault(text);
+        var font = overlay?.Font ?? options.TextFont!;
+        resources.AddFont(font);
+        // The XPS markup parser treats a leading brace as a markup extension.
+        var unicodeString = text.Text.StartsWith('{') ? "{}" + text.Text : text.Text;
+        var style = overlay is not null ? null : text.Face switch
+        {
+            PdfFontFace.Bold => "BoldSimulation",
+            PdfFontFace.Italic => "ItalicSimulation",
+            PdfFontFace.BoldItalic => "BoldItalicSimulation",
+            _ => null,
+        };
         return new XElement(
             Xps + "Glyphs",
-            new XAttribute("FontUri", options.TextFont.FontUri),
+            new XAttribute("FontUri", font.FontUri),
             new XAttribute("FontRenderingEmSize", F(text.FontSize)),
-            new XAttribute("Fill", Color(text.Color)),
+            new XAttribute("Fill", overlay is not null ? "#00000000" : Color(text.Color)),
             new XAttribute("OriginX", F(text.X)),
             new XAttribute("OriginY", F(FlipY(text.Y, pageHeight))),
-            new XAttribute("UnicodeString", text.Text),
-            text.Face switch
-            {
-                PdfFontFace.Bold => new XAttribute("StyleSimulations", "BoldSimulation"),
-                PdfFontFace.Italic => new XAttribute("StyleSimulations", "ItalicSimulation"),
-                PdfFontFace.BoldItalic => new XAttribute("StyleSimulations", "BoldSimulation,ItalicSimulation"),
-                _ => null,
-            });
+            new XAttribute("UnicodeString", unicodeString),
+            overlay?.Indices is { } indices ? new XAttribute("Indices", indices) : null,
+            style is null ? null : new XAttribute("StyleSimulations", style));
     }
 
     private static XElement BuildImage(
         PdfImage image,
         double pageHeight,
-        List<(string Path, byte[] Bytes)> images,
-        ref int imageIndex)
+        PageResources resources)
     {
-        if (!IsSupportedImage(image))
+        if (!TryGetSupportedImageSize(image, out var pixelWidth, out var pixelHeight))
             throw new InvalidOperationException("Only untransformed PNG and JPEG images can be written to XPS.");
-        var extension = image.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
-        var path = $"Resources/Images/{++imageIndex}.{extension}";
-        images.Add((path, image.ImageBytes));
+        var path = resources.AddImage(image);
 
-        var placement = PlaceImage(image);
+        var placement = PlaceImage(image, pixelWidth, pixelHeight);
         return new XElement(
             Xps + "Path",
             new XAttribute(
@@ -265,23 +324,27 @@ public static class PortableXpsWriter
                         $"{F(placement.X)},{F(pageHeight - placement.Y - placement.Height)},{F(placement.Width)},{F(placement.Height)}"),
                     new XAttribute("ViewportUnits", "Absolute"),
                     new XAttribute("Viewbox", placement.Viewbox),
-                    new XAttribute("ViewboxUnits", "RelativeToBoundingBox"))));
+                    new XAttribute("ViewboxUnits", "Absolute"))));
     }
 
     /// <summary>
     /// Resolves an <c>a:srcRect</c> crop into the two things XPS can express: the visible source
-    /// region becomes the brush <c>Viewbox</c> (a fraction of the image bounding box), and the
+    /// region becomes the brush <c>Viewbox</c> (in source image units), and the
     /// destination rectangle shrinks for negative insets, which pad the image inside its frame
     /// rather than cropping it. Both halves come from the shared plan the PDF adapters use, so the
     /// same crop lands on the same source pixels in every backend.
     /// </summary>
-    private static XpsImagePlacement PlaceImage(PdfImage image)
+    private static XpsImagePlacement PlaceImage(PdfImage image, int pixelWidth, int pixelHeight)
     {
-        var full = new XpsImagePlacement(image.X, image.Y, image.Width, image.Height, "0,0,1,1");
-        if (!image.SourceCrop.HasCrop ||
-            image.Width <= 0 ||
-            image.Height <= 0 ||
-            !PdfImageDimensions.TryReadSize(image.ImageBytes, image.ContentType, out var pixelWidth, out var pixelHeight))
+        var dpi = image.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase)
+            ? ReadPngDpi(image.ImageBytes)
+            : ReadJpegDpi(image.ImageBytes);
+        // XPS measures ImageBrush.Viewbox in 1/96 inch at the source image's own resolution.
+        var sourceScaleX = dpi.X > 0 ? 96d / dpi.X : 1d;
+        var sourceScaleY = dpi.Y > 0 ? 96d / dpi.Y : 1d;
+        var full = new XpsImagePlacement(image.X, image.Y, image.Width, image.Height,
+            FormatViewbox(0, 0, pixelWidth, pixelHeight));
+        if (!image.SourceCrop.HasCrop || image.Width <= 0 || image.Height <= 0)
             return full;
 
         var plan = PdfRenderGeometry.GetImageCropPlan(pixelWidth, pixelHeight, image.SourceCrop);
@@ -293,19 +356,18 @@ public static class PortableXpsWriter
         if (width <= 0 || height <= 0)
             return full;
 
-        // The XPS page is y-up like PDF user space, so the bottom inset lifts the destination
-        // origin while the Viewbox -- measured on the image itself -- keeps its y-down top inset.
+        // The destination is still expressed in PDF's y-up coordinates here, while the
+        // source viewbox starts from the image's top-left pixel.
         return new XpsImagePlacement(
             image.X + plan.DestinationInsetLeft * image.Width,
             image.Y + plan.DestinationInsetBottom * image.Height,
             width,
             height,
-            string.Join(
-                ",",
-                FFraction(plan.SourceX / (double)pixelWidth),
-                FFraction(plan.SourceY / (double)pixelHeight),
-                FFraction(plan.SourceWidth / (double)pixelWidth),
-                FFraction(plan.SourceHeight / (double)pixelHeight)));
+            FormatViewbox(plan.SourceX, plan.SourceY, plan.SourceWidth, plan.SourceHeight));
+
+        string FormatViewbox(int x, int y, int width, int height) =>
+            $"{TransformNumber(x * sourceScaleX)},{TransformNumber(y * sourceScaleY)}," +
+            $"{TransformNumber(width * sourceScaleX)},{TransformNumber(height * sourceScaleY)}";
     }
 
     private readonly record struct XpsImagePlacement(
@@ -315,42 +377,206 @@ public static class PortableXpsWriter
         double Height,
         string Viewbox);
 
-    private static XElement BuildCanvas(
-        IReadOnlyList<PdfDrawOp> operations,
-        double pageWidth,
-        double pageHeight,
-        XpsWriterOptions options,
-        List<(string Path, byte[] Bytes)> images,
-        ref int imageIndex,
-        PdfRotationGroup rotation)
+    private static (double X, double Y) ReadPngDpi(ReadOnlySpan<byte> bytes)
     {
-        var canvas = new XElement(Xps + "Canvas");
-        var angle = -rotation.RotationDegrees;
-        var centerX = rotation.CenterX;
-        var centerY = FlipY(rotation.CenterY, pageHeight);
-        canvas.Add(new XElement(
-            Xps + "Canvas.RenderTransform",
-            new XElement(
-                Xps + "MatrixTransform",
-                new XAttribute("Matrix", $"{F(Math.Cos(angle * Math.PI / 180))},{F(Math.Sin(angle * Math.PI / 180))},{F(-Math.Sin(angle * Math.PI / 180))},{F(Math.Cos(angle * Math.PI / 180))},{F(centerX)},{F(centerY)}"))));
-        foreach (var operation in operations)
-            canvas.Add(BuildOperation(operation, pageWidth, pageHeight, options, images, ref imageIndex));
-        return canvas;
+        // Dimensions have already been validated. PNG stores absolute density in pixels per metre.
+        var chunks = bytes[8..];
+        while (chunks.Length >= 12)
+        {
+            var length = BinaryPrimitives.ReadUInt32BigEndian(chunks);
+            if (length > (uint)(chunks.Length - 12))
+                break;
+
+            var type = chunks.Slice(4, 4);
+            if (type.SequenceEqual("IDAT"u8))
+                break;
+            if (type.SequenceEqual("pHYs"u8) && length == 9 && chunks[16] == 1)
+            {
+                const double metresPerInch = 0.0254;
+                return (BinaryPrimitives.ReadUInt32BigEndian(chunks[8..]) * metresPerInch,
+                    BinaryPrimitives.ReadUInt32BigEndian(chunks[12..]) * metresPerInch);
+            }
+
+            chunks = chunks[(12 + (int)length)..];
+        }
+
+        return default;
+    }
+
+    private static (double X, double Y) ReadJpegDpi(ReadOnlySpan<byte> bytes)
+    {
+        var headers = bytes[2..];
+        while (headers.Length >= 4 && headers[0] == 0xFF)
+        {
+            var marker = headers[1];
+            if (marker == 0xFF)
+            {
+                headers = headers[1..];
+                continue;
+            }
+            if (marker is 0xD9 or 0xDA)
+                break;
+
+            var length = BinaryPrimitives.ReadUInt16BigEndian(headers[2..]);
+            if (length < 2 || length > headers.Length - 2)
+                break;
+
+            var data = headers.Slice(4, length - 2);
+            if (marker == 0xE0 && data.Length >= 12 && data.StartsWith("JFIF\0"u8) && data[7] is 1 or 2)
+            {
+                var unitsPerInch = data[7] == 1 ? 1d : 2.54;
+                var x = BinaryPrimitives.ReadUInt16BigEndian(data[8..]);
+                var y = BinaryPrimitives.ReadUInt16BigEndian(data[10..]);
+                if (x > 0 || y > 0)
+                    return (x * unitsPerInch, y * unitsPerInch);
+            }
+            if (marker == 0xE1 && data.StartsWith("Exif\0\0"u8))
+            {
+                var exifDpi = ReadExifDpi(data[6..]);
+                if (exifDpi.X > 0 || exifDpi.Y > 0)
+                    return exifDpi;
+            }
+
+            headers = headers[(2 + length)..];
+        }
+
+        return default;
+    }
+
+    private static (double X, double Y) ReadExifDpi(ReadOnlySpan<byte> data)
+    {
+        var littleEndian = data.StartsWith("II"u8);
+        if (data.Length < 8 || (!littleEndian && !data.StartsWith("MM"u8)) || UInt16(data[2..], littleEndian) != 42)
+            return default;
+
+        var directoryOffset = UInt32(data[4..], littleEndian);
+        if (directoryOffset > (uint)(data.Length - 2))
+            return default;
+
+        var directory = data[(int)directoryOffset..];
+        var entryCount = Math.Min((int)UInt16(directory, littleEndian), (directory.Length - 2) / 12);
+        double x = 0;
+        double y = 0;
+        var units = 2;
+        for (var index = 0; index < entryCount; index++)
+        {
+            var entry = directory.Slice(2 + index * 12, 12);
+            if (UInt32(entry[4..], littleEndian) != 1)
+                continue;
+
+            var tag = UInt16(entry, littleEndian);
+            var type = UInt16(entry[2..], littleEndian);
+            if (tag == 0x0128 && type == 3)
+                units = UInt16(entry[8..], littleEndian);
+            if (tag is not (0x011A or 0x011B) || type != 5)
+                continue;
+
+            var offset = UInt32(entry[8..], littleEndian);
+            if (offset > (uint)(data.Length - 8))
+                continue;
+
+            var rational = data[(int)offset..];
+            var denominator = UInt32(rational[4..], littleEndian);
+            if (denominator == 0)
+                continue;
+
+            var dpi = (double)UInt32(rational, littleEndian) / denominator;
+            if (tag == 0x011A)
+                x = dpi;
+            else
+                y = dpi;
+        }
+
+        return units switch
+        {
+            2 => (x, y),
+            3 => (x * 2.54, y * 2.54),
+            _ => default,
+        };
+
+        static ushort UInt16(ReadOnlySpan<byte> value, bool littleEndian) => littleEndian
+            ? BinaryPrimitives.ReadUInt16LittleEndian(value)
+            : BinaryPrimitives.ReadUInt16BigEndian(value);
+
+        static uint UInt32(ReadOnlySpan<byte> value, bool littleEndian) => littleEndian
+            ? BinaryPrimitives.ReadUInt32LittleEndian(value)
+            : BinaryPrimitives.ReadUInt32BigEndian(value);
+    }
+
+    private sealed class PageResources(
+        IDictionary<string, XpsFontResource> fonts,
+        int firstImageIndex)
+    {
+        public List<(string Path, byte[] Bytes)> Images { get; } = [];
+        public HashSet<string> FontPartUris { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public void AddFont(XpsFontResource font)
+        {
+            var uri = font.PartUri;
+            FontPartUris.Add(uri);
+            if (!fonts.TryGetValue(uri, out var existing))
+            {
+                fonts.Add(uri, font);
+                return;
+            }
+
+            if (!ReferenceEquals(font.FontBytes, existing.FontBytes) &&
+                !font.FontBytes.AsSpan().SequenceEqual(existing.FontBytes))
+                throw new InvalidOperationException($"Different XPS font resources use the same part URI: {uri}");
+            if (font.IsRestricted && !existing.IsRestricted)
+                fonts[uri] = existing with { IsRestricted = true };
+        }
+
+        public string AddImage(PdfImage image)
+        {
+            var extension = image.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+            var path = FormattableString.Invariant($"Resources/Images/{firstImageIndex + Images.Count + 1}.{extension}");
+            Images.Add((path, image.ImageBytes));
+            return path;
+        }
     }
 
     private static XElement BuildCanvas(
         IReadOnlyList<PdfDrawOp> operations,
-        double pageWidth,
         double pageHeight,
         XpsWriterOptions options,
-        List<(string Path, byte[] Bytes)> images,
-        ref int imageIndex,
-        PdfOpacityGroup opacity)
+        PageResources resources,
+        XAttribute attribute)
     {
-        var canvas = new XElement(Xps + "Canvas", new XAttribute("Opacity", F(Math.Clamp(opacity.Opacity, 0, 1))));
+        var canvas = new XElement(Xps + "Canvas", attribute);
         foreach (var operation in operations)
-            canvas.Add(BuildOperation(operation, pageWidth, pageHeight, options, images, ref imageIndex));
+            canvas.Add(BuildOperation(operation, pageHeight, options, resources));
         return canvas;
+    }
+
+    private static XElement? BuildClippedCanvas(
+        PdfClipGroup clip,
+        double pageHeight,
+        XpsWriterOptions options,
+        PageResources resources)
+    {
+        if (Finite(clip.Width) <= 0 || Finite(clip.Height) <= 0)
+            return null;
+
+        return BuildCanvas(clip.Ops, pageHeight, options, resources,
+            new XAttribute("Clip", RectPath(clip.X, clip.Y, clip.Width, clip.Height, pageHeight)));
+    }
+
+    private static string RotationMatrix(PdfRotationGroup rotation, double pageHeight)
+    {
+        var (sin, cos) = Math.SinCos(rotation.RotationDegrees * Math.PI / 180);
+        var flipX = rotation.FlipH ? -1 : 1;
+        var flipY = rotation.FlipV ? -1 : 1;
+        var m11 = cos * flipX;
+        var m12 = sin * flipY;
+        var m21 = -sin * flipX;
+        var m22 = cos * flipY;
+        var centerX = rotation.CenterX;
+        var centerY = FlipY(rotation.CenterY, pageHeight);
+        var offsetX = centerX - centerX * m11 - centerY * m21;
+        var offsetY = centerY - centerX * m12 - centerY * m22;
+        return $"{TransformNumber(m11)},{TransformNumber(m12)},{TransformNumber(m21)},{TransformNumber(m22)}," +
+            $"{TransformNumber(offsetX)},{TransformNumber(offsetY)}";
     }
 
     private static XElement PathElement(string data, XElement? fill = null, XElement? stroke = null)
@@ -411,20 +637,18 @@ public static class PortableXpsWriter
         return builder.ToString();
     }
 
-    private static bool IsSupportedImage(PdfImage image) =>
-        (image.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
-         image.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase)) &&
-        image.RotationDegrees == 0 &&
-        image.ClipKind == PdfImageClipKind.None &&
-        image.Opacity == 1 &&
-        !image.ColorEffects.HasPixelEffects &&
-        // A crop is expressible (Viewbox + a shrunken destination) only once the source pixel grid
-        // is known. Unreadable bytes keep the old truthful refusal rather than silently emitting
-        // the whole uncropped image.
-        (!image.SourceCrop.HasCrop ||
-         PdfImageDimensions.TryReadSize(image.ImageBytes, image.ContentType, out _, out _));
+    private static bool TryGetSupportedImageSize(PdfImage image, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        return image.RotationDegrees == 0 &&
+            image.ClipKind == PdfImageClipKind.None &&
+            image.Opacity == 1 &&
+            !image.ColorEffects.HasPixelEffects &&
+            PdfImageDimensions.TryReadSize(image.ImageBytes, image.ContentType, out width, out height);
+    }
 
-    private static XElement BuildContentTypes(PdfContentDocument document, XpsWriterOptions options)
+    private static XElement BuildContentTypes(int pageCount, IEnumerable<string> fontPartUris, bool hasCoreProperties)
     {
         var root = new XElement(
             ContentTypes + "Types",
@@ -435,21 +659,60 @@ public static class PortableXpsWriter
             new XElement(ContentTypes + "Default", new XAttribute("Extension", "jpeg"), new XAttribute("ContentType", "image/jpeg")),
             new XElement(ContentTypes + "Override", new XAttribute("PartName", "/FixedDocSeq.fdseq"), new XAttribute("ContentType", "application/vnd.ms-package.xps-fixeddocumentsequence+xml")),
             new XElement(ContentTypes + "Override", new XAttribute("PartName", "/Documents/1/FixedDocument.fdoc"), new XAttribute("ContentType", "application/vnd.ms-package.xps-fixeddocument+xml")));
-        for (var i = 0; i < document.Pages.Count; i++)
+        for (var i = 0; i < pageCount; i++)
             root.Add(new XElement(ContentTypes + "Override", new XAttribute("PartName", $"/Documents/1/Pages/{i + 1}.fpage"), new XAttribute("ContentType", "application/vnd.ms-package.xps-fixedpage+xml")));
-        if (options.TextFont is { } font)
-            root.Add(new XElement(ContentTypes + "Default", new XAttribute("Extension", Path.GetExtension(font.PackagePath).TrimStart('.')), new XAttribute("ContentType", "application/vnd.ms-opentype")));
+
+        if (hasCoreProperties)
+            root.Add(new XElement(ContentTypes + "Override", new XAttribute("PartName", "/" + CorePropertiesPath),
+                new XAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml")));
+        foreach (var fontUri in fontPartUris)
+        {
+            var fontType = fontUri.EndsWith(".odttf", StringComparison.OrdinalIgnoreCase) ||
+                fontUri.EndsWith(".odttc", StringComparison.OrdinalIgnoreCase)
+                ? "application/vnd.ms-package.obfuscated-opentype"
+                : "application/vnd.ms-opentype";
+            root.Add(new XElement(ContentTypes + "Override", new XAttribute("PartName", fontUri),
+                new XAttribute("ContentType", fontType)));
+        }
         return root;
     }
 
-    private static XElement BuildRootRelationships() => new(
+    private static XElement BuildRootRelationships(bool hasCoreProperties) => new(
         Rel + "Relationships",
-        new XElement(Rel + "Relationship",
-            new XAttribute("Id", "rId1"),
-            new XAttribute("Type", "http://schemas.microsoft.com/xps/2005/06/fixedrepresentation"),
-            new XAttribute("Target", "/FixedDocSeq.fdseq")));
+        Relationship(1, Xps.NamespaceName + "/fixedrepresentation", "/FixedDocSeq.fdseq"),
+        hasCoreProperties
+            ? Relationship(2, Rel.NamespaceName + "/metadata/core-properties", "/" + CorePropertiesPath)
+            : null);
 
-    private static XElement BuildFixedDocumentSequence(int pageCount) => new(
+    private static XElement BuildPartRelationships(IEnumerable<string> targets, string type) => new(
+        Rel + "Relationships",
+        targets.Select((target, index) => Relationship(index + 1, type, target)));
+
+    private static XElement Relationship(int index, string type, string target) => new(
+        Rel + "Relationship",
+        new XAttribute("Id", FormattableString.Invariant($"rId{index}")),
+        new XAttribute("Type", type),
+        new XAttribute("Target", target));
+
+    private static XElement? BuildCoreProperties(PdfDocumentProperties? properties)
+    {
+        if (properties is null)
+            return null;
+
+        var core = new XElement(CoreProperties + "coreProperties",
+            new XAttribute(XNamespace.Xmlns + "cp", CoreProperties.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "dc", DublinCore.NamespaceName),
+            Property(DublinCore + "title", properties.Title),
+            Property(DublinCore + "creator", properties.Author),
+            Property(DublinCore + "subject", properties.Subject),
+            Property(CoreProperties + "keywords", properties.Keywords));
+        return core.HasElements ? core : null;
+
+        static XElement? Property(XName name, string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : new XElement(name, value.Trim());
+    }
+
+    private static XElement BuildFixedDocumentSequence() => new(
         Xps + "FixedDocumentSequence",
         new XElement(Xps + "DocumentReference", new XAttribute("Source", "/Documents/1/FixedDocument.fdoc")));
 
@@ -477,9 +740,8 @@ public static class PortableXpsWriter
 
     private static string F(double value) => Finite(value).ToString("0.###", CultureInfo.InvariantCulture);
 
-    // Viewbox values are fractions of the image bounding box, so three decimals would quantise the
-    // crop to whole percent of the source -- visibly wrong on a large bitmap.
-    private static string FFraction(double value) => Finite(value).ToString("0.######", CultureInfo.InvariantCulture);
+    private static string TransformNumber(double value) =>
+        Finite(value).ToString("0.############", CultureInfo.InvariantCulture);
 
     // r469: NaN and Infinity used to be formatted straight into the markup, giving a FixedPage with
     // Width="NaN" and paths reading `M NaN,NaN L ...`. Neither is a number in the abbreviated
