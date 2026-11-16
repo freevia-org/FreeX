@@ -31,6 +31,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     private readonly CellAddress _destination;
     private IReadOnlyList<CellAddress> _affectedCells = [];
     private List<CellSnapshot>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
     // R32-commands-clipboard-deep-2: merges cloned at the destination (translated copies of any
     // merge fully contained in _sourceRange), so Revert can remove exactly the ones this Apply
     // added without disturbing any pre-existing merge that happened to already sit there.
@@ -41,7 +42,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     /// <inheritdoc/>
-    public int EstimatedBytes => (int)Math.Min(_sourceRange.CellCount * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min(_sourceRange.CellCount * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public CopyRangeCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
     {
@@ -125,6 +126,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (CommandGuards.RejectIfSplitsArray(sheet, destinationCells, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, destinationCells);
         _snapshot = CaptureCellSnapshots(sheet, destinationCells);
 
         var activeSheetName = sheet.Name;
@@ -144,7 +146,9 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             sheet.ReplaceMergedRegions(sheet.MergedRegions.Concat(_addedMergedRegions));
         }
 
-        _affectedCells = destinationCells;
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        _affectedCells = destinationCells.Concat(_headerRename.Affected).Distinct().ToArray();
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -153,6 +157,7 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_sheetId);
         if (_addedMergedRegions is { Count: > 0 })
         {

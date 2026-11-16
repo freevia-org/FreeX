@@ -7535,6 +7535,18 @@ public sealed class WorkbookSession : IDisposable
                         // be routed through MoveRangeCommand (e.g. a cross-sheet destination).
                         new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, isCutSource: true)
                     ]);
+                // Paste and source-clear must reconcile table headers together: reconciling
+                // each child separately loses column identity when both touch one table.
+                var headerRanges = new List<GridRange> { clipboard.SourceRange };
+                var cutRows = options.Transpose ? clipboard.SourceRange.ColCount : clipboard.SourceRange.RowCount;
+                var cutCols = options.Transpose ? clipboard.SourceRange.RowCount : clipboard.SourceRange.ColCount;
+                foreach (var sheetId in CurrentGroupedEditSheetIds())
+                {
+                    var start = new CellAddress(sheetId, destination.Row, destination.Col);
+                    if (TryGetRectangleEnd(start, cutRows, cutCols, out var end))
+                        headerRanges.Add(new GridRange(start, end));
+                }
+                command = new TableHeaderCutCommand(command, headerRanges);
             }
         }
 

@@ -23,6 +23,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     private IReadOnlyList<CellAddress> _affectedCells = [];
     private IReadOnlyList<CellAddress> _payloadAffectedCells = [];
     private List<CellSnapshot>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
     private Dictionary<CellAddress, string>? _formulaSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
     // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -99,7 +100,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     /// <inheritdoc/>
     public int EstimatedBytes => _snapshot is null
         ? 0
-        : (int)Math.Min((long)_snapshot.Count * BytesPerCell, int.MaxValue);
+        : (int)Math.Min((long)_snapshot.Count * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public MoveRangeCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
     {
@@ -184,11 +185,17 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         var movingTables = sourceSheet.StructuredTables.Where(table => _sourceRange.Contains(table.Range)).ToList();
         var partialOverlapTable = sourceSheet.StructuredTables
             .FirstOrDefault(table => !movingTables.Contains(table) && _sourceRange.Overlaps(table.Range));
-        if (partialOverlapTable is not null)
+        // A single header cell can be cut out of a table: the column remains in place
+        // and receives a generated name. Other partial-table moves remain prohibited.
+        var movingSingleHeader = partialOverlapTable is not null && _sourceRange.CellCount == 1 &&
+            partialOverlapTable.HeaderRowCount != 0 && _sourceRange.Start.Row == partialOverlapTable.Range.Start.Row;
+        if (partialOverlapTable is not null && !movingSingleHeader)
             return new CommandOutcome(false, "Cannot move a range that intersects part of a table.");
-        var tableCollision = destSheet.StructuredTables
-            .Any(table => !movingTables.Contains(table) && targetRange.Overlaps(table.Range));
-        if (tableCollision)
+        var destinationTables = destSheet.StructuredTables
+            .Where(table => !movingTables.Contains(table) && targetRange.Overlaps(table.Range)).ToArray();
+        var movingIntoSingleHeader = movingTables.Count == 0 && destinationTables.Length == 1 && _sourceRange.CellCount == 1 &&
+            destinationTables[0].HeaderRowCount != 0 && targetRange.Start.Row == destinationTables[0].Range.Start.Row;
+        if (destinationTables.Length > 0 && !movingIntoSingleHeader)
             return new CommandOutcome(false, "Cannot move a range that intersects a table.");
 
         var affected = CreateAffectedCellList(_sourceRange, targetRange);
@@ -290,6 +297,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 return destSplitRejection;
         }
 
+        _headerRename = movingSingleHeader || movingIntoSingleHeader
+            ? TableHeaderRenameTransaction.Capture(ctx, sourceCells.Concat(targetCells)) : null;
         _snapshot = CaptureCellSnapshots(ResolveSheet, affected);
         _commentSnapshot = CaptureDictionary(ResolveSheet, static s => s.Comments, affected);
         _commentAuthorsSnapshot = CaptureDictionary(ResolveSheet, static s => s.CommentAuthors, affected);
@@ -450,7 +459,10 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             }
         }
 
-        _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
+        try { _headerRename?.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys)
+            .Concat(_headerRename?.Affected ?? []).Distinct().ToArray();
         return new CommandOutcome(
             true,
             AffectedCells: _affectedCells,
@@ -703,6 +715,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sourceSheet = ctx.GetSheet(_sheetId);
         var isCrossSheet = _destination.Sheet != _sheetId;
         var destSheet = isCrossSheet ? ctx.GetSheet(_destination.Sheet) : sourceSheet;
