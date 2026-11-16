@@ -43,6 +43,19 @@ public sealed class PrintRendererShapeTests
             longSuffix.Should().NotBeEmpty();
             longSuffix.Intersect(shortSuffix).Count().Should().BeGreaterThan((int)(shortSuffix.Count * 0.85),
                 "right alignment must retain the end of an overflowing line");
+
+            // Excel permits unwrapped ink in the inset margins and clips at the shape border.
+            var asymmetric = block with { Text = "MMMMMMMMMM", TextInsets = new PageShapeTextInsets(15, 10, 0, 0) };
+            var leftInk = Render(asymmetric);
+            leftInk.Should().Contain(pixel => pixel.X >= 45 && pixel.X < 55, "left-aligned overflow may cross the right inset");
+            var rightInk = Render(asymmetric with { TextHorizontalAlignment = DrawingShapeTextHAlign.Right });
+            rightInk.Should().Contain(pixel => pixel.X >= 10 && pixel.X < 25, "right-aligned overflow may cross the left inset");
+            leftInk.Concat(rightInk).Should().OnlyContain(pixel => pixel.X >= 10 && pixel.X < 55);
+
+            var rtlInk = Render(block with { Text = "مرحبا مرحبا مرحبا مرحبا", TextHorizontalAlignment = DrawingShapeTextHAlign.Right });
+            rtlInk.Should().NotBeEmpty();
+            rtlInk.Should().NotContain(pixel => pixel.Y >= 30, "RTL glyphs must also remain on one clipped line");
+            rtlInk.Should().OnlyContain(pixel => pixel.X >= 10 && pixel.X < 55);
         });
 
         static (int X, int Y)[] Render(PageShapeBlock block)
