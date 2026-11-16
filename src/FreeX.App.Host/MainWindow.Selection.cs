@@ -933,7 +933,12 @@ public partial class MainWindow
             AppOptionsEnterDirectionMapper.ToFormulaEditor(_options.AfterEnterDirection));
         if (resolution is not { } resolvedNavigation) return;
 
-        CellAddress? target = resolvedNavigation.Target;
+        var enterAfterTab = e.Key == Key.Enter && _lastWorksheetNavigationWasTab;
+        _lastWorksheetNavigationWasTab = e.Key == Key.Tab;
+
+        CellAddress? target = enterAfterTab
+            ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(current)
+            : resolvedNavigation.Target;
 
         if (_endMode)
             SetEndMode(false);

@@ -12,39 +12,34 @@ public sealed partial class WorksheetContextMenuPlannerTests
         commands.Select(command => command.Header).Should().ContainInOrder(
             "Cut",
             "Copy",
+            "Paste Options",
+            "Insert",
+            "Delete",
+            "Clear Contents",
+            "Format Cells",
+            "Row Height",
+            "Hide",
+            "Unhide");
+        commands.Single(command => command.Header == "Paste Options").Children
+            .Should().ContainSingle().Which.Should().BeEquivalentTo(
+                new WorksheetContextMenuCommand(
+                    "Paste Special",
+                    WorksheetContextMenuAction.PasteSpecial,
+                    AccessHeader: "Paste _Special"));
+        commands.Select(command => command.Header).Should().NotContain([
             "Paste",
+            "Insert Column Left",
             "Insert Row Above",
             "Delete Row(s)",
-            "Row Height...",
+            "Delete Column(s)",
+            "Column Width...",
+            "AutoFit Column Width",
             "AutoFit Row Height",
             "Hide Rows",
             "Unhide Rows",
             "Group",
             "Ungroup",
-            "Format Cells...",
-            "Clear Contents");
-        commands.Single(command => command.Header == "Group").Should().BeEquivalentTo(
-            new WorksheetContextMenuCommand(
-                "Group",
-                WorksheetContextMenuAction.Group,
-                AccessHeader: "_Group"));
-        commands.Single(command => command.Header == "Ungroup").Should().BeEquivalentTo(
-            new WorksheetContextMenuCommand(
-                "Ungroup",
-                WorksheetContextMenuAction.Ungroup,
-                AccessHeader: "_Ungroup"));
-        commands.Single(command => command.Header == "Format Cells...").Should().BeEquivalentTo(
-            new WorksheetContextMenuCommand(
-                "Format Cells...",
-                WorksheetContextMenuAction.FormatCells,
-                AccessHeader: "_Format Cells..."));
-        commands.Select(command => command.Header).Should().NotContain([
-            "Insert Column Left",
-            "Delete Column(s)",
-            "Column Width...",
-            "AutoFit Column Width",
-            "Hide Columns",
-            "Unhide Columns"
+            "Format Cells..."
         ]);
     }
 

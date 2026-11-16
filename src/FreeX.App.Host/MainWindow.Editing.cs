@@ -1061,10 +1061,14 @@ public partial class MainWindow
 
         if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } rawNext)
         {
+            var enterAfterTab = e.Key == Key.Enter && _lastWorksheetNavigationWasTab;
+            _lastWorksheetNavigationWasTab = e.Key == Key.Tab;
             var next = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
                 _workbook.GetSheet(_currentSheetId),
                 editNavigationCurrent,
-                rawNext);
+                enterAfterTab
+                    ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(editNavigationCurrent)
+                    : rawNext);
             var text = _inlineEditor!.Text;
             FormulaBar.Text = text;
             if (string.IsNullOrEmpty(text))

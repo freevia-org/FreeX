@@ -248,6 +248,17 @@ public sealed class ExcelWorksheetNavigationResolveTargetTests
             .Should().Be(At(sheet, 1, 3));
     }
 
+    [Fact]
+    public void EnterAfterTab_FromLastEnteredColumn_WrapsToColumnAOnNextRow()
+    {
+        var (_, sheet) = NewSheet();
+
+        ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(At(sheet, 1, 3))
+            .Should().Be(At(sheet, 2, 1));
+        ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(At(sheet, CellAddress.MaxRow, 3))
+            .Should().Be(At(sheet, CellAddress.MaxRow, 1));
+    }
+
     // ── Tab ─────────────────────────────────────────────────────────────────
 
     [Fact]
