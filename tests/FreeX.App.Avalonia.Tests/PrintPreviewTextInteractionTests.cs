@@ -38,6 +38,9 @@ public sealed class PrintPreviewTextInteractionTests
             Find<ComboBox>(dialog, "PrintPreviewSettingsPrintWhatBox").SelectedIndex = (int)PrintWhat.EntireWorkbook;
             await DrainAsync();
             var query = Find<TextBox>(dialog, "PrintPreviewFindBox");
+            var status = Find<TextBlock>(dialog, "PrintPreviewFindStatus");
+            AutomationProperties.GetLiveSetting(status).Should().Be(
+                OperatingSystem.IsMacOS() ? AutomationLiveSetting.Off : AutomationLiveSetting.Polite);
             var next = Find<Button>(dialog, "PrintPreviewFindNextButton");
             var previous = Find<Button>(dialog, "PrintPreviewFindPreviousButton");
             var copy = Find<Button>(dialog, "PrintPreviewCopyButton");
@@ -73,8 +76,11 @@ public sealed class PrintPreviewTextInteractionTests
             query.Text = "missing text";
             await DrainAsync();
             Click(next);
-            Find<TextBlock>(dialog, "PrintPreviewFindStatus").Text.Should().Be(UiText.Get("MainLoc_NoMatchesFound"));
+            status.Text.Should().Be(UiText.Get("MainLoc_NoMatchesFound"));
             copy.IsEnabled.Should().BeFalse();
+            query.Text = "needle";
+            await DrainAsync();
+            status.Text.Should().BeEmpty();
         });
 
     [Fact]

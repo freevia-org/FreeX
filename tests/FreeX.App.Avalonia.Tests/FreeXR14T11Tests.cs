@@ -53,7 +53,7 @@ public sealed class FreeXR14T11Tests
             window.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter, KeyModifiers = KeyModifiers.None });
 
             // macOS deliberately skips the live region (Avalonia 12.0.4 native raiseLiveRegionChanged
-            // abort, see MainWindow.StatusBar.EnsureStatusTextLiveRegion).
+            // abort. macOS uses AppKit announcements and leaves the Avalonia live setting off.
             global::Avalonia.Automation.AutomationProperties.GetLiveSetting(window.StatusTextForTest)
                 .Should().Be(OperatingSystem.IsMacOS()
                     ? global::Avalonia.Automation.AutomationLiveSetting.Off

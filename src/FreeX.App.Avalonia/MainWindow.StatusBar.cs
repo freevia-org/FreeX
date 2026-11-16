@@ -30,9 +30,8 @@ public sealed partial class MainWindow
     // be refreshed on open, mirroring the WPF host's _statusBarCustomizeMenuItems registry.
     private readonly Dictionary<string, MenuItem> _statusBarCustomizeMenuItems = new(StringComparer.Ordinal);
 
-    // Selection statistic controls receive their polite live-region metadata at construction.
-    // Only the status text still needs lazy initialization because it is renderer-global state.
-    private bool _statusTextLiveSettingApplied;
+    // Enable announcements for the general status line when an action needs to report a failure.
+    private bool _statusTextAnnouncementConfigured;
     private StatusBarAutomationSnapshot? _lastStatusBarAutomationSnapshot;
 
     private bool GetStatusBarOption(string optionTag) =>
@@ -164,11 +163,8 @@ public sealed partial class MainWindow
             StatusBarPresentationPlanner.ReadoutAutomationId(kind));
         AutomationProperties.SetName(textBlock, fallbackName);
         AutomationProperties.SetHelpText(textBlock, fallbackName);
-        // macOS: Avalonia 12.0.4's native -[AvnAccessibilityElement raiseLiveRegionChanged] throws
-        // NSInvalidArgumentException (nil object in NSDictionary) and aborts the process when one of
-        // these readouts changes while an accessibility client is attached (reproduced: multi-cell
-        // select, then click a single cell collapses the statistics). Skip the polite live region on
-        // macOS until the framework is fixed; Name/HelpText still carry the values for VoiceOver.
+        // macOS posts one announcement for the statistics panel, so VoiceOver receives the
+        // full selection summary in a single message.
         if (!OperatingSystem.IsMacOS())
             AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
     }
@@ -232,7 +228,11 @@ public sealed partial class MainWindow
             AutomationProperties.SetName(control, change.Current.Name);
             AutomationProperties.SetHelpText(control, change.Current.HelpText);
             if (change.ShouldNotify)
+            {
                 NotifyStatusBarAutomationChanged(control, change.PreviousName, change.Current.Name);
+                if (OperatingSystem.IsMacOS() && change.Current.Element == StatusBarPresentationElement.StatsPanel)
+                    MacOsAccessibilityAnnouncement.TryPost(control, change.Current.Name);
+            }
         }
 
         _lastStatusBarAutomationSnapshot = automationSnapshot;
@@ -271,27 +271,29 @@ public sealed partial class MainWindow
         }
     }
 
-    // ── Accessibility: live-region announcement for status/edit-issue text ───
-    // _statusText carries both routine "Ready"/save-completed status AND edit/validation-commit
-    // failure messages (ShowEditIssue, ShowSaveIssue, ShowOpenIssue, ShowExportIssue) — the Avalonia
-    // shell has no owned modal MessageBox for validation violations the way WPF's
-    // MainWindow.Editing.cs ShowOwnedMessage does, so this text update is the ONLY signal a failed
-    // commit occurred. Without a live region a screen-reader user gets no announcement at all and can
-    // believe a rejected edit succeeded. Name/HelpText stay their fixed "Status"/help-text values;
-    // LiveSetting is what makes a content/Text change get announced.
     private void EnsureStatusTextLiveRegion()
     {
-        if (_statusTextLiveSettingApplied)
+        if (_statusTextAnnouncementConfigured)
             return;
 
-        // macOS: same Avalonia 12.0.4 native raiseLiveRegionChanged abort as the selection-statistic
-        // readouts above -- any polite live region whose text changes while VoiceOver (or another
-        // accessibility client) is attached can take the whole process down. Skip it on macOS until
-        // the framework is fixed; the status text's Name/HelpText remain readable on demand.
+        ConfigureTextAnnouncement(_statusText);
+        _statusTextAnnouncementConfigured = true;
+    }
+
+    private static void ConfigureTextAnnouncement(TextBlock textBlock)
+    {
         if (OperatingSystem.IsMacOS())
+        {
+            // Avalonia 12.0.4 can abort when its macOS live region changes to empty text.
+            // Post the TextBlock's message through AppKit so clearing the UI remains safe.
+            textBlock.PropertyChanged += (_, change) =>
+            {
+                if (change.Property == TextBlock.TextProperty)
+                    MacOsAccessibilityAnnouncement.TryPost(textBlock, textBlock.Text);
+            };
             return;
+        }
 
-        AutomationProperties.SetLiveSetting(_statusText, AutomationLiveSetting.Polite);
-        _statusTextLiveSettingApplied = true;
+        AutomationProperties.SetLiveSetting(textBlock, AutomationLiveSetting.Polite);
     }
 }
