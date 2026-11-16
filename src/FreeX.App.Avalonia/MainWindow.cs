@@ -9612,7 +9612,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RefreshFormulaSignatureHelp(editor);
 
             if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
-                ApplyInlineCellValueAutoCompleteSuggestion(address, editor);
+                ApplyCellValueAutoCompleteSuggestion(address, editor);
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
@@ -9850,14 +9850,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// keystroke (which re-runs this same check for the new prefix), and Backspace/Delete rejects it
     /// via the session's one-shot suppression state.
     /// </summary>
-    private void ApplyInlineCellValueAutoCompleteSuggestion(CellAddress address, TextBox editor)
+    private void ApplyCellValueAutoCompleteSuggestion(CellAddress address, TextBox editor)
     {
-        if (_applyingInlineCellValueAutoCompleteSuggestion ||
-            !Equals(_inlineCellEditAddress, address) ||
-            !ReferenceEquals(_inlineCellEditor, editor))
-        {
+        if (_applyingInlineCellValueAutoCompleteSuggestion)
             return;
-        }
 
         var text = editor.Text ?? "";
         var sheet = _session.Workbook.GetSheet(address.Sheet);
@@ -9878,8 +9874,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             editor.CaretIndex = plan.Value.Text.Length;
             editor.SelectionStart = plan.Value.SelectionStart;
             editor.SelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
-            _inlineCellEditSelectionStart = plan.Value.SelectionStart;
-            _inlineCellEditSelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
+            if (ReferenceEquals(_inlineCellEditor, editor) && Equals(_inlineCellEditAddress, address))
+            {
+                _inlineCellEditSelectionStart = plan.Value.SelectionStart;
+                _inlineCellEditSelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
+            }
         }
         finally
         {
@@ -11113,6 +11112,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
+        if (_inlineCellEditor?.IsVisible != true &&
+            !_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression() &&
+            _session.FormulaEditAddress is { } address)
+        {
+            ApplyCellValueAutoCompleteSuggestion(address, _formulaBox);
+        }
         RefreshFormulaFunctionAutocomplete(_formulaBox);
         RefreshFormulaSignatureHelp(_formulaBox);
     }
@@ -19477,6 +19482,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             return;
         }
+
+        // Backspace/Delete must be allowed to remove a selected cell-value completion without the
+        // following TextChanged pass immediately offering the same completion again.
+        if (e.Key is Key.Back or Key.Delete)
+            _formulaRangeEditingSession.SuppressNextCellValueAutocomplete();
 
         if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyModifiers))
         {

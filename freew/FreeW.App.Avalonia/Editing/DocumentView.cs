@@ -434,6 +434,7 @@ public sealed partial class DocumentView : Control
 
     /// <summary>Raised after any change to the document (edit, undo/redo, load) so the shell can refresh chrome.</summary>
     public event Action? DocumentChanged;
+    internal event Action? DocumentLoaded;
 
     /// <summary>Raised when a Find result moves the caret, so the shell can scroll it into view.</summary>
     public event Action? ScrollToCaretRequested;
@@ -648,9 +649,11 @@ public sealed partial class DocumentView : Control
         // AV-PROOFING: Ignore All is session-scoped to the OPEN DOCUMENT, not the editor instance —
         // without this, words ignored in one document stayed silently ignored after loading another.
         _ignoredProofingWords.Clear();
+        ResetProofingReviewState();
         _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
+        DocumentLoaded?.Invoke();
         DocumentChanged?.Invoke();
     }
 

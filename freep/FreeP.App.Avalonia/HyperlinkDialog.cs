@@ -260,9 +260,10 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
         RenderTargetState(state);
     }
 
-    private void OnOk() => Apply();
+    private async void OnOk() => await ApplyAsync(
+        (message, title) => AvaloniaUserMessageDialog.ShowWarningAsync(this, message, title));
 
-    private bool Apply()
+    private async Task<bool> ApplyAsync(Func<string, string, Task> showWarning)
     {
         var plan = _session.TryAccept();
 
@@ -271,6 +272,7 @@ internal sealed partial class HyperlinkDialog : FreePDialogWindow
             var validation = plan.Validation!;
             _validationText.Text = _session.State.ValidationText;
             _validationText.IsVisible = true;
+            await showWarning(validation.Message, validation.Caption);
             FocusField(validation.FocusField);
             return false;
         }
