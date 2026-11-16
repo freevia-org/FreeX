@@ -26,11 +26,11 @@ public sealed record XpsFontResource(string PackagePath, byte[] FontBytes)
 
 public sealed record XpsWriterOptions(XpsFontResource? TextFont = null)
 {
-    /// <summary>Text operations rendered as transparent glyphs with their own embedded fonts.</summary>
+    /// <summary>Text operations mapped to their own embedded glyph runs, with optional transparent overlays.</summary>
     public IReadOnlyDictionary<PdfText, XpsGlyphRun>? GlyphOverlays { get; init; }
 }
 
-public sealed record XpsGlyphRun(XpsFontResource Font, string? Indices = null);
+public sealed record XpsGlyphRun(XpsFontResource Font, string? Indices = null, bool IsTransparent = true);
 
 public sealed record XpsExportabilityReport(
     bool IsExportable,
@@ -55,18 +55,25 @@ public sealed class XpsUnsupportedContentException : InvalidOperationException
 /// Writes a standards-shaped OPC XPS package from the shared fixed-layout draw-op model.
 /// This is deliberately separate from PDF: it never copies or relabels PDF bytes.
 ///
-/// Ordinary text requires a caller-supplied <see cref="XpsWriterOptions.TextFont"/>. Raster-backed
-/// pages can carry selectable <see cref="XpsWriterOptions.GlyphOverlays"/> with per-run font resources.
+/// Ordinary text requires a caller-supplied <see cref="XpsWriterOptions.TextFont"/>. Each text operation can also use an embedded
+/// <see cref="XpsGlyphRun"/> with explicit glyph indices and advances.
 /// </summary>
 public static class PortableXpsWriter
 {
     private const double XpsUnitsPerPoint = 96d / 72d;
+    // XPS 1.0.1 Table 18–1 recommends these minimum consumer limits.
+    private const int MaxGradientStops = 100;
+    private const double MaxGradientCoordinate = 1e12;
     private const string CorePropertiesPath = "docProps/core.xml";
     private static readonly XNamespace Xps = "http://schemas.microsoft.com/xps/2005/06";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace ContentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace CoreProperties = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
     private static readonly XNamespace DublinCore = "http://purl.org/dc/elements/1.1/";
+
+    /// <summary>Checks whether the gradient can be written as a native brush.</summary>
+    public static bool CanRenderLinearGradient(PdfLinearGradient gradient) =>
+        TryGetGradientStops(gradient, out _);
 
     public static XpsExportabilityReport Analyze(
         PdfContentDocument document,
@@ -169,6 +176,11 @@ public static class PortableXpsWriter
                 if (!TryGetSupportedImageSize(image, out _, out _))
                     requirements.Add("PdfImage requires readable PNG or JPEG bytes without clip, color effects, or rotation");
                 break;
+            case PdfFillRectPattern { Pattern: var pattern } when !PortableXpsPatternBrush.CanRender(pattern):
+            case PdfFillEllipsePattern { Pattern: var ellipsePattern } when !PortableXpsPatternBrush.CanRender(ellipsePattern):
+            case PdfPathPattern { Pattern: var pathPattern } when !PortableXpsPatternBrush.CanRender(pathPattern):
+                requirements.Add("PdfPatternFill requires positive tile extents within the XPS coordinate range");
+                break;
             case PdfRotationGroup group:
                 foreach (var child in group.Ops)
                     AnalyzeOperation(child, options, requirements, ref textCount, ref imageCount);
@@ -218,34 +230,43 @@ public static class PortableXpsWriter
         return op switch
         {
             PdfFillRect fill => PathElement(RectPath(fill.X, fill.Y, fill.Width, fill.Height, pageHeight), Fill(fill.Color)),
+            PdfFillRectPattern fill => PathElement(RectPath(fill.X, fill.Y, fill.Width, fill.Height, pageHeight),
+                PortableXpsPatternBrush.Build(fill.Pattern)),
             PdfFillRectLinearGradient fill => PathElement(
-                RectPath(fill.X, fill.Y, fill.Width, fill.Height, pageHeight), Fill(fill.FallbackColor)),
+                RectPath(fill.X, fill.Y, fill.Width, fill.Height, pageHeight),
+                Fill(fill.Gradient, fill.FallbackColor, pageHeight)),
             PdfStrokeRect stroke => PathElement(
                 RectPath(stroke.X, stroke.Y, stroke.Width, stroke.Height, pageHeight),
-                Stroke(stroke.Color, stroke.LineWidth)),
+                stroke: Stroke(stroke.Color, stroke.LineWidth), dash: stroke.Dash),
             PdfStrokeRectLinearGradient stroke => PathElement(
                 RectPath(stroke.X, stroke.Y, stroke.Width, stroke.Height, pageHeight),
-                Stroke(stroke.FallbackColor, stroke.LineWidth)),
+                stroke: Stroke(stroke.Gradient, stroke.FallbackColor, stroke.LineWidth, pageHeight), dash: stroke.Dash),
             PdfFillEllipse ellipse => PathElement(
                 EllipsePath(ellipse.X, ellipse.Y, ellipse.Width, ellipse.Height, pageHeight), Fill(ellipse.Color)),
+            PdfFillEllipsePattern ellipse => PathElement(EllipsePath(ellipse.X, ellipse.Y, ellipse.Width, ellipse.Height, pageHeight),
+                PortableXpsPatternBrush.Build(ellipse.Pattern)),
             PdfFillEllipseLinearGradient ellipse => PathElement(
-                EllipsePath(ellipse.X, ellipse.Y, ellipse.Width, ellipse.Height, pageHeight), Fill(ellipse.FallbackColor)),
+                EllipsePath(ellipse.X, ellipse.Y, ellipse.Width, ellipse.Height, pageHeight),
+                Fill(ellipse.Gradient, ellipse.FallbackColor, pageHeight)),
             PdfStrokeEllipse ellipse => PathElement(
                 EllipsePath(ellipse.X, ellipse.Y, ellipse.Width, ellipse.Height, pageHeight),
-                Stroke(ellipse.Color, ellipse.LineWidth)),
+                stroke: Stroke(ellipse.Color, ellipse.LineWidth), dash: ellipse.Dash),
             PdfStrokeEllipseLinearGradient ellipse => PathElement(
                 EllipsePath(ellipse.X, ellipse.Y, ellipse.Width, ellipse.Height, pageHeight),
-                Stroke(ellipse.FallbackColor, ellipse.LineWidth)),
+                stroke: Stroke(ellipse.Gradient, ellipse.FallbackColor, ellipse.LineWidth, pageHeight), dash: ellipse.Dash),
             PdfLine line => PathElement(
                 $"M {F(line.X1)},{F(FlipY(line.Y1, pageHeight))} L {F(line.X2)},{F(FlipY(line.Y2, pageHeight))}",
-                Stroke(line.Color, line.LineWidth)),
+                stroke: Stroke(line.Color, line.LineWidth)),
             PdfLineLinearGradient line => PathElement(
                 $"M {F(line.X1)},{F(FlipY(line.Y1, pageHeight))} L {F(line.X2)},{F(FlipY(line.Y2, pageHeight))}",
-                Stroke(line.FallbackColor, line.LineWidth)),
+                stroke: Stroke(line.Gradient, line.FallbackColor, line.LineWidth, pageHeight)),
             PdfFilledTriangle triangle => PathElement(
                 $"M {F(triangle.X1)},{F(FlipY(triangle.Y1, pageHeight))} L {F(triangle.X2)},{F(FlipY(triangle.Y2, pageHeight))} L {F(triangle.X3)},{F(FlipY(triangle.Y3, pageHeight))} Z",
                 Fill(triangle.Color)),
             PdfPath path => BuildPath(path, pageHeight),
+            PdfPathPattern path => PathElement(PathData(path.Contours, pageHeight), PortableXpsPatternBrush.Build(path.Pattern),
+                path.StrokeColor is { } color ? Stroke(color, Math.Max(0.1, path.StrokeWidth)) : null,
+                dash: path.StrokeDash),
             PdfPathLinearGradient path => BuildPath(path, pageHeight),
             PdfText text => BuildText(text, pageHeight, options, resources),
             PdfImage image => BuildImage(image, pageHeight, resources),
@@ -262,12 +283,16 @@ public static class PortableXpsWriter
     private static XElement BuildPath(PdfPath path, double pageHeight) =>
         PathElement(PathData(path.Contours, pageHeight),
             path.FillColor is { } fill ? Fill(fill) : null,
-            path.StrokeColor is { } stroke ? Stroke(stroke, path.StrokeWidth) : null);
+            path.StrokeColor is { } stroke ? Stroke(stroke, Math.Max(0.1, path.StrokeWidth)) : null,
+            dash: path.StrokeDash);
 
     private static XElement BuildPath(PdfPathLinearGradient path, double pageHeight) =>
         PathElement(PathData(path.Contours, pageHeight),
-            path.FillFallbackColor is { } fill ? Fill(fill) : null,
-            path.StrokeFallbackColor is { } stroke ? Stroke(stroke, path.StrokeWidth) : null);
+            path.FillFallbackColor is { } fill ? Fill(path.FillGradient, fill, pageHeight) : null,
+            path.StrokeFallbackColor is { } stroke
+                ? Stroke(path.StrokeGradient, stroke, Math.Max(0.1, path.StrokeWidth), pageHeight)
+                : null,
+            dash: path.StrokeDash);
 
     private static XElement BuildText(
         PdfText text,
@@ -291,7 +316,7 @@ public static class PortableXpsWriter
             Xps + "Glyphs",
             new XAttribute("FontUri", font.FontUri),
             new XAttribute("FontRenderingEmSize", F(text.FontSize)),
-            new XAttribute("Fill", overlay is not null ? "#00000000" : Color(text.Color)),
+            new XAttribute("Fill", overlay?.IsTransparent == true ? "#00000000" : Color(text.Color)),
             new XAttribute("OriginX", F(text.X)),
             new XAttribute("OriginY", F(FlipY(text.Y, pageHeight))),
             new XAttribute("UnicodeString", unicodeString),
@@ -579,25 +604,97 @@ public static class PortableXpsWriter
             $"{TransformNumber(offsetX)},{TransformNumber(offsetY)}";
     }
 
-    private static XElement PathElement(string data, XElement? fill = null, XElement? stroke = null)
+    private static XElement PathElement(
+        string data, XElement? fill = null, XElement? stroke = null, PdfDashPattern? dash = null)
     {
         var path = new XElement(Xps + "Path", new XAttribute("Data", data));
         if (fill is not null)
-            path.SetAttributeValue("Fill", fill.Attribute("Color")?.Value);
+            SetPathBrush(path, "Fill", fill);
         if (stroke is not null)
         {
-            var thickness = stroke.Attribute("data-stroke-thickness")?.Value;
-            path.SetAttributeValue("Stroke", stroke.Attribute("Color")?.Value);
+            var thickness = stroke.Attribute("data-stroke-thickness");
             if (thickness is not null)
-                path.SetAttributeValue("StrokeThickness", thickness);
+            {
+                path.SetAttributeValue("StrokeThickness", thickness.Value);
+                path.SetAttributeValue("StrokeMiterLimit", "4");
+                if (dash is not null)
+                    ApplyDashPattern(path, dash, (double)thickness);
+                thickness.Remove();
+            }
+
+            SetPathBrush(path, "Stroke", stroke);
         }
         return path;
     }
 
+    private static void ApplyDashPattern(XElement path, PdfDashPattern dash, double strokeWidth)
+    {
+        if (strokeWidth <= 0)
+            return;
+        var segments = dash.Segments.Where(segment => double.IsFinite(segment) && segment > 0).ToArray();
+        if (segments.Length == 0 || segments.Length % 2 != 0)
+            return;
+
+        // The shared pattern is measured in points. XPS measures its lengths and phase
+        // in multiples of the stroke thickness.
+        path.SetAttributeValue("StrokeDashArray", string.Join(" ", segments.Select(segment => TransformNumber(segment / strokeWidth))));
+        if (double.IsFinite(dash.Phase) && dash.Phase != 0)
+            path.SetAttributeValue("StrokeDashOffset", TransformNumber(dash.Phase / strokeWidth));
+    }
+
+    private static void SetPathBrush(XElement path, string propertyName, XElement brush)
+    {
+        if (brush.Name == Xps + "SolidColorBrush")
+            path.SetAttributeValue(propertyName, brush.Attribute("Color")!.Value);
+        else
+            path.Add(new XElement(Xps + ("Path." + propertyName), brush));
+    }
+
     private static XElement Fill(PdfColor color) => new(Xps + "SolidColorBrush", new XAttribute("Color", Color(color)));
 
+    private static XElement Fill(PdfLinearGradient? gradient, PdfColor fallbackColor, double pageHeight) =>
+        gradient is not null && TryGetGradientStops(gradient, out var stops)
+            ? LinearGradientBrush(gradient, stops, pageHeight)
+            : Fill(fallbackColor);
+
     private static XElement Stroke(PdfColor color, double width) =>
-        new(Xps + "SolidColorBrush", new XAttribute("Color", Color(color)), new XAttribute("data-stroke-thickness", F(width)));
+        Stroke(null, color, width, pageHeight: 0);
+
+    private static XElement Stroke(PdfLinearGradient? gradient, PdfColor fallbackColor, double width, double pageHeight)
+    {
+        var brush = Fill(gradient, fallbackColor, pageHeight);
+        brush.SetAttributeValue("data-stroke-thickness", TransformNumber(width));
+        return brush;
+    }
+
+    private static bool TryGetGradientStops(PdfLinearGradient gradient, out PdfGradientStop[] stops)
+    {
+        stops = [];
+        return Math.Abs(gradient.StartX) <= MaxGradientCoordinate &&
+            Math.Abs(gradient.StartY) <= MaxGradientCoordinate &&
+            Math.Abs(gradient.EndX) <= MaxGradientCoordinate &&
+            Math.Abs(gradient.EndY) <= MaxGradientCoordinate &&
+            PdfRenderGeometry.TryNormalizeGradient(gradient, out stops) &&
+            stops.Length <= MaxGradientStops;
+    }
+
+    private static XElement LinearGradientBrush(
+        PdfLinearGradient gradient,
+        IReadOnlyList<PdfGradientStop> stops,
+        double pageHeight) =>
+        new(
+            Xps + "LinearGradientBrush",
+            new XAttribute("MappingMode", "Absolute"),
+            new XAttribute("ColorInterpolationMode", "SRgbLinearInterpolation"),
+            new XAttribute("SpreadMethod", "Pad"),
+            new XAttribute("StartPoint", $"{TransformNumber(gradient.StartX)},{TransformNumber(FlipY(gradient.StartY, pageHeight))}"),
+            new XAttribute("EndPoint", $"{TransformNumber(gradient.EndX)},{TransformNumber(FlipY(gradient.EndY, pageHeight))}"),
+            new XElement(
+                Xps + "LinearGradientBrush.GradientStops",
+                stops.Select(stop => new XElement(
+                    Xps + "GradientStop",
+                    new XAttribute("Color", Color(stop.Color)),
+                    new XAttribute("Offset", TransformNumber(stop.Position))))));
 
     private static string RectPath(double x, double y, double width, double height, double pageHeight) =>
         $"M {F(x)},{F(FlipY(y + height, pageHeight))} L {F(x + width)},{F(FlipY(y + height, pageHeight))} L {F(x + width)},{F(FlipY(y, pageHeight))} L {F(x)},{F(FlipY(y, pageHeight))} Z";
@@ -614,7 +711,10 @@ public static class PortableXpsWriter
 
     private static string PathData(IReadOnlyList<PdfPathContour> contours, double pageHeight)
     {
-        var builder = new StringBuilder();
+        if (contours.Count == 0)
+            return string.Empty;
+
+        var builder = new StringBuilder("F1 ");
         foreach (var contour in contours)
         {
             builder.Append("M ").Append(F(contour.Start.X)).Append(',').Append(F(FlipY(contour.Start.Y, pageHeight)));
@@ -636,6 +736,8 @@ public static class PortableXpsWriter
         }
         return builder.ToString();
     }
+
+    internal static bool CanRenderImage(PdfImage image) => TryGetSupportedImageSize(image, out _, out _);
 
     private static bool TryGetSupportedImageSize(PdfImage image, out int width, out int height)
     {

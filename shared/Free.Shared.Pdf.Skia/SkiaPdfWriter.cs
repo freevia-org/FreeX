@@ -234,15 +234,17 @@ public static class SkiaPdfWriter
         int dpi,
         PdfTypefaceSet typefaces,
         FallbackTextRenderer textRenderer,
-        ICollection<string>? imageDiagnostics = null)
+        ICollection<string>? imageDiagnostics = null,
+        bool transparentBackground = false)
     {
         var width = Math.Max(1, checked((int)Math.Ceiling(page.WidthPoints * dpi / 72d)));
         var height = Math.Max(1, checked((int)Math.Ceiling(page.HeightPoints * dpi / 72d)));
-        var imageInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        var alphaType = transparentBackground ? SKAlphaType.Premul : SKAlphaType.Opaque;
+        var imageInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, alphaType);
         using var surface = SKSurface.Create(imageInfo)
             ?? throw new InvalidOperationException("Could not allocate the PDF page raster.");
         var canvas = surface.Canvas;
-        canvas.Clear(SKColors.White);
+        canvas.Clear(transparentBackground ? SKColors.Transparent : SKColors.White);
         canvas.Scale(dpi / 72f);
         RenderPage(canvas, page, typefaces, textRenderer, imageDiagnostics);
         canvas.Flush();
