@@ -27,6 +27,7 @@ This is a sequential, paired manual run. Each scenario uses the same clean workb
 | 2 | Keyboard navigation from A1 to B2, replace 3 with 4, commit with Enter, save. Both recalculate D2=5, B4=6 and D4=14. Pass. | Same saved workbooks after edit; parsed with OpenPyXL, including formula text and cached values. |
 | 3 | Open Find using Ctrl+F. Functional command opens in both. Initial visual parity failed: Excel starts at about 440x194 px with Options/results hidden; FreeX started at about 706x424 px with format controls and an empty results grid visible. | Live paired UI inspection. Repair source: `codex/ux-qa-iter25-find-replace-20260831`, commit `12a6da5b6584f31432b61207de0b8e7d141d3b02`. |
 | 4 | Reopen Find after porting the compact-dialog change. FreeX now opens at about 528x160 px; format tools and results are absent initially. The large-results-pane defect is fixed, but the dialog remains 88 px wider and 34 px shorter than Excel's 440x194 px window. | Paired live UI, Ctrl+F in Excel and FreeX. Focused `FindReplaceDialogXamlTests`: 23 passed. |
+| 5 | Grid navigation and formula editing: Ctrl+Home, arrows, Ctrl+Down/Right, Shift+Left selected matching cells/ranges in both apps. F2 showed `=SUM(D2:D3)` with D2:D3 references highlighted; Escape restored the D4 selection without changing its value (14). Mouse click selected B2 in both apps (value 4); FreeX status bar showed Average 4, Count 1, Numerical Count 1, Sum 4, Min 4, Max 4. Pass for this keyboard/mouse slice. | Paired live screenshots on separate monitors. Saved workbook copies remain unchanged and both show B2=4, D4=14 and `=SUM(D2:D3)`. Screenshots were inspected but not persisted. |
 
 ## Discrepancies
 
@@ -38,14 +39,14 @@ This is a sequential, paired manual run. Each scenario uses the same clean workb
 
 ## Current Status
 
-Four narrow scenarios have been exercised; the initial workbook/editing scenarios passed and the Find/Replace visual defect was substantially reduced, with a smaller dimension mismatch still open. This is not a full keyboard, mouse, or command-surface pass. Continue with navigation, selection, editing and common Home/Data commands, one paired scenario at a time.
+Five narrow scenarios have been exercised; workbook creation/editing and the tested grid-navigation slice passed. Find/Replace still has a dimension mismatch. This is not a full keyboard, mouse, or command-surface pass. Continue one paired scenario at a time; mouse double-click editing remains untested because this attempt routed coordinates to the other monitor and did not activate the target cell.
 
 Screenshots from this run were inspected live but not persisted as files. Capture paired before/after screenshots in future iterations when recording visual outcomes.
 
 ## Integration Handoff
 
-- The verified repair is commit `e4ef06c3d053d116762d408dfeca258cd7b0e779` on `codex/ux-parity-current-20261116`, based on `origin/main` `224915d89128d51fc93a93748f2088ace1db04ed`.
+- The current QA branch is `codex/ux-parity-current-20261116`, rebased onto `origin/main` `b82fc0c20a4daa68fecdd9560e431994acda2034`; it contains the compact Find/Replace repair and this QA ledger.
 - `FindReplaceDialogXamlTests`: 23 passed, 0 failed. Release host build completed with 0 warnings and 0 errors before the live comparison.
-- During reconciliation, `origin/main` advanced to `c728e62648bfed8527c5eefaabd20195881d87ca`. CI failed in repository preflight because `Test-MacOsAppReadiness.ps1` expects the previous `actions/download-artifact` commit marker; CodeQL passed. This UX branch does not repair that workflow failure, so the integration script, push, and merge are intentionally deferred until the exact base candidate is green.
-- The newer upstream commits also modify the same Find/Replace XAML, code-behind, planner and tests. Coordinate with the active shared-dialog owner and rebase/resolve against a green main before proposing integration; do not overwrite the newer shared-dialog work without review.
+- Integration remains deferred until exact-base CI is green and `tools/Test-BranchForIntegration.ps1` passes. The current branch has not been pushed or merged.
+- An active shared-dialog session and active Avalonia/Linux sessions were found during reconciliation. They were asked to report their exact branches, verification and integration readiness; their changes are not yet considered complete or integrated. Coordinate shared dialog files before merging.
 - Local worktree audit: `ux-qa-iter25-find-replace-integration` is clean and contains the repair source commit; `ux-qa-iter27-backstage-visual-20260831` has unresolved rebase conflicts; `freex-number-format-gallery-20260821` contains untracked screenshot evidence. Preserve the latter two. Other clean pre-rewrite branches have not been validated against current main and are not yet safe to archive as integrated.
