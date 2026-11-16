@@ -54,6 +54,18 @@ public class ProtectionGuardCoverageTests
     // Sheet-protection tests: cell/row/column mutation commands
     // ---------------------------------------------------------------------------
 
+    [Fact]
+    public void TableHeaderBatchCommand_PropagatesChildProtectionRejection()
+    {
+        var (_, sheet, ctx) = MakeProtectedSetup();
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var child = EditCellsCommand.ForValue(sheet.Id, address, new TextValue("changed"));
+        var command = new TableHeaderBatchCommand(child, [new GridRange(address, address)]);
+        var result = command.Apply(ctx);
+        result.Success.Should().BeFalse();
+        sheet.GetValue(address).Should().Be(new TextValue("data"));
+    }
+
     [Theory]
     [MemberData(nameof(SheetProtectedCommandFactories))]
     public void CellMutatingCommand_RejectsProtectedSheet(string name, Func<Workbook, Sheet, IWorkbookCommand> factory)
@@ -126,6 +138,8 @@ public class ProtectionGuardCoverageTests
 
     // Justifications:
     // - CompositeWorkbookCommand: wraps other commands; protection enforced by each child.
+    // - TableHeaderBatchCommand: delegates cell edits to guarded children; collateral header
+    //   normalization checks CanEditCell before writing a protected sheet's header.
     // - RejectedWorkbookCommand: always fails; never mutates anything.
     // - AddPivotTableToNewWorksheetCommand: modifies workbook structure (adds a sheet) —
     //   delegates to AddSheetCommand which is covered by WorkbookStructureProtected set.
@@ -188,6 +202,7 @@ public class ProtectionGuardCoverageTests
         // Meta / always-failing
         ["RejectedWorkbookCommand"] = "Never mutates anything; always returns failure.",
         ["CompositeWorkbookCommand"] = "Wraps other guarded commands; protection enforced per child.",
+        ["TableHeaderBatchCommand"] = "Delegates edits to guarded children and checks collateral header writes.",
 
         // Hard to construct + covered by sub-command guards
         ["AddPivotTableToNewWorksheetCommand"] = "Delegates to AddSheetCommand (structure-guarded). Complex ctor.",

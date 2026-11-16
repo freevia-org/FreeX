@@ -22,6 +22,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
 
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
+    private readonly IReadOnlyList<CellAddress> _directlyEditedCells;
     private IReadOnlyList<CellAddress> _affectedCells;
     private List<CellEditCompanionSnapshot>? _snapshot;
     private TableHeaderRenameTransaction? _headerRename;
@@ -64,7 +65,8 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
         var affectedCells = new CellAddress[edits.Count];
         for (var i = 0; i < edits.Count; i++)
             affectedCells[i] = edits[i].Address;
-        _affectedCells = affectedCells;
+        _directlyEditedCells = affectedCells;
+        _affectedCells = _directlyEditedCells;
     }
 
     /// <summary>Convenience constructor for editing a single cell value.</summary>
@@ -95,11 +97,10 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
             }
         }
 
-        var directlyEdited = _edits.Select(edit => edit.Address).ToArray();
-        if (CommandGuards.RejectIfSplitsArray(sheet, directlyEdited, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _directlyEditedCells, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
-        _affectedCells = directlyEdited;
+        _affectedCells = _directlyEditedCells;
         _headerRename = TableHeaderRenameTransaction.Capture(ctx, _affectedCells);
         _snapshot = [];
 
@@ -180,6 +181,10 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
             return new CommandOutcome(true, AffectedCells: _affectedCells, IsNoOp: true);
 
         if (extraAffectedCells.Count == 0)
+            return new CommandOutcome(true, AffectedCells: _affectedCells);
+
+        var directSet = _directlyEditedCells.ToHashSet();
+        if (extraAffectedCells.All(directSet.Contains))
             return new CommandOutcome(true, AffectedCells: _affectedCells);
 
         var allAffectedCells = new List<CellAddress>(_affectedCells.Count + extraAffectedCells.Count);
