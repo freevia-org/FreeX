@@ -2804,6 +2804,14 @@ public sealed class RecalcEngine
                     currentRow.ColumnName);
                 if (address is not null)
                     refs.Add(address.Value);
+                else
+                {
+                    var hostSheet = workbook?.GetSheet(defaultSheetId);
+                    var range = string.IsNullOrWhiteSpace(currentRow.ColumnName)
+                        ? StructuredReferenceResolver.Resolve(workbook, hostSheet, currentRow.TableName ?? "", "#This Row", formulaCell)
+                        : StructuredReferenceResolver.ResolveCurrentRowColumnRange(workbook, hostSheet, formulaCell, currentRow.TableName, currentRow.ColumnName);
+                    if (range is not null) refs.AddRange(range.Value);
+                }
                 return false;
             }
 

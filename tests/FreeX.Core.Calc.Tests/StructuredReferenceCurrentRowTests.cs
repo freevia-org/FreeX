@@ -8,6 +8,40 @@ namespace FreeX.Core.Calc.Tests;
 public sealed class StructuredReferenceCurrentRowTests
 {
     [Fact]
+    public void Recalculate_QualifiedCurrentRowOutsideTable_TracksCrossSheetCellsAndRanges()
+    {
+        var workbook = new Workbook("test");
+        var source = workbook.AddSheet("Data");
+        var other = workbook.AddSheet("Other");
+        var a = new CellAddress(source.Id, 1, 1);
+        var b = new CellAddress(source.Id, 1, 2);
+        var a2 = new CellAddress(source.Id, 2, 1);
+        var b2 = new CellAddress(source.Id, 2, 2);
+        source.SetCell(a, new TextValue("Alpha"));
+        source.SetCell(b, new TextValue("Bravo"));
+        source.SetCell(a2, new NumberValue(10));
+        source.SetCell(b2, new NumberValue(100));
+        source.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "SalesTable", DisplayName = "Alias", Range = new GridRange(a, b2), Columns = { new StructuredTableColumnModel(1, "Alpha"), new StructuredTableColumnModel(2, "Bravo") } });
+        var scalar = new CellAddress(other.Id, 2, 8);
+        var range = new CellAddress(other.Id, 2, 9);
+        var whole = new CellAddress(other.Id, 2, 10);
+        other.SetFormula(scalar, "Alias[@Alpha]");
+        other.SetFormula(range, "SUM(Alias[@[Alpha]:[Bravo]])");
+        other.SetFormula(whole, "SUM(Alias[@])");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+        other.GetValue(scalar).Should().Be(new NumberValue(10));
+        other.GetValue(range).Should().Be(new NumberValue(110));
+        other.GetValue(whole).Should().Be(new NumberValue(110));
+        source.SetCell(a2, new NumberValue(20));
+        var report = engine.Recalculate(workbook, [a2]);
+        report.RecalculatedCells.Should().Contain([scalar, range, whole]);
+        other.GetValue(scalar).Should().Be(new NumberValue(20));
+        other.GetValue(range).Should().Be(new NumberValue(120));
+        other.GetValue(whole).Should().Be(new NumberValue(120));
+    }
+
+    [Fact]
     public void Recalculate_CurrentRowStructuredReference_UsesFormulaCellTableRow()
     {
         var workbook = new Workbook("StructuredReferenceCurrentRowTest");

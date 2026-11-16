@@ -8,6 +8,38 @@ namespace FreeX.App.Services.Tests;
 public sealed class TableHeaderCutRoutingTests
 {
     [Theory]
+    [InlineData("SUM([Charlie])", "SUM(SalesTable[Charlie])")]
+    [InlineData("SUM([@Charlie])", "SUM(SalesTable[@Charlie])")]
+    public void CutHeaderAndFormulaAcrossSheets_UsesMoveAndPreservesTableBinding(string original, string expected)
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Data");
+        var other = workbook.AddSheet("Other");
+        var a = new CellAddress(sheet.Id, 1, 1);
+        var b = new CellAddress(sheet.Id, 1, 2);
+        var body = new CellAddress(sheet.Id, 2, 1);
+        var destination = new CellAddress(other.Id, 1, 8);
+        sheet.SetCell(a, new TextValue("Alpha"));
+        sheet.SetCell(b, new TextValue("Charlie"));
+        sheet.SetCell(body, Cell.FromFormula(original));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(1000));
+        sheet.StructuredTables.Add(new StructuredTableModel { Id = 1, Name = "SalesTable", DisplayName = "SalesTable", Range = new GridRange(a, new CellAddress(sheet.Id, 3, 2)), Columns = { new StructuredTableColumnModel(1, "Alpha"), new StructuredTableColumnModel(2, "Charlie") } });
+        var session = new WorkbookSessionFactory().Create(new StartupWorkbookLoadResult(workbook, "Book.fxl", "Opened", false), viewportHeight: 240, viewportWidth: 320);
+        session.SelectRange(new GridRange(a, body));
+        var clipboard = session.CutSelectedRangeText();
+        session.SelectSheet(other.Id).Should().BeTrue();
+        session.SelectCell(destination);
+        var result = session.PasteClipboardTextAtActiveCell(clipboard);
+        result.Success.Should().BeTrue(result.ErrorMessage);
+        other.GetCell(2, 8)!.FormulaText.Should().Be(expected);
+        other.GetValue(2, 8).Should().Be(new NumberValue(1000));
+        sheet.GetValue(a).Should().Be(new TextValue("Column1"));
+        session.UndoLastEdit().Success.Should().BeTrue();
+        sheet.GetCell(body)!.FormulaText.Should().Be(original);
+        sheet.GetValue(a).Should().Be(new TextValue("Alpha"));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void PasteAcrossTables_OnlyReconcilesTableWhoseHeaderChanged(bool malformedOtherTable)

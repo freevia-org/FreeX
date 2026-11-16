@@ -7851,7 +7851,7 @@ public sealed class WorkbookSession : IDisposable
         // Grouped multi-sheet editing can't be expressed as a single move, so fall back regardless
         // of destination sheet.
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (targetSheetIds.Count != 1 || !targetSheetIds[0].Equals(clipboard.SourceRange.Start.Sheet))
+        if (targetSheetIds.Count != 1 || !targetSheetIds[0].Equals(destination.Sheet))
             return false;
 
         // R38-commands-cut-move-2-1: MoveRangeCommand now supports a cross-sheet destination for
