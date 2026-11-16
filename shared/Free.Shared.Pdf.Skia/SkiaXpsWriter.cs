@@ -299,7 +299,8 @@ public static class SkiaXpsWriter
                     else
                     {
                         var indices = BuildIndices(run, glyphIds, font.GetGlyphWidths(run), font.Size);
-                        runs.Add((text with { X = x, Text = run }, new XpsGlyphRun(resource, indices, transparent)));
+                        runs.Add((text with { X = x, Text = run },
+                            new XpsGlyphRun(resource, indices) { IsTransparent = transparent }));
                     }
                 }
                 else

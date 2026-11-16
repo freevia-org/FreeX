@@ -100,6 +100,20 @@ public sealed class SkiaXpsWriterTests
             .Attribute("Fill")!.Value.Should().Be("#000000");
     }
 
+    [Fact]
+    public void GlyphRun_StillSupportsTheOriginalCompiledConstructor()
+    {
+        var constructor = typeof(Free.Shared.Xps.XpsGlyphRun).GetConstructor(
+            [typeof(Free.Shared.Xps.XpsFontResource), typeof(string)]);
+        constructor.Should().NotBeNull();
+
+        var resource = new Free.Shared.Xps.XpsFontResource("Font.ttf", []);
+        var glyph = (Free.Shared.Xps.XpsGlyphRun)constructor!.Invoke([resource, "21"]);
+        glyph.Font.Should().BeSameAs(resource);
+        glyph.Indices.Should().Be("21");
+        glyph.IsTransparent.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData(0x0000, "odttf", false)]
     [InlineData(0x0004, "odttf", true)]
