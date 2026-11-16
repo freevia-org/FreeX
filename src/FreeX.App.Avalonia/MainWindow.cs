@@ -25359,6 +25359,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        if (result.RestoredCustomViewSheetIds is not null)
+            RefreshViewportSizeForZoom();
+
         // R127C-avalonia-clipboard-marquee-undo-redo-1: WorkbookSession.UndoLastEdit/RedoLastEdit
         // already retire the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit,
         // unconditional since R127-services-clipboard-formats-copy-cancel-1 -- covers a plain Copy too,

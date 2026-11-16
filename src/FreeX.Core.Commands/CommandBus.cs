@@ -131,7 +131,10 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
             // landing a plain cell-range selection on its anchor. See IDrawingObjectDeletionCommand.
             DrawingObjectSelection: command is IDrawingObjectDeletionCommand deletion
                 ? new DrawingObjectSelectionHint(deletion.DrawingObjectKind, deletion.DrawingObjectId, Exists: true)
-                : null);
+                : null)
+        {
+            RestoredCustomViewSheetIds = (command as ApplyCustomViewCommand)?.RestoredSheetIds
+        };
     }
 
     public CommandOutcome Redo(WorkbookId workbookId)
