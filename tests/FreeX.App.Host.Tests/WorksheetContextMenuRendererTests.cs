@@ -12,6 +12,38 @@ namespace FreeX.App.Host.Tests;
 public sealed class WorksheetContextMenuRendererTests
 {
     [Fact]
+    public void Render_RowSelectionMenu_UsesExcelRowHeaderCommandsAndLabels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.RowSelection);
+            var menu = new ContextMenu();
+            WorksheetContextMenuRenderer.AddItems(
+                menu.Items,
+                WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands).Items,
+                _ => { });
+
+            menu.Items.OfType<MenuItem>().Select(item => item.Header as string).Should().ContainInOrder(
+                "Cu_t",
+                "_Copy",
+                "_Paste Options",
+                "_Insert",
+                "_Delete",
+                "Clear C_ontents",
+                "Format _Cells",
+                "Row _Height",
+                "_Hide",
+                "Un_hide");
+            menu.Items.OfType<MenuItem>().Select(item => item.Header as string)
+                .Should().NotContain(["_Paste", "AutoFit Row He_ight", "_Group", "_Ungroup"]);
+            menu.Items.OfType<MenuItem>()
+                .Single(item => (string)item.Header == "_Paste Options")
+                .Items.OfType<MenuItem>().Select(item => item.Header as string)
+                .Should().ContainSingle().Which.Should().Be("Paste _Special");
+        });
+    }
+
+    [Fact]
     public void Render_FromPlannerViaAdapter_MatchesPlannerHeadersNamesIdsEnabledAndNesting()
     {
         StaTestRunner.Run(() =>

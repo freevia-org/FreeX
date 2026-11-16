@@ -636,7 +636,7 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
     private static MainWindow CreateShownWindow(out Sheet sheet)
     {
-        var window = new MainWindow([]);
+        var window = new MainWindow([], null!, CreateIsolatedOptionsSession());
         sheet = window.Session.Workbook.AddSheet("PhysicalEditingFixture");
         window.Session.SelectSheet(sheet.Id);
         window.Show();
@@ -648,13 +648,22 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
     private static MainWindow CreateShownWindow(WorkbookSession session, out Sheet sheet)
     {
-        var window = new MainWindow([], session);
+        var window = new MainWindow([], session, CreateIsolatedOptionsSession());
         sheet = window.Session.ActiveSheet;
         window.Show();
         window.Measure(new Size(1120, 720));
         window.Arrange(new Rect(0, 0, 1120, 720));
         Refresh(window);
         return window;
+    }
+
+    private static FreeXOptionsRuntimeSession CreateIsolatedOptionsSession()
+    {
+        var options = new AppOptions();
+        return new FreeXOptionsRuntimeSession(
+            initialOptions: options,
+            load: () => options.Clone(),
+            save: _ => true);
     }
 
     private static string CreateCsvRows(int count) =>
