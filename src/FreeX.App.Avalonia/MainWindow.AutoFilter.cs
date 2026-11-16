@@ -198,10 +198,11 @@ public sealed partial class MainWindow
             menuPlan,
             AvaloniaPlannerTextResources.AutoFilter);
 
-        var panel = new StackPanel { Spacing = 4, MinWidth = 260, MaxWidth = 340 };
+        var savedCriteria = AutoFilterDialogCriteriaPlanner.GetSavedCriteria(sheet, dropdownPlan, model.FilterKind);
+        var panel = new StackPanel { Spacing = 4 };
+        var checklistEdited = false;
         var allItems = AutoFilterMenuPlanner.CreateDialogItems(model).ToList();
         var visibleItems = new List<AutoFilterDialogItem>();
-        var checkBoxes = new List<CheckBox>();
         var checklistPanel = new StackPanel();
         var updatingSelectAll = false;
         Control? initialFocusTarget = null;
@@ -241,13 +242,13 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(criteriaBox, $"AutoFilterCriteriaBox_{headerCell.Row}_{headerCell.Col}");
+        AutomationProperties.SetName(criteriaBox, UiText.Get("AutoFilter_CriteriaText"));
 
         void RefreshChecklist()
         {
             var state = AutoFilterMenuPlanner.PlanChecklistState(allItems, searchBox.Text);
             visibleItems = state.VisibleItems.ToList();
             checklistPanel.Children.Clear();
-            checkBoxes.Clear();
 
             foreach (var dialogItem in visibleItems)
             {
@@ -261,10 +262,18 @@ public sealed partial class MainWindow
                 };
                 box.IsCheckedChanged += (_, _) =>
                 {
+                    checklistEdited = true;
                     dialogItem.IsSelected = box.IsChecked == true;
-                    selectAll.IsChecked = AutoFilterMenuPlanner.SelectAllState(visibleItems);
+                    updatingSelectAll = true;
+                    try
+                    {
+                        selectAll.IsChecked = AutoFilterMenuPlanner.SelectAllState(visibleItems);
+                    }
+                    finally
+                    {
+                        updatingSelectAll = false;
+                    }
                 };
-                checkBoxes.Add(box);
                 checklistPanel.Children.Add(box);
             }
 
@@ -293,6 +302,7 @@ public sealed partial class MainWindow
 
         void ApplySelectionToVisible(bool isSelected)
         {
+            checklistEdited = true;
             var updated = AutoFilterMenuPlanner.SetSelectionForSearch(allItems, searchBox.Text, isSelected);
             allItems.Clear();
             allItems.AddRange(updated);
@@ -360,7 +370,7 @@ public sealed partial class MainWindow
                         "AutoFilter_SortByColor"));
                     break;
                 case AutoFilterMenuItemKind.FilterFamily:
-                    panel.Children.Add(CreateAutoFilterCriteriaPanel(model, criteriaBox));
+                    panel.Children.Add(CreateAutoFilterCriteriaPanel(model, criteriaBox, savedCriteria));
                     break;
                 case AutoFilterMenuItemKind.Search:
                     searchBox.TextChanged += (_, _) => RefreshChecklist();
@@ -399,22 +409,44 @@ public sealed partial class MainWindow
             IsDefault = true,
             MinWidth = 72,
         };
+        AutomationProperties.SetAutomationId(okButton, "AutoFilterOkButton");
         AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);
         okButton.Click += (_, _) =>
         {
             flyout.Hide();
+            var criteriaText = criteriaBox.Text?.Trim() ?? string.Empty;
+            if (savedCriteria is not null && criteriaText == savedCriteria.CriteriaText)
+            {
+                if (!checklistEdited && string.IsNullOrWhiteSpace(searchBox.Text))
+                    return;
+
+                criteriaText = string.Empty;
+            }
+
             RunAutoFilterResult(
                 range,
                 columnOffset,
                 AutoFilterMenuPlanner.BuildResult(
                     allItems,
                     searchBox.Text,
-                    criteriaBox.Text,
+                    criteriaText,
                     addCurrentSelectionToFilter: addSelectionBox.IsChecked == true));
         };
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([okButton], new Thickness(0, 6, 0, 0)));
+        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")) };
+        AutomationProperties.SetAutomationId(cancelButton, "AutoFilterCancelButton");
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AutoFilterDialogChromeStyle, 72);
+        cancelButton.Click += (_, _) => flyout.Hide();
+        var chrome = new DockPanel { MinWidth = 260, MaxWidth = 340 };
+        var actions = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 6, 0, 0));
+        DockPanel.SetDock(actions, Dock.Bottom);
+        chrome.Children.Add(actions);
+        chrome.Children.Add(new ScrollViewer
+        {
+            Content = panel,
+            MaxHeight = Math.Clamp(Bounds.Height - 120, 240, 560),
+        });
 
-        panel.KeyDown += (_, e) =>
+        chrome.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
             {
@@ -422,7 +454,7 @@ public sealed partial class MainWindow
                 e.Handled = true;
             }
         };
-        flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
+        flyout.Content = new Border { Padding = new Thickness(8), Child = chrome };
         _autoFilterFlyout = flyout;
         RecordOptionalAutoFilterPlacementTarget(AutomationProperties.GetAutomationId(anchor));
         flyout.Closed += (_, _) =>
@@ -450,104 +482,216 @@ public sealed partial class MainWindow
         flyout.Hide();
     }
 
-    private Control CreateAutoFilterCriteriaPanel(AutoFilterMenuModel model, TextBox criteriaBox)
+    private Control CreateAutoFilterCriteriaPanel(
+        AutoFilterMenuModel model,
+        TextBox criteriaBox,
+        AutoFilterSavedCriteria? savedCriteria)
     {
         var options = model.CriteriaOptions;
-        var selector = new ComboBox
+        var secondOptions = AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(options);
+        var familyLabel = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
+            ?? UiText.Get("AutoFilter_FiltersAutomationName");
+        var firstIndex = FindCriteriaOption(options, savedCriteria?.First);
+        var secondIndex = FindCriteriaOption(secondOptions, savedCriteria?.Second);
+        var canEditSavedRows = firstIndex >= 0 && (savedCriteria?.Second is null || secondIndex >= 0);
+        var selector = CreateAutoFilterCriteriaSelector(
+            options.Select(option => option.Label),
+            canEditSavedRows ? firstIndex : options.Count > 0 ? 0 : -1,
+            "AutoFilterCriteriaOperatorBox",
+            familyLabel);
+        var valueLabel = UiText.Get("AutoFilter_FilterValue");
+        var valueBox = CreateAutoFilterCriteriaValueBox(
+            "AutoFilterCriteriaValueBox",
+            valueLabel,
+            canEditSavedRows ? savedCriteria?.First?.Value : null);
+        var maximumLabel = UiText.Get("AutoFilter_MaximumLabel");
+        var maximumBox = CreateAutoFilterCriteriaValueBox("AutoFilterCriteriaMaximumBox", maximumLabel);
+        var secondSelector = CreateAutoFilterCriteriaSelector(
+            new[] { StripDisplayMnemonic(UiText.Get("FormatCells_None")) }
+                .Concat(secondOptions.Select(option => option.Label)),
+            canEditSavedRows ? secondIndex + 1 : 0,
+            "AutoFilterSecondCriteriaOperatorBox",
+            UiText.Get("AutoFilter_SecondOperator"));
+        var secondValueBox = CreateAutoFilterCriteriaValueBox(
+            "AutoFilterSecondCriteriaValueBox",
+            UiText.Get("AutoFilter_SecondValue"),
+            canEditSavedRows ? savedCriteria?.Second?.Value : null);
+        var connector = CreateAutoFilterCriteriaSelector(
+            [UiText.Get("AutoFilter_ConnectorAnd"), UiText.Get("AutoFilter_ConnectorOr")],
+            canEditSavedRows && savedCriteria is { Second: not null, Connector: "Or" } ? 1 : 0,
+            "AutoFilterCriteriaConnectorBox",
+            $"{UiText.Get("AutoFilter_ConnectorAnd")} / {UiText.Get("AutoFilter_ConnectorOr")}");
+        var secondRow = new AvaloniaGrid
         {
-            ItemsSource = options.Select(option => option.Label).ToArray(),
-            SelectedIndex = options.Count > 0 ? 0 : -1,
-            MinHeight = 26,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 4,
         };
-        AutomationProperties.SetAutomationId(selector, "AutoFilterCriteriaOperatorBox");
-        AutomationProperties.SetName(
-            selector,
-            model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
-                ?? UiText.Get("AutoFilter_FiltersAutomationName"));
-
-        var valueBox = new TextBox
-        {
-            PlaceholderText = UiText.Get("ConditionalFormat_ValueLabel"),
-            MinHeight = 26,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        var secondValueBox = new TextBox
-        {
-            PlaceholderText = UiText.Get("ConditionalFormat_MaximumLabel"),
-            MinHeight = 26,
-            IsVisible = false,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-        };
-        void UpdateCriteria()
-        {
-            if (selector.SelectedIndex < 0 || selector.SelectedIndex >= options.Count)
-                return;
-
-            var option = options[selector.SelectedIndex];
-            secondValueBox.IsVisible = AutoFilterMenuPlanner.RequiresSecondCriteriaValue(option);
-            valueBox.PlaceholderText = AutoFilterMenuPlanner.RequiresCountCriteriaValue(option)
-                ? "Count"
-                : option.RequiresValue ? "Value" : string.Empty;
-            valueBox.IsEnabled = option.RequiresValue;
-            criteriaBox.Text = AutoFilterMenuPlanner.BuildCompletedCriteriaText(
-                option,
-                valueBox.Text,
-                secondValueBox.Text);
-        }
-
-        selector.SelectionChanged += (_, _) =>
-        {
-            UpdateCriteria();
-        };
-        valueBox.TextChanged += (_, _) =>
-        {
-            UpdateCriteria();
-        };
-        secondValueBox.TextChanged += (_, _) =>
-        {
-            UpdateCriteria();
-        };
-        UpdateCriteria();
+        AvaloniaGrid.SetColumn(secondSelector, 1);
+        secondRow.Children.Add(connector);
+        secondRow.Children.Add(secondSelector);
 
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(new TextBlock
         {
-            Text = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
-                ?? UiText.Get("AutoFilter_FiltersAutomationName"),
+            Text = familyLabel,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
         });
+
+        string[] datePresets =
+        [
+            "Custom", "Today", "Yesterday", "Tomorrow",
+            "This Week", "Last Week", "Next Week",
+            "This Month", "Last Month", "Next Month",
+            "This Year", "Last Year", "Next Year",
+        ];
+        ComboBox? datePresetSelector = null;
+        if (model.FilterKind == AutoFilterMenuFilterKind.Date)
+        {
+            datePresetSelector = CreateAutoFilterCriteriaSelector(
+                datePresets.Select(preset => UiText.Get($"AutoFilter_DatePreset{preset.Replace(" ", string.Empty)}")),
+                0,
+                "AutoFilterDatePresetBox",
+                UiText.Get("AutoFilter_DatePreset"));
+            panel.Children.Add(datePresetSelector);
+        }
+
         panel.Children.Add(selector);
         panel.Children.Add(valueBox);
+        panel.Children.Add(maximumBox);
+        panel.Children.Add(secondRow);
         panel.Children.Add(secondValueBox);
         panel.Children.Add(criteriaBox);
 
+        void UpdateCriteria(bool writeCriteriaText)
+        {
+            if (selector.SelectedIndex < 0 || selector.SelectedIndex >= options.Count)
+                return;
+
+            var firstOption = options[selector.SelectedIndex];
+            var secondOption = secondSelector.SelectedIndex > 0 ? secondOptions[secondSelector.SelectedIndex - 1] : null;
+            var preset = datePresetSelector is { SelectedIndex: > 0 }
+                ? datePresets[datePresetSelector.SelectedIndex]
+                : null;
+            var isBetween = AutoFilterDialogCriteriaPlanner.IsBetweenOption(firstOption);
+            var isTopBottom = AutoFilterDialogCriteriaPlanner.IsTopBottomOption(firstOption);
+            var canCombine = preset is null && !isBetween && !isTopBottom &&
+                !AutoFilterDialogCriteriaPlanner.IsAverageOption(firstOption);
+
+            selector.IsEnabled = preset is null;
+            valueBox.IsEnabled = preset is null && firstOption.RequiresValue;
+            valueBox.PlaceholderText = isBetween
+                ? UiText.Get("AutoFilter_MinimumLabel")
+                : isTopBottom
+                    ? UiText.Get(firstOption.CriteriaPrefix.Contains("percent:", StringComparison.Ordinal)
+                        ? "AutoFilter_Percent"
+                        : "AutoFilter_Items")
+                    : valueLabel;
+            maximumBox.IsVisible = isBetween && preset is null;
+            secondRow.IsVisible = canCombine && secondOptions.Count > 0;
+            connector.IsEnabled = secondOption is not null;
+            secondValueBox.IsVisible = canCombine && secondOption?.RequiresValue == true;
+
+            if (!writeCriteriaText)
+                return;
+
+            if (preset is not null)
+            {
+                criteriaBox.Text = AutoFilterDialogCriteriaPlanner.BuildDatePresetCriteriaText(preset, DateTime.Today);
+                return;
+            }
+
+            var firstCriteria = AutoFilterMenuPlanner.BuildCompletedCriteriaText(firstOption, valueBox.Text, maximumBox.Text);
+            var secondCriteria = canCombine && secondOption is not null
+                ? AutoFilterMenuPlanner.BuildCompletedCriteriaText(secondOption, secondValueBox.Text, null)
+                : string.Empty;
+            criteriaBox.Text = AutoFilterDialogCriteriaPlanner.BuildCompositeCriteriaText(
+                firstCriteria,
+                connector.SelectedIndex == 1 ? "Or" : "And",
+                secondCriteria);
+        }
+
+        UpdateCriteria(writeCriteriaText: savedCriteria is null);
+        if (savedCriteria is not null)
+            criteriaBox.Text = savedCriteria.CriteriaText;
+
+        selector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
+        secondSelector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
+        connector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
+        if (datePresetSelector is not null)
+            datePresetSelector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
+
+        foreach (var input in new[] { valueBox, maximumBox, secondValueBox })
+        {
+            input.PropertyChanged += (_, e) =>
+            {
+                if (e.Property == TextBox.TextProperty)
+                    UpdateCriteria(writeCriteriaText: true);
+            };
+        }
+
         if (model.CriteriaSuggestions.Count > 0)
         {
-            panel.Children.Add(new ComboBox
+            var suggestions = CreateAutoFilterCriteriaSelector(
+                model.CriteriaSuggestions,
+                -1,
+                "AutoFilterCriteriaSuggestionsBox",
+                UiText.Get("AutoFilter_CriteriaTemplate"));
+            suggestions.SelectionChanged += (_, _) =>
             {
-                ItemsSource = model.CriteriaSuggestions,
-                SelectedIndex = -1,
-                MinHeight = 26,
-                FontSize = 12,
-                FontFamily = FormulaBarFontFamily,
-            });
-            if (panel.Children[^1] is ComboBox suggestions)
-            {
-                suggestions.SelectionChanged += (_, _) =>
-                {
-                    if (suggestions.SelectedItem is string suggestion)
-                        criteriaBox.Text = suggestion;
-                };
-            }
+                if (suggestions.SelectedItem is string suggestion)
+                    criteriaBox.Text = suggestion;
+            };
+            panel.Children.Add(suggestions);
         }
 
         return panel;
+    }
+
+    private static int FindCriteriaOption(IReadOnlyList<AutoFilterCriteriaOption> options, AutoFilterSavedCondition? condition)
+    {
+        for (var i = 0; i < options.Count; i++)
+        {
+            if (options[i].CriteriaPrefix == condition?.CriteriaPrefix)
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static ComboBox CreateAutoFilterCriteriaSelector(
+        IEnumerable<string> labels,
+        int selectedIndex,
+        string automationId,
+        string automationName)
+    {
+        var selector = new ComboBox
+        {
+            ItemsSource = labels.ToArray(),
+            SelectedIndex = selectedIndex,
+            MinHeight = 26,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AutomationProperties.SetAutomationId(selector, automationId);
+        AutomationProperties.SetName(selector, automationName);
+        return selector;
+    }
+
+    private static TextBox CreateAutoFilterCriteriaValueBox(string automationId, string label, string? value = null)
+    {
+        var input = new TextBox
+        {
+            Text = value,
+            PlaceholderText = label,
+            MinHeight = 26,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        };
+        AutomationProperties.SetAutomationId(input, automationId);
+        AutomationProperties.SetName(input, label);
+        return input;
     }
 
     private Control CreateAutoFilterColorPanel(

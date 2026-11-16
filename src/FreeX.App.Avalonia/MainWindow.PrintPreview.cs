@@ -1289,7 +1289,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(next, "PrintPreviewFindNextButton");
         AutomationProperties.SetName(next, StripDisplayMnemonic(UiText.Get("FindReplace_FindNext")));
         AutomationProperties.SetAutomationId(status, "PrintPreviewFindStatus");
-        AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
+        ConfigureTextAnnouncement(status);
         Grid.SetColumn(findBox, 0);
         Grid.SetColumn(previous, 1);
         Grid.SetColumn(next, 2);

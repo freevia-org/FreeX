@@ -118,12 +118,11 @@ public sealed partial class MainWindow
     // ── Formulas ▸ Formula Auditing ▸ Watch Window ───────────────────────────────
     private Task ShowWatchWindowDialogAsync()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+        if (!TryRecalculateWatchWindowValues())
             return Task.CompletedTask;
 
         if (_watchWindowDialog is { IsVisible: true } existing)
         {
-            _refreshWatchWindow?.Invoke();
             if (existing.WindowState == WindowState.Minimized)
                 existing.WindowState = WindowState.Normal;
             existing.Activate();
@@ -250,7 +249,11 @@ public sealed partial class MainWindow
         };
         ApplyWatchWindowButtonChrome(refreshButton, 80);
         AutomationProperties.SetAutomationId(refreshButton, "WatchWindowRefreshButton");
-        refreshButton.Click += (_, _) => RefreshList();
+        refreshButton.Click += (_, _) => RunGuarded(() =>
+        {
+            TryRecalculateWatchWindowValues();
+            return Task.CompletedTask;
+        });
 
         var closeButton = new Button
         {
@@ -331,6 +334,18 @@ public sealed partial class MainWindow
                 _refreshWatchWindow = null;
             });
         return Task.CompletedTask;
+    }
+
+    private bool TryRecalculateWatchWindowValues()
+    {
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return false;
+
+        // Opening the tool and choosing Refresh explicitly recalculate the workbook. Passive
+        // Watch Window updates still read the existing values under the current calculation mode.
+        _session.RecalculateWorkbook();
+        RefreshShell(_statusText.Text ?? StatusBarTextProvider.GetReadyText());
+        return true;
     }
 
     // WPF: every Watch Window button is Height = 26 with a fixed width (96 / 80 / 96 / 80).
