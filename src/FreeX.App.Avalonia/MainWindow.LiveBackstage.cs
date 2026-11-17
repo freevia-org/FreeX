@@ -32,6 +32,8 @@ public sealed partial class MainWindow
         FreeXBackstageFramePlanner.Build();
     private static readonly FreeXBackstageHomePanePlan LiveBackstageHomePanePlan =
         FreeXBackstageHomePanePlanner.Build();
+    private static readonly FreeXBackstageOpenPanePlan LiveBackstageOpenPanePlan =
+        FreeXBackstageOpenPanePlanner.Build();
     private AvaloniaBackstageFrame _backstageOverlay = null!;
 
     // WPF File-screen rail (src/FreeX.App.Host/MainWindow.BackstageFrame.cs, InitializeBackstageFrame):
@@ -245,6 +247,7 @@ public sealed partial class MainWindow
         flow.Pane switch
         {
             FreeXBackstagePaneId.Home => BuildLiveBackstageHomePane(),
+            FreeXBackstagePaneId.Open => BuildLiveBackstageOpenPane(),
             FreeXBackstagePaneId.Info => BuildLiveBackstageInfoPane(),
             FreeXBackstagePaneId.Print => BuildLiveBackstagePrintPane(),
             _ => throw new InvalidOperationException($"Unsupported Backstage pane '{flow.Pane}'."),
@@ -268,6 +271,13 @@ public sealed partial class MainWindow
         SetRibbonKeyTipsVisible(false);
         _backstageOverlay.Show(
             FreeXBackstageFramePlanner.GetPaneStableId(FreeXBackstagePaneId.Print));
+    }
+
+    private void ShowBackstageOpenPane()
+    {
+        ShowBackstageOverlay();
+        _backstageOverlay.Show(
+            FreeXBackstageFramePlanner.GetPaneStableId(FreeXBackstagePaneId.Open));
     }
 
     private void HideBackstageOverlay() => _backstageOverlay.Hide();
@@ -498,6 +508,69 @@ public sealed partial class MainWindow
 
                 searchBox.Focus();
                 searchBox.CaretIndex = searchBox.Text?.Length ?? 0;
+            });
+        }
+
+        return content;
+    }
+
+    private Control BuildLiveBackstageOpenPane()
+    {
+        var content = CreateLiveBackstagePaneStack(LiveBackstagePaneTopInset);
+        content.Children.Add(new TextBlock
+        {
+            Text = UiText.Get(LiveBackstageOpenPanePlan.TitleKey),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 28,
+            FontWeight = FontWeight.Light,
+            Foreground = LiveBackstageInk,
+            Margin = new Thickness(0, 0, 0, 18),
+        });
+
+        var browse = new Button
+        {
+            Content = UiText.Get(LiveBackstageOpenPanePlan.Locations.Single(
+                location => location.Id == FreeXBackstageOpenLocationId.Browse).LabelKey),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Padding = new Thickness(18, 9),
+            Margin = new Thickness(0, 0, 0, 22),
+        };
+        AutomationProperties.SetAutomationId(browse, "BackstageOpenBrowseButton");
+        browse.Click += (_, _) => RunGuarded(OpenWorkbookAsync);
+        content.Children.Add(browse);
+
+        var recent = LiveBackstageOpenPanePlan.Locations.Single(
+            location => location.Id == FreeXBackstageOpenLocationId.Recent);
+        var recentHeader = new TextBlock
+        {
+            Text = UiText.Get(recent.LabelKey),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 16,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = LiveBackstageInk,
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        AutomationProperties.SetAutomationId(recentHeader, recent.AutomationId);
+        content.Children.Add(recentHeader);
+
+        var files = new StackPanel();
+        content.Children.Add(files);
+        var recentPlan = BackstageRecentFileListPlanner.Build(
+            ReloadRecentFilesStore().Snapshot(),
+            string.Empty,
+            _recentFilePathExistenceCache.Exists);
+        foreach (var entry in recentPlan.RecentItems)
+            files.Children.Add(BuildLiveBackstageRecentRow(entry));
+
+        if (recentPlan.RecentItems.Count == 0)
+        {
+            files.Children.Add(new TextBlock
+            {
+                Text = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
+                FontFamily = FormulaBarFontFamily,
+                FontSize = 13,
+                Foreground = LiveBackstageMutedInk,
+                Margin = new Thickness(0, 14, 0, 0),
             });
         }
 

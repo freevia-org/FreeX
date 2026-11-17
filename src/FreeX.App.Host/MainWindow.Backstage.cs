@@ -1214,7 +1214,7 @@ public partial class MainWindow
     internal void OpenWorkbookBackstageForKeyboard()
     {
         ShowStartScreen();
-        SwitchToRecentTab();
+        _backstageFrame?.Show(FreeXBackstageFramePlanner.GetPaneStableId(FreeXBackstagePaneId.Open));
     }
 
     private void SsRecentItem_Click(object sender, RoutedEventArgs e)

@@ -213,7 +213,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
 
     [Theory]
     [InlineData(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
-    [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
+    [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenBackstage)]
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
     [InlineData(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.SaveWorkbook)]
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SaveWorkbook)]

@@ -5,6 +5,7 @@ namespace FreeX.App.Presentation.Shell;
 public enum WorkbookShortcutRoute
 {
     NewWorkbook,
+    OpenBackstage,
     OpenWorkbook,
     SaveWorkbook,
     PrintWorkbook,
@@ -48,6 +49,7 @@ public enum WorkbookShortcutRoute
 public enum KeyboardCommandShortcut
 {
     NewWorkbook,
+    OpenBackstage,
     OpenWorkbook,
     SaveWorkbook,
     Copy,
@@ -282,7 +284,7 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Meta)),
         new(
-            WorkbookShortcutRoute.OpenWorkbook,
+            WorkbookShortcutRoute.OpenBackstage,
             new WorkbookShortcutChord(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Meta)),
         new(WorkbookShortcutRoute.OpenWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control)),

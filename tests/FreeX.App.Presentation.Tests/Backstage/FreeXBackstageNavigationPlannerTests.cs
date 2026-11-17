@@ -29,13 +29,12 @@ public sealed class FreeXBackstageNavigationPlannerTests
 
         entries.Where(entry => entry.Kind == FreeXBackstageNavigationEntryKind.Pane)
             .Select(entry => entry.Pane)
-            .Should().Equal(FreeXBackstagePaneId.Home, FreeXBackstagePaneId.Info, FreeXBackstagePaneId.Print);
+            .Should().Equal(FreeXBackstagePaneId.Home, FreeXBackstagePaneId.Open, FreeXBackstagePaneId.Info, FreeXBackstagePaneId.Print);
 
         entries.Where(entry => entry.Kind == FreeXBackstageNavigationEntryKind.Command)
             .Select(entry => entry.Command)
             .Should().Equal(
                 FreeXBackstageCommandId.New,
-                FreeXBackstageCommandId.Open,
                 FreeXBackstageCommandId.Share,
                 FreeXBackstageCommandId.Save,
                 FreeXBackstageCommandId.SaveAs,
@@ -82,6 +81,8 @@ public sealed class FreeXBackstageNavigationPlannerTests
 
         entries.Single(entry => entry.Pane == FreeXBackstagePaneId.Home)
             .AutomationId.Should().Be(FreeXBackstageNavigationPlanner.HomePaneAutomationId);
+        entries.Single(entry => entry.Pane == FreeXBackstagePaneId.Open)
+            .AutomationId.Should().Be(FreeXBackstageNavigationPlanner.OpenPaneAutomationId);
         entries.Single(entry => entry.Pane == FreeXBackstagePaneId.Info)
             .AutomationId.Should().Be(FreeXBackstageNavigationPlanner.InfoPaneAutomationId);
         entries.Single(entry => entry.Pane == FreeXBackstagePaneId.Print)

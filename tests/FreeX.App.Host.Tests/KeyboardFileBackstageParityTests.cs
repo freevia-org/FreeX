@@ -7,7 +7,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class KeyboardFileBackstageParityTests
 {
     [Fact]
-    public void KeyboardOpen_RoutesToBackstageRecentWithoutChangingWorkbook()
+    public void MouseOpenRailEntry_NavigatesToOpenPaneWithoutLaunchingPicker()
     {
         StaTestRunner.Run(() =>
         {
@@ -15,23 +15,53 @@ public sealed class KeyboardFileBackstageParityTests
             var sheet = harness.Workbook.Sheets.Single();
             var address = new CellAddress(sheet.Id, 1, 1);
             sheet.SetCell(address, new TextValue("keep"));
+            harness.OpenBackstage();
 
-            harness.OpenWorkbookBackstageForKeyboard();
+            var open = harness.RailButton("BackstageOpenButton");
+            open.Should().NotBeNull();
+            harness.Click(open!);
+
+            harness.CurrentEntryId.Should().Be("freex.backstage.pane.open");
+            harness.HasAutomationId("BackstageOpenBrowseButton").Should().BeTrue();
+            harness.Workbook.Sheets.Single().GetCell(address)!.Value.Should().Be(new TextValue("keep"));
+        });
+    }
+
+    [Fact]
+    public void KeyboardOpen_RoutesToOpenPaneWithoutChangingWorkbook()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            var sheet = harness.Workbook.Sheets.Single();
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new TextValue("keep"));
+            var activeCellBefore = harness.ActiveCell;
+
+            harness.ExecuteOpenShortcut();
 
             harness.IsBackstageVisible.Should().BeTrue();
-            harness.CurrentEntryId.Should().Be("freex.backstage.pane.home");
+            harness.CurrentEntryId.Should().Be("freex.backstage.pane.open");
+            harness.HasAutomationId("BackstageOpenBrowseButton").Should().BeTrue();
+            harness.HasAutomationId("BackstageOpenRecentLocation").Should().BeTrue();
             sheet.GetCell(address)!.Value.Should().Be(new TextValue("keep"));
 
             harness.PressKeyOnFrame(Key.Escape);
 
             harness.IsBackstageVisible.Should().BeFalse();
+            harness.CurrentEntryId.Should().Be("freex.backstage.pane.open");
+            harness.ActiveCell.Should().Be(activeCellBefore);
             harness.Workbook.Sheets.Single().GetCell(address)!.Value.Should().Be(new TextValue("keep"));
         });
 
         var routing = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
-        routing.Should().Contain("invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut")
+        routing.Should().Contain("invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage)")
             .And.Contain("OpenWorkbookBackstageForKeyboard();")
             .And.Contain("OpenButton_Click(NativeSource(invocation), RoutedArgs(invocation));");
+
+        var backstage = DialogSourceTestSupport.ReadHostSources("MainWindow.Backstage.cs", "MainWindow.BackstageFrame.cs");
+        backstage.Should().Contain("GetPaneStableId(FreeXBackstagePaneId.Open)")
+            .And.Contain("browse.Click += (_, _) => RunGuardedUiCommand(\"Browse for Workbook\", OpenFromBackstageAsync);");
     }
 
     [Fact]

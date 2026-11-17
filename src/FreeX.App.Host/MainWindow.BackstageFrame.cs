@@ -17,7 +17,7 @@ namespace FreeX.App.Host;
 /// their full FreeX metadata (key-tips, automation ids/names/help, rich tooltips, command-icon names) and
 /// routes each entry back into FreeX's existing handlers.
 ///
-/// The three content panes (<c>SsHomeView</c>/<c>SsInfoView</c>/<c>SsPrintView</c>) are kept exactly as they
+/// The content panes (<c>SsHomeView</c>/<c>SsOpenView</c>/<c>SsInfoView</c>/<c>SsPrintView</c>) are kept exactly as they
 /// were in XAML, parked in a hidden holder inside <c>StartScreenOverlay</c>; each pane entry's
 /// <see cref="BackstageEntry.ContentFactory"/> first runs that pane's live-refresh logic (the same calls the
 /// old <c>Show*View</c> methods made) and then reparents the pane element into the frame's content host.
@@ -205,10 +205,119 @@ public partial class MainWindow
         pane switch
         {
             FreeXBackstagePaneId.Home => SsHomeView,
+            FreeXBackstagePaneId.Open => BuildBackstageOpenPane(),
             FreeXBackstagePaneId.Info => SsInfoView,
             FreeXBackstagePaneId.Print => SsPrintView,
             _ => throw new InvalidOperationException($"Unsupported Backstage pane '{pane}'.")
         };
+
+    private FrameworkElement BuildBackstageOpenPane()
+    {
+        var plan = FreeXBackstageOpenPanePlanner.Build();
+        var content = new Grid { Margin = new Thickness(40, 30, 40, 24) };
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        content.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        content.Children.Add(new TextBlock
+        {
+            Text = UiText.Get(plan.TitleKey),
+            FontSize = 28,
+            FontWeight = FontWeights.Light,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
+            Margin = new Thickness(0, 0, 0, 18),
+        });
+
+        var browse = new Button
+        {
+            Content = UiText.Get(plan.Locations.Single(location => location.Id == FreeXBackstageOpenLocationId.Browse).LabelKey),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Padding = new Thickness(18, 9, 18, 9),
+            Margin = new Thickness(0, 0, 0, 22),
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(browse, "BackstageOpenBrowseButton");
+        browse.Click += (_, _) => RunGuardedUiCommand("Browse for Workbook", OpenFromBackstageAsync);
+        Grid.SetRow(browse, 1);
+        content.Children.Add(browse);
+
+        var recent = plan.Locations.Single(location => location.Id == FreeXBackstageOpenLocationId.Recent);
+        var recentHeader = new TextBlock
+        {
+            Text = UiText.Get(recent.LabelKey),
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(recentHeader, recent.AutomationId);
+        Grid.SetRow(recentHeader, 2);
+        content.Children.Add(recentHeader);
+
+        var files = new StackPanel();
+        var recentFiles = BackstageRecentFileListPlanner.Build(
+            ReloadRecentFilesStore().Snapshot(),
+            string.Empty,
+            _recentFilePathExistenceCache.Exists).RecentItems;
+        foreach (var file in recentFiles)
+        {
+            var button = new Button
+            {
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Padding = new Thickness(8, 10, 8, 10),
+                MinHeight = 54,
+                Content = new DockPanel
+                {
+                    LastChildFill = true,
+                    Children =
+                    {
+                        new TextBlock
+                        {
+                            Text = file.LastOpenedText,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Width = 150,
+                        },
+                        new StackPanel
+                        {
+                            Children =
+                            {
+                                new TextBlock { Text = file.FileName, FontSize = 13 },
+                                new TextBlock
+                                {
+                                    Text = file.DisplayDirectory,
+                                    FontSize = 11,
+                                    Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                                    TextTrimming = TextTrimming.CharacterEllipsis,
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(button, "BackstageOpenRecentFileButton");
+            System.Windows.Automation.AutomationProperties.SetName(button, file.OpenAutomationName);
+            button.Click += (_, _) => RunGuardedUiCommand("Open Recent Workbook", () => OpenFileAsync(file.Path));
+            files.Children.Add(button);
+        }
+
+        if (recentFiles.Count == 0)
+        {
+            files.Children.Add(new TextBlock
+            {
+                Text = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
+                Margin = new Thickness(8, 14, 8, 0),
+                Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+            });
+        }
+
+        var recentScroll = new ScrollViewer { Content = files, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(recentScroll, recent.AutomationId);
+        Grid.SetRow(recentScroll, 3);
+        content.Children.Add(recentScroll);
+        return content;
+    }
 
     private void ApplyBackstagePaneFocus(FreeXBackstagePaneFlowPlan plan)
     {

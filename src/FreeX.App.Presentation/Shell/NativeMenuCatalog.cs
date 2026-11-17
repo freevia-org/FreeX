@@ -416,7 +416,7 @@ public static class NativeMenuCatalog
         new(
             NativeFileMenuItemId.Open,
             "AvaloniaNativeMenu_Open",
-            NativeMenuGesture(WorkbookShortcutRoute.OpenWorkbook)),
+            NativeMenuGesture(WorkbookShortcutRoute.OpenBackstage)),
         new(
             NativeFileMenuItemId.OpenRecent,
             "AvaloniaNativeMenu_OpenRecent",

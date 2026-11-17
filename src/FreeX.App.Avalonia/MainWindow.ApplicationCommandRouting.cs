@@ -30,7 +30,11 @@ public partial class MainWindow
                 },
                 OpenWorkbookAsync: async invocation =>
                 {
-                    if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
+                    if (invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage))
+                    {
+                        ShowBackstageOpenPane();
+                    }
+                    else if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
                         await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
                     else
                         await OpenWorkbookAsync();
