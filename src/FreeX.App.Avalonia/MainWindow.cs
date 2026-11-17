@@ -13455,12 +13455,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // (TryGetFixedDialogClientCaptureSize), so the reference canvas is the client size: the
             // 16x39 Windows frame is not subtracted here. A 284x201 client would also cut the action
             // row, which ends at y=202 in this top-down layout.
-            Width = ZoomDialogPlanner.Width,
-            Height = ZoomDialogPlanner.Height,
-            MinWidth = ZoomDialogPlanner.Width,
-            MaxWidth = ZoomDialogPlanner.Width,
-            MinHeight = ZoomDialogPlanner.Height,
-            MaxHeight = ZoomDialogPlanner.Height,
+            Width = ZoomDialogVisualMetrics.WindowWidth,
+            Height = ZoomDialogVisualMetrics.WindowHeight,
+            MinWidth = ZoomDialogVisualMetrics.WindowWidth,
+            MaxWidth = ZoomDialogVisualMetrics.WindowWidth,
+            MinHeight = ZoomDialogVisualMetrics.WindowHeight,
+            MaxHeight = ZoomDialogVisualMetrics.WindowHeight,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -13468,14 +13468,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var zoomDialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ControlHeight = 20,
-            CompactRadioButtonHeight = 16,
-            TextBoxHeight = ZoomDialogPlanner.CustomPercentBoxHeight,
-            ButtonHeight = 22,
+            ControlHeight = ZoomDialogVisualMetrics.AvaloniaControlHeight,
+            CompactRadioButtonHeight = ZoomDialogVisualMetrics.AvaloniaCompactRadioButtonHeight,
+            TextBoxHeight = ZoomDialogVisualMetrics.CustomPercentBoxHeight,
+            ButtonHeight = ZoomDialogVisualMetrics.AvaloniaButtonHeight,
             ButtonPadding = new Thickness(10, 1),
+            ForegroundBrush = Brushes.Black,
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(dialog, "ZoomDialog");
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
+        AutomationProperties.SetAutomationId(dialog, ZoomDialogVisualMetrics.DialogAutomationId);
 
         var presetButtons = new List<RadioButton>();
         var presetPanel = new StackPanel { Spacing = 0 };
@@ -13488,10 +13490,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 GroupName = "ZoomDialogOptions",
                 IsChecked = currentZoom == zoom,
                 // WPF: every preset radio button carries Margin = (0, 0, 0, 4).
-                Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.PresetItemBottomMargin),
+                Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.PresetItemBottomMargin),
             };
             AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);
-            AutomationProperties.SetAutomationId(button, $"ZoomPreset{zoom}Button");
+            AutomationProperties.SetAutomationId(button, ZoomDialogVisualMetrics.PresetButtonAutomationId(zoom));
             presetButtons.Add(button);
             presetPanel.Children.Add(button);
         }
@@ -13500,10 +13502,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Content = StripDisplayMnemonic(UiText.Get("Zoom_FitSelection")),
             GroupName = "ZoomDialogOptions",
-            Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.FitSelectionBottomMargin),
+            Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.FitSelectionBottomMargin),
         };
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(fitSelectionButton, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(fitSelectionButton, "ZoomFitSelectionButton");
+        AutomationProperties.SetAutomationId(fitSelectionButton, ZoomDialogVisualMetrics.FitSelectionButtonAutomationId);
 
         var customButton = new RadioButton
         {
@@ -13512,17 +13514,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsChecked = !presetButtons.Any(button => button.IsChecked == true),
         };
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(customButton, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(customButton, "ZoomCustomButton");
+        AutomationProperties.SetAutomationId(customButton, ZoomDialogVisualMetrics.CustomButtonAutomationId);
 
         var customBox = new TextBox
         {
             Text = currentZoom.ToString(CultureInfo.InvariantCulture),
-            Width = ZoomDialogPlanner.CustomPercentBoxWidth,
+            Width = ZoomDialogVisualMetrics.CustomPercentBoxWidth,
             // WPF ZoomDialog leaves the percent box at the TextBox default: left-aligned text.
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(customBox, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
+        AutomationProperties.SetAutomationId(customBox, ZoomDialogVisualMetrics.CustomPercentBoxAutomationId);
         AutomationProperties.SetName(customBox, UiText.Get("Zoom_CustomZoomPercent"));
 
         customBox.GotFocus += (_, _) => customButton.IsChecked = true;
@@ -13533,23 +13535,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetAutomationId(errorText, "ZoomValidationText");
+        AutomationProperties.SetAutomationId(errorText, ZoomDialogVisualMetrics.ValidationTextAutomationId);
 
         var okButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
-            Width = ZoomDialogPlanner.ActionButtonWidth,
+            Width = ZoomDialogVisualMetrics.ActionButtonWidth,
             IsDefault = true,
         };
-        AutomationProperties.SetAutomationId(okButton, "ZoomOkButton");
+        AutomationProperties.SetAutomationId(okButton, ZoomDialogVisualMetrics.OkButtonAutomationId);
 
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
-            Width = ZoomDialogPlanner.ActionButtonWidth,
+            Width = ZoomDialogVisualMetrics.ActionButtonWidth,
             IsCancel = true,
         };
-        AutomationProperties.SetAutomationId(cancelButton, "ZoomCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, ZoomDialogVisualMetrics.CancelButtonAutomationId);
 
         void Accept()
         {
@@ -13636,7 +13638,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var choices = new AvaloniaGrid
         {
             ColumnDefinitions = new ColumnDefinitions(
-                $"{ZoomDialogPlanner.PresetColumnWidth},*"),
+                $"{ZoomDialogVisualMetrics.PresetColumnWidth},*"),
         };
         choices.Children.Add(presetPanel);
         var customChoices = new StackPanel
@@ -13653,8 +13655,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var magnificationGroup = new GroupBox
         {
             Header = UiText.Get("Zoom_Magnification"),
-            Padding = new Thickness(ZoomDialogPlanner.MagnificationGroupPadding),
-            Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.MagnificationGroupBottomMargin),
+            Padding = new Thickness(ZoomDialogVisualMetrics.MagnificationGroupPadding),
+            Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.MagnificationGroupBottomMargin),
             Content = choices,
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(magnificationGroup, zoomDialogChrome);
@@ -13662,17 +13664,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaCompactDialogChrome.ApplyButton(
             okButton,
             zoomDialogChrome,
-            ZoomDialogPlanner.ActionButtonWidth,
+            ZoomDialogVisualMetrics.ActionButtonWidth,
             isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(
             cancelButton,
             zoomDialogChrome,
-            ZoomDialogPlanner.ActionButtonWidth);
+            ZoomDialogVisualMetrics.ActionButtonWidth);
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(ZoomDialogPlanner.OuterPadding),
+            Margin = new Thickness(ZoomDialogVisualMetrics.OuterPadding),
             Children =
             {
                 magnificationGroup,
@@ -16405,11 +16407,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = WorkbookStatisticsDialogPlanner.Height - WpfResizableFrameHeight,
             MinWidth = WorkbookStatisticsDialogPlanner.MinWidth - WpfResizableFrameWidth,
             MinHeight = WorkbookStatisticsDialogPlanner.MinHeight - WpfResizableFrameHeight,
-            FontFamily = FormulaBarFontFamily,
-            FontSize = 12,
+            FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily(
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback),
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        var workbookStatisticsChrome = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily(
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback),
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
+            ForegroundBrush = Brushes.Black,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, workbookStatisticsChrome);
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
         AutomationProperties.SetAutomationId(dialog, "WorkbookStatisticsDialog");
 
         var okButton = new Button
@@ -16417,7 +16429,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             // WPF: OK MinWidth = 76 (default and cancel), Copy to Clipboard MinWidth = 132, 8px apart.
             // Enter/Escape are routed by the dialog's own key handler below.
-            MinWidth = 76,
+            MinWidth = WorkbookStatisticsDialogVisualMetrics.OkButtonMinWidth,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
         ApplyDialogButtonChrome(okButton, isDefault: true);
@@ -16429,7 +16441,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var copyToClipboardButton = new Button
         {
             Content = UiText.Get("WorkbookStatistics_CopyToClipboard"),
-            MinWidth = 132,
+            MinWidth = WorkbookStatisticsDialogVisualMetrics.CopyButtonMinWidth,
         };
         AutomationProperties.SetName(copyToClipboardButton, UiText.Get("WorkbookStatistics_CopyToClipboard"));
         AutomationProperties.SetAutomationId(
@@ -16470,16 +16482,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             Background = Brushes.White,
+            Foreground = Brushes.Black,
             // WPF: SystemColors.ControlDarkBrush border, Padding = 8, MinHeight = 260.
-            BorderBrush = Brush(160, 160, 160),
-            BorderThickness = new Thickness(1),
+            BorderBrush = Brush(
+                WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent,
+                WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent,
+                WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent),
+            BorderThickness = new Thickness(WorkbookStatisticsDialogVisualMetrics.SummaryBorderThickness),
             CornerRadius = new CornerRadius(0),
-            Padding = new Thickness(8),
-            MinHeight = 260,
-            FontSize = 12,
+            Padding = new Thickness(
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryLeadingInsetAdjustment,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryLeadingInsetAdjustment,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
+            MinHeight = WorkbookStatisticsDialogVisualMetrics.SummaryMinHeight,
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
             // WPF lays the summary out on the 16px line pitch of its 12px dialog font.
-            LineHeight = 16,
+            LineHeight = WorkbookStatisticsDialogVisualMetrics.SummaryLineHeight,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
+        };
+        statisticsBlock.AttachedToVisualTree += (_, _) =>
+        {
+            TextOptions.SetTextRenderingMode(statisticsBlock, TextRenderingMode.Antialias);
+            foreach (var presenter in statisticsBlock.GetVisualDescendants().OfType<TextPresenter>())
+                TextOptions.SetTextRenderingMode(presenter, TextRenderingMode.Antialias);
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
         AutomationProperties.SetAutomationId(
@@ -16492,9 +16520,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = WorkbookStatisticsDialogVisualMetrics.ActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, WorkbookStatisticsDialogVisualMetrics.ActionRowTopMargin, 0, 0),
         };
         if (copyToClipboardButton is not null)
             buttonRow.Children.Add(copyToClipboardButton);
@@ -16502,7 +16530,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var root = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(WorkbookStatisticsDialogVisualMetrics.ContentMargin),
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);

@@ -8,6 +8,29 @@ namespace FreeX.App.Avalonia.Tests;
 
 public sealed class AvaloniaMainWindowChromeSourceTests
 {
+    [Fact]
+    public void WorkbookStatisticsDialog_UsesSharedWindowsPresentationMetrics()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var start = source.IndexOf("private async Task ShowWorkbookStatisticsDialogAsync()", StringComparison.Ordinal);
+        var end = source.IndexOf("private async Task ShowWorkbookPerformanceDialogAsync()", start, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        var dialog = source[start..end];
+
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback");
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.SummaryLineHeight");
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.ContentMargin");
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryLeadingInsetAdjustment");
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.CopyButtonMinWidth");
+        dialog.Should().Contain("Foreground = Brushes.Black");
+        dialog.Should().Contain("ForegroundBrush = Brushes.Black");
+        dialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, workbookStatisticsChrome);");
+        dialog.Should().Contain("TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);");
+        dialog.Should().Contain("TextOptions.SetTextRenderingMode(statisticsBlock, TextRenderingMode.Antialias)");
+        dialog.Should().Contain("foreach (var presenter in statisticsBlock.GetVisualDescendants().OfType<TextPresenter>())");
+    }
+
     public static IEnumerable<object[]> SharedWindowsWorkbookShortcutRoutes =>
         WorkbookKeyboardShortcutCatalog.Rules.Select(rule => new object[] { rule });
 

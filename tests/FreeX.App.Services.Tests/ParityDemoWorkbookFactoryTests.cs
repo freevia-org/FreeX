@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services.Tests;
@@ -74,5 +75,18 @@ public sealed class ParityDemoWorkbookFactoryTests
             new CellAddress(sheet.Id, 9, 7)));
         sheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 1));
         sheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
+    }
+
+    [Fact]
+    public void Create_ProducesWorkbookStatisticsSharedByBothDialogCaptureFixtures()
+    {
+        var statistics = WorkbookStatisticsService.GetStatistics(ParityDemoWorkbookFactory.Create());
+
+        statistics.CellCount.Should().Be(43);
+        statistics.UsedRowCount.Should().Be(9);
+        statistics.UsedColumnCount.Should().Be(5);
+        statistics.ConstantCount.Should().Be(43);
+        statistics.TextConstantCount.Should().Be(20);
+        statistics.NumberConstantCount.Should().Be(23);
     }
 }
