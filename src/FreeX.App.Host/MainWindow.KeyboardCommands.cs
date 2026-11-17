@@ -80,6 +80,7 @@ public partial class MainWindow
         });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleRibbonVisibility, (_, _) => ToggleRibbonVisibility());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CycleShellFocus, (_, _) => CycleShellFocus(reverse: Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, (_, _) => SwitchWorkbookWindow(forward: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, (_, _) => SwitchWorkbookWindow(forward: false));

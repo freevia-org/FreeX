@@ -13,6 +13,23 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class ShortcutParityBehaviorTests
 {
+    [Fact]
+    public void CtrlF1_TogglesRibbonContentVisibilityInTheWpfHost()
+    {
+        KeyboardShortcutMatcher.TryGetCommandShortcut(
+            Key.F1, Key.None, ModifierKeys.Control, out var shortcut)
+            .Should().BeTrue();
+        shortcut.Should().Be(KeyboardCommandShortcut.ToggleRibbonVisibility);
+
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        source.Should().Contain("ExecuteCommandShortcut(ribbonShortcut, sender, e);");
+        source.Should().Contain("private void ToggleRibbonVisibility()");
+        source.Should().Contain("PART_SelectedContentHost");
+        source.Should().Contain("Visibility.Collapsed : Visibility.Visible");
+        DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs")
+            .Should().Contain("Register(KeyboardCommandShortcut.ToggleRibbonVisibility");
+    }
+
     // --- Ctrl+P / Ctrl+Shift+F12 (Print) ---
 
     [Theory]

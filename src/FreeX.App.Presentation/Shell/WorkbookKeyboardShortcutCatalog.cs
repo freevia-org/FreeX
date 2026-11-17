@@ -106,6 +106,7 @@ public enum KeyboardCommandShortcut
     SaveAs,
     OpenHelp,
     ShowKeyTips,
+    ToggleRibbonVisibility,
     CycleShellFocus,
     SwitchToNextWorkbookWindow,
     SwitchToPreviousWorkbookWindow,

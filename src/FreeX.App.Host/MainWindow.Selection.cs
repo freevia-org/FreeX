@@ -635,6 +635,18 @@ public partial class MainWindow
         if (TryHandleShowKeyTipsPreview(e, sender))
             return;
 
+        if (KeyboardShortcutMatcher.TryGetCommandShortcut(
+                e.Key,
+                e.SystemKey,
+                Keyboard.Modifiers,
+                out var ribbonShortcut) &&
+            ribbonShortcut == KeyboardCommandShortcut.ToggleRibbonVisibility)
+        {
+            ExecuteCommandShortcut(ribbonShortcut, sender, e);
+            e.Handled = true;
+            return;
+        }
+
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
@@ -665,6 +677,18 @@ public partial class MainWindow
 
         ExecuteCommandShortcut(commandShortcut, sender, e);
         e.Handled = true;
+    }
+
+    private bool _ribbonContentCollapsed;
+
+    private void ToggleRibbonVisibility()
+    {
+        RibbonTabs.ApplyTemplate();
+        if (RibbonTabs.Template.FindName("PART_SelectedContentHost", RibbonTabs) is not ContentPresenter contentHost)
+            return;
+
+        _ribbonContentCollapsed = !_ribbonContentCollapsed;
+        contentHost.Visibility = _ribbonContentCollapsed ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private bool TryHandleShowKeyTipsPreview(System.Windows.Input.KeyEventArgs e, object sender)
