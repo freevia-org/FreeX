@@ -94,7 +94,7 @@ internal sealed class BackstageRailHarness : IDisposable
     public void ExecuteOpenShortcut()
     {
         if (!WorkbookApplicationCommandRouter.TryRouteShortcut(
-                WorkbookShortcutRoute.OpenWorkbook,
+                WorkbookShortcutRoute.OpenBackstage,
                 out var route))
             throw new InvalidOperationException("Ctrl+O was not registered as a workbook shortcut route.");
         var bindings = (WorkbookApplicationCommandBindings)typeof(MainWindow)

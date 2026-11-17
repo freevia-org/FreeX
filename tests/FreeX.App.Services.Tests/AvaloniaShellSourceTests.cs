@@ -775,7 +775,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_Open\"");
-        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenWorkbook)");
+        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenBackstage)");
         source.Should().Contain("_openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_OpenRecent\"");
@@ -5740,7 +5740,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("(modifiers & ~(commandModifiers | KeyModifiers.Shift)) == 0;");
 
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.NewWorkbook)");
-        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenWorkbook)");
+        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenBackstage)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.SaveWorkbook)");
         catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
         catalogSource.Should().Contain("NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta");

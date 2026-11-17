@@ -8,7 +8,7 @@ public sealed partial class KeyboardShortcutMatcherTests
 {
     [Theory]
     [InlineData(Key.N, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.NewWorkbook)]
-    [InlineData(Key.O, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
+    [InlineData(Key.O, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenBackstage)]
     [InlineData(Key.F12, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.OpenWorkbook)]
     [InlineData(Key.S, Key.None, ModifierKeys.Control, KeyboardCommandShortcut.SaveWorkbook)]
     [InlineData(Key.F12, Key.None, ModifierKeys.Shift, KeyboardCommandShortcut.SaveWorkbook)]

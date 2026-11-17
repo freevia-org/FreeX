@@ -20,7 +20,7 @@ public partial class MainWindow
                 NewWorkbookAsync: _ => RequestNewWorkbookAsync(),
                 OpenWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
                 {
-                    if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                    if (invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage))
                     {
                         OpenWorkbookBackstageForKeyboard();
                         return;

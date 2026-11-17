@@ -30,7 +30,7 @@ public partial class MainWindow
                 },
                 OpenWorkbookAsync: async invocation =>
                 {
-                    if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                    if (invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage))
                     {
                         ShowBackstageOpenPane();
                     }

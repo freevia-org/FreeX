@@ -55,7 +55,7 @@ public sealed class KeyboardFileBackstageParityTests
         });
 
         var routing = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
-        routing.Should().Contain("invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut")
+        routing.Should().Contain("invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage)")
             .And.Contain("OpenWorkbookBackstageForKeyboard();")
             .And.Contain("OpenButton_Click(NativeSource(invocation), RoutedArgs(invocation));");
 

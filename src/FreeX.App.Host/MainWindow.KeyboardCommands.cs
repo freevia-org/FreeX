@@ -11,6 +11,7 @@ public partial class MainWindow
     private void RegisterKeyboardCommandShortcuts()
     {
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.NewWorkbook, WorkbookShortcutRoute.NewWorkbook);
+        RegisterPortableKeyboardCommand(KeyboardCommandShortcut.OpenBackstage, WorkbookShortcutRoute.OpenBackstage);
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.OpenWorkbook, WorkbookShortcutRoute.OpenWorkbook);
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.SaveWorkbook, WorkbookShortcutRoute.SaveWorkbook);
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.Copy, WorkbookShortcutRoute.Copy);

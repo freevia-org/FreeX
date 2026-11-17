@@ -94,7 +94,7 @@ public sealed class BackstageWpfParityPaneTests
 
             var routing = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ApplicationCommandRouting.cs"));
             var keyboardRouteStart = routing.IndexOf(
-                "if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)",
+                "if (invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage))",
                 StringComparison.Ordinal);
             var keyboardRouteEnd = routing.IndexOf("else if", keyboardRouteStart, StringComparison.Ordinal);
             routing[keyboardRouteStart..keyboardRouteEnd].Should().Contain("ShowBackstageOpenPane();")
@@ -120,7 +120,7 @@ public sealed class BackstageWpfParityPaneTests
                     .GetProperty("WorkbookApplicationCommands", BindingFlags.Instance | BindingFlags.NonPublic)!
                     .GetValue(window)!;
                 WorkbookApplicationCommandRouter.TryRouteShortcut(
-                    WorkbookShortcutRoute.OpenWorkbook,
+                    WorkbookShortcutRoute.OpenBackstage,
                     out var route).Should().BeTrue();
 
                 var result = await bindings.TryExecuteAsync(route);

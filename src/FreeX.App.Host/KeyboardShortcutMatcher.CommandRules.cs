@@ -65,6 +65,7 @@ public static partial class KeyboardShortcutMatcher
         route switch
         {
             WorkbookShortcutRoute.NewWorkbook => KeyboardCommandShortcut.NewWorkbook,
+            WorkbookShortcutRoute.OpenBackstage => KeyboardCommandShortcut.OpenBackstage,
             WorkbookShortcutRoute.OpenWorkbook => KeyboardCommandShortcut.OpenWorkbook,
             WorkbookShortcutRoute.SaveWorkbook => KeyboardCommandShortcut.SaveWorkbook,
             WorkbookShortcutRoute.PrintWorkbook => KeyboardCommandShortcut.OpenPrintPreview,
