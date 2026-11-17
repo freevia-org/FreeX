@@ -87,16 +87,21 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);");
-        source.Should().Contain("ButtonHeight = 20,");
-        source.Should().Contain("TextBoxHeight = 18,");
-        source.Should().Contain("MinHeight = 130,");
-        source.Should().Contain("Margin = new Thickness(0, 24, 0, 0),");
+        source.Should().Contain("ButtonHeight = GoToDialogVisualMetrics.ButtonHeight,");
+        source.Should().Contain("TextBoxHeight = GoToDialogVisualMetrics.TextBoxHeight,");
+        source.Should().Contain("ForegroundBrush = Brushes.Black,");
+        source.Should().Contain("TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(historyList, dialogChrome);");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryListMinHeight");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryListTopMargin");
         source.Should().Contain("new GridLength(1, GridUnitType.Star)");
         source.Should().Contain("Grid.SetRow(historyList, 1);");
-        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(specialButton, dialogChrome, minWidth: 86);");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(specialButton, dialogChrome, minWidth: GoToDialogVisualMetrics.SpecialButtonWidth);");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
         source.Should().NotContain("var historyBorder = new Border");
-        source.Should().Contain("AutomationProperties.SetAutomationId(historyList, \"GoToHistoryList\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(historyList, GoToDialogVisualMetrics.HistoryListAutomationId);");
+        source.Should().Contain("GoToDialogVisualMetrics.AcceptButtonAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.CancelButtonAutomationId");
         source.Should().Contain("AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);");
     }
 

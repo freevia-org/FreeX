@@ -144,6 +144,22 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
+    public void GoToDialog_ConsumesSharedVisualMetricsAndAutomationIds()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
+
+        source.Should().Contain("Width = GoToDialogVisualMetrics.WindowWidth;");
+        source.Should().Contain("Height = GoToDialogVisualMetrics.WindowHeight;");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryColumnWidth");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryListMinHeight");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryListAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.ReferenceInputAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.SpecialButtonAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.AcceptButtonAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.CancelButtonAutomationId");
+    }
+
+    [Fact]
     public void GoToDialogOpenedFromKeyboard_FocusesReferenceBox()
     {
         var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
