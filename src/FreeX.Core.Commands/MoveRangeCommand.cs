@@ -23,6 +23,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     private IReadOnlyList<CellAddress> _affectedCells = [];
     private IReadOnlyList<CellAddress> _payloadAffectedCells = [];
     private List<CellSnapshot>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
     private Dictionary<CellAddress, string>? _formulaSnapshot;
     private Dictionary<CellAddress, string>? _commentSnapshot;
     // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
@@ -99,7 +100,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
     /// <inheritdoc/>
     public int EstimatedBytes => _snapshot is null
         ? 0
-        : (int)Math.Min((long)_snapshot.Count * BytesPerCell, int.MaxValue);
+        : (int)Math.Min((long)_snapshot.Count * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public MoveRangeCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
     {
@@ -177,23 +178,50 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (mergeCollision)
             return new CommandOutcome(false, "Cannot move a range that intersects merged cells.");
 
-        // R38-commands-cut-move-2-2: a structured table fully contained in _sourceRange moves along
-        // with the selection (its Range is relocated below); a table only partially overlapping the
-        // moved range can't be split any more than a merge can, and a table already sitting at the
-        // destination is a real collision.
+        // A fully contained table moves with the range. A partial table stays in place;
+        // when the moved rectangle crosses its header, reconcile its column names as a
+        // single batch after the cell payload has moved.
         var movingTables = sourceSheet.StructuredTables.Where(table => _sourceRange.Contains(table.Range)).ToList();
-        var partialOverlapTable = sourceSheet.StructuredTables
-            .FirstOrDefault(table => !movingTables.Contains(table) && _sourceRange.Overlaps(table.Range));
-        if (partialOverlapTable is not null)
+        var partialTables = sourceSheet.StructuredTables
+            .Where(table => !movingTables.Contains(table) && _sourceRange.Overlaps(table.Range)).ToArray();
+        static bool CanMovePartial(GridRange range, StructuredTableModel table)
+        {
+            if (table.HeaderRowCount != 0 && range.Start.Row <= table.Range.Start.Row && range.End.Row >= table.Range.Start.Row)
+                return true;
+            var (first, last) = StructuredTableEditEffects.GetDataBodyRowBounds(table);
+            var overlapFirst = Math.Max(range.Start.Row, table.Range.Start.Row);
+            var overlapLast = Math.Min(range.End.Row, table.Range.End.Row);
+            return first <= last && overlapFirst >= first && overlapLast <= last;
+        }
+        if (partialTables.Length > 0 && (movingTables.Count > 0 || partialTables.Any(table => !CanMovePartial(_sourceRange, table))))
             return new CommandOutcome(false, "Cannot move a range that intersects part of a table.");
-        var tableCollision = destSheet.StructuredTables
-            .Any(table => !movingTables.Contains(table) && targetRange.Overlaps(table.Range));
-        if (tableCollision)
+        var destinationTables = destSheet.StructuredTables
+            .Where(table => !movingTables.Contains(table) && targetRange.Overlaps(table.Range)).ToArray();
+        if (destinationTables.Length > 0 && (movingTables.Count > 0 || destinationTables.Any(table => !CanMovePartial(targetRange, table))))
             return new CommandOutcome(false, "Cannot move a range that intersects a table.");
 
         var affected = CreateAffectedCellList(_sourceRange, targetRange);
         var sourceCells = _sourceRange.AllCells().ToList();
         var targetCells = targetRange.AllCells().ToList();
+        Dictionary<CellAddress, string>? qualificationOwners = null;
+
+        if (partialTables.Length > 0 || destinationTables.Length > 0)
+        {
+            foreach (var address in sourceCells)
+            {
+                var owner = sourceSheet.StructuredTables.FirstOrDefault(table => table.Range.Contains(address));
+                if (owner is null || sourceSheet.GetCell(address)?.FormulaText is not { } formula || !formula.Contains('[')) continue;
+                var target = new CellAddress(_destination.Sheet,
+                    _destination.Row + (address.Row - _sourceRange.Start.Row),
+                    _destination.Col + (address.Col - _sourceRange.Start.Col));
+                var destinationOwner = destSheet.StructuredTables.FirstOrDefault(table => table.Range.Contains(target));
+                if (ReferenceEquals(owner, destinationOwner)) continue;
+                if (!StructuredFormulaMoveQualification.TryQualify(formula, owner.Name, out var qualified))
+                    return new CommandOutcome(false, "Cannot safely move this table-relative formula outside its table.");
+                if (qualified != formula)
+                    (qualificationOwners ??= [])[target] = owner.Name;
+            }
+        }
 
         if (!isCrossSheet)
         {
@@ -290,6 +318,8 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
                 return destSplitRejection;
         }
 
+        _headerRename = partialTables.Length > 0 || destinationTables.Length > 0
+            ? TableHeaderRenameTransaction.Capture(ctx, sourceCells.Concat(targetCells)) : null;
         _snapshot = CaptureCellSnapshots(ResolveSheet, affected);
         _commentSnapshot = CaptureDictionary(ResolveSheet, static s => s.Comments, affected);
         _commentAuthorsSnapshot = CaptureDictionary(ResolveSheet, static s => s.CommentAuthors, affected);
@@ -416,6 +446,19 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         _sparklineDataRangeSnapshot = TranslateFullyContainedSparklineDataRanges(ctx.Workbook, _sourceRange, _destination.Sheet, rowDelta, colDelta);
 
         var payloads = CaptureSourcePayloads(sourceSheet, _sourceRange, _destination);
+        if (qualificationOwners is not null)
+        {
+            foreach (var payload in payloads)
+            {
+                if (!qualificationOwners.TryGetValue(payload.Target, out var owner) || payload.Cell?.FormulaText is not { } formula) continue;
+                if (!StructuredFormulaMoveQualification.TryQualify(formula, owner, out var qualified))
+                {
+                    Revert(ctx);
+                    return new CommandOutcome(false, "Cannot safely move this table-relative formula outside its table.");
+                }
+                RowColumnShiftHelpers.SetFormulaTextPreservingArrayIdentity(payload.Cell, qualified);
+            }
+        }
         // R20-array-dynamic-spill-1: capture any live spill rooted at a source cell BEFORE
         // ClearAddress tears it down, so a moved dynamic-array anchor (e.g. =SEQUENCE with no cell
         // references, whose formula text is unchanged by a plain Move) keeps spilling at its new
@@ -450,7 +493,10 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
             }
         }
 
-        _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys);
+        try { _headerRename?.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        _affectedCells = MergeAffectedCells(affected, _formulaSnapshot.Keys)
+            .Concat(_headerRename?.Affected ?? []).Distinct().ToArray();
         return new CommandOutcome(
             true,
             AffectedCells: _affectedCells,
@@ -703,6 +749,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sourceSheet = ctx.GetSheet(_sheetId);
         var isCrossSheet = _destination.Sheet != _sheetId;
         var destSheet = isCrossSheet ? ctx.GetSheet(_destination.Sheet) : sourceSheet;

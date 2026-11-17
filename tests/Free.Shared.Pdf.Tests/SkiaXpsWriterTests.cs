@@ -101,6 +101,31 @@ public sealed class SkiaXpsWriterTests
     }
 
     [Fact]
+    public void WriteToBytes_RasterizesDashPatternsTheDirectWriterCannotRepresent()
+    {
+        var page = new PdfContentPage(72, 72,
+            [new PdfStrokeRect(4, 8, 20, 12, PdfColor.Black, 2, new PdfDashPattern([6, 3], 1e13))]);
+        using var package = new ZipArchive(new MemoryStream(SkiaXpsWriter.WriteToBytes(new PdfContentDocument([page]))));
+        using var pagePart = package.GetEntry("Documents/1/Pages/1.fpage")!.Open();
+        var fixedPage = XDocument.Load(pagePart);
+        fixedPage.Descendants(Xps + "ImageBrush").Should().NotBeEmpty();
+        fixedPage.Descendants(Xps + "Path").Should().NotContain(path => path.Attribute("StrokeDashArray") != null);
+    }
+
+    [Fact]
+    public void WriteToBytes_UsesNativeBrushForGradientOnlyPath()
+    {
+        var gradient = new PdfLinearGradient(0, 0, 40, 0, [new(0, PdfColor.Black), new(1, new PdfColor(255, 0, 0))]);
+        var contour = new PdfPathContour(new(0, 0), [PdfPathSegment.LineTo(new(40, 0)), PdfPathSegment.LineTo(new(40, 40))], true);
+        var page = new PdfContentPage(72, 72, [new PdfPathLinearGradient([contour], gradient, null, gradient, null, 2)]);
+        using var package = new ZipArchive(new MemoryStream(SkiaXpsWriter.WriteToBytes(new PdfContentDocument([page]))));
+        using var pagePart = package.GetEntry("Documents/1/Pages/1.fpage")!.Open();
+        var fixedPage = XDocument.Load(pagePart);
+        fixedPage.Descendants(Xps + "LinearGradientBrush").Should().HaveCount(2);
+        fixedPage.Descendants(Xps + "ImageBrush").Should().BeEmpty();
+    }
+
+    [Fact]
     public void GlyphRun_StillSupportsTheOriginalCompiledConstructor()
     {
         var constructor = typeof(Free.Shared.Xps.XpsGlyphRun).GetConstructor(

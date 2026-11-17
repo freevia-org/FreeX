@@ -278,8 +278,10 @@ public sealed class CommandRegistryTests
         opened.Should().Be(1);
     }
 
-    [Fact]
-    public async Task Legacy_form_field_shading_command_toggles_screen_only_field_chrome()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Legacy_form_field_shading_command_toggles_screen_only_field_chrome(bool initialVisibility)
     {
         await Session.Dispatch(() =>
         {
@@ -297,16 +299,28 @@ public sealed class CommandRegistryTests
             placed.Cast<object>().Where(item => (bool)item.GetType().GetProperty("IsLegacyFormField")!.GetValue(item)!)
                 .Should().HaveCount(originalText.Length, "the renderer must tag only glyphs from the WPF-shaded field run");
 
-            // WPF's matching command flips its screen-only shading preference and rerenders; it does not
-            // edit the field's result or formatting. Avalonia used to register this command to an empty action.
-            DocumentView.LegacyFormFieldShadingVisible.Should().BeTrue();
-            Execute(registry, "freew.ff-shading");
-            DocumentView.LegacyFormFieldShadingVisible.Should().BeFalse();
-            fieldRun.Text.Should().Be(originalText);
-            fieldRun.ComplexField.Should().BeSameAs(originalField);
+            // The preference is process-wide, so other commands may have changed it before this test.
+            // Exercise both states and restore the original even if an assertion fails.
+            var previousVisibility = DocumentView.LegacyFormFieldShadingVisible;
+            try
+            {
+                if (previousVisibility != initialVisibility)
+                    editor.ToggleLegacyFormFieldShading();
 
-            Execute(registry, "freew.ff-shading");
-            DocumentView.LegacyFormFieldShadingVisible.Should().BeTrue();
+                // WPF's matching command flips screen-only shading without editing the field.
+                Execute(registry, "freew.ff-shading");
+                DocumentView.LegacyFormFieldShadingVisible.Should().Be(!initialVisibility);
+                fieldRun.Text.Should().Be(originalText);
+                fieldRun.ComplexField.Should().BeSameAs(originalField);
+
+                Execute(registry, "freew.ff-shading");
+                DocumentView.LegacyFormFieldShadingVisible.Should().Be(initialVisibility);
+            }
+            finally
+            {
+                if (DocumentView.LegacyFormFieldShadingVisible != previousVisibility)
+                    editor.ToggleLegacyFormFieldShading();
+            }
         }, CancellationToken.None);
     }
 

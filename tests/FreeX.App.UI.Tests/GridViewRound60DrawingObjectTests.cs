@@ -269,6 +269,48 @@ public sealed class GridViewRound60DrawingObjectTests
         });
     }
 
+    [Fact]
+    public void ShapeTextRendering_UsesExplicitInsetsIncludingZeroAndAsymmetry()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var grid = new GridView();
+            var shape = new DrawingShapeModel { ShapeText = "Label", ShapeTextFontSizePoints = 11,
+                ShapeTextHAlign = DrawingShapeTextHAlign.Left, ShapeTextVAnchor = DrawingShapeTextVAnchor.Top };
+            var rect = new Rect(10, 10, 160, 80);
+            var defaults = MeasureTextInkOrigin(grid, shape, rect);
+            shape.ShapeTextInsets = new DrawingShapeTextInsets(0, null, 0, null);
+            var zero = MeasureTextInkOrigin(grid, shape, rect);
+            shape.ShapeTextInsets = new DrawingShapeTextInsets(20 * 9525, null, 12 * 9525, null);
+            var inset = MeasureTextInkOrigin(grid, shape, rect);
+            defaults.X.Should().BeApproximately(zero.X + 4, 1);
+            defaults.Y.Should().BeApproximately(zero.Y + 2, 1);
+            inset.X.Should().BeApproximately(zero.X + 20, 1);
+            inset.Y.Should().BeApproximately(zero.Y + 12, 1);
+            shape.ShapeTextHAlign = DrawingShapeTextHAlign.Right;
+            shape.ShapeTextVAnchor = DrawingShapeTextVAnchor.Bottom;
+            shape.ShapeTextInsets = new DrawingShapeTextInsets(0, 0, 0, 0);
+            var alignedZero = MeasureTextInkOrigin(grid, shape, rect);
+            shape.ShapeTextInsets = new DrawingShapeTextInsets(20 * 9525, 7 * 9525, 12 * 9525, 9 * 9525);
+            var alignedInset = MeasureTextInkOrigin(grid, shape, rect);
+            alignedInset.X.Should().BeApproximately(alignedZero.X - 7, 1);
+            alignedInset.Y.Should().BeApproximately(alignedZero.Y - 9, 1);
+        });
+    }
+
+    private static Point MeasureTextInkOrigin(GridView grid, DrawingShapeModel shape, Rect rect)
+    {
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen()) grid.DrawShapeText(dc, shape, rect, 1.0);
+        var bitmap = new RenderTargetBitmap(200, 120, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var pixels = new byte[200 * 120 * 4];
+        bitmap.CopyPixels(pixels, 200 * 4, 0);
+        var coordinates = Enumerable.Range(0, 200 * 120).Where(i => pixels[i * 4 + 3] > 10).ToArray();
+        coordinates.Should().NotBeEmpty();
+        return new Point(coordinates.Min(i => i % 200), coordinates.Min(i => i / 200));
+    }
+
     private static int MeasureShapeTextVerticalSpan(GridView grid, DrawingShapeModel shape, Rect rect)
     {
         var visual = new DrawingVisual();

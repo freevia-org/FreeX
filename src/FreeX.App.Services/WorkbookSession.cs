@@ -7574,6 +7574,18 @@ public sealed class WorkbookSession : IDisposable
                         // be routed through MoveRangeCommand (e.g. a cross-sheet destination).
                         new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, isCutSource: true)
                     ]);
+                // Paste and source-clear must reconcile table headers together: reconciling
+                // each child separately loses column identity when both touch one table.
+                var headerRanges = new List<GridRange> { clipboard.SourceRange };
+                var cutRows = options.Transpose ? clipboard.SourceRange.ColCount : clipboard.SourceRange.RowCount;
+                var cutCols = options.Transpose ? clipboard.SourceRange.RowCount : clipboard.SourceRange.ColCount;
+                foreach (var sheetId in CurrentGroupedEditSheetIds())
+                {
+                    var start = new CellAddress(sheetId, destination.Row, destination.Col);
+                    if (TryGetRectangleEnd(start, cutRows, cutCols, out var end))
+                        headerRanges.Add(new GridRange(start, end));
+                }
+                command = new TableHeaderBatchCommand(command, headerRanges);
             }
         }
 
@@ -7638,6 +7650,10 @@ public sealed class WorkbookSession : IDisposable
             mode,
             options,
             keepSourceColumnWidths);
+        var headerRanges = CurrentGroupedEditSheetIds()
+            .SelectMany(sheetId => selectedRanges.Select(range => RemapRangeToSheet(range, sheetId)))
+            .ToArray();
+        command = new TableHeaderBatchCommand(command, headerRanges);
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -7874,7 +7890,7 @@ public sealed class WorkbookSession : IDisposable
         // Grouped multi-sheet editing can't be expressed as a single move, so fall back regardless
         // of destination sheet.
         var targetSheetIds = CurrentGroupedEditSheetIds();
-        if (targetSheetIds.Count != 1 || !targetSheetIds[0].Equals(clipboard.SourceRange.Start.Sheet))
+        if (targetSheetIds.Count != 1 || !targetSheetIds[0].Equals(destination.Sheet))
             return false;
 
         // R38-commands-cut-move-2-1: MoveRangeCommand now supports a cross-sheet destination for

@@ -159,6 +159,10 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintString(stream, chart.DataRange.ToString());
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintBoolean(stream, chart.IsVisible);
+        WriteFingerprintBoolean(stream, chart.Locked);
+        WriteFingerprintBoolean(stream, chart.PrintObject);
+        WriteFingerprintDictionary(stream, chart.DrawingLockAttributes);
+        WriteFingerprintString(stream, chart.DrawingLockChildrenXml);
         WriteFingerprintBoolean(stream, chart.IsPivotChart);
         WriteFingerprintString(stream, chart.PivotSourceSheetName);
         WriteFingerprintString(stream, chart.PivotTableName);
@@ -190,6 +194,13 @@ public sealed partial class XlsxFileAdapter
         WriteFingerprintBoolean(stream, picture.IsSourceLoaded);
         WriteFingerprintBoolean(stream, picture.IsLinkedToSourceRange);
         WriteFingerprintBoolean(stream, picture.IsVisible);
+        WriteFingerprintBoolean(stream, picture.Locked);
+        WriteFingerprintBoolean(stream, picture.PrintObject);
+        WriteFingerprintBoolean(stream, picture.LockAspectRatio);
+        WriteFingerprintString(stream, picture.DrawingNoMove?.ToString());
+        WriteFingerprintString(stream, picture.DrawingNoResize?.ToString());
+        WriteFingerprintDictionary(stream, picture.DrawingLockAttributes);
+        WriteFingerprintString(stream, picture.DrawingLockChildrenXml);
         WriteFingerprintString(stream, picture.LinkedSourceRange?.ToString());
         WriteFingerprintString(stream, picture.LinkedSourceSheetName);
         WriteFingerprintString(stream, picture.ContentType);
@@ -216,6 +227,12 @@ public sealed partial class XlsxFileAdapter
 
     private static void WriteDrawingTextBoxFingerprint(Stream stream, TextBoxModel textBox)
     {
+        WriteFingerprintBoolean(stream, textBox.Locked);
+        WriteFingerprintBoolean(stream, textBox.PrintObject);
+        WriteFingerprintString(stream, textBox.DrawingNoMove?.ToString());
+        WriteFingerprintString(stream, textBox.DrawingNoResize?.ToString());
+        WriteFingerprintDictionary(stream, textBox.DrawingLockAttributes);
+        WriteFingerprintString(stream, textBox.DrawingLockChildrenXml);
         WriteFingerprintString(stream, textBox.Name);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintAddress(stream, textBox.Anchor);
@@ -248,6 +265,18 @@ public sealed partial class XlsxFileAdapter
 
     private static void WriteDrawingShapeFingerprint(Stream stream, DrawingShapeModel shape)
     {
+        WriteFingerprintBoolean(stream, shape.Locked);
+        WriteFingerprintBoolean(stream, shape.PrintObject);
+        WriteFingerprintString(stream, shape.DrawingNoMove?.ToString());
+        WriteFingerprintString(stream, shape.DrawingNoResize?.ToString());
+        WriteFingerprintDictionary(stream, shape.DrawingLockAttributes);
+        WriteFingerprintString(stream, shape.DrawingLockChildrenXml);
+        WriteFingerprintString(stream, shape.ShapeText);
+        WriteFingerprintString(stream, XlsxShapeTextDocumentCodec.Fingerprint(shape.ShapeTextDocument));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Left?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Right?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Top?.ToString(CultureInfo.InvariantCulture));
+        WriteFingerprintString(stream, shape.ShapeTextInsets?.Bottom?.ToString(CultureInfo.InvariantCulture));
         WriteFingerprintString(stream, shape.Name);
         WriteFingerprintToken(stream, "\t");
         WriteFingerprintAddress(stream, shape.Anchor);
@@ -3198,6 +3227,8 @@ public sealed partial class XlsxFileAdapter
         }
 
         private static bool ChartRequiresFullSavePostProcessing(Workbook workbook, Sheet sheet, ChartModel chart) =>
+            (chart.SourceXlsxLocked.HasValue && (chart.SourceXlsxLocked != chart.Locked || chart.SourceXlsxPrintObject != chart.PrintObject ||
+                !DrawingLockAttributesMatch(chart.SourceXlsxLockAttributes, chart.DrawingLockAttributes) || chart.SourceXlsxLockChildrenXml != chart.DrawingLockChildrenXml)) ||
             chart.ExternalData is not null ||
             chart.UserShapes is not null ||
             (chart.IsPivotChart && !IsPatchSafePivotChartModel(workbook, sheet, chart));
@@ -3722,7 +3753,6 @@ public sealed partial class XlsxFileAdapter
                 .ToList();
             var pictureElements = drawingXml.Descendants(spreadsheetDrawingNs + "pic").ToList();
             var contentPartElements = drawingXml.Descendants(spreadsheetDrawingNs + "contentPart").ToList();
-            var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml);
 
             // Loaded here (rather than alongside the relationship-graph walk further below) so the picture
             // anchors/geometry can be compared against the in-memory sheet before any drawing part is
@@ -3732,6 +3762,7 @@ public sealed partial class XlsxFileAdapter
             var drawingRelsXmlForPictures = drawingRelsEntry is not null
                 ? XlsxPackageXmlEditor.LoadXml(drawingRelsEntry)
                 : null;
+            var (sourceTextBoxes, sourceShapes) = XlsxWorksheetDrawingPartReader.ReadShapeParts(drawingXml, drawingRelsXmlForPictures);
             var sourcePictures = XlsxWorksheetDrawingPartReader.ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXmlForPictures);
 
             if (chartElements.Count != sheet.Charts.Count ||
@@ -4542,6 +4573,13 @@ public sealed partial class XlsxFileAdapter
                 var source = sourcePictures[index];
                 var current = sheet.Pictures[index];
                 if (!IsPatchSafeSourcePicture(current) ||
+                    source.IsLocked != current.Locked ||
+                    source.PrintObject != current.PrintObject ||
+                    source.LockAspectRatio != current.LockAspectRatio ||
+                    source.DrawingNoMove != current.DrawingNoMove ||
+                    source.DrawingNoResize != current.DrawingNoResize ||
+                    !DrawingLockAttributesMatch(source.DrawingLockAttributes, current.DrawingLockAttributes) ||
+                    source.DrawingLockChildrenXml != current.DrawingLockChildrenXml ||
                     !StringEquals(source.Name, current.Name) ||
                     !StringEquals(source.Title, current.Title) ||
                     !StringEquals(source.AltText, current.AltText) ||
@@ -4574,6 +4612,12 @@ public sealed partial class XlsxFileAdapter
                 var source = sourceTextBoxes[index];
                 var current = sheet.TextBoxes[index];
                 if (!IsPatchSafeSourceTextBox(current) ||
+                    source.Locked != current.Locked ||
+                    source.PrintObject != current.PrintObject ||
+                    source.DrawingNoMove != current.DrawingNoMove ||
+                    source.DrawingNoResize != current.DrawingNoResize ||
+                    !DrawingLockAttributesMatch(source.DrawingLockAttributes, current.DrawingLockAttributes) ||
+                    source.DrawingLockChildrenXml != current.DrawingLockChildrenXml ||
                     !StringEquals(source.Name, current.Name) ||
                     !StringEquals(source.Text, current.Text) ||
                     !StringEquals(source.Title, current.Title) ||
@@ -4612,7 +4656,19 @@ public sealed partial class XlsxFileAdapter
                 var source = sourceShapes[index];
                 var current = sheet.DrawingShapes[index];
                 if (!IsPatchSafeSourceDrawingShape(current) ||
+                    source.Locked != current.Locked ||
+                    source.PrintObject != current.PrintObject ||
+                    source.DrawingNoMove != current.DrawingNoMove ||
+                    source.DrawingNoResize != current.DrawingNoResize ||
+                    !DrawingLockAttributesMatch(source.DrawingLockAttributes, current.DrawingLockAttributes) ||
+                    source.DrawingLockChildrenXml != current.DrawingLockChildrenXml ||
                     source.Kind != current.Kind ||
+                    !StringEquals(source.ShapeText ?? "", current.ShapeText ?? "") ||
+                    !StringEquals(XlsxShapeTextDocumentCodec.Fingerprint(source.ShapeTextDocument, includeOpaqueOwner: false),
+                        XlsxShapeTextDocumentCodec.Fingerprint(current.ShapeTextDocument, includeOpaqueOwner: false)) ||
+                    (current.ShapeTextDocument is { } currentRich && XlsxShapeTextDocumentCodec.HasOpaqueRelationships(currentRich) &&
+                        !ReferenceEquals(currentRich, current.OriginalSourceShapeTextDocument)) ||
+                    source.ShapeTextInsets != current.ShapeTextInsets ||
                     !StringEquals(source.Name, current.Name) ||
                     !StringEquals(source.Title, current.Title) ||
                     !StringEquals(source.AltText, current.AltText) ||
@@ -4655,6 +4711,12 @@ public sealed partial class XlsxFileAdapter
         /// reposition (no XML anchor rewrite) must never be treated as "no drawing change" — otherwise the
         /// cell-patch fast-save path keeps the stale source drawing XML and silently discards the resize/move.
         /// </summary>
+        private static bool DrawingLockAttributesMatch(IReadOnlyDictionary<string, string>? left, IReadOnlyDictionary<string, string>? right)
+        {
+            if ((left?.Count ?? 0) != (right?.Count ?? 0)) return false;
+            return left is null || left.All(pair => right is not null && right.TryGetValue(pair.Key, out var value) && value == pair.Value);
+        }
+
         private static bool DrawingAnchorMatchesGeometry(
             XlsxDrawingAnchor? sourceAnchor,
             Sheet sheet,

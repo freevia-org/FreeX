@@ -6281,8 +6281,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // Returns Control (not TextBlock) so an outline layer Panel can be returned when needed.
     private static Control CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
     {
-        const double HPad = 4;
-        const double VPad = 2;
+        var leftInset = d.ShapeTextInsets?.Left / 9525d ?? 4;
+        var rightInset = d.ShapeTextInsets?.Right / 9525d ?? 4;
+        var topInset = d.ShapeTextInsets?.Top / 9525d ?? 2;
+        var bottomInset = d.ShapeTextInsets?.Bottom / 9525d ?? 2;
         const double DefaultFontSizePt = 11.0;
         const double PtToDip = 96.0 / 72.0;
 
@@ -6347,7 +6349,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalAlignment = vAlign,
             TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(HPad, VPad, HPad, VPad),
+            Margin = new Thickness(leftInset, topInset, rightInset, bottomInset),
             IsHitTestVisible = false,
         };
 
@@ -6388,7 +6390,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     VerticalAlignment = vAlign,
                     TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
                     TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
-                    Margin = new Thickness(HPad + dx, VPad + dy, HPad - dx, VPad - dy),
+                    Margin = new Thickness(leftInset + dx, topInset + dy, rightInset - dx, bottomInset - dy),
                     IsHitTestVisible = false,
                 });
             }

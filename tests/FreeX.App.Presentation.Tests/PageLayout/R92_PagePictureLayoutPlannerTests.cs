@@ -83,6 +83,13 @@ public sealed class R92_PagePictureLayoutPlannerTests
             ImageBytes = [9, 9, 9],
             ContentType = "image/png"
         };
+        var nonPrinting = new PictureModel
+        {
+            Anchor = new CellAddress(sheet.Id, 1, 1),
+            ImageBytes = [9, 9, 9],
+            ContentType = "image/png",
+            PrintObject = false
+        };
         // Non-linked Paste Special > Picture default: no raster bytes, only per-cell snapshots --
         // out of scope for this planner (see its class doc comment).
         var cellRangeSnapshot = new PictureModel
@@ -98,7 +105,7 @@ public sealed class R92_PagePictureLayoutPlannerTests
             Anchor = new CellAddress(sheet.Id, 1, 1),
             ContentType = "image/png"
         };
-        sheet.Pictures.AddRange([hidden, visible, offPage, cellRangeSnapshot, noBytes]);
+        sheet.Pictures.AddRange([hidden, visible, nonPrinting, offPage, cellRangeSnapshot, noBytes]);
 
         var blocks = PagePictureLayoutPlanner.Build(
             sheet.Pictures,
@@ -109,6 +116,7 @@ public sealed class R92_PagePictureLayoutPlannerTests
             measurement: UniformMeasurement(colWidth: 50, rowHeight: 20));
 
         blocks.Should().ContainSingle().Which.Id.Should().Be(visible.Id);
+        nonPrinting.IsVisible.Should().BeTrue();
     }
 
     [Fact]

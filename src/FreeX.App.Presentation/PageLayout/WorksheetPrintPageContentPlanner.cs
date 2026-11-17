@@ -98,7 +98,10 @@ public sealed record WorksheetPrintDrawingLayerPlan(
     bool RenderCharts,
     IReadOnlyList<PageChartBlock> PortableCharts,
     IReadOnlyList<PagePictureBlock> Pictures,
-    IReadOnlyList<PageTextBoxBlock> TextBoxes);
+    IReadOnlyList<PageTextBoxBlock> TextBoxes)
+{
+    public IReadOnlyList<PageShapeBlock> Shapes { get; init; } = [];
+}
 
 public sealed record WorksheetPrintCommentLayerPlan(
     bool RenderDisplayedComments,
@@ -340,7 +343,12 @@ public static class WorksheetPrintPageContentPlanner
                 RenderCharts: !sheet.PrintDraftQuality,
                 PortableCharts: layout.Charts,
                 Pictures: pictures,
-                TextBoxes: textBoxes),
+                TextBoxes: textBoxes)
+            {
+                Shapes = sheet.PrintDraftQuality ? [] : profile.BakeScaleIntoGeometry ? layout.Shapes : PageShapeLayoutPlanner.Build(
+                    sheet.DrawingShapes, sheet, workbook.Theme, page.Rows, page.Columns, gridLeft, gridTop, measurement,
+                    bodyRows: page.RowPlan.BodyRows, bodyColumns: page.ColumnPlan.BodyColumns)
+            },
             new WorksheetPrintCommentLayerPlan(
                 displayedComments.Count > 0,
                 ResolveDisplayedCommentText(sheet),

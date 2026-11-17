@@ -1640,8 +1640,87 @@ public sealed partial class MainWindow
                 case PrintPreviewPaintKind.Image:
                     AddPreviewImage(canvas, instruction);
                     break;
+                case PrintPreviewPaintKind.Shape:
+                    AddPreviewShape(canvas, instruction);
+                    break;
             }
         }
+    }
+
+    private static void AddPreviewShape(Canvas canvas, PrintPreviewPaintInstruction instruction)
+    {
+        if (instruction.ShapeBlock is not { } shape) return;
+        var clip = instruction.ShapeClip;
+        var layer = new Canvas { Width = Math.Max(0, clip.Width), Height = Math.Max(0, clip.Height), ClipToBounds = true };
+        Canvas.SetLeft(layer, clip.Left);
+        Canvas.SetTop(layer, clip.Top);
+        var bounds = shape.Bounds;
+        Free.Shared.Drawing.LayoutPoint Local(Free.Shared.Drawing.LayoutPoint p) => new(p.X - bounds.Left, p.Y - bounds.Top);
+        Free.Shared.Drawing.ShapeGeometry LocalGeometry(Free.Shared.Drawing.ShapeGeometry source) => new(source.Contours.Select(contour =>
+            new Free.Shared.Drawing.ShapeContour(Local(contour.Start), contour.Segments.Select(segment => segment with
+            {
+                End = Local(segment.End), Control1 = Local(segment.Control1), Control2 = Local(segment.Control2)
+            }).ToArray(), contour.Closed, contour.Filled)).ToArray());
+        var path = new global::Avalonia.Controls.Shapes.Path
+        {
+            Width = Math.Max(1, bounds.Width), Height = Math.Max(1, bounds.Height),
+            Data = Free.Shared.Drawing.Avalonia.AvaloniaShapeGeometryAdapter.ToGeometry(LocalGeometry(shape.Geometry)),
+            Fill = shape.Appearance.Paint.HasFill && !shape.BlackAndWhite ? PreviewBrush(FreeX.App.Presentation.ConditionalFormatting.PresentationRgb.FromCellColor(shape.Appearance.Paint.Fill)) : null,
+            Stroke = shape.Appearance.Paint.HasOutline ? shape.BlackAndWhite ? Brushes.Black : PreviewBrush(FreeX.App.Presentation.ConditionalFormatting.PresentationRgb.FromCellColor(shape.Appearance.Paint.Outline)) : null,
+            StrokeThickness = shape.Appearance.Outline.ThicknessDip,
+            Stretch = Stretch.None
+        };
+        if (!shape.BlackAndWhite && shape.Appearance.Paint.HasFill && shape.Appearance.FillGradient is { } gradient)
+            path.Fill = CreateDrawingShapeGradientBrush(shape.Appearance.Paint.Fill, gradient);
+        if (GetShapeOutlineDashArray(shape.Appearance.Outline.Dash) is { } dash)
+            path.StrokeDashArray = new global::Avalonia.Collections.AvaloniaList<double>(dash);
+        ApplyDrawingObjectTransform(path, shape.Appearance.Transform.RotationDegrees, shape.Appearance.Transform.FlipHorizontal, shape.Appearance.Transform.FlipVertical);
+        Canvas.SetLeft(path, bounds.Left - clip.Left);
+        Canvas.SetTop(path, bounds.Top - clip.Top);
+        layer.Children.Add(path);
+        foreach (var arrow in shape.Arrowheads)
+        {
+            var arrowPath = new global::Avalonia.Controls.Shapes.Path
+            {
+                Width = Math.Max(1, bounds.Width), Height = Math.Max(1, bounds.Height),
+                Data = Free.Shared.Drawing.Avalonia.AvaloniaShapeGeometryAdapter.ToGeometry(LocalGeometry(arrow)),
+                Fill = shape.BlackAndWhite ? Brushes.Black : PreviewBrush(FreeX.App.Presentation.ConditionalFormatting.PresentationRgb.FromCellColor(shape.Appearance.Paint.Outline)),
+                Stretch = Stretch.None
+            };
+            ApplyDrawingObjectTransform(arrowPath, shape.Appearance.Transform.RotationDegrees,
+                shape.Appearance.Transform.FlipHorizontal, shape.Appearance.Transform.FlipVertical);
+            Canvas.SetLeft(arrowPath, bounds.Left - clip.Left);
+            Canvas.SetTop(arrowPath, bounds.Top - clip.Top);
+            layer.Children.Add(arrowPath);
+        }
+        if (!string.IsNullOrWhiteSpace(shape.Text))
+        {
+            var text = new TextBlock { Text = shape.Text, FontSize = shape.TextFont.FontSize,
+                FontWeight = shape.TextFont.Bold ? FontWeight.Bold : FontWeight.Normal,
+                FontStyle = shape.TextFont.Italic ? FontStyle.Italic : FontStyle.Normal,
+                Foreground = shape.BlackAndWhite ? Brushes.Black : PreviewBrush(shape.TextFont.Color),
+                TextAlignment = shape.TextHorizontalAlignment switch
+                {
+                    DrawingShapeTextHAlign.Center => TextAlignment.Center,
+                    DrawingShapeTextHAlign.Right => TextAlignment.Right,
+                    _ => TextAlignment.Left
+                },
+                VerticalAlignment = shape.TextVerticalAlignment switch
+                {
+                    DrawingShapeTextVAnchor.Middle => global::Avalonia.Layout.VerticalAlignment.Center,
+                    DrawingShapeTextVAnchor.Bottom => global::Avalonia.Layout.VerticalAlignment.Bottom,
+                    _ => global::Avalonia.Layout.VerticalAlignment.Top
+                },
+                TextWrapping = shape.TextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap };
+            var textFrame = new Border { Width = Math.Max(0, bounds.Width), Height = Math.Max(0, bounds.Height),
+                Padding = new Thickness(shape.TextInsets?.Left ?? 4, shape.TextInsets?.Top ?? 4,
+                    shape.TextInsets?.Right ?? 4, shape.TextInsets?.Bottom ?? 4), ClipToBounds = true, Child = text };
+            ApplyDrawingObjectTransform(textFrame, shape.Appearance.Transform.RotationDegrees, false, false);
+            Canvas.SetLeft(textFrame, bounds.Left - clip.Left);
+            Canvas.SetTop(textFrame, bounds.Top - clip.Top);
+            layer.Children.Add(textFrame);
+        }
+        canvas.Children.Add(layer);
     }
 
     /// <summary>

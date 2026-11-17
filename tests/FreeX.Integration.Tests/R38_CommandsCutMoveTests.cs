@@ -208,11 +208,10 @@ public sealed class R38_CommandsCutMoveTests
         revertedTable.Range.Should().Be(tableRange);
     }
 
-    // Sibling/no-regression: a move that only PARTIALLY overlaps a table must be rejected, exactly
-    // like the existing merged-cell partial-overlap guard -- it must not silently split the table
-    // or corrupt its Range.
+    // A partial table-column move leaves the table in place and gives the vacated header a
+    // generated name; references continue to follow the original table-column position.
     [Fact]
-    public void MoveRange_PartiallyOverlappingStructuredTable_IsRejectedAndTableUnchanged()
+    public void MoveRange_PartialStructuredTableColumn_PreservesTableIdentityAndUndoes()
     {
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
@@ -226,9 +225,23 @@ public sealed class R38_CommandsCutMoveTests
             DisplayName = "Table1",
             Range = tableRange,
             HeaderRowCount = 1,
-            Columns = { new StructuredTableColumnModel(1, "Column1"), new StructuredTableColumnModel(2, "Column2") }
+            Columns = { new StructuredTableColumnModel(1, "Alpha"), new StructuredTableColumnModel(2, "Bravo") }
         };
         sheet.StructuredTables.Add(table);
+        var header = new CellAddress(sheet.Id, 1, 1);
+        var secondHeader = new CellAddress(sheet.Id, 1, 2);
+        var firstData = new CellAddress(sheet.Id, 2, 1);
+        var secondData = new CellAddress(sheet.Id, 3, 1);
+        var formula = new CellAddress(sheet.Id, 5, 1);
+        var remainingFormula = new CellAddress(sheet.Id, 6, 1);
+        sheet.SetCell(header, new TextValue("Alpha"));
+        sheet.SetCell(secondHeader, new TextValue("Bravo"));
+        sheet.SetCell(firstData, new NumberValue(10));
+        sheet.SetCell(secondData, new NumberValue(20));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 2), new NumberValue(100));
+        sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(200));
+        sheet.SetFormula(formula, "SUM(Table1[Alpha])");
+        sheet.SetFormula(remainingFormula, "SUM(Table1[Bravo])");
 
         // Move only the table's first column (A1:A3) -- a partial overlap, not the whole table.
         var partialSource = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 1));
@@ -237,9 +250,35 @@ public sealed class R38_CommandsCutMoveTests
 
         var outcome = command.Apply(context);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be("Cannot move a range that intersects part of a table.");
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
         sheet.StructuredTables.Should().ContainSingle().Which.Range.Should().Be(tableRange);
+        sheet.StructuredTables[0].Columns.Select(column => column.Name).Should().Equal("Column1", "Bravo");
+        sheet.GetValue(header).Should().Be(new TextValue("Column1"));
+        sheet.GetValue(firstData).Should().Be(BlankValue.Instance);
+        sheet.GetValue(secondData).Should().Be(BlankValue.Instance);
+        sheet.GetValue(destination).Should().Be(new TextValue("Alpha"));
+        sheet.GetValue(2, 6).Should().Be(new NumberValue(10));
+        sheet.GetValue(3, 6).Should().Be(new NumberValue(20));
+        sheet.GetCell(formula)!.FormulaText.Should().Be("SUM(Table1[Column1])");
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+        sheet.GetValue(formula).Should().Be(new NumberValue(0));
+        sheet.GetValue(remainingFormula).Should().Be(new NumberValue(300));
+
+        command.Revert(context);
+        sheet.StructuredTables.Should().ContainSingle().Which.Range.Should().Be(tableRange);
+        sheet.StructuredTables[0].Columns.Select(column => column.Name).Should().Equal("Alpha", "Bravo");
+        sheet.GetValue(header).Should().Be(new TextValue("Alpha"));
+        sheet.GetValue(firstData).Should().Be(new NumberValue(10));
+        sheet.GetValue(secondData).Should().Be(new NumberValue(20));
+        sheet.GetValue(destination).Should().Be(BlankValue.Instance);
+        sheet.GetCell(formula)!.FormulaText.Should().Be("SUM(Table1[Alpha])");
+        engine.RecalculateAllFormulas(workbook);
+        sheet.GetValue(formula).Should().Be(new NumberValue(30));
+        command.Apply(context).Success.Should().BeTrue();
+        sheet.GetCell(formula)!.FormulaText.Should().Be("SUM(Table1[Column1])");
+        engine.RecalculateAllFormulas(workbook);
+        sheet.GetValue(formula).Should().Be(new NumberValue(0));
     }
 
     // ── R38-commands-cut-move-2-3: cross-sheet Cut of a merged cell unmerges the source ────────

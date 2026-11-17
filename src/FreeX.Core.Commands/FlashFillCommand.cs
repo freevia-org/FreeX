@@ -34,10 +34,11 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
 
     /// <summary>Snapshot of cells that were written during Apply, used to revert.</summary>
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
 
     public string Label => "Flash Fill";
 
-    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? (int)(_endRow - _startRow + 1)) * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? (int)(_endRow - _startRow + 1)) * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     /// <param name="sheetId">The sheet to operate on.</param>
     /// <param name="fillColIndex">Column the user typed examples into (1-based).</param>
@@ -67,6 +68,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
         var sheet = ctx.GetSheet(_sheetId);
         var rowsToFill = detection.RowsToFill!;
         var filled = detection.FilledValues!;
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, rowsToFill.Select(row => new CellAddress(_sheetId, row, _fillColIndex)));
 
         // Write filled values, capturing snapshot for undo
         _snapshot = [];
@@ -94,6 +96,9 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
         if (affected.Count == 0)
             return new CommandOutcome(true, IsNoOp: true);
 
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        affected.AddRange(_headerRename.Affected);
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -196,6 +201,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
     {
         if (_snapshot is null) return;
 
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var (addr, oldCell) in _snapshot)
         {

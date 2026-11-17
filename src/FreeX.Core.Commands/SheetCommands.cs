@@ -169,6 +169,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // reference as the O25/P113 cell-hyperlink fields above (verbatim, per DrawingObjectHyperlink's
     // own doc comment) but was never rewritten on rename -- see DrawingObjectHyperlinkRewriter.
     private List<(DrawingShapeModel Shape, DrawingObjectHyperlink? OldValue)>? _drawingShapeHyperlinkRenameSnapshot;
+    private List<(DrawingShapeModel Shape, DrawingShapeTextDocument Document)>? _shapeTextHyperlinkRenameSnapshot;
     private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkRenameSnapshot;
     private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkRenameSnapshot;
     private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkRenameSnapshot;
@@ -455,6 +456,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // renamed sheet too (e.g. "Sheet2!A1"), and DuplicateSheetDrawingCloner already proves the
         // codebase treats this as the same class of reference for the Duplicate Sheet path.
         _drawingShapeHyperlinkRenameSnapshot = [];
+        _shapeTextHyperlinkRenameSnapshot = [];
         _textBoxHyperlinkRenameSnapshot = [];
         _pictureHyperlinkRenameSnapshot = [];
         _chartHyperlinkRenameSnapshot = [];
@@ -462,6 +464,15 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         {
             foreach (var shape in s.DrawingShapes)
             {
+                if (shape.ShapeTextDocument is { } document)
+                {
+                    var updatedDocument = document.RewriteHyperlinks(link => DrawingObjectHyperlinkRewriter.Rewrite(link, renameOp, s.Name)!);
+                    if (!ReferenceEquals(document, updatedDocument))
+                    {
+                        _shapeTextHyperlinkRenameSnapshot.Add((shape, document));
+                        shape.ShapeTextDocument = updatedDocument;
+                    }
+                }
                 // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: named distinctively
                 // (not a bare "rewritten") so the R101 patch-safety guard's RHS allowlist regex
                 // can target this exact call shape narrowly -- see
@@ -708,6 +719,9 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_drawingShapeHyperlinkRenameSnapshot is not null)
                 foreach (var (shape, savedDrawingObjectHyperlink) in _drawingShapeHyperlinkRenameSnapshot)
                     shape.Hyperlink = savedDrawingObjectHyperlink;
+            if (_shapeTextHyperlinkRenameSnapshot is not null)
+                foreach (var (shape, document) in _shapeTextHyperlinkRenameSnapshot)
+                    shape.ShapeTextDocument = document;
 
             if (_textBoxHyperlinkRenameSnapshot is not null)
                 foreach (var (textBox, savedDrawingObjectHyperlink) in _textBoxHyperlinkRenameSnapshot)
@@ -841,6 +855,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // same kind of 'Place in This Document' sheet-qualified reference as the R95 cell-hyperlink
     // fields above but was never rewritten to #REF! on delete -- see DrawingObjectHyperlinkRewriter.
     private List<(DrawingShapeModel Shape, DrawingObjectHyperlink? OldValue)>? _drawingShapeHyperlinkDeleteSnapshot;
+    private List<(DrawingShapeModel Shape, DrawingShapeTextDocument Document)>? _shapeTextHyperlinkDeleteSnapshot;
     private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkDeleteSnapshot;
     private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkDeleteSnapshot;
     private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkDeleteSnapshot;
@@ -1278,6 +1293,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // equivalent pass, using deleteOp so FormulaRewriter converts the sheet-qualified ref to
         // #REF! instead of a new name.
         _drawingShapeHyperlinkDeleteSnapshot = [];
+        _shapeTextHyperlinkDeleteSnapshot = [];
         _textBoxHyperlinkDeleteSnapshot = [];
         _pictureHyperlinkDeleteSnapshot = [];
         _chartHyperlinkDeleteSnapshot = [];
@@ -1285,6 +1301,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         {
             foreach (var shape in s.DrawingShapes)
             {
+                if (shape.ShapeTextDocument is { } document)
+                {
+                    var updatedDocument = document.RewriteHyperlinks(link => DrawingObjectHyperlinkRewriter.Rewrite(link, deleteOp, s.Name)!);
+                    if (!ReferenceEquals(document, updatedDocument))
+                    {
+                        _shapeTextHyperlinkDeleteSnapshot.Add((shape, document));
+                        shape.ShapeTextDocument = updatedDocument;
+                    }
+                }
                 // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: see the matching
                 // comment on RenameSheetCommand's equivalent pass above.
                 var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(shape.Hyperlink, deleteOp, s.Name);
@@ -1504,6 +1529,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_drawingShapeHyperlinkDeleteSnapshot is not null)
                 foreach (var (shape, savedDrawingObjectHyperlink) in _drawingShapeHyperlinkDeleteSnapshot)
                     shape.Hyperlink = savedDrawingObjectHyperlink;
+            if (_shapeTextHyperlinkDeleteSnapshot is not null)
+                foreach (var (shape, document) in _shapeTextHyperlinkDeleteSnapshot)
+                    shape.ShapeTextDocument = document;
 
             if (_textBoxHyperlinkDeleteSnapshot is not null)
                 foreach (var (textBox, savedDrawingObjectHyperlink) in _textBoxHyperlinkDeleteSnapshot)

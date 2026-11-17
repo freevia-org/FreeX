@@ -25,6 +25,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
     private readonly GridRange _range;
     private readonly FillCellsDirection _direction;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
     private List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>? _phoneticGuideSnapshot;
@@ -43,7 +44,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
     };
 
     /// <inheritdoc/>
-    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public FillCellsCommand(SheetId sheetId, GridRange range, FillCellsDirection direction)
     {
@@ -89,6 +90,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         // no gaps/partial overlaps (e.g. a "Q1" header merged across A1:B1 stacked over a
         // second, identically-sized A2:B2 merge): that retiles the merged anchor content
         // instead of refusing outright.
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, targets);
         var overlappingMerges = sheet.MergedRegions.Where(region => _range.Overlaps(region)).ToList();
         if (overlappingMerges.Count > 0)
         {
@@ -96,7 +98,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
             if (tileSpan is null)
                 return new CommandOutcome(false, "Cannot fill a range that intersects merged cells.");
 
-            return ApplyMergeTiledFill(ctx, sheet, overlappingMerges, tileSpan.Value);
+            return FinishHeaderRename(ctx, ApplyMergeTiledFill(ctx, sheet, overlappingMerges, tileSpan.Value));
         }
 
         _snapshot = [];
@@ -170,10 +172,18 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         // list. R237_NoOpDecisionUsesEverySnapshotContractTests holds that invariant: add a
         // sixth snapshot field without extending NothingChanged and the build stays green but
         // the contract fails.
-        if (NothingChanged(sheet))
-            return new CommandOutcome(true, IsNoOp: true);
+        var outcome = NothingChanged(sheet)
+            ? new CommandOutcome(true, IsNoOp: true)
+            : new CommandOutcome(true, AffectedCells: targets);
+        return FinishHeaderRename(ctx, outcome);
+    }
 
-        return new CommandOutcome(true, AffectedCells: targets);
+    private CommandOutcome FinishHeaderRename(ICommandContext ctx, CommandOutcome outcome)
+    {
+        if (!outcome.Success || outcome.IsNoOp) return outcome;
+        try { _headerRename?.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        return outcome with { AffectedCells = (outcome.AffectedCells ?? []).Concat(_headerRename?.Affected ?? []).Distinct().ToArray() };
     }
 
     public void Revert(ICommandContext ctx)
@@ -181,6 +191,7 @@ public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
         {

@@ -20,10 +20,16 @@ internal static class NativeJsonVisualDtoMapper
         Width = PositiveFiniteOrDefault(picture.Width, 240),
         Height = PositiveFiniteOrDefault(picture.Height, 140),
         LockAspectRatio = picture.LockAspectRatio,
+        DrawingNoMove = picture.DrawingNoMove,
+        DrawingNoResize = picture.DrawingNoResize,
+        DrawingLockAttributes = picture.DrawingLockAttributes,
+        DrawingLockChildrenXml = picture.DrawingLockChildrenXml,
         RotationDegrees = NormalizeRotation(picture.RotationDegrees),
         FlipHorizontal = picture.FlipHorizontal,
         FlipVertical = picture.FlipVertical,
         IsVisible = picture.IsVisible,
+        Locked = picture.Locked,
+        PrintObject = picture.PrintObject,
         CropLeft = SanitizeCropEdge(picture.CropLeft),
         CropTop = SanitizeCropEdge(picture.CropTop),
         CropRight = SanitizeCropEdge(picture.CropRight),
@@ -80,10 +86,16 @@ internal static class NativeJsonVisualDtoMapper
                 Width = PositiveFiniteOrDefault(pictureDto.Width, 240),
                 Height = PositiveFiniteOrDefault(pictureDto.Height, 140),
                 LockAspectRatio = pictureDto.LockAspectRatio,
+                DrawingNoMove = pictureDto.DrawingNoMove,
+                DrawingNoResize = pictureDto.DrawingNoResize,
+                DrawingLockAttributes = pictureDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = pictureDto.DrawingLockChildrenXml,
                 RotationDegrees = NormalizeRotation(pictureDto.RotationDegrees),
                 FlipHorizontal = pictureDto.FlipHorizontal,
                 FlipVertical = pictureDto.FlipVertical,
                 IsVisible = pictureDto.IsVisible,
+                Locked = pictureDto.Locked,
+        PrintObject = pictureDto.PrintObject,
                 CropLeft = SanitizeCropEdge(pictureDto.CropLeft),
                 CropTop = SanitizeCropEdge(pictureDto.CropTop),
                 CropRight = SanitizeCropEdge(pictureDto.CropRight),
@@ -129,6 +141,12 @@ internal static class NativeJsonVisualDtoMapper
         FlipHorizontal = textBox.FlipHorizontal,
         FlipVertical = textBox.FlipVertical,
         IsVisible = textBox.IsVisible,
+        Locked = textBox.Locked,
+        PrintObject = textBox.PrintObject,
+        DrawingNoMove = textBox.DrawingNoMove,
+        DrawingNoResize = textBox.DrawingNoResize,
+        DrawingLockAttributes = textBox.DrawingLockAttributes,
+        DrawingLockChildrenXml = textBox.DrawingLockChildrenXml,
         HasFill = textBox.HasFill,
         FillColor = textBox.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = textBox.OutlineColor is { } outline ? FormatColor(outline) : null,
@@ -175,6 +193,12 @@ internal static class NativeJsonVisualDtoMapper
                 FlipHorizontal = textBoxDto.FlipHorizontal,
                 FlipVertical = textBoxDto.FlipVertical,
                 IsVisible = textBoxDto.IsVisible,
+                Locked = textBoxDto.Locked,
+        PrintObject = textBoxDto.PrintObject,
+                DrawingNoMove = textBoxDto.DrawingNoMove,
+                DrawingNoResize = textBoxDto.DrawingNoResize,
+                DrawingLockAttributes = textBoxDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = textBoxDto.DrawingLockChildrenXml,
                 HasFill = textBoxDto.HasFill,
                 FillColor = textBoxDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = textBoxDto.OutlineColor is { } outline ? ParseColor(outline) : null,
@@ -207,12 +231,19 @@ internal static class NativeJsonVisualDtoMapper
         Name = shape.Name,
         Anchor = shape.Anchor.ToA1(),
         Kind = ValidEnumOrDefault(shape.Kind, DrawingShapeKind.Rectangle),
+        SourceConnectorKind = shape.SourceConnectorKind,
         Width = PositiveFiniteOrDefault(shape.Width, 120),
         Height = PositiveFiniteOrDefault(shape.Height, 70),
         RotationDegrees = NormalizeRotation(shape.RotationDegrees),
         FlipHorizontal = shape.FlipHorizontal,
         FlipVertical = shape.FlipVertical,
         IsVisible = shape.IsVisible,
+        Locked = shape.Locked,
+        PrintObject = shape.PrintObject,
+        DrawingNoMove = shape.DrawingNoMove,
+        DrawingNoResize = shape.DrawingNoResize,
+        DrawingLockAttributes = shape.DrawingLockAttributes,
+        DrawingLockChildrenXml = shape.DrawingLockChildrenXml,
         HasFill = shape.HasFill,
         FillColor = shape.FillColor is { } fill ? FormatColor(fill) : null,
         OutlineColor = shape.OutlineColor is { } outline ? FormatColor(outline) : null,
@@ -236,6 +267,9 @@ internal static class NativeJsonVisualDtoMapper
             ? new ArrowheadDto { Type = ta.Type, Width = ta.Width, Length = ta.Length }
             : null,
         ShapeText = shape.ShapeText,
+        ShapeTextDocumentXml = shape.ShapeTextDocument is { } document ? XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: true).ToString(System.Xml.Linq.SaveOptions.DisableFormatting) : null,
+        ShapeTextDocumentRelationships = shape.ShapeTextDocument is { } richText ? XlsxShapeTextDocumentCodec.SourceRelationships(richText) : null,
+        ShapeTextInsets = shape.ShapeTextInsets,
         ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
         ShapeTextBold = shape.ShapeTextBold,
         ShapeTextItalic = shape.ShapeTextItalic,
@@ -277,6 +311,7 @@ internal static class NativeJsonVisualDtoMapper
                 Id = ExistingOrNewId(shapeDto.Id),
                 Anchor = CellAddress.Parse(shapeDto.Anchor, sheetId),
                 Name = shapeDto.Name,
+                SourceConnectorKind = shapeDto.SourceConnectorKind,
                 Kind = ValidEnumOrDefault(shapeDto.Kind, DrawingShapeKind.Rectangle),
                 Width = PositiveFiniteOrDefault(shapeDto.Width, 120),
                 Height = PositiveFiniteOrDefault(shapeDto.Height, 70),
@@ -284,6 +319,12 @@ internal static class NativeJsonVisualDtoMapper
                 FlipHorizontal = shapeDto.FlipHorizontal,
                 FlipVertical = shapeDto.FlipVertical,
                 IsVisible = shapeDto.IsVisible,
+                Locked = shapeDto.Locked,
+        PrintObject = shapeDto.PrintObject,
+                DrawingNoMove = shapeDto.DrawingNoMove,
+                DrawingNoResize = shapeDto.DrawingNoResize,
+                DrawingLockAttributes = shapeDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = shapeDto.DrawingLockChildrenXml,
                 HasFill = shapeDto.HasFill,
                 FillColor = shapeDto.FillColor is { } fill ? ParseColor(fill) : null,
                 OutlineColor = shapeDto.OutlineColor is { } outline ? ParseColor(outline) : null,
@@ -307,6 +348,8 @@ internal static class NativeJsonVisualDtoMapper
                     ? new DrawingArrowhead(ta.Type, ta.Width, ta.Length)
                     : null,
                 ShapeText = shapeDto.ShapeText,
+                ShapeTextDocument = shapeDto.ShapeTextDocumentXml is { } textXml ? XlsxShapeTextDocumentCodec.Read(System.Xml.Linq.XElement.Parse(textXml), shapeDto.ShapeTextDocumentRelationships?.ToDictionary(pair => pair.Key, pair => (pair.Value.Target, pair.Value.TargetMode))) : null,
+                ShapeTextInsets = shapeDto.ShapeTextInsets,
                 ShapeTextFontSizePoints = shapeDto.ShapeTextFontSizePoints,
                 ShapeTextBold = shapeDto.ShapeTextBold,
                 ShapeTextItalic = shapeDto.ShapeTextItalic,
@@ -396,10 +439,16 @@ internal class PictureDto
     public double Width { get; set; } = 240;
     public double Height { get; set; } = 140;
     public bool LockAspectRatio { get; set; } = true;
+    public bool? DrawingNoMove { get; set; }
+    public bool? DrawingNoResize { get; set; }
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+    public string? DrawingLockChildrenXml { get; set; }
     public double RotationDegrees { get; set; }
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool Locked { get; set; } = true;
+    public bool PrintObject { get; set; } = true;
     public double CropLeft { get; set; }
     public double CropTop { get; set; }
     public double CropRight { get; set; }
@@ -437,6 +486,12 @@ internal class TextBoxDto
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool Locked { get; set; } = true;
+    public bool PrintObject { get; set; } = true;
+    public bool? DrawingNoMove { get; set; }
+    public bool? DrawingNoResize { get; set; }
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+    public string? DrawingLockChildrenXml { get; set; }
     public bool HasFill { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
@@ -472,6 +527,12 @@ internal class DrawingShapeDto
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+    public bool Locked { get; set; } = true;
+    public bool PrintObject { get; set; } = true;
+    public bool? DrawingNoMove { get; set; }
+    public bool? DrawingNoResize { get; set; }
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+    public string? DrawingLockChildrenXml { get; set; }
     public bool HasFill { get; set; } = true;
     public string? FillColor { get; set; }
     public string? OutlineColor { get; set; }
@@ -491,6 +552,10 @@ internal class DrawingShapeDto
     public ArrowheadDto? TailArrowhead { get; set; }
     // ── Shape text ────────────────────────────────────────────────────────
     public string? ShapeText { get; set; }
+    public string? ShapeTextDocumentXml { get; set; }
+    public bool? SourceConnectorKind { get; set; }
+    public Dictionary<string, DrawingObjectHyperlink>? ShapeTextDocumentRelationships { get; set; }
+    public DrawingShapeTextInsets? ShapeTextInsets { get; set; }
     public double ShapeTextFontSizePoints { get; set; }
     public bool ShapeTextBold { get; set; }
     public bool ShapeTextItalic { get; set; }

@@ -1,5 +1,8 @@
 namespace FreeX.Core.Model;
 
+/// <summary>Authored shape text insets in EMUs; null sides inherit the file-format default.</summary>
+public sealed record DrawingShapeTextInsets(long? Left, long? Right, long? Top, long? Bottom);
+
 public enum DrawingShapeEffectPreset
 {
     None = 0,
@@ -124,7 +127,17 @@ public sealed class DrawingShapeModel
     /// </summary>
     public double AnchorOffsetY { get; set; }
 
-    public DrawingShapeKind Kind { get; set; } = DrawingShapeKind.Rectangle;
+    private DrawingShapeKind _kind = DrawingShapeKind.Rectangle;
+    public DrawingShapeKind Kind
+    {
+        get => _kind;
+        set
+        {
+            if (_shapeTextDocument is not null && (SourceConnectorKind ?? Free.Shared.Drawing.DrawingShapeKindSupport.IsLineLike(value)))
+                throw new InvalidOperationException("Connector shapes cannot contain structured text.");
+            _kind = value;
+        }
+    }
     public double Width { get; set; } = 120;
     public double Height { get; set; } = 70;
     public double RotationDegrees { get; set; }
@@ -135,20 +148,32 @@ public sealed class DrawingShapeModel
 
     /// <summary>
     /// Whether this shape is locked against move/resize while its sheet is protected with
-    /// the "Edit objects" permission blocked, matching OOXML <c>&lt;a:spLocks noMove="1" noResize="1".../&gt;</c>
-    /// (the fLocksWithSheet-style per-object lock under the shape's spPr, or the analogous
-    /// picLocks/graphicFrameLocks for pictures/charts). Defaults to <see langword="true"/>, matching
+    /// the "Edit objects" permission blocked, matching the anchor's OOXML
+    /// <c>&lt;xdr:clientData fLocksWithSheet="..."/&gt;</c>. Defaults to <see langword="true"/>, matching
     /// Excel's default of a locked shape. When an author explicitly unlocks a shape (unchecks
     /// Format Shape &gt; Properties &gt; Locked) that one shape stays movable/resizable even while
     /// the sheet protection has "Edit objects" turned off, while other (default-locked) shapes on
     /// the same protected sheet remain immovable.
     /// </summary>
-    /// <remarks>
-    /// Reading/writing the OOXML per-shape lock attribute (<c>a:spLocks</c>) on load/save is
-    /// deferred follow-up work — this field is currently in-memory/session-only and defaults to
-    /// locked, matching Excel's authored default when no lock override is present.
-    /// </remarks>
     public bool Locked { get; set; } = true;
+    /// <summary>Whether this visible drawing is included when printing.</summary>
+    public bool PrintObject { get; set; } = true;
+    internal bool? SourceXlsxPrintObject { get; set; }
+    /// <summary>Independent DrawingML movement restriction, when explicitly authored.</summary>
+    public bool? DrawingNoMove { get; set; }
+    /// <summary>Independent DrawingML resize restriction, when explicitly authored.</summary>
+    public bool? DrawingNoResize { get; set; }
+    /// <summary>Other explicitly authored DrawingML lock attributes.</summary>
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+
+    /// <summary>Preserved XML children of the DrawingML lock element, wrapped in a root element.</summary>
+    public string? DrawingLockChildrenXml { get; set; }
+    internal string? SourceXlsxLockChildrenXml { get; set; }
+    internal string? SourceXlsxName { get; set; }
+    internal bool? SourceXlsxLocked { get; set; }
+    internal bool? SourceXlsxNoMove { get; set; }
+    internal bool? SourceXlsxNoResize { get; set; }
+    internal IReadOnlyDictionary<string, string>? SourceXlsxLockAttributes { get; set; }
     public string? Title { get; set; }
     public string? AltText { get; set; }
 
@@ -357,7 +382,43 @@ public sealed class DrawingShapeModel
     /// Concatenated plain text from all runs in the shape's <c>&lt;xdr:txBody&gt;</c>, or
     /// <see langword="null"/> / empty when the shape carries no text.
     /// </summary>
-    public string? ShapeText { get; set; }
+    private string? _shapeText;
+    private DrawingShapeTextDocument? _shapeTextDocument;
+    internal DrawingShapeTextDocument? OriginalSourceShapeTextDocument { get; set; }
+    internal bool? SourceConnectorKind { get; set; }
+    internal bool IsDrawingConnector => SourceConnectorKind ?? Free.Shared.Drawing.DrawingShapeKindSupport.IsLineLike(Kind);
+
+    public string? ShapeText
+    {
+        get => _shapeText;
+        set
+        {
+            if (string.Equals(_shapeText, value, StringComparison.Ordinal)) return;
+            _shapeText = value;
+            _shapeTextDocument = null;
+        }
+    }
+
+    /// <summary>Structured text, or null when the shape uses the legacy plain-text representation.</summary>
+    public DrawingShapeTextDocument? ShapeTextDocument
+    {
+        get => _shapeTextDocument;
+        set
+        {
+            if (value is not null && IsDrawingConnector)
+                throw new InvalidOperationException("Connector shapes cannot contain structured text.");
+            _shapeTextDocument = value;
+            if (value is not null) _shapeText = value.PlainText;
+        }
+    }
+
+    /// <summary>Authored text margins; null preserves absence for each side.</summary>
+    private DrawingShapeTextInsets? _shapeTextInsets;
+    public DrawingShapeTextInsets? ShapeTextInsets
+    {
+        get => _shapeTextInsets;
+        set => _shapeTextInsets = value is { Left: null, Right: null, Top: null, Bottom: null } ? null : value;
+    }
 
     /// <summary>
     /// Font size for the first run's <c>&lt;a:rPr sz&gt;</c>, in points (OOXML stores

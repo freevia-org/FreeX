@@ -225,6 +225,25 @@ public sealed record PageContentLayout(
     IReadOnlyList<PageDisplayedCommentBlock> Comments,
     IReadOnlyList<PageHeaderFooterPictureBlock>? HeaderFooterPictures = null)
 {
+    /// <summary>Printable worksheet shapes resolved for this page.</summary>
+    public IReadOnlyList<PageShapeBlock> Shapes { get; init; } = [];
+    /// <summary>Back-to-front worksheet object order for the drawing layer.</summary>
+    public IReadOnlyList<DrawingObjectZOrderEntry> DrawingOrder { get; init; } = [];
+
+    /// <summary>Returns the visible page objects in worksheet order, adding unspecified objects deterministically.</summary>
+    public IReadOnlyList<DrawingObjectZOrderEntry> GetDrawingOrder()
+    {
+        var present = Charts.Select(item => new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Chart, item.Id))
+            .Concat(Shapes.Select(item => new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, item.Id)))
+            .Concat(Pictures.Select(item => new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, item.Id)))
+            .Concat(TextBoxes.Select(item => new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, item.Id))).ToArray();
+        var remaining = present.ToHashSet();
+        var result = new List<DrawingObjectZOrderEntry>(present.Length);
+        foreach (var entry in DrawingOrder.Concat(present))
+            if (remaining.Remove(entry)) result.Add(entry);
+        return result;
+    }
+
     /// <summary>
     /// R168-presentation-preview-headerfooter-picture-1: the header/footer <c>&amp;G</c> pictures on
     /// this page, painted with the header/footer bands (never empty-vs-null for a consumer to

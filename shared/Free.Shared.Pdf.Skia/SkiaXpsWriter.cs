@@ -158,26 +158,28 @@ public static class SkiaXpsWriter
         private static bool CanRenderShape(PdfDrawOp op) => op switch
         {
             // Skia draws a device-pixel hairline for a zero-width stroke.
-            PdfStrokeRect stroke => stroke.LineWidth > 0,
-            PdfStrokeEllipse stroke => stroke.LineWidth > 0,
+            PdfStrokeRect stroke => stroke.LineWidth > 0 && PortableXpsWriter.CanRenderDash(stroke.Dash, stroke.LineWidth),
+            PdfStrokeEllipse stroke => stroke.LineWidth > 0 && PortableXpsWriter.CanRenderDash(stroke.Dash, stroke.LineWidth),
             PdfLine line => line.LineWidth > 0,
             PdfFillRectLinearGradient fill => PortableXpsWriter.CanRenderLinearGradient(fill.Gradient),
             PdfFillEllipseLinearGradient fill => PortableXpsWriter.CanRenderLinearGradient(fill.Gradient),
             PdfStrokeRectLinearGradient stroke =>
-                stroke.LineWidth > 0 && PortableXpsWriter.CanRenderLinearGradient(stroke.Gradient),
+                stroke.LineWidth > 0 && PortableXpsWriter.CanRenderDash(stroke.Dash, stroke.LineWidth) && PortableXpsWriter.CanRenderLinearGradient(stroke.Gradient),
             PdfStrokeEllipseLinearGradient stroke =>
-                stroke.LineWidth > 0 && PortableXpsWriter.CanRenderLinearGradient(stroke.Gradient),
+                stroke.LineWidth > 0 && PortableXpsWriter.CanRenderDash(stroke.Dash, stroke.LineWidth) && PortableXpsWriter.CanRenderLinearGradient(stroke.Gradient),
             PdfLineLinearGradient line =>
                 line.LineWidth > 0 && PortableXpsWriter.CanRenderLinearGradient(line.Gradient),
             PdfPathLinearGradient path =>
-                (path.FillFallbackColor is null || path.FillGradient is null ||
+                (path.StrokeGradient is null && path.StrokeFallbackColor is null || PortableXpsWriter.CanRenderDash(path.StrokeDash, Math.Max(0.1, path.StrokeWidth))) &&
+                (path.FillGradient is null ||
                     PortableXpsWriter.CanRenderLinearGradient(path.FillGradient)) &&
-                (path.StrokeFallbackColor is null || path.StrokeGradient is null ||
+                (path.StrokeGradient is null ||
                     PortableXpsWriter.CanRenderLinearGradient(path.StrokeGradient)),
             PdfFillRectPattern fill => PortableXpsPatternBrush.CanRender(fill.Pattern),
             PdfFillEllipsePattern fill => PortableXpsPatternBrush.CanRender(fill.Pattern),
-            PdfPathPattern path => PortableXpsPatternBrush.CanRender(path.Pattern),
-            PdfFillRect or PdfFillEllipse or PdfFilledTriangle or PdfPath => true,
+            PdfPathPattern path => (path.StrokeColor is null || PortableXpsWriter.CanRenderDash(path.StrokeDash, Math.Max(0.1, path.StrokeWidth))) && PortableXpsPatternBrush.CanRender(path.Pattern),
+            PdfPath path => path.StrokeColor is null || PortableXpsWriter.CanRenderDash(path.StrokeDash, Math.Max(0.1, path.StrokeWidth)),
+            PdfFillRect or PdfFillEllipse or PdfFilledTriangle => true,
             _ => false,
         };
 

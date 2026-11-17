@@ -894,7 +894,7 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(chart.Height))),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0"), chart.PrintObject ? null : new XAttribute("fPrintsWithSheet", "0")));
 
     private static XElement ToOneCellChartAnchor(
         ChartModel chart,
@@ -917,7 +917,7 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(chart.Height))),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0"), chart.PrintObject ? null : new XAttribute("fPrintsWithSheet", "0")));
     }
 
     private static XElement ToTwoCellChartAnchor(
@@ -940,7 +940,7 @@ internal static class XlsxWorksheetChartWriter
             ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
             ToAnchorMarkerXml("to", to, spreadsheetDrawingNs),
             ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            new XElement(spreadsheetDrawingNs + "clientData", chart.Locked ? null : new XAttribute("fLocksWithSheet", "0"), chart.PrintObject ? null : new XAttribute("fPrintsWithSheet", "0")));
     }
 
     private static XElement ToChartFrameOrAlternateContent(
@@ -1012,7 +1012,12 @@ internal static class XlsxWorksheetChartWriter
                             drawingNs + "hlinkClick",
                             new XAttribute(relNs + "id", resolvedRel.RelId),
                             string.IsNullOrWhiteSpace(resolvedRel.Tooltip) ? null : new XAttribute("tooltip", resolvedRel.Tooltip))),
-                new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
+                new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr",
+                    chart.DrawingLockAttributes is { Count: > 0 } || chart.DrawingLockChildrenXml is not null
+                        ? new XElement(drawingNs + "graphicFrameLocks",
+                            (chart.DrawingLockAttributes ?? new Dictionary<string, string>()).Select(pair => new XAttribute(XName.Get(pair.Key), pair.Value)),
+                            chart.DrawingLockChildrenXml is null ? null : XElement.Parse(chart.DrawingLockChildrenXml).Elements().Select(child => new XElement(child)))
+                        : null)),
             new XElement(spreadsheetDrawingNs + "xfrm",
                 isChartEx
                     ? new object[]

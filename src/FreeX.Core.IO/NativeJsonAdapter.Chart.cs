@@ -14,6 +14,10 @@ public sealed partial class NativeJsonAdapter
             var chart = new ChartModel
             {
                 Name = chartDto.Name,
+                Locked = chartDto.Locked,
+        PrintObject = chartDto.PrintObject,
+        DrawingLockAttributes = chartDto.DrawingLockAttributes,
+        DrawingLockChildrenXml = chartDto.DrawingLockChildrenXml,
                 AltTextTitle = chartDto.AltTextTitle,
                 AltTextDescription = chartDto.AltTextDescription,
                 Type = chartDto.Type,

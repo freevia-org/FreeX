@@ -23,6 +23,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
     // vacated source, paste re-merges at the destination" move semantics.
     private readonly bool _isCutSource;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
@@ -32,7 +33,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
     public string Label => "Clear Contents";
 
     /// <inheritdoc/>
-    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public ClearContentsCommand(SheetId sheetId, GridRange range, bool isCutSource = false)
     {
@@ -80,6 +81,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
         if (CommandGuards.RejectIfSplitsArray(sheet, effectiveRange.AllCells(), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
+        _headerRename = TableHeaderRenameTransaction.CaptureRange(ctx, sheet, effectiveRange);
+        if (_isCutSource && _headerRename.HasCandidates)
+            return new CommandOutcome(false, "This cut operation cannot safely move table headers with the selected paste options.");
         _snapshot = [];
         _hyperlinkSnapshot = sheet.Hyperlinks
             .Where(pair => _range.Contains(pair.Key))
@@ -172,6 +176,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
             affected.Add(address);
         }
 
+        try { _headerRename?.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        if (_headerRename is not null) affected.AddRange(_headerRename.Affected);
         return new CommandOutcome(true, AffectedCells: affected);
     }
 
@@ -180,6 +187,7 @@ public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_sheetId);
         if (_mergedRegionsSnapshot is not null)
             sheet.ReplaceMergedRegions(_mergedRegionsSnapshot);
