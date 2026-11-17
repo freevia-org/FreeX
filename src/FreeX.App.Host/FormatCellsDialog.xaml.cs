@@ -14,6 +14,7 @@ public partial class FormatCellsDialog : Window
     private const double CompactDialogHeight = 510;
     private const double BorderDialogWidth = 620;
     private const double BorderDialogHeight = 540;
+    private static FormatCellsDialogTab _lastSelectedTab = FormatCellsDialogTab.Number;
 
     public StyleDiff? ResultDiff { get; private set; }
     public FormatCellsDialogBorderSelection ResultBorderSelection { get; private set; } = FormatCellsDialogBorderSelection.None;
@@ -24,6 +25,7 @@ public partial class FormatCellsDialog : Window
     private readonly bool _initialMergeCells;
     private readonly string? _numberPreviewText;
     private bool _syncingNumberControls;
+    private bool _syncingRotationControls;
     private bool _borderPresetClearRequested;
     private CellBorder? _borderPresetOutline;
     private CellBorder? _borderPresetInside;
@@ -46,12 +48,13 @@ public partial class FormatCellsDialog : Window
         _current = current.Clone();
         _theme = theme;
         _initialMergeCells = mergeCells;
-        _numberPreviewText = string.IsNullOrWhiteSpace(numberPreviewText) ? null : numberPreviewText;
+        _numberPreviewText = numberPreviewText;
+        var effectiveInitialTab = initialTab == FormatCellsDialogTab.Number ? _lastSelectedTab : initialTab;
         InitializeComponent();
         Loaded += (_, _) =>
         {
             Populate(_current);
-            Tabs.SelectedIndex = (int)initialTab;
+            Tabs.SelectedIndex = (int)effectiveInitialTab;
             UpdateDialogSizeForSelectedTab();
             FocusInitialKeyboardTarget();
         };
@@ -62,6 +65,8 @@ public partial class FormatCellsDialog : Window
         if (!ReferenceEquals(e.OriginalSource, Tabs))
             return;
 
+        if (Tabs.SelectedIndex >= 0 && Tabs.SelectedIndex < Enum.GetValues<FormatCellsDialogTab>().Length)
+            _lastSelectedTab = (FormatCellsDialogTab)Tabs.SelectedIndex;
         UpdateDialogSizeForSelectedTab();
     }
 
@@ -165,6 +170,9 @@ public partial class FormatCellsDialog : Window
         DlgMergeCellsCheck.IsChecked = _initialMergeCells;
         DlgIndentLevelBox.Text = s.IndentLevel.ToString();
         DlgTextRotationBox.Text = s.TextRotation.ToString();
+        DlgTextRotationSlider.Value = s.TextRotation == 255 ? 0 : s.TextRotation;
+        DlgReadingOrderBox.ItemsSource = Enum.GetNames(typeof(CellReadingOrder));
+        DlgReadingOrderBox.SelectedItem = s.ReadingOrder.ToString();
 
         PopulateBorder(DlgBorderTopStyleBox, DlgBorderTopColorBox, s.BorderTop, _theme);
         PopulateBorder(DlgBorderRightStyleBox, DlgBorderRightColorBox, s.BorderRight, _theme);
@@ -213,6 +221,28 @@ public partial class FormatCellsDialog : Window
             return;
 
         UpdateNumberPreview();
+    }
+
+    private void DlgTextRotationSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_syncingRotationControls || DlgTextRotationBox is null)
+            return;
+
+        _syncingRotationControls = true;
+        DlgTextRotationBox.Text = ((int)Math.Round(e.NewValue)).ToString();
+        _syncingRotationControls = false;
+    }
+
+    private void DlgTextRotationBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_syncingRotationControls || DlgTextRotationSlider is null
+            || !int.TryParse(DlgTextRotationBox.Text, out var rotation)
+            || rotation is < -90 or > 90)
+            return;
+
+        _syncingRotationControls = true;
+        DlgTextRotationSlider.Value = rotation;
+        _syncingRotationControls = false;
     }
 
     private void FontStyleList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -316,7 +346,8 @@ public partial class FormatCellsDialog : Window
                 DlgIndentLevelBox.Text,
                 DlgTextRotationBox.Text,
                 _initialMergeCells,
-                DlgMergeCellsCheck.IsChecked),
+                DlgMergeCellsCheck.IsChecked,
+                DlgReadingOrderBox.SelectedItem as string),
             Border: new FormatCellsDialogBorderInput(
                 DlgBorderLineColorBox.Text,
                 new FormatCellsDialogBorderSideInput(SelectedBorderStyle(DlgBorderTopStyleBox.SelectedItem).ToString(), DlgBorderTopColorBox.Text),

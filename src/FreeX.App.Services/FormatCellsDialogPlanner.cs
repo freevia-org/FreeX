@@ -85,7 +85,8 @@ public sealed record FormatCellsDialogAlignmentInput(
     string? IndentLevelText,
     string? TextRotationText,
     bool InitialMergeCells,
-    bool? MergeCells);
+    bool? MergeCells,
+    string? ReadingOrderText = null);
 
 public sealed record FormatCellsDialogBorderSideInput(string? StyleText, string? ColorText);
 
@@ -341,6 +342,9 @@ public static class FormatCellsDialogPlanner
         var textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(input.Alignment.TextRotationText ?? string.Empty);
         if (textRotation is null)
             return Fail(TextRotationValidation(), out validation);
+        if (!Enum.TryParse<CellReadingOrder>(input.Alignment.ReadingOrderText, out var readingOrder)
+            || !Enum.IsDefined(readingOrder))
+            readingOrder = current.ReadingOrder;
 
         if (!TryValidateBorder(input.Border, out validation))
             return false;
@@ -385,6 +389,7 @@ public static class FormatCellsDialogPlanner
                     IsDoubleUnderlineSelected(input.Font.UnderlineLabel, input.Font.Labels),
                 IndentLevel: indentLevel,
                 TextRotation: textRotation,
+                ReadingOrder: Changed(current.ReadingOrder, readingOrder),
                 BorderTop: borderTop,
                 BorderRight: borderRight,
                 BorderBottom: borderBottom,
