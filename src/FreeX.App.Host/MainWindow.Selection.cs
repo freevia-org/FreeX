@@ -689,6 +689,7 @@ public partial class MainWindow
 
         _ribbonContentCollapsed = !_ribbonContentCollapsed;
         contentHost.Visibility = _ribbonContentCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        RibbonTabs.MinHeight = _ribbonContentCollapsed ? 0 : 132;
     }
 
     private bool TryHandleShowKeyTipsPreview(System.Windows.Input.KeyEventArgs e, object sender)

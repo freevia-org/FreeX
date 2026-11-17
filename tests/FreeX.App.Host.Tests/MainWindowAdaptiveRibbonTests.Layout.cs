@@ -16,6 +16,29 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowAdaptiveRibbonTests
 {
     [Fact]
+    public void CtrlF1_CollapsesRibbonRowAndMovesFormulaBarUp()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var expandedRibbonHeight = harness.RibbonHeight;
+            var expandedFormulaBarTop = harness.FormulaBarTop;
+
+            harness.ToggleRibbonVisibility();
+
+            harness.RibbonHeight.Should().BeLessThan(expandedRibbonHeight - 80);
+            harness.FormulaBarTop.Should().BeLessThan(expandedFormulaBarTop - 80);
+            (expandedFormulaBarTop - harness.FormulaBarTop)
+                .Should().BeApproximately(expandedRibbonHeight - harness.RibbonHeight, 1);
+
+            harness.ToggleRibbonVisibility();
+
+            harness.RibbonHeight.Should().BeApproximately(expandedRibbonHeight, 1);
+            harness.FormulaBarTop.Should().BeApproximately(expandedFormulaBarTop, 1);
+        });
+    }
+
+    [Fact]
     public void DenseRibbonCommandColumns_UseShortRowButtons()
     {
         StaTestRunner.Run(() =>
