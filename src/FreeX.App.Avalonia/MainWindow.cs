@@ -15488,24 +15488,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = UiText.Get("GoToSpecial_GoToSpecial"),
             // WPF GoToSpecialDialog is a 430x438 *outer* NoResize window; Avalonia sizes the client
             // area, so take the Windows caption/frame off both axes.
-            Width = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
-            Height = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
-            MinWidth = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
-            MinHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
-            MaxWidth = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
-            MaxHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
+            Width = GoToSpecialDialogMetrics.Width - WpfNoResizeFrameWidth,
+            Height = GoToSpecialDialogMetrics.Height - WpfNoResizeClientFrameHeight,
+            MinWidth = GoToSpecialDialogMetrics.Width - WpfNoResizeFrameWidth,
+            MinHeight = GoToSpecialDialogMetrics.Height - WpfNoResizeClientFrameHeight,
+            MaxWidth = GoToSpecialDialogMetrics.Width - WpfNoResizeFrameWidth,
+            MaxHeight = GoToSpecialDialogMetrics.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
+        var goToSpecialChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ForegroundBrush = Brushes.Black,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, goToSpecialChromeStyle);
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
 
         var choices = CreateGoToSpecialChoices();
         var kindButtons = new List<RadioButton>(choices.Length);
         var choiceGrid = CreateGoToSpecialChoiceGrid(choices, kindButtons);
         AutomationProperties.SetAutomationId(choiceGrid, "GoToSpecialKindBox");
         foreach (var button in kindButtons)
-            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);
+            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, goToSpecialChromeStyle);
 
         var numbersBox = CreateGoToSpecialValueTypeBox(
             StripDisplayMnemonic(UiText.Get("GoToSpecial_Numbers")),
@@ -15519,10 +15524,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var errorsBox = CreateGoToSpecialValueTypeBox(
             StripDisplayMnemonic(UiText.Get("GoToSpecial_Errors")),
             "GoToSpecialErrorsBox");
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(textBox, AvaloniaCompactDialogChrome.WindowsStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(logicalsBox, AvaloniaCompactDialogChrome.WindowsStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(errorsBox, AvaloniaCompactDialogChrome.WindowsStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, goToSpecialChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(textBox, goToSpecialChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(logicalsBox, goToSpecialChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(errorsBox, goToSpecialChromeStyle);
 
         var okButton = new Button
         {
@@ -15605,7 +15610,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var valueTypeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing,
+            Spacing = GoToSpecialDialogMetrics.AvaloniaValueTypeSpacing,
             Margin = new Thickness(8, 6, 8, 1),
             Children =
             {
@@ -15618,52 +15623,58 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // The planner's right/bottom margins were measured against a client area as large as the WPF
         // *outer* window, so they carry the Windows frame on top of the WPF 12px content margin
-        // (DockPanel { Margin = GoToSpecialDialogPlanner.ContentMargin }). The window is now sized to
+        // (DockPanel { Margin = GoToSpecialDialogMetrics.ContentMargin }). The window is now sized to
         // the client area, so that frame share comes back off and the gutters match the left/top ones.
         const double goToSpecialFrameShareOfRightMargin =
-            GoToSpecialDialogPlanner.AvaloniaContentRightMargin - GoToSpecialDialogPlanner.AvaloniaContentLeftMargin;
+            GoToSpecialDialogMetrics.AvaloniaContentRightMargin - GoToSpecialDialogMetrics.AvaloniaContentLeftMargin;
         const double goToSpecialFrameShareOfBottomMargin =
-            GoToSpecialDialogPlanner.ActionRowBottomMargin - GoToSpecialDialogPlanner.ContentMargin;
+            GoToSpecialDialogMetrics.ActionRowBottomMargin - GoToSpecialDialogMetrics.ContentMargin;
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [okButton, cancelButton],
             new Thickness(
                 0,
-                GoToSpecialDialogPlanner.ActionRowTopMargin,
-                GoToSpecialDialogPlanner.ActionRowRightMargin - goToSpecialFrameShareOfRightMargin,
-                GoToSpecialDialogPlanner.ActionRowBottomMargin - goToSpecialFrameShareOfBottomMargin));
+                GoToSpecialDialogMetrics.ActionRowTopMargin,
+                GoToSpecialDialogMetrics.ActionRowRightMargin - goToSpecialFrameShareOfRightMargin,
+                GoToSpecialDialogMetrics.ActionRowBottomMargin - goToSpecialFrameShareOfBottomMargin));
 
         var availableGroup = new GroupBox
         {
             Header = UiText.Get("GoToSpecial_GoToSpecial"),
             Margin = new Thickness(
                 0,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupTopMargin,
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupTopMargin,
                 0,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomMargin),
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupBottomMargin),
             Padding = new Thickness(
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding,
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupHorizontalPadding,
                 1,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomPadding),
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupHorizontalPadding,
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupBottomPadding),
             Content = choiceGrid,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));
+        AvaloniaCompactDialogChrome.ApplyGroupBox(
+            availableGroup,
+            borderBrush: Brush(213, 223, 229),
+            captionBrush: Brushes.Black);
 
         var valueTypeGroup = new GroupBox
         {
             Header = UiText.Get("GoToSpecial_ValuesForConstantsAndFormulas"),
             Margin = new Thickness(0),
-            Padding = new Thickness(0, 0, 0, GoToSpecialDialogPlanner.AvaloniaValueTypeGroupBottomPadding),
+            Padding = new Thickness(0, 0, 0, GoToSpecialDialogMetrics.AvaloniaValueTypeGroupBottomPadding),
             Content = valueTypeRow,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup, borderBrush: Brush(213, 223, 229));
+        AvaloniaCompactDialogChrome.ApplyGroupBox(
+            valueTypeGroup,
+            borderBrush: Brush(213, 223, 229),
+            captionBrush: Brushes.Black);
 
         var content = new StackPanel
         {
             Margin = new Thickness(
-                GoToSpecialDialogPlanner.AvaloniaContentLeftMargin,
-                GoToSpecialDialogPlanner.AvaloniaContentTopMargin,
-                GoToSpecialDialogPlanner.AvaloniaContentRightMargin - goToSpecialFrameShareOfRightMargin,
+                GoToSpecialDialogMetrics.AvaloniaContentLeftMargin,
+                GoToSpecialDialogMetrics.AvaloniaContentTopMargin,
+                GoToSpecialDialogMetrics.AvaloniaContentRightMargin - goToSpecialFrameShareOfRightMargin,
                 0),
             Children =
             {
@@ -15726,8 +15737,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Margin = new Thickness(
                     0,
                     0,
-                    GoToSpecialDialogPlanner.AvaloniaChoiceButtonRightMargin,
-                    GoToSpecialDialogPlanner.AvaloniaChoiceButtonBottomMargin),
+                    GoToSpecialDialogMetrics.AvaloniaChoiceButtonRightMargin,
+                    GoToSpecialDialogMetrics.AvaloniaChoiceButtonBottomMargin),
                 IsChecked = index == 0,
             };
             buttons.Add(button);
@@ -15771,9 +15782,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static void ApplyGoToSpecialButtonSize(Button button)
     {
-        button.Height = GoToSpecialDialogPlanner.ActionButtonHeight;
-        button.MinHeight = GoToSpecialDialogPlanner.ActionButtonHeight;
-        button.MaxHeight = GoToSpecialDialogPlanner.ActionButtonHeight;
+        button.Height = GoToSpecialDialogMetrics.ActionButtonHeight;
+        button.MinHeight = GoToSpecialDialogMetrics.ActionButtonHeight;
+        button.MaxHeight = GoToSpecialDialogMetrics.ActionButtonHeight;
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 

@@ -2798,7 +2798,7 @@ public sealed class AvaloniaShellSourceTests
         errorCheckingSource.Should().Contain("FormulaEvaluationSummaryService.GetSummary(_session.Workbook, issue.Address)");
         errorCheckingSource.Should().Contain("TraceFormulaPrecedents();");
         errorCheckingSource.Should().Contain("ErrorCheckingDialogPlanner.CreateCommandState");
-        errorCheckingSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogPlanner.DialogAutomationId)");
+        errorCheckingSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogVisualMetrics.DialogAutomationId)");
         parityCaptureSource.Should().Contain("private Task ShowErrorCheckingParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
@@ -5649,7 +5649,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         smokeSource.Should().Contain("HasCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
         smokeSource.Should().Contain("HasCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320)");
-        smokeSource.Should().Contain("height: GoToSpecialDialogPlanner.Height");
+        smokeSource.Should().Contain("height: GoToSpecialDialogMetrics.Height");
         smokeSource.Should().Contain("HasButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         smokeSource.Should().Contain("HasButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
         dialogInspectionSource.Should().Contain("private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(Action<GoToDialogInspection> inspectionCallback)");

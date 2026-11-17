@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
