@@ -680,6 +680,7 @@ public record StyleDiff(
     bool? DoubleUnderline       = null,
     int? IndentLevel            = null,
     int? TextRotation           = null,
+    CellReadingOrder? ReadingOrder = null,
     CellBorder? BorderTop            = null,
     CellBorder? BorderRight          = null,
     CellBorder? BorderBottom         = null,
@@ -734,6 +735,7 @@ public record StyleDiff(
             DoubleUnderline: style.DoubleUnderline,
             IndentLevel:     style.IndentLevel,
             TextRotation:    style.TextRotation,
+            ReadingOrder:    style.ReadingOrder,
             BorderTop:            style.BorderTop,
             BorderRight:          style.BorderRight,
             BorderBottom:         style.BorderBottom,
@@ -827,6 +829,7 @@ public record StyleDiff(
         if (DoubleUnderline is not null) s.DoubleUnderline = DoubleUnderline.Value;
         if (IndentLevel    is not null) s.IndentLevel   = Math.Clamp(IndentLevel.Value, 0, 15);
         if (TextRotation   is not null) s.TextRotation  = TextRotation.Value;
+        if (ReadingOrder   is not null) s.ReadingOrder  = ReadingOrder.Value;
         if (BorderTop          is not null) s.BorderTop          = BorderTop.Value;
         if (BorderRight        is not null) s.BorderRight        = BorderRight.Value;
         if (BorderBottom       is not null) s.BorderBottom       = BorderBottom.Value;

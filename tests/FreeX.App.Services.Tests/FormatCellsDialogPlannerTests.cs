@@ -59,6 +59,7 @@ public sealed class FormatCellsDialogPlannerTests
         result.Diff.ShrinkToFit.Should().BeTrue();
         result.Diff.IndentLevel.Should().Be(7);
         result.Diff.TextRotation.Should().Be(-45);
+        result.Diff.ReadingOrder.Should().Be(CellReadingOrder.RightToLeft);
         result.Diff.BorderTop.Should().Be(new CellBorder(BorderStyle.Thin, new CellColor(255, 192, 0)));
         result.Diff.BorderRight.Should().Be(new CellBorder(BorderStyle.Medium, new CellColor(68, 114, 196)));
         result.Diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Dashed, new CellColor(112, 173, 71)));
@@ -346,7 +347,8 @@ public sealed class FormatCellsDialogPlannerTests
                 IndentLevelText: "7",
                 TextRotationText: "-45",
                 InitialMergeCells: false,
-                MergeCells: true),
+                MergeCells: true,
+                ReadingOrderText: nameof(CellReadingOrder.RightToLeft)),
             Border: new FormatCellsDialogBorderInput(
                 LineColorText: "#7030A0",
                 Top: new FormatCellsDialogBorderSideInput(nameof(BorderStyle.Thin), "#FFC000"),
