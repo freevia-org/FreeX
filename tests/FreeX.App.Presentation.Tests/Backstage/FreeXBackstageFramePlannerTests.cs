@@ -20,6 +20,12 @@ public sealed class FreeXBackstageFramePlannerTests
         home.PaneFlow.ResetRecentTab.Should().BeTrue();
         home.CommandWorkflow.Should().BeNull();
 
+        var open = plan.Entries.Single(entry => entry.PaneFlow?.Pane == FreeXBackstagePaneId.Open);
+        open.StableId.Should().Be("freex.backstage.pane.open");
+        open.Navigation.AutomationId.Should().Be(FreeXBackstageNavigationPlanner.OpenPaneAutomationId);
+        open.PaneFlow!.RefreshRecentFiles.Should().BeTrue();
+        open.CommandWorkflow.Should().BeNull();
+
         var print = plan.Entries.Single(entry => entry.PaneFlow?.Pane == FreeXBackstagePaneId.Print);
         print.PaneFlow!.ResetPrintPreviewSettings.Should().BeTrue();
         print.PaneFlow.RefreshPrintOptions.Should().BeTrue();
@@ -42,6 +48,7 @@ public sealed class FreeXBackstageFramePlannerTests
         selection.DefaultPane.Should().Be(FreeXBackstagePaneId.Home);
         selection.DefaultPaneAutomationId.Should().Be(FreeXBackstageNavigationPlanner.HomePaneAutomationId);
         selection.For(FreeXBackstagePaneId.Home).Should().Be(FreeXBackstageNavigationPlanner.HomePaneAutomationId);
+        selection.For(FreeXBackstagePaneId.Open).Should().Be(FreeXBackstageNavigationPlanner.OpenPaneAutomationId);
         selection.For(FreeXBackstagePaneId.Info).Should().Be(FreeXBackstageNavigationPlanner.InfoPaneAutomationId);
         selection.For(FreeXBackstagePaneId.Print).Should().Be(FreeXBackstageNavigationPlanner.PrintPaneAutomationId);
     }

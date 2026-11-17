@@ -4,11 +4,13 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Shell;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -80,6 +82,86 @@ public sealed class BackstageWpfParityPaneTests
         }), CancellationToken.None);
 
     [Fact]
+    public Task OpenPane_ExposesRecentAndBrowseWithoutOpeningPicker() =>
+        Session.Dispatch(() => WithBackstagePane(FreeXBackstagePaneId.Open, (window, content) =>
+        {
+            var overlay = (AvaloniaBackstageFrame)typeof(MainWindow)
+                .GetField("_backstageOverlay", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(window)!;
+            overlay.CurrentEntryId.Should().Be("freex.backstage.pane.open");
+            FindById<Button>(content, "BackstageOpenBrowseButton");
+            FindById<TextBlock>(content, "BackstageOpenRecentLocation");
+
+            var routing = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ApplicationCommandRouting.cs"));
+            var keyboardRouteStart = routing.IndexOf(
+                "if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)",
+                StringComparison.Ordinal);
+            var keyboardRouteEnd = routing.IndexOf("else if", keyboardRouteStart, StringComparison.Ordinal);
+            routing[keyboardRouteStart..keyboardRouteEnd].Should().Contain("ShowBackstageOpenPane();")
+                .And.NotContain("OpenWorkbookAsync();");
+        }), CancellationToken.None);
+
+    [Fact]
+    public Task CtrlO_RoutesToOpenPaneWithoutOpeningPickerOrChangingWorkbook() =>
+        Session.Dispatch(async () =>
+        {
+            var originalProduct = AppProduct.Current;
+            var productDirectory = "FreeXOpenRouteTest_" + Guid.NewGuid().ToString("N");
+            AppProduct.Current = new AppProductIdentity(productDirectory, "OPEN_ROUTE_TEST", productDirectory);
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                window.Measure(new Size(1120, 720));
+                window.Arrange(new Rect(0, 0, 1120, 720));
+                var sheetIds = window.Session.Workbook.Sheets.Select(sheet => sheet.Id).ToArray();
+                var activeCell = window.Session.ActiveCell;
+                var bindings = (WorkbookApplicationCommandBindings)typeof(MainWindow)
+                    .GetProperty("WorkbookApplicationCommands", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(window)!;
+                WorkbookApplicationCommandRouter.TryRouteShortcut(
+                    WorkbookShortcutRoute.OpenWorkbook,
+                    out var route).Should().BeTrue();
+
+                var result = await bindings.TryExecuteAsync(route);
+
+                result.IsBound.Should().BeTrue();
+                result.Handled.Should().BeTrue();
+                var overlay = (AvaloniaBackstageFrame)typeof(MainWindow)
+                    .GetField("_backstageOverlay", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(window)!;
+                overlay.CurrentEntryId.Should().Be("freex.backstage.pane.open");
+                FindById<Button>(overlay.CurrentPaneContent!, "BackstageOpenBrowseButton");
+                FindById<TextBlock>(overlay.CurrentPaneContent!, "BackstageOpenRecentLocation");
+                window.Session.Workbook.Sheets.Select(sheet => sheet.Id).Should().Equal(sheetIds);
+                window.Session.ActiveCell.Should().Be(activeCell);
+
+                overlay.RaiseEvent(new KeyEventArgs
+                {
+                    RoutedEvent = InputElement.KeyDownEvent,
+                    Key = Key.Escape,
+                });
+                overlay.IsVisible.Should().BeFalse();
+                overlay.CurrentEntryId.Should().Be("freex.backstage.pane.open");
+                window.Session.Workbook.Sheets.Select(sheet => sheet.Id).Should().Equal(sheetIds);
+                window.Session.ActiveCell.Should().Be(activeCell);
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+                AppProduct.Current = originalProduct;
+                var directory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    productDirectory);
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, recursive: true);
+            }
+
+            return true;
+        }, CancellationToken.None);
+
+    [Fact]
     public Task PrintPane_HasSinglePrintButtonSettingsSummaryAndFittedPreview() =>
         Session.Dispatch(() => WithBackstagePane(FreeXBackstagePaneId.Print, (window, content) =>
         {
@@ -142,4 +224,7 @@ public sealed class BackstageWpfParityPaneTests
         root.GetLogicalDescendants().OfType<T>()
             .Concat(root.GetVisualDescendants().OfType<T>())
             .First(control => AutomationProperties.GetAutomationId(control) == automationId);
+
+    private static string RepoFile(params string[] parts) =>
+        Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

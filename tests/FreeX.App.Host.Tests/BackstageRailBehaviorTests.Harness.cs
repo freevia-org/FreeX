@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.UI;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -81,10 +82,25 @@ internal sealed class BackstageRailHarness : IDisposable
         ((UIElement)_window.FindName("StartScreenOverlay")).Visibility == Visibility.Visible;
 
     public Workbook Workbook => _window.Session.Workbook;
+    public CellAddress ActiveCell => _window.Session.ActiveCell;
 
     public void OpenWorkbookBackstageForKeyboard()
     {
         _window.OpenWorkbookBackstageForKeyboard();
+        _window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    public void ExecuteOpenShortcut()
+    {
+        if (!WorkbookApplicationCommandRouter.TryRouteShortcut(
+                WorkbookShortcutRoute.OpenWorkbook,
+                out var route))
+            throw new InvalidOperationException("Ctrl+O was not registered as a workbook shortcut route.");
+        var bindings = (WorkbookApplicationCommandBindings)typeof(MainWindow)
+            .GetProperty("WorkbookApplicationCommands", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(_window)!;
+        bindings.TryExecuteAsync(route).AsTask().GetAwaiter().GetResult();
         _window.UpdateLayout();
         PumpDispatcher();
     }
@@ -175,6 +191,11 @@ internal sealed class BackstageRailHarness : IDisposable
             .OfType<ContentControl>()
             .Any(host => ReferenceEquals(host.Content, pane));
     }
+
+    public bool HasAutomationId(string automationId) =>
+        Descendants(_frame as DependencyObject)
+            .OfType<FrameworkElement>()
+            .Any(element => AutomationProperties.GetAutomationId(element) == automationId);
 
     public bool IsRailButtonFocused(string automationId) =>
         RailButton(automationId) is { } button &&
