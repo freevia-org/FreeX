@@ -27,6 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
     <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
   </ItemGroup>
 

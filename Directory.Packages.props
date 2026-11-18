@@ -14,8 +14,8 @@
     <PackageVersion Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
     <PackageVersion Include="UglyToad.PdfPig.DocumentLayoutAnalysis" Version="1.7.0-custom-5" />
     <!-- Avalonia UI framework -->
-    <PackageVersion Include="Avalonia" Version="12.0.4" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.0.4" />
+    <PackageVersion Include="Avalonia" Version="12.1.6" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.6" />
     <PackageVersion Include="Avalonia.Headless" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Skia" Version="12.0.4" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.4" />
