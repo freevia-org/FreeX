@@ -133,6 +133,30 @@ public sealed class PasteCommandFactoryClipboardTextTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExternalTextPaste_EmptyTabularFieldClearsDestinationAsBlank(bool preserveText)
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var destination = new CellAddress(sheet.Id, 4, 3);
+        sheet.SetCell(destination, Cell.FromValue(new TextValue("old value")));
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            new CellAddress(sheet.Id, 4, 2),
+            [["left", "", "right"]],
+            preserveText);
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 2)).Should().Be(new TextValue("left"));
+        sheet.GetValue(destination).Should().Be(BlankValue.Instance);
+        sheet.GetValue(new CellAddress(sheet.Id, 4, 4)).Should().Be(new TextValue("right"));
+    }
+
+    [Theory]
     [InlineData("NaN")]
     [InlineData("Infinity")]
     [InlineData("-Infinity")]
