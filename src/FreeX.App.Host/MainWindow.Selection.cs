@@ -1622,10 +1622,9 @@ public partial class MainWindow
     internal void CompleteDragSelectionStatusRefresh()
     {
         // The Name Box shows a live "{rows}R x {cols}C" dimension readout while the drag was in
-        // progress (ExtendSelection); now that the drag has ended, revert it to the plain range
-        // address, matching Excel (R69-render-active-cell-selection-6-2).
+        // progress (ExtendSelection); afterward, restore Excel's active-cell or defined-name text.
         if (SheetGrid.SelectedRange is { } activeRange)
-            SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
+            SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(activeRange));
 
         if (!_dragSelectStatusRefreshPending)
             return;

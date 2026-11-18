@@ -35,11 +35,10 @@ public sealed partial class MainWindowMouseSelectionSourceTests
         GridSelectionNavigationPlanner.FormatDragDimensionText(range).Should().Be("4R x 3C");
     }
 
-    // No-regression: once the drag ends, CompleteDragSelectionStatusRefresh must revert the Name
-    // Box back to the plain range address (matching a keyboard-driven selection, which never shows
-    // dimension text at all since it never sets _dragSelectActive).
+    // Once the drag ends, Excel shows the active cell (or a matching defined name), not the full
+    // selection range. The shared formatter also keeps this consistent with keyboard selection.
     [Fact]
-    public void CompleteDragSelectionStatusRefreshRevertsNameBoxToPlainAddress()
+    public void CompleteDragSelectionStatusRefreshRestoresExcelNameBoxSelectionText()
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
 
@@ -48,6 +47,6 @@ public sealed partial class MainWindowMouseSelectionSourceTests
             selectionSource.IndexOf("private void BeginHeaderSelectionDrag", StringComparison.Ordinal)];
 
         completeRefresh.Should().Contain("if (SheetGrid.SelectedRange is { } activeRange)");
-        completeRefresh.Should().Contain("SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));");
+        completeRefresh.Should().Contain("SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(activeRange));");
     }
 }
