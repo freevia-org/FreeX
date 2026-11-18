@@ -135,7 +135,7 @@ public sealed class FindReplaceDialogXamlTests
 
         document.Descendants(presentation + "Expander")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "OptionsExpander")
-            .Attribute("IsExpanded")?.Value.Should().Be("False");
+            .Attribute("IsExpanded")!.Value.Should().Be("False");
 
         AssertNamedElementHasAttribute(document, presentation, xaml, "ComboBox", "LookInCombo", "SelectedIndex", "0");
 
@@ -231,7 +231,7 @@ public sealed class FindReplaceDialogXamlTests
         var grid = document.Descendants(presentation + "DataGrid")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "FindResultsGrid");
 
-        grid.Attribute("SelectionChanged")?.Value.Should().Be("FindResultsGrid_SelectionChanged");
+        grid.Attribute("SelectionChanged")!.Value.Should().Be("FindResultsGrid_SelectionChanged");
         WithDialog(dialog => GetPrivateControl<DataGrid>(dialog, "FindResultsGrid").Columns
             .Select(column => column.Header)
             .Should()
@@ -273,7 +273,7 @@ public sealed class FindReplaceDialogXamlTests
 
         document.Descendants(presentation + "TabControl")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "FindReplaceTabs")
-            .Attribute("SelectionChanged")?.Value.Should().Be("FindReplaceTabs_SelectionChanged");
+            .Attribute("SelectionChanged")!.Value.Should().Be("FindReplaceTabs_SelectionChanged");
 
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceBtn", "Visibility", "Collapsed");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceAllBtn", "Visibility", "Collapsed");
