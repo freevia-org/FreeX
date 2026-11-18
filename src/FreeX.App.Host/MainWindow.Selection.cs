@@ -650,7 +650,10 @@ public partial class MainWindow
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
-        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None && IsStartScreenVisible())
+        if (e.Key == Key.Escape &&
+            Keyboard.Modifiers == ModifierKeys.None &&
+            IsStartScreenVisible() &&
+            !_ribbonKeyTipSession.IsActive)
         {
             HideStartScreen();
             e.Handled = true;

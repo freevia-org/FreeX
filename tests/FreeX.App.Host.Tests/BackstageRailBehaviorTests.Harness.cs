@@ -78,6 +78,55 @@ internal sealed class BackstageRailHarness : IDisposable
         PumpDispatcher();
     }
 
+    public bool EnterBackstageFromAltF()
+    {
+        _window.Activate();
+        var handled = (bool)typeof(MainWindow)
+            .GetMethod("TryHandleDirectRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(_window, [Key.F])!;
+        _window.UpdateLayout();
+        PumpDispatcher();
+        return handled;
+    }
+
+    public void SelectFileTab()
+    {
+        var tabs = (TabControl)_window.FindName("RibbonTabs");
+        var fileHeader = UiText.Get("MainWindow_Header_File");
+        var fileTab = tabs.Items.OfType<TabItem>()
+            .Single(tab => string.Equals(tab.Header?.ToString(), fileHeader, StringComparison.Ordinal));
+        fileTab.IsSelected = true;
+        _window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    public bool IsKeyTipModeActive
+    {
+        get
+        {
+            var session = typeof(MainWindow)
+                .GetField("_ribbonKeyTipSession", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(_window)!;
+            return (bool)session.GetType().GetProperty("IsActive")!.GetValue(session)!;
+        }
+    }
+
+    public void PressEscapeThroughWindowRouting()
+    {
+        var source = PresentationSource.FromVisual(_window)
+            ?? throw new InvalidOperationException("MainWindow has no presentation source.");
+        var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, Key.Escape)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent
+        };
+        typeof(MainWindow)
+            .GetMethod("MainWindow_PreviewKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(_window, [_window, args]);
+        if (!args.Handled)
+            _window.MainWindow_KeyDown(_window, args);
+        PumpDispatcher();
+    }
+
     public bool IsBackstageVisible =>
         ((UIElement)_window.FindName("StartScreenOverlay")).Visibility == Visibility.Visible;
 
