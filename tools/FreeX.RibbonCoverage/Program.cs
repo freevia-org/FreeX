@@ -1,11 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Free.Shared.Ribbon;
+using FreeX.App.Presentation.Interactions;
 using FreeX.Ribbon.Definitions;
 
 var check = args.Contains("--check", StringComparer.Ordinal);
-var outputArgument = args.FirstOrDefault(argument => argument != "--check");
-var outputPath = Path.GetFullPath(outputArgument ?? "docs/testing/freex-command-surface.jsonl");
+var interactionSurfaces = args.Contains("--interaction-surfaces", StringComparer.Ordinal);
+var outputArgument = args.FirstOrDefault(argument => argument is not "--check" and not "--interaction-surfaces");
+var outputPath = Path.GetFullPath(outputArgument ?? (interactionSurfaces
+    ? "docs/testing/freex-interaction-surface-catalog.jsonl"
+    : "docs/testing/freex-command-surface.jsonl"));
+if (interactionSurfaces)
+    return WriteInteractionSurfaceManifest(outputPath, check);
+
 var manifest = BuildManifest(FreeXRibbon.Build());
 var jsonOptions = new JsonSerializerOptions
 {
@@ -39,6 +46,44 @@ Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 File.WriteAllText(outputPath, json);
 Console.WriteLine($"Wrote {manifest.Commands.Count} commands to {outputPath}");
 return 0;
+
+static int WriteInteractionSurfaceManifest(string outputPath, bool check)
+{
+    var rows = InteractionSurfaceCatalog.Rows;
+    var jsonOptions = new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        Converters = { new JsonStringEnumConverter() },
+    };
+    var lines = new List<string>
+    {
+        JsonSerializer.Serialize(new CommandCoverageHeader(
+            "manifest",
+            "interaction-surfaces",
+            "Generated from InteractionSurfaceCatalog.Rows(); catalog coverage only, paired execution evidence remains pending."), jsonOptions)
+    };
+    lines.AddRange(rows.Select(row => JsonSerializer.Serialize(new InteractionSurfaceCoverageRow(
+        "surface", row, "pending", "pending", "pending", "pending", "pending"), jsonOptions)));
+    var json = string.Join("\n", lines) + "\n";
+
+    if (check)
+    {
+        if (!File.Exists(outputPath) || !string.Equals(File.ReadAllText(outputPath), json, StringComparison.Ordinal))
+        {
+            Console.Error.WriteLine($"Interaction surface manifest is stale: {outputPath}");
+            return 1;
+        }
+
+        Console.WriteLine($"Interaction surface manifest is current: {rows.Count} catalog rows.");
+        return 0;
+    }
+
+    Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+    File.WriteAllText(outputPath, json);
+    Console.WriteLine($"Wrote {rows.Count} interaction surfaces to {outputPath}");
+    return 0;
+}
 
 static CommandCoverageManifest BuildManifest(RibbonDefinition definition)
 {
@@ -120,6 +165,15 @@ sealed record CommandCoverageManifest(
     IReadOnlyList<CommandCoverageRow> Commands);
 
 sealed record CommandCoverageHeader(string RecordType, string Scope, string EvidenceRule);
+
+sealed record InteractionSurfaceCoverageRow(
+    string RecordType,
+    InteractionSurfaceCatalogRow Surface,
+    string MouseRoute,
+    string KeyboardRoute,
+    string ResultEvidence,
+    string VisualEvidence,
+    string WorkbookEffectEvidence);
 
 sealed record CommandCoverageRow(
     string RecordType,
