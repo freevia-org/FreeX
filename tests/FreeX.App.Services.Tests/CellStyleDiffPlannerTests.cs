@@ -19,7 +19,7 @@ public sealed class CellStyleDiffPlannerTests
         diff.Strikethrough.Should().BeFalse();
         diff.Superscript.Should().BeFalse();
         diff.Subscript.Should().BeFalse();
-        diff.FontName.Should().Be("Calibri");
+        diff.FontName.Should().Be(WorkbookCreationDefaults.FontName);
         diff.FontSize.Should().Be(11);
         diff.ClearFill.Should().BeTrue();
         diff.NumberFormat.Should().Be("General");
@@ -70,7 +70,10 @@ public sealed class CellStyleDiffPlannerTests
 
         var result = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Normal).ApplyTo(styled);
 
-        result.Should().Be(CellStyle.Default);
+        var expected = CellStyle.Default.Clone();
+        expected.FontName = WorkbookCreationDefaults.FontName;
+        expected.FontScheme = CellFontScheme.None;
+        result.Should().Be(expected);
     }
 
     [Theory]

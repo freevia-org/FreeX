@@ -12,9 +12,6 @@ public sealed record ErrorCheckingCommandState(
 
 public static class ErrorCheckingDialogPlanner
 {
-    public const string DialogAutomationId = "ErrorCheckingDialog";
-    public const string IssuesAutomationId = "ErrorCheckingIssuesList";
-
     public const string TitleKey = "ErrorChecking_Title";
     public const string HelpGroupHeaderKey = "ErrorChecking_HelpGroupHeader";
     public const string ActionIntroTextKey = "ErrorChecking_ActionIntroText";
@@ -41,31 +38,6 @@ public static class ErrorCheckingDialogPlanner
     public const string HelpTitleKey = "ErrorChecking_HelpTitle";
     public const string NoIssuesMessageKey = "MainWindowMessage_ErrorCheckingNoIssues";
     public const string NoIssuesTitleKey = "MainWindowMessage_ErrorCheckingTitle";
-
-    public const double Width = 720;
-    public const double Height = 420;
-    // WPF's 720x420 value is the outer dialog frame. Avalonia's borderless client
-    // surface must use the same client rectangle so its content does not consume
-    // the native frame reserve that WPF leaves empty in parity captures.
-    public const double AvaloniaClientWidth = 704;
-    public const double AvaloniaClientHeight = 383;
-    public const double MinWidth = 540;
-    public const double MinHeight = 240;
-    public const double RootMargin = 10;
-    public const double ActionPanelWidth = 180;
-    public const double ButtonHeight = 26;
-    public const double GoToButtonWidth = 80;
-    public const double PreviousButtonWidth = 84;
-    public const double NextButtonWidth = 80;
-    public const double IgnoreButtonWidth = 104;
-    public const double TraceButtonWidth = 96;
-    public const double OptionsButtonWidth = 92;
-    public const double CloseButtonWidth = 80;
-    public const double SheetColumnWidth = 110;
-    public const double CellColumnWidth = 70;
-    public const double IssueColumnWidth = 80;
-    public const double FormulaColumnWidth = 150;
-    public const double DescriptionColumnWidth = 260;
 
     public static ErrorCheckingCommandState CreateCommandState(
         int selectedIndex,

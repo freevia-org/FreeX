@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
@@ -18,7 +19,10 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);
+    private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily)
+    {
+        ForegroundBrush = Brushes.Black,
+    };
 
     private async Task CheckFormulaErrorsAsync()
     {
@@ -45,15 +49,16 @@ public sealed partial class MainWindow
             Title = UiText.Get(ErrorCheckingDialogPlanner.TitleKey),
             // WPF ErrorCheckingDialog is a 720x420 *outer* resizable window; its client rectangle is
             // the planner's AvaloniaClient size, which is what an Avalonia window sizes.
-            Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth,
-            Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight,
-            MinWidth = ErrorCheckingDialogPlanner.MinWidth - WpfResizableFrameWidth,
-            MinHeight = ErrorCheckingDialogPlanner.MinHeight - WpfResizableFrameHeight,
+            Width = ErrorCheckingDialogVisualMetrics.AvaloniaClientWidth,
+            Height = ErrorCheckingDialogVisualMetrics.AvaloniaClientHeight,
+            MinWidth = ErrorCheckingDialogVisualMetrics.MinWidth - WpfResizableFrameWidth,
+            MinHeight = ErrorCheckingDialogVisualMetrics.MinHeight - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);
-        AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogPlanner.DialogAutomationId);
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
+        AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogVisualMetrics.DialogAutomationId);
 
         var header = new TextBlock
         {
@@ -62,20 +67,20 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 0, 0, 8),
         };
         var rowsPanel = new StackPanel { Focusable = true };
-        AutomationProperties.SetAutomationId(rowsPanel, ErrorCheckingDialogPlanner.IssuesAutomationId);
+        AutomationProperties.SetAutomationId(rowsPanel, ErrorCheckingDialogVisualMetrics.IssuesAutomationId);
         AutomationProperties.SetName(rowsPanel, UiText.Get(ErrorCheckingDialogPlanner.IssuesAutomationNameKey));
 
         var helpButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.HelpButtonKey);
         var showStepsButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.ShowCalculationStepsButtonKey);
         var sideIgnoreButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.IgnoreErrorButtonKey);
         var editFormulaButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.EditInFormulaBarButtonKey);
-        var goToButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.GoToButtonKey, ErrorCheckingDialogPlanner.GoToButtonWidth);
-        var previousButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.PreviousButtonKey, ErrorCheckingDialogPlanner.PreviousButtonWidth);
-        var nextButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.NextButtonKey, ErrorCheckingDialogPlanner.NextButtonWidth);
-        var ignoreButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.IgnoreErrorButtonKey, ErrorCheckingDialogPlanner.IgnoreButtonWidth);
-        var traceButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.TraceErrorButtonKey, ErrorCheckingDialogPlanner.TraceButtonWidth);
-        var optionsButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.OptionsButtonKey, ErrorCheckingDialogPlanner.OptionsButtonWidth);
-        var closeButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.CloseButtonKey, ErrorCheckingDialogPlanner.CloseButtonWidth);
+        var goToButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.GoToButtonKey, ErrorCheckingDialogVisualMetrics.GoToButtonWidth);
+        var previousButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.PreviousButtonKey, ErrorCheckingDialogVisualMetrics.PreviousButtonWidth);
+        var nextButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.NextButtonKey, ErrorCheckingDialogVisualMetrics.NextButtonWidth);
+        var ignoreButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.IgnoreErrorButtonKey, ErrorCheckingDialogVisualMetrics.IgnoreButtonWidth);
+        var traceButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.TraceErrorButtonKey, ErrorCheckingDialogVisualMetrics.TraceButtonWidth);
+        var optionsButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.OptionsButtonKey, ErrorCheckingDialogVisualMetrics.OptionsButtonWidth);
+        var closeButton = CreateErrorCheckingButton(ErrorCheckingDialogPlanner.CloseButtonKey, ErrorCheckingDialogVisualMetrics.CloseButtonWidth);
         closeButton.IsCancel = true;
 
         helpButton.Click += (_, _) => ShowSelectedIssueHelp();
@@ -112,7 +117,7 @@ public sealed partial class MainWindow
         var actionPanel = new GroupBox
         {
             Header = StripDisplayMnemonic(UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey)),
-            Width = ErrorCheckingDialogPlanner.ActionPanelWidth,
+            Width = ErrorCheckingDialogVisualMetrics.ActionPanelWidth,
             Margin = new Thickness(10, 0, 0, 0),
             Padding = new Thickness(8),
             Content = actionStack,
@@ -178,7 +183,7 @@ public sealed partial class MainWindow
         DockPanel.SetDock(actionPanel, Dock.Right);
         DockPanel.SetDock(buttons, Dock.Bottom);
 
-        var root = new DockPanel { Margin = new Thickness(ErrorCheckingDialogPlanner.RootMargin) };
+        var root = new DockPanel { Margin = new Thickness(ErrorCheckingDialogVisualMetrics.RootMargin) };
         // Dock the bottom button bar BEFORE the right-hand action panel so the bar spans the full
         // dialog width (matching the WPF/Windows layout); the action panel then claims the right
         // edge above it and the issues list fills the remaining area.
@@ -508,11 +513,11 @@ public sealed partial class MainWindow
         {
             MinHeight = minHeight,
             ColumnDefinitions = new ColumnDefinitions(
-                $"{ErrorCheckingDialogPlanner.SheetColumnWidth}," +
-                $"{ErrorCheckingDialogPlanner.CellColumnWidth}," +
-                $"{ErrorCheckingDialogPlanner.IssueColumnWidth}," +
-                $"{ErrorCheckingDialogPlanner.FormulaColumnWidth}," +
-                $"{ErrorCheckingDialogPlanner.DescriptionColumnWidth}"),
+                $"{ErrorCheckingDialogVisualMetrics.SheetColumnWidth}," +
+                $"{ErrorCheckingDialogVisualMetrics.CellColumnWidth}," +
+                $"{ErrorCheckingDialogVisualMetrics.IssueColumnWidth}," +
+                $"{ErrorCheckingDialogVisualMetrics.FormulaColumnWidth}," +
+                $"{ErrorCheckingDialogVisualMetrics.DescriptionColumnWidth}"),
         };
 
     private static void AddErrorCheckingCell(Grid grid, string text, int column, bool isHeader = false)
@@ -557,10 +562,10 @@ public sealed partial class MainWindow
             button,
             ErrorCheckingDialogChromeStyle,
             width ?? 0);
-        // WPF: every Error Checking button is Height = ErrorCheckingDialogPlanner.ButtonHeight.
-        button.Height = ErrorCheckingDialogPlanner.ButtonHeight;
-        button.MinHeight = ErrorCheckingDialogPlanner.ButtonHeight;
-        button.MaxHeight = ErrorCheckingDialogPlanner.ButtonHeight;
+        // WPF: every Error Checking button uses the shared fixed height.
+        button.Height = ErrorCheckingDialogVisualMetrics.ButtonHeight;
+        button.MinHeight = ErrorCheckingDialogVisualMetrics.ButtonHeight;
+        button.MaxHeight = ErrorCheckingDialogVisualMetrics.ButtonHeight;
         return button;
     }
 

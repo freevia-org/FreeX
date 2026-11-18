@@ -391,10 +391,11 @@ public sealed class OptionsDialogPlannerTests
         OptionsDialogPlanner.IndexToObjectDisplay(-1).Should().Be(AppOptionsObjectDisplay.All);
 
     [Fact]
-    public void DefaultFontToIndex_FallsBackToCalibriForCustomFonts()
+    public void DefaultFontToIndex_FallsBackToOfficeDefaultForCustomFonts()
     {
         var customIndex = OptionsDialogPlanner.DefaultFontToIndex("Wingdings");
         OptionsDialogPlanner.FontNames[customIndex].Should().Be(AppOptions.DefaultFontNameFallback);
+        OptionsDialogPlanner.FontNames.Should().Contain("Aptos Narrow");
 
         var arialIndex = OptionsDialogPlanner.DefaultFontToIndex("Arial");
         OptionsDialogPlanner.FontNames[arialIndex].Should().Be("Arial");

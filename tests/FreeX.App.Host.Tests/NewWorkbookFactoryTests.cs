@@ -28,7 +28,7 @@ public sealed class NewWorkbookFactoryTests
 
     [Theory]
     [InlineData(" Aptos ", 14, "Aptos", 14)]
-    [InlineData("", 0, "Calibri", 11)]
+    [InlineData("", 0, "Aptos Narrow", 11)]
     [InlineData("Arial", 500, "Arial", 409)]
     public void Create_HonorsNormalizedDefaultFontOptions(
         string defaultFontName,

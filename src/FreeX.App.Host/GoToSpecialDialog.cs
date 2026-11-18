@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
+using Free.Shared.Shell;
 
 namespace FreeX.App.Host;
 
@@ -20,13 +21,13 @@ public sealed class GoToSpecialDialog : Window
     public GoToSpecialDialog()
     {
         Title = UiText.Get("GoToSpecial_GoToSpecial");
-        Width = GoToSpecialDialogPlanner.Width;
-        Height = GoToSpecialDialogPlanner.Height;
+        Width = GoToSpecialDialogMetrics.Width;
+        Height = GoToSpecialDialogMetrics.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var root = new DockPanel { Margin = new Thickness(GoToSpecialDialogPlanner.ContentMargin) };
+        var root = new DockPanel { Margin = new Thickness(GoToSpecialDialogMetrics.ContentMargin) };
         var content = new StackPanel();
         DockPanel.SetDock(content, Dock.Top);
         root.Children.Add(content);

@@ -72,7 +72,7 @@ public sealed class AppOptionsPersistenceTests : IDisposable
     }
 
     [Theory]
-    [InlineData("", "Calibri")]
+    [InlineData("", "Aptos Narrow")]
     [InlineData("  Aptos  ", "Aptos")]
     public void LoadFromPath_NormalizesDefaultFontName(
         string persistedFontName,

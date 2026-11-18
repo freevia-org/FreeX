@@ -43,7 +43,7 @@ public partial class OptionsDialog : Window
     private sealed record QuickAccessCommandChoice(string Id, string DisplayName);
 
     private static readonly string[] Fonts =
-        ["Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
+        ["Aptos Narrow", "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
 
     private static readonly string[] Sizes =
         ["8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36"];

@@ -37,18 +37,18 @@ public sealed partial class GoToDialog : Window
         _resolveScopedName = resolveScopedName;
 
         Title = UiText.Get("GoTo_GoTo");
-        Width = 420;
-        Height = 320;
+        Width = GoToDialogVisualMetrics.WindowWidth;
+        Height = GoToDialogVisualMetrics.WindowHeight;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var root = new Grid { Margin = new Thickness(12) };
+        var root = new Grid { Margin = new Thickness(GoToDialogVisualMetrics.RootMargin) };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GoToDialogVisualMetrics.HistoryColumnWidth) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var historyLabel = new Label
@@ -57,7 +57,7 @@ public sealed partial class GoToDialog : Window
             Target = _historyList,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 0, 8, 4)
+            Margin = new Thickness(0, 0, GoToDialogVisualMetrics.HistoryLabelRightMargin, GoToDialogVisualMetrics.HistoryLabelBottomMargin)
         };
         Grid.SetRow(historyLabel, 0);
         Grid.SetColumnSpan(historyLabel, 2);
@@ -67,10 +67,11 @@ public sealed partial class GoToDialog : Window
             _historyList.Items.Add(reference);
 
         _historyList.ToolTip = UiText.Get("GoTo_RecentReferencesAndDefinedNames");
+        AutomationProperties.SetAutomationId(_historyList, GoToDialogVisualMetrics.HistoryListAutomationId);
         AutomationProperties.SetName(_historyList, UiText.Get("GoTo_GoTo"));
         AutomationProperties.SetHelpText(_historyList, UiText.Get("GoTo_ListsRecentReferencesAndDefinedNamesAvailableForNavigation"));
-        _historyList.MinHeight = 130;
-        _historyList.Margin = new Thickness(0, 24, 0, 0);
+        _historyList.MinHeight = GoToDialogVisualMetrics.HistoryListMinHeight;
+        _historyList.Margin = new Thickness(0, GoToDialogVisualMetrics.HistoryListTopMargin, 0, 0);
         _historyList.SelectionChanged += (_, _) =>
         {
             if (_historyList.SelectedItem is string reference)
@@ -88,15 +89,16 @@ public sealed partial class GoToDialog : Window
             Target = _addressBox,
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
             Padding = new Thickness(0),
-            Margin = new Thickness(0, 8, 8, 12)
+            Margin = new Thickness(0, GoToDialogVisualMetrics.ReferenceLabelTopMargin, GoToDialogVisualMetrics.ReferenceLabelRightMargin, GoToDialogVisualMetrics.ReferenceLabelBottomMargin)
         };
         Grid.SetRow(referenceLabel, 2);
         root.Children.Add(referenceLabel);
 
         _addressBox.Text = defaultAddress;
+        AutomationProperties.SetAutomationId(_addressBox, GoToDialogVisualMetrics.ReferenceInputAutomationId);
         AutomationProperties.SetName(_addressBox, UiText.Get("GoTo_Reference2"));
         AutomationProperties.SetHelpText(_addressBox, UiText.Get("GoTo_EnterACellReferenceRangeOrDefinedNameToNavigateTo"));
-        _addressBox.Margin = new Thickness(0, 8, 0, 12);
+        _addressBox.Margin = new Thickness(0, GoToDialogVisualMetrics.ReferenceInputTopMargin, 0, GoToDialogVisualMetrics.ReferenceInputBottomMargin);
         Grid.SetRow(_addressBox, 2);
         Grid.SetColumn(_addressBox, 1);
         root.Children.Add(_addressBox);
@@ -110,13 +112,17 @@ public sealed partial class GoToDialog : Window
         Grid.SetColumnSpan(buttons, 2);
         root.Children.Add(buttons);
 
-        var special = new Button { Content = UiText.Get("GoTo_Special"), Width = 86, Margin = new Thickness(0, 0, 8, 0) };
+        var special = new Button { Content = UiText.Get("GoTo_Special"), Width = GoToDialogVisualMetrics.SpecialButtonWidth, Margin = new Thickness(0, 0, GoToDialogVisualMetrics.ButtonGap, 0) };
+        AutomationProperties.SetAutomationId(special, GoToDialogVisualMetrics.SpecialButtonAutomationId);
         special.Click += (_, _) => OpenSpecialDialog();
         buttons.Children.Add(special);
-        var ok = new Button { Content = UiText.Ok, Width = 72, Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var ok = new Button { Content = UiText.Ok, Width = GoToDialogVisualMetrics.StandardButtonWidth, Margin = new Thickness(0, 0, GoToDialogVisualMetrics.ButtonGap, 0), IsDefault = true };
+        AutomationProperties.SetAutomationId(ok, GoToDialogVisualMetrics.AcceptButtonAutomationId);
         ok.Click += (_, _) => Accept();
         buttons.Children.Add(ok);
-        buttons.Children.Add(new Button { Content = UiText.Cancel, Width = 72, IsCancel = true });
+        var cancel = new Button { Content = UiText.Cancel, Width = GoToDialogVisualMetrics.StandardButtonWidth, IsCancel = true };
+        AutomationProperties.SetAutomationId(cancel, GoToDialogVisualMetrics.CancelButtonAutomationId);
+        buttons.Children.Add(cancel);
 
         Content = root;
         Loaded += (_, _) => FocusInitialKeyboardTarget();

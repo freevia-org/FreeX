@@ -33,7 +33,8 @@ public static class StatusBarDisplayModelBuilder
         StatusBarViewMode viewMode,
         int zoomPercent,
         WorkbookSelectionStats stats,
-        IStatusBarTextProvider textProvider)
+        IStatusBarTextProvider textProvider,
+        bool isSingleCellSelection = false)
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
@@ -86,7 +87,10 @@ public static class StatusBarDisplayModelBuilder
             IsReadyVisible: false,
             ReadyText: "",
             AreStatsVisible: true,
-            Readouts: readouts);
+            Readouts: readouts)
+        {
+            IsSingleCellSelection = isSingleCellSelection
+        };
     }
 
     /// <summary>Formats a number the compact, Excel-like way used across the status bar.</summary>
