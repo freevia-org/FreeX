@@ -5,11 +5,12 @@ using System.Text;
 using Free.Shared.AppServices.Printing;
 using FreeX.App.Services;
 using FreeX.Core.Model;
+using Xunit.Abstractions;
 using AvaloniaXpsDocumentExporter = ProductionAvalonia::FreeX.App.Avalonia.Pdf.AvaloniaXpsDocumentExporter;
 
 namespace FreeX.App.Avalonia.Tests;
 
-public sealed class AvaloniaXpsWindowsReaderTests
+public sealed class AvaloniaXpsWindowsReaderTests(ITestOutputHelper output)
 {
     [Fact]
     public async Task Publish_PaginatesAndRendersInWindowsXpsReader()
@@ -104,6 +105,31 @@ public sealed class AvaloniaXpsWindowsReaderTests
                     throw 'The WPF document text provider could not find and extract the exported cell text.'
                 }
 
+                # Some non-interactive Windows PowerShell hosts cannot rasterize any WPF visual.
+                $probeVisual = [System.Windows.Media.DrawingVisual]::new()
+                $probeContext = $probeVisual.RenderOpen()
+                $probeContext.DrawRectangle(
+                    [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Colors]::Red),
+                    $null,
+                    [System.Windows.Rect]::new(0, 0, 32, 32))
+                $probeContext.Close()
+                $probeBitmap = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(
+                    32, 32, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+                $probeBitmap.Render($probeVisual)
+                $probePixels = [byte[]]::new(32 * 32 * 4)
+                $probeBitmap.CopyPixels($probePixels, 32 * 4, 0)
+                $hasOpaqueProbePixel = $false
+                for ($i = 3; $i -lt $probePixels.Length; $i += 4) {
+                    if ($probePixels[$i] -eq 255) {
+                        $hasOpaqueProbePixel = $true
+                        break
+                    }
+                }
+                if (-not $hasOpaqueProbePixel) {
+                    Write-Output 'XPS_PIXEL_RENDER_UNAVAILABLE'
+                    return
+                }
+
                 $image = [System.Windows.Media.Imaging.RenderTargetBitmap]::new(
                     816, 1056, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
                 $image.Render($page.Visual)
@@ -140,6 +166,14 @@ public sealed class AvaloniaXpsWindowsReaderTests
             Timeout: TimeSpan.FromSeconds(45));
 
         var result = await new SystemProcessRunner().RunAsync(invocation);
+        if (result.Succeeded && result.StandardOutput.Contains("XPS_PIXEL_RENDER_UNAVAILABLE", StringComparison.Ordinal))
+        {
+            output.WriteLine(
+                "Pixel assertion not run: this Windows PowerShell WPF host cannot rasterize a known DrawingVisual. " +
+                "Native XPS page, glyph, font, and accessibility checks passed.");
+            return;
+        }
+
         Assert.True(result.Succeeded,
             $"Windows XPS reader exited with {result.ExitCode} (timed out: {result.TimedOut}).\n{result.StandardOutput}\n{result.StandardError}");
     }
