@@ -334,16 +334,85 @@ public partial class MainWindow
         if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2) return;
         var tab = (sender as System.Windows.FrameworkElement)?.DataContext as SheetTabViewModel;
         if (tab is null) return;
-        RenameSheetFromTab(tab);
+        BeginInlineSheetTabRename(tab);
         e.Handled = true;
     }
 
-    private void RenameSheetFromTab(SheetTabViewModel tab)
+    private void BeginInlineSheetTabRename(SheetTabViewModel tab)
     {
         SelectSingleSheetTab(tab.Id);
         UpdateViewport();
         RefreshSheetTabs();
-        RenameSheet(tab.Name);
+        var refreshedTab = FindSheetTab(tab.Id);
+        if (refreshedTab is null)
+            return;
+
+        refreshedTab.EditName = refreshedTab.Name;
+        refreshedTab.IsRenaming = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            var target = FindSheetTab(refreshedTab.Id);
+            var tabChrome = target is null ? null : FindSheetTabContextMenuTarget(target);
+            var editor = tabChrome is null
+                ? null
+                : FindVisualDescendant<TextBox>(tabChrome, static control => control.Name == "SheetTabRenameEditor");
+            if (editor is null)
+                return;
+
+            editor.Focus();
+            editor.SelectAll();
+        }, DispatcherPriority.Input);
+    }
+
+    private void SheetTabRenameEditor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox editor || editor.DataContext is not SheetTabViewModel tab)
+            return;
+
+        if (e.Key == Key.Enter)
+        {
+            CommitInlineSheetTabRename(tab);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            CancelInlineSheetTabRename(tab);
+            e.Handled = true;
+        }
+    }
+
+    private void CommitInlineSheetTabRename(SheetTabViewModel tab)
+    {
+        var name = tab.EditName;
+        if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
+        {
+            SynchronizeWorkbookSessionSelection();
+            if (!CompleteWorksheetSessionCommand(_session.RenameActiveSheet(name), "Rename Sheet"))
+            {
+                tab.IsRenaming = true;
+                return;
+            }
+
+            RefreshSheetTabs();
+        }
+
+        FinishInlineSheetTabRename(tab.Id);
+    }
+
+    private void CancelInlineSheetTabRename(SheetTabViewModel tab)
+    {
+        tab.EditName = tab.Name;
+        FinishInlineSheetTabRename(tab.Id);
+    }
+
+    private void FinishInlineSheetTabRename(SheetId sheetId)
+    {
+        var tab = FindSheetTab(sheetId);
+        if (tab is null)
+            return;
+
+        tab.IsRenaming = false;
+        Dispatcher.BeginInvoke(() => FocusSheetTab(sheetId), DispatcherPriority.Input);
     }
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
