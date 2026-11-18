@@ -36,7 +36,7 @@ internal static class ZoomDialogChrome
             IsDefault = plan.IsDefault,
             IsCancel = plan.IsCancel,
             IsEnabled = isEnabled,
-            MinWidth = ZoomDialogVisualMetrics.ButtonMinWidth,
+            MinWidth = global::FreeP.App.Compositor.ZoomDialogVisualMetrics.ButtonMinWidth,
         };
         AutomationProperties.SetName(button, plan.AccessibleName);
         AutomationProperties.SetAutomationId(button, plan.AutomationId);

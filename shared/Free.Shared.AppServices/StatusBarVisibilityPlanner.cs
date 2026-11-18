@@ -160,16 +160,19 @@ public static class StatusBarVisibilityPlanner
         ArgumentNullException.ThrowIfNull(model);
 
         var visibleReadouts = GetVisibleReadouts(model, optionVisibility);
+        var selectionStatsVisible = !model.IsSingleCellSelection;
         return new StatusBarVisibilityPlan(
             ReadyTextVisible: optionVisibility.CellMode && model.IsReadyVisible,
             PageNumberVisible: optionVisibility.PageNumber && hasPageNumberText,
-            StatsPanelVisible: model.AreStatsVisible && HasVisibleStatisticOption(optionVisibility),
-            AverageVisible: optionVisibility.Average,
-            CountVisible: optionVisibility.Count,
-            NumericalCountVisible: optionVisibility.NumericalCount,
-            SumVisible: optionVisibility.Sum,
-            MinimumVisible: optionVisibility.Minimum,
-            MaximumVisible: optionVisibility.Maximum,
+            StatsPanelVisible: model.AreStatsVisible &&
+                               !model.IsSingleCellSelection &&
+                               HasVisibleStatisticOption(optionVisibility),
+            AverageVisible: selectionStatsVisible && optionVisibility.Average,
+            CountVisible: selectionStatsVisible && optionVisibility.Count,
+            NumericalCountVisible: selectionStatsVisible && optionVisibility.NumericalCount,
+            SumVisible: selectionStatsVisible && optionVisibility.Sum,
+            MinimumVisible: selectionStatsVisible && optionVisibility.Minimum,
+            MaximumVisible: selectionStatsVisible && optionVisibility.Maximum,
             ViewShortcutsVisible: optionVisibility.ViewShortcuts,
             ZoomVisible: optionVisibility.Zoom,
             ZoomSliderVisible: optionVisibility.ZoomSlider,
@@ -186,7 +189,7 @@ public static class StatusBarVisibilityPlanner
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        if (!model.AreStatsVisible)
+        if (!model.AreStatsVisible || model.IsSingleCellSelection)
             return [];
 
         var readouts = new List<StatusBarReadoutItem>(model.Readouts.Count);

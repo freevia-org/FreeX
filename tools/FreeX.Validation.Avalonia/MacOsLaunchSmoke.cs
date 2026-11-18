@@ -1009,10 +1009,10 @@ internal static class MacOsLaunchSmokeCoordinator
                 HasCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
             hasGoToSpecialDialogCompactLayout = HasCompactDialog(
                 probe.Dialog,
-                width: GoToSpecialDialogPlanner.Width,
-                height: GoToSpecialDialogPlanner.Height,
-                minWidth: GoToSpecialDialogPlanner.Width,
-                minHeight: GoToSpecialDialogPlanner.Height);
+                width: global::Free.Shared.Shell.GoToSpecialDialogMetrics.Width,
+                height: global::Free.Shared.Shell.GoToSpecialDialogMetrics.Height,
+                minWidth: global::Free.Shared.Shell.GoToSpecialDialogMetrics.Width,
+                minHeight: global::Free.Shared.Shell.GoToSpecialDialogMetrics.Height);
         });
 
         var hasFormatCellsDialog = false;

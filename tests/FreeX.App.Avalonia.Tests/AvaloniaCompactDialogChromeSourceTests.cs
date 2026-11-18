@@ -5,6 +5,23 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class AvaloniaCompactDialogChromeSourceTests
 {
     [Fact]
+    public void CompactRadioButtonTemplate_UsesItsSharedForegroundForContent()
+    {
+        var source = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "AvaloniaCompactDialogChrome.cs"));
+        var start = source.IndexOf(
+            "public static FuncControlTemplate<RadioButton> CreateCompactRadioButtonTemplate",
+            StringComparison.Ordinal);
+        var end = source.IndexOf("ApplyWpfExpander", start, StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        source[start..end].Should().Contain("Foreground = foreground,");
+    }
+
+    [Fact]
     public void PivotOptions_DelegatesCompactControlChromeToSharedHelper()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
@@ -510,12 +527,13 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AutoFilterDialogChromeStyle, 72);");
         autoFilterSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 6, 0, 0))");
 
-        errorCheckingSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle ErrorCheckingDialogChromeStyle => new(FormulaBarFontFamily);");
+        errorCheckingSource.Should().Contain("ForegroundBrush = Brushes.Black,");
+        errorCheckingSource.Should().Contain("TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, ErrorCheckingDialogChromeStyle);");
         errorCheckingSource.Should().NotContain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         parityCaptureSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
-        errorCheckingSource.Should().Contain("Width = ErrorCheckingDialogPlanner.AvaloniaClientWidth");
-        errorCheckingSource.Should().Contain("Height = ErrorCheckingDialogPlanner.AvaloniaClientHeight");
+        errorCheckingSource.Should().Contain("Width = ErrorCheckingDialogVisualMetrics.AvaloniaClientWidth");
+        errorCheckingSource.Should().Contain("Height = ErrorCheckingDialogVisualMetrics.AvaloniaClientHeight");
         errorCheckingSource.Should().NotContain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left,");
         errorCheckingSource.Should().NotContain("VerticalAlignment = AvaloniaVerticalAlignment.Top,");
         errorCheckingSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(");

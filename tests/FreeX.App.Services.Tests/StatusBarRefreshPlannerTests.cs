@@ -92,13 +92,34 @@ public sealed class StatusBarRefreshPlannerTests
             stats,
             isFileOperationProgressVisible: false,
             zoomPercent: 90,
-            TextProvider);
+            TextProvider,
+            isSingleCellSelection: true);
 
         plan.Action.Should().Be(StatusBarRefreshAction.Stats);
         plan.ViewMode.Should().Be(StatusBarViewMode.PageBreak);
         plan.ZoomPercent.Should().Be(90);
         plan.Stats.Should().Be(stats);
+        plan.IsSingleCellSelection.Should().BeTrue();
         plan.ReadyText.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Build_MultiCellSelection_MarksAggregatesEligible()
+    {
+        var sheet = CreateSheet();
+        var top = new CellAddress(sheet.Id, 1, 1);
+        var bottom = new CellAddress(sheet.Id, 2, 1);
+
+        var plan = StatusBarRefreshPlanner.Build(
+            sheet,
+            new GridRange(top, bottom),
+            new WorkbookSelectionStats(12, 2, 2, 6, 5, 7),
+            isFileOperationProgressVisible: false,
+            zoomPercent: 100,
+            TextProvider);
+
+        plan.Action.Should().Be(StatusBarRefreshAction.Stats);
+        plan.IsSingleCellSelection.Should().BeFalse();
     }
 
     [Fact]

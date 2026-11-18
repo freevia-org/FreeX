@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -11,17 +12,34 @@ public sealed class ErrorCheckingDialogPlannerTests
     [Fact]
     public void Constants_MatchWindowsDialogChromeAndColumns()
     {
-        ErrorCheckingDialogPlanner.Width.Should().Be(720);
-        ErrorCheckingDialogPlanner.Height.Should().Be(420);
-        ErrorCheckingDialogPlanner.AvaloniaClientWidth.Should().Be(704);
-        ErrorCheckingDialogPlanner.AvaloniaClientHeight.Should().Be(383);
-        ErrorCheckingDialogPlanner.ActionPanelWidth.Should().Be(180);
-        ErrorCheckingDialogPlanner.ButtonHeight.Should().Be(26);
-        ErrorCheckingDialogPlanner.SheetColumnWidth.Should().Be(110);
-        ErrorCheckingDialogPlanner.CellColumnWidth.Should().Be(70);
-        ErrorCheckingDialogPlanner.IssueColumnWidth.Should().Be(80);
-        ErrorCheckingDialogPlanner.FormulaColumnWidth.Should().Be(150);
-        ErrorCheckingDialogPlanner.DescriptionColumnWidth.Should().Be(260);
+        ErrorCheckingDialogVisualMetrics.WpfWidth.Should().Be(720);
+        ErrorCheckingDialogVisualMetrics.WpfHeight.Should().Be(420);
+        ErrorCheckingDialogVisualMetrics.AvaloniaClientWidth.Should().Be(704);
+        ErrorCheckingDialogVisualMetrics.AvaloniaClientHeight.Should().Be(383);
+        ErrorCheckingDialogVisualMetrics.MinWidth.Should().Be(540);
+        ErrorCheckingDialogVisualMetrics.MinHeight.Should().Be(240);
+        ErrorCheckingDialogVisualMetrics.RootMargin.Should().Be(10);
+        ErrorCheckingDialogVisualMetrics.ActionPanelWidth.Should().Be(180);
+        ErrorCheckingDialogVisualMetrics.ButtonHeight.Should().Be(26);
+        ErrorCheckingDialogVisualMetrics.GoToButtonWidth.Should().Be(80);
+        ErrorCheckingDialogVisualMetrics.PreviousButtonWidth.Should().Be(84);
+        ErrorCheckingDialogVisualMetrics.NextButtonWidth.Should().Be(80);
+        ErrorCheckingDialogVisualMetrics.IgnoreButtonWidth.Should().Be(104);
+        ErrorCheckingDialogVisualMetrics.TraceButtonWidth.Should().Be(96);
+        ErrorCheckingDialogVisualMetrics.OptionsButtonWidth.Should().Be(92);
+        ErrorCheckingDialogVisualMetrics.CloseButtonWidth.Should().Be(80);
+        ErrorCheckingDialogVisualMetrics.SheetColumnWidth.Should().Be(110);
+        ErrorCheckingDialogVisualMetrics.CellColumnWidth.Should().Be(70);
+        ErrorCheckingDialogVisualMetrics.IssueColumnWidth.Should().Be(80);
+        ErrorCheckingDialogVisualMetrics.FormulaColumnWidth.Should().Be(150);
+        ErrorCheckingDialogVisualMetrics.DescriptionColumnWidth.Should().Be(260);
+    }
+
+    [Fact]
+    public void AutomationIdentifiers_AreStableSharedRendererContracts()
+    {
+        ErrorCheckingDialogVisualMetrics.DialogAutomationId.Should().Be("ErrorCheckingDialog");
+        ErrorCheckingDialogVisualMetrics.IssuesAutomationId.Should().Be("ErrorCheckingIssuesList");
     }
 
     [Fact]

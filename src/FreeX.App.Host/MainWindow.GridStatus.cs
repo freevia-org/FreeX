@@ -39,6 +39,7 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var selectedRange = SheetGrid.SelectedRange;
         var selectedRanges = SheetGrid.SelectedRanges;
+        var isSingleCellSelection = selectedRange is { CellCount: 1 } && selectedRanges is not { Count: > 1 };
         WorkbookSelectionStats? stats = sheet is null
             ? null
             : selectedRanges is { Count: > 0 }
@@ -56,7 +57,8 @@ public partial class MainWindow
             WpfResourceKeyTextResolver.StatusBarTextProvider,
             sheet is null ? null : GetEffectiveViewState(sheet).ViewMode,
             isManualCalculationMode: _workbook.CalculationMode == WorkbookCalculationMode.Manual,
-            hasPendingRecalculation: _workbook.HasPendingManualRecalculation);
+            hasPendingRecalculation: _workbook.HasPendingManualRecalculation,
+            isSingleCellSelection: isSingleCellSelection);
         ApplyStatusBarRefreshPlan(plan);
     }
 
@@ -78,7 +80,8 @@ public partial class MainWindow
                 ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetStats(
                     plan.ViewMode,
                     plan.ZoomPercent,
-                    plan.Stats));
+                    plan.Stats,
+                    plan.IsSingleCellSelection));
                 return;
             default:
                 ApplyStatusBarDisplayState(_statusBarDisplayStateCache.GetReady(

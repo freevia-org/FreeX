@@ -20,6 +20,7 @@ public sealed class StatusBarViewModelCache
     private StatusBarViewMode? _lastStatsViewMode;
     private int _lastStatsZoomPercent;
     private WorkbookSelectionStats? _lastStats;
+    private bool _lastStatsIsSingleCellSelection;
     private StatusBarViewModel? _lastStatsState;
 
     public StatusBarViewModelCache(IStatusBarTextProvider textProvider)
@@ -54,23 +55,31 @@ public sealed class StatusBarViewModelCache
     public StatusBarViewModel GetStats(
         StatusBarViewMode viewMode,
         int zoomPercent,
-        WorkbookSelectionStats stats)
+        WorkbookSelectionStats stats,
+        bool isSingleCellSelection = false)
     {
         RefreshCultureState();
 
         if (_lastStatsState is { } state &&
             _lastStatsViewMode == viewMode &&
             _lastStatsZoomPercent == zoomPercent &&
+            _lastStatsIsSingleCellSelection == isSingleCellSelection &&
             _lastStats is { } cachedStats &&
             cachedStats == stats)
         {
             return state;
         }
 
-        state = StatusBarDisplayModelBuilder.Stats(viewMode, zoomPercent, stats, _textProvider);
+        state = StatusBarDisplayModelBuilder.Stats(
+            viewMode,
+            zoomPercent,
+            stats,
+            _textProvider,
+            isSingleCellSelection);
         _lastStatsViewMode = viewMode;
         _lastStatsZoomPercent = zoomPercent;
         _lastStats = stats;
+        _lastStatsIsSingleCellSelection = isSingleCellSelection;
         _lastStatsState = state;
         return state;
     }
@@ -84,6 +93,7 @@ public sealed class StatusBarViewModelCache
         _lastStatsViewMode = null;
         _lastStatsZoomPercent = 0;
         _lastStats = null;
+        _lastStatsIsSingleCellSelection = false;
         _lastStatsState = null;
     }
 

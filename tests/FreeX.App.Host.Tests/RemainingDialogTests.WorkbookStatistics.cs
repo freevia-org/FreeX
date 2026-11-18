@@ -77,6 +77,23 @@ public sealed partial class RemainingDialogTests
     }
 
     [Fact]
+    public void WorkbookStatisticsDialog_RendererConsumesSharedPresentationMetrics()
+    {
+        var wpf = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");
+        var capture = DialogSourceTestSupport.ReadHostSourceFile("ParityCapture.cs");
+        var metrics = WorkspaceFileLocator.ReadAllText(
+            "shared", "Free.Shared.Shell", "WorkbookStatisticsDialogVisualMetrics.cs");
+
+        wpf.Should().Contain("WorkbookStatisticsDialogVisualMetrics.ContentMargin");
+        wpf.Should().Contain("WorkbookStatisticsDialogVisualMetrics.SummaryMinHeight");
+        wpf.Should().Contain("WorkbookStatisticsDialogVisualMetrics.CopyButtonMinWidth");
+        capture.Should().Contain("WorkbookStatisticsService.GetStatistics(ParityDemoWorkbookFactory.Create())");
+        metrics.Should().Contain("public const double FontSize = 12;");
+        metrics.Should().Contain("public const double SummaryLineHeight = 16;");
+        metrics.Should().Contain("public const int Width = 500;");
+    }
+
+    [Fact]
     public void WorkbookStatisticsDialog_StatisticsSummaryIsSelectableAndExposesAutomationName()
     {
         var source = DialogSourceTestSupport.ReadHostSources("WorkbookStatisticsDialog.cs");

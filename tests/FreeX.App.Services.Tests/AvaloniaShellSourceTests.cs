@@ -975,13 +975,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ApplyZoomPercent(100, \"100% Zoom failed.\")");
         source.Should().Contain("private void ZoomToSelection()");
         source.Should().Contain("private async Task ShowZoomDialogAsync()");
-        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ZoomDialog\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(button, $\"ZoomPreset{zoom}Button\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(fitSelectionButton, \"ZoomFitSelectionButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(customButton, \"ZoomCustomButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(customBox, \"ZoomCustomPercentBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"ZoomOkButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ZoomCancelButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, ZoomDialogVisualMetrics.DialogAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(button, ZoomDialogVisualMetrics.PresetButtonAutomationId(zoom));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(fitSelectionButton, ZoomDialogVisualMetrics.FitSelectionButtonAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(customButton, ZoomDialogVisualMetrics.CustomButtonAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(customBox, ZoomDialogVisualMetrics.CustomPercentBoxAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, ZoomDialogVisualMetrics.OkButtonAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, ZoomDialogVisualMetrics.CancelButtonAutomationId);");
         source.Should().Contain("ZoomDialogPlanner.TryCreateResult(customBox.Text, out var customResult, out var validationError)");
         source.Should().Contain("ResolveZoomDialogValidationError(validationError)");
         source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
@@ -2798,7 +2798,7 @@ public sealed class AvaloniaShellSourceTests
         errorCheckingSource.Should().Contain("FormulaEvaluationSummaryService.GetSummary(_session.Workbook, issue.Address)");
         errorCheckingSource.Should().Contain("TraceFormulaPrecedents();");
         errorCheckingSource.Should().Contain("ErrorCheckingDialogPlanner.CreateCommandState");
-        errorCheckingSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogPlanner.DialogAutomationId)");
+        errorCheckingSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, ErrorCheckingDialogVisualMetrics.DialogAutomationId)");
         parityCaptureSource.Should().Contain("private Task ShowErrorCheckingParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowWatchWindowParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
@@ -5649,7 +5649,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("HasCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390)");
         smokeSource.Should().Contain("HasCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480)");
         smokeSource.Should().Contain("HasCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320)");
-        smokeSource.Should().Contain("height: GoToSpecialDialogPlanner.Height");
+        smokeSource.Should().Contain("height: global::Free.Shared.Shell.GoToSpecialDialogMetrics.Height");
         smokeSource.Should().Contain("HasButton(probe.ChooseFormatButton, \"FindChooseFormatFromCellButton\", \"Choose From Cell\")");
         smokeSource.Should().Contain("HasButton(probe.ChooseFindFormatButton, \"ReplaceFindChooseFormatFromCellButton\", \"Choose From Cell\")");
         dialogInspectionSource.Should().Contain("private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(Action<GoToDialogInspection> inspectionCallback)");
@@ -5720,7 +5720,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("MinHeight = WorkbookStatisticsDialogPlanner.MinHeight");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"WorkbookStatisticsDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"WorkbookStatisticsOkButton\");");
-        source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton)");
+        var contentCallStart = source.IndexOf(
+            "dialog.Content = CreateWorkbookStatisticsDialogContent(",
+            StringComparison.Ordinal);
+        contentCallStart.Should().BeGreaterThanOrEqualTo(0);
+        var contentCallEnd = source.IndexOf(");", contentCallStart, StringComparison.Ordinal);
+        contentCallEnd.Should().BeGreaterThan(contentCallStart);
+        var contentCall = source[contentCallStart..contentCallEnd];
+        contentCall.Should().Contain("workbookStatisticsChrome");
+        contentCall.Should().Contain("copyToClipboardButton");
         source.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
         source.Should().Contain("UiText.Get(\"WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook\")");
         source.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
