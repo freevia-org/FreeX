@@ -10,7 +10,8 @@ public static class WorkbookStatisticsDialogVisualMetrics
     public const double ContentMargin = 16;
     public const double SummaryMinHeight = 260;
     public const double SummaryPadding = 8;
-    public const double AvaloniaSummaryLeadingInsetAdjustment = 5;
+    public const double AvaloniaSummaryHorizontalInsetAdjustment = 3;
+    public const double AvaloniaSummaryVerticalInsetAdjustment = 0;
     public const double SummaryBorderThickness = 1;
     public const byte SummaryBorderComponent = 160;
     public const double FontSize = 12;

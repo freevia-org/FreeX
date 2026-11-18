@@ -21,7 +21,10 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback");
         dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.SummaryLineHeight");
         dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.ContentMargin");
-        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryLeadingInsetAdjustment");
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryHorizontalInsetAdjustment");
+        dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryVerticalInsetAdjustment");
+        dialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(");
+        dialog.Should().Contain("fixedHeight: false");
         dialog.Should().Contain("WorkbookStatisticsDialogVisualMetrics.CopyButtonMinWidth");
         dialog.Should().Contain("Foreground = Brushes.Black");
         dialog.Should().Contain("ForegroundBrush = Brushes.Black");

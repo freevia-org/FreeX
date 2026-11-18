@@ -16418,6 +16418,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily(
                 WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback),
             FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
+            TextBoxPadding = new Thickness(
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryHorizontalInsetAdjustment,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryVerticalInsetAdjustment,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
             ForegroundBrush = Brushes.Black,
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, workbookStatisticsChrome);
@@ -16468,12 +16475,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
         };
 
-        dialog.Content = CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton);
+        dialog.Content = CreateWorkbookStatisticsDialogContent(
+            statistics,
+            okButton,
+            workbookStatisticsChrome,
+            copyToClipboardButton);
         dialog.Opened += (_, _) => okButton.Focus();
         await dialog.ShowDialog(this);
     }
 
-    private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton, Button? copyToClipboardButton = null)
+    private static Control CreateWorkbookStatisticsDialogContent(
+        WorkbookStatistics statistics,
+        Button okButton,
+        AvaloniaCompactDialogChromeStyle workbookStatisticsChrome,
+        Button? copyToClipboardButton = null)
     {
         var statisticsBlock = new TextBox
         {
@@ -16490,19 +16505,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent),
             BorderThickness = new Thickness(WorkbookStatisticsDialogVisualMetrics.SummaryBorderThickness),
             CornerRadius = new CornerRadius(0),
-            Padding = new Thickness(
-                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
-                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryLeadingInsetAdjustment,
-                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
-                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryLeadingInsetAdjustment,
-                WorkbookStatisticsDialogVisualMetrics.SummaryPadding,
-                WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
+            Padding = new Thickness(WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
             MinHeight = WorkbookStatisticsDialogVisualMetrics.SummaryMinHeight,
             FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
             // WPF lays the summary out on the 16px line pitch of its 12px dialog font.
             LineHeight = WorkbookStatisticsDialogVisualMetrics.SummaryLineHeight,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(
+            statisticsBlock,
+            workbookStatisticsChrome,
+            fixedHeight: false);
+        statisticsBlock.Padding = workbookStatisticsChrome.TextBoxPadding;
+        statisticsBlock.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
         statisticsBlock.AttachedToVisualTree += (_, _) =>
         {
             TextOptions.SetTextRenderingMode(statisticsBlock, TextRenderingMode.Antialias);
