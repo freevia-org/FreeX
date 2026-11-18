@@ -7,6 +7,41 @@ namespace FreeX.App.Host.Tests;
 public sealed class KeyboardFileBackstageParityTests
 {
     [Fact]
+    public void AltFThenEscape_ClearsKeyTipsAndKeepsBackstageOpen()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+
+            harness.EnterBackstageFromAltF().Should().BeTrue();
+            harness.IsBackstageVisible.Should().BeTrue();
+            harness.IsKeyTipModeActive.Should().BeTrue();
+
+            harness.PressEscapeThroughWindowRouting();
+
+            harness.IsBackstageVisible.Should().BeTrue();
+            harness.IsKeyTipModeActive.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public void MouseFileTabThenEscape_ReturnsToWorksheet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+
+            harness.SelectFileTab();
+            harness.IsBackstageVisible.Should().BeTrue();
+            harness.IsKeyTipModeActive.Should().BeFalse();
+
+            harness.PressEscapeThroughWindowRouting();
+
+            harness.IsBackstageVisible.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public void MouseOpenRailEntry_NavigatesToOpenPaneWithoutLaunchingPicker()
     {
         StaTestRunner.Run(() =>
