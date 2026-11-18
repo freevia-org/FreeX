@@ -1383,7 +1383,10 @@ public partial class MainWindow
         var expanded = sheet is null
             ? SelectionRangeService.GetWholeRows(range)
             : StructuredTableSelectionPlanner.PlanWholeRows(sheet, range).Range;
-        SetSelectionRange(expanded, range.Start);
+        var activeCell = SheetGrid.ActiveCell is { } currentActiveCell && expanded.Contains(currentActiveCell)
+            ? currentActiveCell
+            : range.Start;
+        SetSelectionRange(expanded, activeCell);
     }
 
     /// <summary>
@@ -1401,7 +1404,10 @@ public partial class MainWindow
         var expanded = sheet is null
             ? SelectionRangeService.GetWholeColumns(range)
             : StructuredTableSelectionPlanner.PlanWholeColumns(sheet, range).Range;
-        SetSelectionRange(expanded, range.Start);
+        var activeCell = SheetGrid.ActiveCell is { } currentActiveCell && expanded.Contains(currentActiveCell)
+            ? currentActiveCell
+            : range.Start;
+        SetSelectionRange(expanded, activeCell);
     }
 
     // R92-commands-merge-edge-5-2: navigating (Name Box / Go To / hyperlink / any other caller of
@@ -1423,7 +1429,7 @@ public partial class MainWindow
         var effectiveActiveCell = sheet is { MergedRegions.Count: > 0 } && sheet.GetMergeRegion(activeCell) is { } activeMerge
             ? activeMerge.Start
             : activeCell;
-        _selectionAnchor = expandedRange.Start;
+        _selectionAnchor = effectiveActiveCell;
         _selectionCursor = expandedRange.End;
         SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = expandedRange;
