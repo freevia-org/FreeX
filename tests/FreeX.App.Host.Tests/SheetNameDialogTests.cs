@@ -1,5 +1,7 @@
+using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -24,6 +26,28 @@ public sealed class SheetNameDialogTests
             {
                 dialog.Close();
             }
+        });
+    }
+
+    [Fact]
+    public void SheetNameDialog_EscapeCancelsModalRenameAndPreservesCurrentName()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new SheetNameDialog("Sheet1");
+            dialog.Loaded += (_, _) => dialog.Dispatcher.BeginInvoke(() =>
+            {
+                var source = PresentationSource.FromVisual(dialog)
+                    ?? throw new InvalidOperationException("Sheet name dialog has no presentation source.");
+                dialog.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, Key.Escape)
+                {
+                    RoutedEvent = Keyboard.PreviewKeyDownEvent
+                });
+            });
+
+            dialog.ShowDialog().Should().BeFalse();
+            dialog.IsVisible.Should().BeFalse();
+            dialog.Result.Should().Be(new FreeX.App.Presentation.SheetUI.SheetNameDialogResult("Sheet1"));
         });
     }
 
