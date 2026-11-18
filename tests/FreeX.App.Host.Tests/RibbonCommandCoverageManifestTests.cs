@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using FluentAssertions;
+using FreeX.App.Presentation.Interactions;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Host.Tests;
@@ -42,6 +43,45 @@ public sealed class RibbonCommandCoverageManifestTests
         {
             foreach (var command in commands)
                 command.Dispose();
+        }
+    }
+
+    [Fact]
+    public void InteractionSurfaceManifest_ContainsEveryCatalogSurfaceExactlyOnce()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var manifestPath = Path.Combine(root, "docs", "testing", "freex-interaction-surface-catalog.jsonl");
+        var lines = File.ReadAllLines(manifestPath);
+        lines.Should().NotBeEmpty();
+
+        using var header = JsonDocument.Parse(lines[0]);
+        header.RootElement.GetProperty("RecordType").GetString().Should().Be("manifest");
+        header.RootElement.GetProperty("Scope").GetString().Should().Be("interaction-surfaces");
+
+        var surfaces = lines.Skip(1).Select(line => JsonDocument.Parse(line)).ToArray();
+        try
+        {
+            surfaces.Should().OnlyContain(surface =>
+                surface.RootElement.GetProperty("RecordType").GetString() == "surface" &&
+                surface.RootElement.GetProperty("MouseRoute").GetString() == "pending" &&
+                surface.RootElement.GetProperty("KeyboardRoute").GetString() == "pending");
+
+            var manifestIds = surfaces
+                .Select(surface => surface.RootElement.GetProperty("Surface").GetProperty("Id").GetString()!)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            var catalogIds = InteractionSurfaceCatalog.Rows
+                .Select(surface => surface.Id)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            manifestIds.Should().OnlyHaveUniqueItems();
+            manifestIds.Should().Equal(catalogIds);
+        }
+        finally
+        {
+            foreach (var surface in surfaces)
+                surface.Dispose();
         }
     }
 }

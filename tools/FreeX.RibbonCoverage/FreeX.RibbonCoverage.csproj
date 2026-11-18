@@ -6,6 +6,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/FreeX.App.Presentation/FreeX.App.Presentation.csproj" />
     <ProjectReference Include="../../src/FreeX.Ribbon.Definitions/FreeX.Ribbon.Definitions.csproj" />
   </ItemGroup>
 </Project>
