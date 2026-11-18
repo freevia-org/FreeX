@@ -15,7 +15,8 @@ public readonly record struct StatusBarRefreshPlan(
     StatusBarViewMode ViewMode,
     int ZoomPercent,
     string ReadyText,
-    WorkbookSelectionStats Stats);
+    WorkbookSelectionStats Stats,
+    bool IsSingleCellSelection);
 
 public static class StatusBarRefreshPlanner
 {
@@ -28,7 +29,8 @@ public static class StatusBarRefreshPlanner
         IStatusBarTextProvider textProvider,
         WorksheetViewMode? viewModeOverride = null,
         bool isManualCalculationMode = false,
-        bool hasPendingRecalculation = false)
+        bool hasPendingRecalculation = false,
+        bool isSingleCellSelection = false)
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
@@ -43,7 +45,7 @@ public static class StatusBarRefreshPlanner
                 : WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(sheet.ViewMode);
 
         if (isFileOperationProgressVisible)
-            return new StatusBarRefreshPlan(StatusBarRefreshAction.HideReadouts, viewMode, zoomPercent, "", default);
+            return new StatusBarRefreshPlan(StatusBarRefreshAction.HideReadouts, viewMode, zoomPercent, "", default, false);
 
         if (sheet is null || selectedRange is not { } range || selectionStats is not { } stats)
         {
@@ -52,7 +54,8 @@ public static class StatusBarRefreshPlanner
                 viewMode,
                 zoomPercent,
                 textProvider.GetReadyText(isManualCalculationMode, hasPendingRecalculation),
-                default);
+                default,
+                false);
         }
 
         if (stats.IsEmpty)
@@ -67,7 +70,8 @@ public static class StatusBarRefreshPlanner
                     textProvider,
                     isManualCalculationMode,
                     hasPendingRecalculation),
-                default);
+                default,
+                false);
         }
 
         return new StatusBarRefreshPlan(
@@ -75,6 +79,7 @@ public static class StatusBarRefreshPlanner
             viewMode,
             zoomPercent,
             "",
-            stats);
+            stats,
+            isSingleCellSelection);
     }
 }

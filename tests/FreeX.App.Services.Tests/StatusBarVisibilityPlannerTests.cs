@@ -45,13 +45,13 @@ public sealed class StatusBarVisibilityPlannerTests
     [Fact]
     public void DefaultProfiles_MatchExcelAndFullReadoutProfiles()
     {
-        StatusBarOptionVisibility.ExcelDefaults.Average.Should().BeFalse();
-        StatusBarOptionVisibility.ExcelDefaults.Count.Should().BeFalse();
+        StatusBarOptionVisibility.ExcelDefaults.Average.Should().BeTrue();
+        StatusBarOptionVisibility.ExcelDefaults.Count.Should().BeTrue();
         StatusBarOptionVisibility.ExcelDefaults.SelectionMode.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.NumericalCount.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.Minimum.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.Maximum.Should().BeFalse();
-        StatusBarOptionVisibility.ExcelDefaults.Sum.Should().BeFalse();
+        StatusBarOptionVisibility.ExcelDefaults.Sum.Should().BeTrue();
 
         StatusBarOptionVisibility.FullReadoutDefaults.Average.Should().BeTrue();
         StatusBarOptionVisibility.FullReadoutDefaults.Count.Should().BeTrue();
@@ -142,16 +142,30 @@ public sealed class StatusBarVisibilityPlannerTests
     }
 
     [Fact]
-    public void Build_HidesStatsPanelWithExcelDefaultStatisticOptions()
+    public void Build_ExcelDefaultsShowThreeAggregatesOnlyForMultiCellSelection()
     {
-        var plan = StatusBarVisibilityPlanner.Build(
+        var multiCellPlan = StatusBarVisibilityPlanner.Build(
             StatsModel(),
             StatusBarOptionVisibility.ExcelDefaults,
             fallbackAutomationText: "Customize Status Bar");
+        var singleCellModel = StatusBarDisplayModelBuilder.Stats(
+            StatusBarViewMode.Normal,
+            zoomPercent: 100,
+            new WorkbookSelectionStats(42, 1, 1, 42, 42, 42),
+            Text,
+            isSingleCellSelection: true);
+        var singleCellPlan = StatusBarVisibilityPlanner.Build(
+            singleCellModel,
+            StatusBarOptionVisibility.ExcelDefaults,
+            fallbackAutomationText: "Customize Status Bar");
 
-        plan.StatsPanelVisible.Should().BeFalse();
-        plan.VisibleReadoutText.Should().BeEmpty();
-        plan.AutomationText.Should().Be("Customize Status Bar");
+        multiCellPlan.StatsPanelVisible.Should().BeTrue();
+        multiCellPlan.VisibleReadoutText.Should().Be("Average: 20   Count: 4   Sum: 60");
+        singleCellPlan.StatsPanelVisible.Should().BeFalse();
+        singleCellPlan.VisibleReadoutText.Should().BeEmpty();
+        singleCellPlan.AverageVisible.Should().BeFalse();
+        singleCellPlan.CountVisible.Should().BeFalse();
+        singleCellPlan.AutomationText.Should().Be("Customize Status Bar");
     }
 
     [Fact]

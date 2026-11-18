@@ -257,12 +257,12 @@ public sealed class AppOptionsPersistenceTests : IDisposable
             StatusBarShowEndMode = true,
             StatusBarShowSelectionMode = true,
             StatusBarShowPageNumber = true,
-            StatusBarShowAverage = true,
-            StatusBarShowCount = true,
+            StatusBarShowAverage = false,
+            StatusBarShowCount = false,
             StatusBarShowNumericalCount = true,
             StatusBarShowMinimum = true,
             StatusBarShowMaximum = true,
-            StatusBarShowSum = true,
+            StatusBarShowSum = false,
             StatusBarShowViewShortcuts = false,
             StatusBarShowZoom = false,
             StatusBarShowZoomSlider = false
@@ -275,12 +275,12 @@ public sealed class AppOptionsPersistenceTests : IDisposable
         reloaded.StatusBarShowEndMode.Should().BeTrue();
         reloaded.StatusBarShowSelectionMode.Should().BeTrue();
         reloaded.StatusBarShowPageNumber.Should().BeTrue();
-        reloaded.StatusBarShowAverage.Should().BeTrue();
-        reloaded.StatusBarShowCount.Should().BeTrue();
+        reloaded.StatusBarShowAverage.Should().BeFalse();
+        reloaded.StatusBarShowCount.Should().BeFalse();
         reloaded.StatusBarShowNumericalCount.Should().BeTrue();
         reloaded.StatusBarShowMinimum.Should().BeTrue();
         reloaded.StatusBarShowMaximum.Should().BeTrue();
-        reloaded.StatusBarShowSum.Should().BeTrue();
+        reloaded.StatusBarShowSum.Should().BeFalse();
         reloaded.StatusBarShowViewShortcuts.Should().BeFalse();
         reloaded.StatusBarShowZoom.Should().BeFalse();
         reloaded.StatusBarShowZoomSlider.Should().BeFalse();

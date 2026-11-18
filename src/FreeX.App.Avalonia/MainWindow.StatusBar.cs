@@ -55,7 +55,8 @@ public sealed partial class MainWindow
                 CalculationModeIsManual,
                 _session.Workbook.HasPendingManualRecalculation),
             _session.ViewMode,
-            StatusBarTextProvider);
+            StatusBarTextProvider,
+            isSingleCellSelection: _session.SelectedRange.CellCount == 1 && _session.SelectedRanges.Count <= 1);
 
     /// <summary>
     /// Renders the six selection-statistic fields and ready text
