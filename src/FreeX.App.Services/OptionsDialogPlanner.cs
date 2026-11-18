@@ -168,7 +168,7 @@ public static class OptionsDialogPlanner
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
-        ["Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
+        ["Aptos Narrow", "Calibri", "Arial", "Times New Roman", "Courier New", "Segoe UI", "Verdana", "Georgia"];
 
     /// <summary>Font sizes offered in the Options dialog's default-size picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontSizes { get; } =

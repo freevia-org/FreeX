@@ -62,7 +62,7 @@ public static class CellStyleDiffPlanner
             Strikethrough: false,
             Superscript: false,
             Subscript: false,
-            FontName: "Calibri",
+            FontName: WorkbookCreationDefaults.FontName,
             FontSize: 11,
             FontColor: CellColor.Black,
             ClearFill: true,

@@ -5,7 +5,7 @@ public static class WorkbookCreationDefaults
 {
     public const string WorkbookNamePrefix = "Book";
     public const string WorkbookName = WorkbookNamePrefix + "1";
-    public const string FontName = "Calibri";
+    public const string FontName = "Aptos Narrow";
     public const int FontSize = 11;
     public const int MaxFontSize = 409;
     public const int MinSheetCount = 1;

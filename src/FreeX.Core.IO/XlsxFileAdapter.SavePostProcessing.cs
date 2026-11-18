@@ -423,6 +423,7 @@ public sealed partial class XlsxFileAdapter
                 packageStream.Position = 0;
                 XlsxExternalLinkAuthoringWriter.Save(packageStream, workbook);
             }
+            XlsxDefaultCellStyleWriter.Save(packageStream, workbook.GetStyle(StyleId.Default));
             NormalizeStylesheetForSchema();
             // shared-document-properties F2: this brand-new workbook has no source package for
             // XlsxDocumentPropertiesPreserver.Preserve (inside PreserveSourcePackageParts,
