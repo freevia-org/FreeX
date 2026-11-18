@@ -5720,7 +5720,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("MinHeight = WorkbookStatisticsDialogPlanner.MinHeight");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"WorkbookStatisticsDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"WorkbookStatisticsOkButton\");");
-        source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton)");
+        var contentCallStart = source.IndexOf(
+            "dialog.Content = CreateWorkbookStatisticsDialogContent(",
+            StringComparison.Ordinal);
+        contentCallStart.Should().BeGreaterThanOrEqualTo(0);
+        var contentCallEnd = source.IndexOf(");", contentCallStart, StringComparison.Ordinal);
+        contentCallEnd.Should().BeGreaterThan(contentCallStart);
+        var contentCall = source[contentCallStart..contentCallEnd];
+        contentCall.Should().Contain("workbookStatisticsChrome");
+        contentCall.Should().Contain("copyToClipboardButton");
         source.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
         source.Should().Contain("UiText.Get(\"WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook\")");
         source.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
