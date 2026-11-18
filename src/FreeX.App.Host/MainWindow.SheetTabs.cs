@@ -304,6 +304,7 @@ public partial class MainWindow
     private void SheetTab_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
+        var tabId = tab.Id;
         if (_groupedSheetIds.Count > 1 && _groupedSheetIds.Contains(tab.Id))
         {
             _currentSheetId = tab.Id;
@@ -317,6 +318,15 @@ public partial class MainWindow
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
+
+        e.Handled = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            var refreshedTab = FindSheetTab(tabId);
+            var target = refreshedTab is null ? null : FindSheetTabContextMenuTarget(refreshedTab);
+            if (target is not null)
+                TryOpenSheetTabContextMenu(target, fromKeyboard: false);
+        }, DispatcherPriority.Input);
     }
 
     private void SheetTab_LabelMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -1377,7 +1387,7 @@ public partial class MainWindow
         }
 
         var target = FindSheetTabContextMenuTarget(focusedElement);
-        if (target?.ContextMenu is not { } contextMenu)
+        if (target?.ContextMenu is null)
             return false;
 
         if (target.DataContext is SheetTabViewModel tab)
@@ -1386,16 +1396,24 @@ public partial class MainWindow
             SelectSheetTabForKeyboardContextMenu(tabId);
             var refreshedTab = FindSheetTab(tabId);
             target = refreshedTab is null ? target : FindSheetTabContextMenuTarget(refreshedTab) ?? target;
-            contextMenu = target.ContextMenu;
-            if (contextMenu is null)
+            if (target.ContextMenu is null)
                 return false;
         }
 
-        _isOpeningSheetTabContextMenuFromKeyboard = true;
+        return TryOpenSheetTabContextMenu(target, fromKeyboard: true);
+    }
+
+    private bool TryOpenSheetTabContextMenu(FrameworkElement target, bool fromKeyboard)
+    {
+        if (target.ContextMenu is not { } contextMenu)
+            return false;
+
+        _isOpeningSheetTabContextMenuFromKeyboard = fromKeyboard;
         try
         {
             RebuildSheetTabContextMenu(contextMenu, target.DataContext as SheetTabViewModel);
-            MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
+            if (fromKeyboard)
+                MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
             contextMenu.Opened -= SheetTabContextMenu_Opened;
             contextMenu.Opened += SheetTabContextMenu_Opened;
             contextMenu.PlacementTarget = target;

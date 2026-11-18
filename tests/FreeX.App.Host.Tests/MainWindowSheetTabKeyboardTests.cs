@@ -41,6 +41,30 @@ public sealed class MainWindowSheetTabKeyboardTests
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ViewCode")).Should().Be("V");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ProtectSheet")).Should().Be("P");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_TabColor")).Should().Be("T");
+            harness.SheetTabMenuItemEnabled(UiText.Get("MainWindow_Header_ViewCode")).Should().BeFalse();
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_InsertSheet"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_DeleteSheet"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_Hide"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_Unhide"));
+            harness.SheetTabMenuHeaders.Should().NotContain("Link to this Sheet");
+        });
+    }
+
+    [Fact]
+    public void RightClickSheetTab_OpensManagementMenuOnTheSelectedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 2);
+
+            harness.RightClickSheetTab("Sheet2");
+
+            harness.ActiveSheetTabName.Should().Be("Sheet2");
+            harness.SheetTabContextMenuIsOpen.Should().BeTrue(harness.DebugSheetTabs);
+            harness.SheetTabContextMenuPlacementTargetName.Should().Be("Sheet2");
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_MoveOrCopy"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_ProtectSheet"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("OutlineSettings_MenuItem"));
         });
     }
 
@@ -726,6 +750,23 @@ public sealed class MainWindowSheetTabKeyboardTests
         public bool SheetTabContextMenuPlacementTargetIsFocusedTab =>
             RoutedOrActiveSheetTabTarget is { ContextMenu.PlacementTarget: { } target } &&
             ReferenceEquals(target, RoutedOrActiveSheetTabTarget);
+
+        public string? SheetTabContextMenuPlacementTargetName =>
+            (RoutedOrActiveSheetTabTarget?.ContextMenu?.PlacementTarget as FrameworkElement)?.DataContext is SheetTabViewModel tab
+                ? tab.Name
+                : null;
+
+        public IReadOnlyList<string?> SheetTabMenuHeaders =>
+            RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
+                .OfType<MenuItem>()
+                .Select(item => item.Header?.ToString())
+                .ToList() ?? [];
+
+        public bool SheetTabMenuItemEnabled(string header) =>
+            RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
+                .OfType<MenuItem>()
+                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
+                ?.IsEnabled == true;
 
         public string? SheetTabMenuItemGestureText(string header) =>
             RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
