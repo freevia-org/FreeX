@@ -16,7 +16,7 @@ public static class FreeXRibbonDefinition
                 g => g
                 .Large("PivotTable", "PivotTable", Ico.PivotTable, "PT")
                 .Large(FreeXRibbonCommandIds.PivotChartInsert, "PivotChart", Ico.ChartColumn, "PC")
-                .Large("Table", "Table", Ico.Table, "TB"))
+                .Large("Table", "Table", Ico.Table, "T"))
             .Group("InsertChartsGroup", "Charts", null, priority: 60,
                 g => g
                 .Large("Recommended Charts", "Recommended Charts", Ico.ChartColumn, "RC")
