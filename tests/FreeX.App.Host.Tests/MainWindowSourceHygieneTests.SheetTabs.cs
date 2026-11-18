@@ -14,13 +14,13 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("internal void RefreshSheetTabs()");
         mainSource.Should().NotContain("private void SheetTab_MouseLeftButtonDown(");
         mainSource.Should().NotContain("private void UpdateSheetTabNavigation()");
-        mainSource.Should().NotContain("private void RenameSheetFromTab(");
+        mainSource.Should().NotContain("private void BeginInlineSheetTabRename(");
         mainSource.Should().NotContain("private void MoveSheetTab(");
 
         sheetTabsSource.Should().Contain("internal void RefreshSheetTabs()");
         sheetTabsSource.Should().Contain("private void SheetTab_MouseLeftButtonDown(");
         sheetTabsSource.Should().Contain("private void UpdateSheetTabNavigation()");
-        sheetTabsSource.Should().Contain("private void RenameSheetFromTab(");
+        sheetTabsSource.Should().Contain("private void BeginInlineSheetTabRename(");
         sheetTabsSource.Should().Contain("private void MoveSheetTab(");
     }
 

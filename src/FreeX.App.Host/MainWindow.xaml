@@ -845,6 +845,18 @@
                                                             </TextBlock.Style>
                                                         </TextBlock>
                                                     </StackPanel>
+                                                    <TextBox x:Name="SheetTabRenameEditor"
+                                                             Grid.Row="0"
+                                                             Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                                             Visibility="Collapsed"
+                                                             MinWidth="48"
+                                                             Padding="1,0"
+                                                             FontSize="13"
+                                                             FontFamily="Segoe UI"
+                                                             VerticalContentAlignment="Center"
+                                                             AutomationProperties.Name="Rename sheet tab"
+                                                             AutomationProperties.AutomationId="SheetTabRenameEditor"
+                                                             PreviewKeyDown="SheetTabRenameEditor_PreviewKeyDown"/>
                                                 </Grid>
                                             </Grid>
                                         </Border>
@@ -858,6 +870,10 @@
                                                 IsHitTestVisible="False"/>
                                     </Grid>
                                     <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                            <Setter TargetName="SheetTabLabelContent" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="SheetTabRenameEditor" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
                                         <MultiDataTrigger>
                                             <MultiDataTrigger.Conditions>
                                                 <Condition Binding="{Binding IsActive}" Value="False"/>
