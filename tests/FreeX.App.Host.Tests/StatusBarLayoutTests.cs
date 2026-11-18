@@ -31,6 +31,12 @@ public sealed class StatusBarLayoutTests
             sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(6)));
             sheet.SetCell(new CellAddress(sheet.Id, 2, 2), Cell.FromValue(new TextValue("ignored")));
 
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarAverageMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarCountMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarNumericalCountMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMinimumMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMaximumMenuItem", true);
             harness.InvalidateNavigationCaches();
             harness.SelectRange(1, 1, 2, 2);
             harness.RefreshStatusBar();
@@ -47,6 +53,36 @@ public sealed class StatusBarLayoutTests
     }
 
     [Fact]
+    public void SingleCellSelection_HidesStatisticsByDefaultAndAllowsOptIn()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.ActiveWorkbook.GetSheet(harness.CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(13)));
+
+            harness.InvalidateNavigationCaches();
+            harness.SelectRange(1, 1, 1, 1);
+            harness.RefreshStatusBar();
+
+            foreach (var name in new[]
+                     {
+                         "StatusAvgText", "StatusCountText", "StatusNumericalCountText",
+                         "StatusSumText", "StatusMinText", "StatusMaxText"
+                     })
+            {
+                harness.StatusTextVisibility(name).Should().Be(Visibility.Collapsed);
+            }
+
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", true);
+            harness.RefreshStatusBar();
+            harness.StatusTextVisibility("StatusSumText").Should().Be(Visibility.Visible);
+            harness.StatusText("StatusSumText").Should().Be("Sum: 13");
+        });
+    }
+
+    [Fact]
     public void NumericSelection_UpdatesAggregateAutomationNamesWithLiveStatusText()
     {
         StaTestRunner.Run(() =>
@@ -57,6 +93,9 @@ public sealed class StatusBarLayoutTests
             sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)));
             sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
 
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarAverageMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarCountMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", true);
             harness.SetStatusBarCustomizeMenuItemChecked("StatusBarNumericalCountMenuItem", true);
             harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMinimumMenuItem", true);
             harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMaximumMenuItem", true);

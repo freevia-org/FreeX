@@ -6,16 +6,16 @@ namespace FreeX.App.Host.Tests;
 public sealed class StatusBarCustomizeMenuSourceTests
 {
     [Fact]
-    public void DefaultStatusBarCustomization_MatchesExcelVisibleStatistics()
+    public void DefaultStatusBarCustomization_HidesSelectionStatisticsLikeExcel()
     {
         var options = new AppOptions();
 
-        options.StatusBarShowAverage.Should().BeTrue();
-        options.StatusBarShowCount.Should().BeTrue();
+        options.StatusBarShowAverage.Should().BeFalse();
+        options.StatusBarShowCount.Should().BeFalse();
         options.StatusBarShowNumericalCount.Should().BeFalse();
         options.StatusBarShowMinimum.Should().BeFalse();
         options.StatusBarShowMaximum.Should().BeFalse();
-        options.StatusBarShowSum.Should().BeTrue();
+        options.StatusBarShowSum.Should().BeFalse();
     }
 
     [Fact]

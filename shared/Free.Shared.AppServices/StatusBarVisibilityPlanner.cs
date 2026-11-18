@@ -22,12 +22,12 @@ public sealed record StatusBarOptionVisibility(
     bool EndMode = false,
     bool SelectionMode = false,
     bool PageNumber = false,
-    bool Average = true,
-    bool Count = true,
+    bool Average = false,
+    bool Count = false,
     bool NumericalCount = false,
     bool Minimum = false,
     bool Maximum = false,
-    bool Sum = true,
+    bool Sum = false,
     bool ViewShortcuts = true,
     bool Zoom = true,
     bool ZoomSlider = true)
@@ -35,7 +35,7 @@ public sealed record StatusBarOptionVisibility(
     public static StatusBarOptionVisibility ExcelDefaults { get; } = new();
 
     public static StatusBarOptionVisibility FullReadoutDefaults { get; } =
-        new(SelectionMode: true, NumericalCount: true);
+        new(Average: true, Count: true, SelectionMode: true, NumericalCount: true, Sum: true);
 
     public static StatusBarOptionVisibility From(Func<string, bool> isOptionVisible)
     {

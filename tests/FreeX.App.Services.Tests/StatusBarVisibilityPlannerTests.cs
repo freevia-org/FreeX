@@ -43,14 +43,18 @@ public sealed class StatusBarVisibilityPlannerTests
     private static readonly TestTextProvider Text = new();
 
     [Fact]
-    public void DefaultProfiles_PreserveWpfAndAvaloniaDifferences()
+    public void DefaultProfiles_MatchExcelAndFullReadoutProfiles()
     {
+        StatusBarOptionVisibility.ExcelDefaults.Average.Should().BeFalse();
+        StatusBarOptionVisibility.ExcelDefaults.Count.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.SelectionMode.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.NumericalCount.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.Minimum.Should().BeFalse();
         StatusBarOptionVisibility.ExcelDefaults.Maximum.Should().BeFalse();
-        StatusBarOptionVisibility.ExcelDefaults.Sum.Should().BeTrue();
+        StatusBarOptionVisibility.ExcelDefaults.Sum.Should().BeFalse();
 
+        StatusBarOptionVisibility.FullReadoutDefaults.Average.Should().BeTrue();
+        StatusBarOptionVisibility.FullReadoutDefaults.Count.Should().BeTrue();
         StatusBarOptionVisibility.FullReadoutDefaults.SelectionMode.Should().BeTrue();
         StatusBarOptionVisibility.FullReadoutDefaults.NumericalCount.Should().BeTrue();
         StatusBarOptionVisibility.FullReadoutDefaults.Minimum.Should().BeFalse();
@@ -138,19 +142,12 @@ public sealed class StatusBarVisibilityPlannerTests
     }
 
     [Fact]
-    public void Build_HidesStatsPanelWhenEveryStatisticOptionIsOff()
+    public void Build_HidesStatsPanelWithExcelDefaultStatisticOptions()
     {
-        var options = StatusBarOptionVisibility.ExcelDefaults with
-        {
-            Average = false,
-            Count = false,
-            NumericalCount = false,
-            Sum = false,
-            Minimum = false,
-            Maximum = false
-        };
-
-        var plan = StatusBarVisibilityPlanner.Build(StatsModel(), options, fallbackAutomationText: "Customize Status Bar");
+        var plan = StatusBarVisibilityPlanner.Build(
+            StatsModel(),
+            StatusBarOptionVisibility.ExcelDefaults,
+            fallbackAutomationText: "Customize Status Bar");
 
         plan.StatsPanelVisible.Should().BeFalse();
         plan.VisibleReadoutText.Should().BeEmpty();
