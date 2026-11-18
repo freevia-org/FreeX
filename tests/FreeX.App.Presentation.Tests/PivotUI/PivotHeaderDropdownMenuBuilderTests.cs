@@ -172,6 +172,60 @@ public sealed class PivotHeaderDropdownMenuBuilderTests
         menu.Items.Single(i => i.Action == PivotHeaderMenuAction.MoveToColumns).IsEnabled.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(PivotHeaderArea.Page, PivotHeaderMenuAction.MoveToFilters, PivotHeaderMenuAction.FieldSettings)]
+    [InlineData(PivotHeaderArea.Row, PivotHeaderMenuAction.MoveToRows, PivotHeaderMenuAction.FieldSettings)]
+    [InlineData(PivotHeaderArea.Column, PivotHeaderMenuAction.MoveToColumns, PivotHeaderMenuAction.FieldSettings)]
+    public void BuildMenu_AreaActionsHaveExcelOrderAndAreaSpecificDefaults(
+        PivotHeaderArea area,
+        PivotHeaderMenuAction moveToCurrentArea,
+        PivotHeaderMenuAction fieldSettings)
+    {
+        var pivot = BuildPivot();
+        var target = PivotHeaderDropdownMenuBuilder.BuildTargets(pivot, Headers)
+            .Single(candidate => candidate.Area == area);
+
+        var menu = PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target);
+
+        menu.Items.Select(item => item.Action).Should().Equal(
+            PivotHeaderMenuAction.SortAscending,
+            PivotHeaderMenuAction.SortDescending,
+            PivotHeaderMenuAction.MoreSortOptions,
+            PivotHeaderMenuAction.ClearSort,
+            PivotHeaderMenuAction.Separator,
+            PivotHeaderMenuAction.LabelFilter,
+            PivotHeaderMenuAction.ValueFilter,
+            PivotHeaderMenuAction.ClearFilter,
+            PivotHeaderMenuAction.Separator,
+            PivotHeaderMenuAction.MoveUp,
+            PivotHeaderMenuAction.MoveDown,
+            PivotHeaderMenuAction.MoveToRows,
+            PivotHeaderMenuAction.MoveToColumns,
+            PivotHeaderMenuAction.MoveToFilters,
+            PivotHeaderMenuAction.MoveToValues,
+            PivotHeaderMenuAction.Separator,
+            fieldSettings,
+            PivotHeaderMenuAction.RemoveField);
+
+        menu.Items.Where(item => item.Action == PivotHeaderMenuAction.Separator)
+            .Should().OnlyContain(item => item.IsSeparator);
+        menu.Items.Where(item => item.Action is PivotHeaderMenuAction.SortAscending or PivotHeaderMenuAction.SortDescending)
+            .Should().OnlyContain(item => !item.IsChecked);
+        menu.Items.Single(item => item.Action == PivotHeaderMenuAction.ClearSort)
+            .IsEnabled.Should().BeFalse();
+        menu.Items.Single(item => item.Action == PivotHeaderMenuAction.ClearFilter)
+            .IsEnabled.Should().BeFalse();
+        menu.Items.Single(item => item.Action == moveToCurrentArea)
+            .IsEnabled.Should().BeFalse();
+        menu.Items.Where(item => item.Action is PivotHeaderMenuAction.MoveToRows
+                or PivotHeaderMenuAction.MoveToColumns
+                or PivotHeaderMenuAction.MoveToFilters)
+            .Where(item => item.Action != moveToCurrentArea)
+            .Should().OnlyContain(item => item.IsEnabled);
+        menu.Items.Single(item => item.Action == PivotHeaderMenuAction.MoveToValues)
+            .IsEnabled.Should().BeTrue();
+    }
+
     [Fact]
     public void BuildTargets_ValueFilterWithNullSourceFieldIndex_DoesNotMarkUnrelatedFieldActive()
     {
