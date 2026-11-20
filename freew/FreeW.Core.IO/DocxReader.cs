@@ -229,6 +229,7 @@ public static partial class DocxReader
             document.Blocks.Add(new Paragraph());
 
         ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships, numbering);
+        ShiftSectionStartKindsToFollowingBreaks(documentXml, document);
         ReadNativeVmlWatermark(archive, document);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships, numbering);
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships, numbering);
@@ -1477,6 +1478,31 @@ public static partial class DocxReader
         if (document is not null)
             ReadSectionHeadersFooters(sectPr, section.HeadersFooters, archive, document, hyperlinkRelationships, numbering);
         return section;
+    }
+
+    /// <summary>
+    /// A section's w:type describes how THAT section starts (ECMA-376 17.6.22), while the model keeps a
+    /// marker's <see cref="Section.BreakKind"/> as the break FOLLOWING its paragraph (how the next section
+    /// starts). <see cref="ReadSectionBreak"/> read each marker's own w:type; this shifts every kind onto the
+    /// marker that precedes the section it starts, the last marker taking the body-level final sectPr's type.
+    /// </summary>
+    private static void ShiftSectionStartKindsToFollowingBreaks(XDocument documentXml, TextDocument document)
+    {
+        var markers = document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.SectionBreak is not null)
+            .Select(paragraph => paragraph.SectionBreak!)
+            .ToList();
+        if (markers.Count == 0)
+            return;
+
+        var finalToken = documentXml.Root?.Element(W + "body")?.Element(W + "sectPr")
+            ?.Element(W + "type")?.Attribute(W + "val")?.Value;
+        for (var index = 0; index < markers.Count; index++)
+        {
+            markers[index].BreakKind = index + 1 < markers.Count
+                ? markers[index + 1].BreakKind
+                : SectionBreakFromToken(finalToken);
+        }
     }
 
     /// <summary>

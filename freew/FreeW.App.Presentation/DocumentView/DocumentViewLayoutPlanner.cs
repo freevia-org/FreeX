@@ -719,6 +719,14 @@ public static class DocumentViewLayoutPlanner
             if (block is not Paragraph paragraph)
                 continue;
 
+            // Only the content on the table's own (first) page counts as leading content: a forced page
+            // boundary (page-break-before, a page-break run, or a section break that starts a new page)
+            // moves everything before it onto earlier pages. Summing the whole document prefix here made a
+            // table that follows a cover page look like it started with no room left, so it was split far
+            // too early and left the page it begins on mostly empty.
+            if (paragraph.Formatting.PageBreakBefore)
+                height = 0;
+
             var charsPerLine = paragraph.StyleId?.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) == true
                 ? Math.Max(16, (int)Math.Round(charsPerColumnLine * 0.78))
                 : charsPerColumnLine;
@@ -736,6 +744,14 @@ public static class DocumentViewLayoutPlanner
 
             if (paragraph.StyleId?.Equals("Heading1", StringComparison.OrdinalIgnoreCase) == true)
                 height += defaultFontSizeDip * 0.6;
+
+            // A page-break run starts the NEXT page at the paragraph's remaining text: restart the tally
+            // with this paragraph's own height, since the text after the break lives on the new page.
+            // A page-type section break (the break FOLLOWING this paragraph) empties the new page.
+            if (paragraph.Runs.Any(run => run.IsPageBreak))
+                height = lineCount * lineHeightDip + paragraph.Formatting.SpaceAfterPt * dipPerPoint;
+            if (paragraph.SectionBreak?.BreakKind is SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage)
+                height = 0;
         }
 
         // The page renderer reserves a bottom band for detached footnote bodies. Keep this shared
@@ -3086,10 +3102,33 @@ public static class DocumentViewLayoutPlanner
         double cellWidthDip)
     {
         var contentWidthDip = ResolveTableCellContentWidthDip(table, cell, cellWidthDip);
-        var lines = Math.Max(1, cell.Paragraphs.Sum(paragraph =>
-            EstimateParagraphLineCount(paragraph, contentWidthDip, ResolveEffectiveFontSizePt(paragraph))));
-        var textHeightDip = AddTableCellVerticalPaddingDip(
-            table, cell, lines * EstimatedTableLineHeightDip);
+        double textHeightDip;
+        if (cell.Paragraphs.Count > 0 && cell.Paragraphs.All(IsExactLineParagraph))
+        {
+            // Every paragraph pins its line pitch ("exactly N pt"), so the row is exactly its lines times
+            // that pitch plus the paragraphs' own space before/after (the last space-after stays inside the
+            // cell, as in Word) -- not the 18 DIP/line + 8 DIP gutter guess that is calibrated for
+            // natural-height text and would size a 17pt-exact / 6pt-after TOC row at 26 instead of 30.7 DIP,
+            // packing the planned page piece with more rows than physically fit.
+            var margins = cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
+            textHeightDip = PageLayout.PointsToDip(Math.Max(0, margins.TopPt) + Math.Max(0, margins.BottomPt));
+            foreach (var paragraph in cell.Paragraphs)
+            {
+                var paragraphLines = EstimateParagraphLineCount(
+                    paragraph, contentWidthDip, ResolveEffectiveFontSizePt(paragraph));
+                textHeightDip += PageLayout.PointsToDip(
+                    paragraphLines * paragraph.Formatting.LineHeightPt
+                    + Math.Max(0, paragraph.Formatting.SpaceBeforePt)
+                    + Math.Max(0, paragraph.Formatting.SpaceAfterPt));
+            }
+        }
+        else
+        {
+            var lines = Math.Max(1, cell.Paragraphs.Sum(paragraph =>
+                EstimateParagraphLineCount(paragraph, contentWidthDip, ResolveEffectiveFontSizePt(paragraph))));
+            textHeightDip = AddTableCellVerticalPaddingDip(
+                table, cell, lines * EstimatedTableLineHeightDip);
+        }
         var nestedTablesHeightDip = cell.NestedTables.Sum(nested =>
             EstimateTableHeightDip(nested, Math.Max(12, contentWidthDip)));
         return textHeightDip + nestedTablesHeightDip;
@@ -3157,6 +3196,9 @@ public static class DocumentViewLayoutPlanner
     /// explicit size among the paragraph's runs so a bigger font (a styled header cell, for instance)
     /// widens the assumed character width instead of being averaged away by smaller neighbouring runs.
     /// </summary>
+    private static bool IsExactLineParagraph(Paragraph paragraph) =>
+        paragraph.Formatting is { LineRule: LineSpacingRule.Exact, LineHeightPt: > 0 };
+
     private static double ResolveEffectiveFontSizePt(Paragraph paragraph)
     {
         var largestExplicitSizePt = 0.0;
@@ -3183,10 +3225,32 @@ public static class DocumentViewLayoutPlanner
         // estimate undercounts wrapped lines -- and diverges further still for a larger font -- on
         // virtually every real table. Use the authored grid width so the pagination plan agrees with both
         // hosts when a narrow cell wraps before a page boundary.
-        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt);
+        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt * ScriptCharWidthFactor(text));
         var charsPerLine = Math.Max(1, (int)Math.Floor(Math.Max(12, contentWidthDip) / charWidthDip));
         var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
         return Math.Max(explicitLines, wrappedLines);
+    }
+
+    /// <summary>
+    /// Arabic-script and Hebrew text runs roughly 0.6x as wide per character as the Latin text the
+    /// per-character table estimate is calibrated for (joined letterforms, no wide capitals). Without this a
+    /// one-line Persian/Arabic cell was estimated as two lines, so a table page piece looked ~2x too tall
+    /// and was split early, stranding its last row alone on the next page.
+    /// </summary>
+    private static double ScriptCharWidthFactor(string text)
+    {
+        var rightToLeft = 0;
+        var letters = 0;
+        foreach (var ch in text)
+        {
+            if (!char.IsLetter(ch))
+                continue;
+            letters++;
+            if (ch is >= '֐' and <= 'ࣿ' or >= 'יִ' and <= '﷿' or >= 'ﹰ' and <= '﻿')
+                rightToLeft++;
+        }
+
+        return letters > 0 && rightToLeft * 2 > letters ? 0.65 : 1.0;
     }
 
     private static int CountVerticalMergeSpan(Table table, int restartRow, int gridColumn)

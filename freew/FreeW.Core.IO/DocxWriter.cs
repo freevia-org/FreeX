@@ -1727,7 +1727,34 @@ public static partial class DocxWriter
 
             i = end;
         }
-        body.Add(BuildSectionProperties(document.Page, finalSectionParts));
+        // A section's w:type describes how THAT section starts (ECMA-376 17.6.22), but the model keeps a
+        // marker's BreakKind as the break FOLLOWING its paragraph (how the next section starts). Shift each
+        // kind onto the sectPr of the section it starts: marker i's sectPr carries the previous marker's
+        // kind (the first section has no predecessor, so it carries Word's default nextPage), and the
+        // body-level final sectPr carries the last marker's kind.
+        var sectionMarkers = document.Blocks.OfType<Paragraph>()
+            .Where(paragraph => paragraph.SectionBreak is not null)
+            .Select(paragraph => paragraph.SectionBreak!)
+            .ToList();
+        var markerSectPrs = body.Descendants(W + "sectPr")
+            .Where(sectPr => sectPr.Parent?.Name == W + "pPr")
+            .ToList();
+        if (markerSectPrs.Count == sectionMarkers.Count)
+        {
+            for (var markerIndex = 0; markerIndex < markerSectPrs.Count; markerIndex++)
+            {
+                var ownStart = markerIndex == 0 ? SectionBreakKind.NextPage : sectionMarkers[markerIndex - 1].BreakKind;
+                markerSectPrs[markerIndex].Element(W + "pgSz")?.AddBeforeSelf(
+                    new XElement(W + "type", new XAttribute(W + "val", SectionBreakToken(ownStart))));
+            }
+        }
+
+        body.Add(BuildSectionProperties(
+            document.Page,
+            finalSectionParts,
+            breakKind: sectionMarkers.Count > 0 && sectionMarkers[^1].BreakKind != SectionBreakKind.NextPage
+                ? sectionMarkers[^1].BreakKind
+                : null));
 
         // Page background colour (w:background): it is positionally the FIRST child of w:document, before
         // w:body. Emitted only when a background colour is set so existing documents are unaffected.
@@ -3952,7 +3979,9 @@ public static partial class DocxWriter
             var sectionParts = partsBySection is not null && partsBySection.TryGetValue(section, out var p)
                 ? p
                 : (IReadOnlyList<HeaderFooterPart>)[];
-            pPr.Add(BuildSectionProperties(section.Page, sectionParts, breakKind: section.BreakKind));
+            // The w:type is added once all markers are known (see BuildDocument): it belongs to the section this
+            // marker ends, but the model's BreakKind describes the break that follows it.
+            pPr.Add(BuildSectionProperties(section.Page, sectionParts));
         }
 
         // w:pPrChange (tracked paragraph-formatting change) — LAST child of w:pPr, after sectPr.

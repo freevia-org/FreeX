@@ -286,4 +286,28 @@ public class SectionHeaderFooterRoundTripTests
         result.Sections[0].BreakKind.Should().Be(SectionBreakKind.NextPage);
         result.Sections[0].Page.MarginLeftPt.Should().Be(55);
     }
+
+    [Fact]
+    public void SectionBreakKind_IsWrittenOnTheSectionItStarts_NotTheOneItEnds()
+    {
+        // Model: kind on a marker = the break FOLLOWING its paragraph (how the next section starts).
+        // OOXML: w:sectPr/w:type = how the section owning that sectPr starts.
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("one") { SectionBreak = new Section(new PageSettings(), SectionBreakKind.Continuous) });
+        doc.Blocks.Add(new Paragraph("two") { SectionBreak = new Section(new PageSettings(), SectionBreakKind.OddPage) });
+        doc.Blocks.Add(new Paragraph("three"));
+
+        var bytes = WriteBytes(doc);
+        var body = LoadEntry(bytes, "word/document.xml").Root!.Element(W + "body")!;
+        string? TypeOf(XElement sectPr) => (string?)sectPr.Element(W + "type")?.Attribute(W + "val");
+        var markerSectPrs = body.Elements(W + "p").Select(p => p.Element(W + "pPr")!.Element(W + "sectPr")).Where(s => s is not null).ToList();
+
+        TypeOf(markerSectPrs[0]!).Should().Be("nextPage");   // the first section has no predecessor
+        TypeOf(markerSectPrs[1]!).Should().Be("continuous"); // section 2 starts continuously
+        TypeOf(body.Element(W + "sectPr")!).Should().Be("oddPage"); // final section starts on an odd page
+
+        var result = RoundTrip(doc);
+        result.Sections.Select(section => section.BreakKind).Take(2)
+            .Should().Equal(SectionBreakKind.Continuous, SectionBreakKind.OddPage);
+    }
 }

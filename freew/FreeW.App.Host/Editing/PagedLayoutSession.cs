@@ -543,6 +543,9 @@ internal sealed class PagedLayoutSession
                 TableCellListMarkerPlanner.AdvanceThroughTable(table, sequence);
                 plan.Kind = DocumentView.BodyRenderUnitKind.Reset;
                 plan.PredictedRenderedCount = PaginationEngine.RenderedTopLevelBlockCount(model, table, i);
+                // A page-type break directly before a table is the table's own page start (see
+                // PaginationEngine.ApplyTableSectionBreakFlags); it does not carry on to the next paragraph.
+                flagNextParagraph = false;
                 i++;
             }
             else if (blocks[i] is ModelParagraph bodyParagraph)
