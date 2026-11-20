@@ -951,33 +951,29 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
 
     internal bool TryHandleTableCellPointer(double screenX, double screenY, int clickCount)
     {
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null)
-            return false;
-
         var xf = _canvas.CurrentTransform;
         var slidePt = xf.ScreenToSlide(screenX, screenY);
-        var hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
-        if (!hitId.HasValue)
+        var plan = TableCellPointerPlanner.Plan(
+            _editor.CurrentSlide,
+            _editor.Presentation,
+            slidePt.X,
+            slidePt.Y,
+            clickCount);
+        switch (plan.Action)
         {
-            CommitCellEdit();
-            return false;
+            case TableCellPointerAction.CommitCellEdit:
+                CommitCellEdit();
+                return false;
+            case TableCellPointerAction.SelectCell:
+                _editor.SetActiveTableCell(plan.Row, plan.Col);
+                return true;
+            case TableCellPointerAction.ActivateCellEdit:
+                _editor.SetActiveTableCell(plan.Row, plan.Col);
+                ActivateCellEdit(plan.ShapeId, plan.Row, plan.Col);
+                return true;
+            default:
+                return false;
         }
-
-        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
-        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
-            return false;
-
-        var cellHit = TableCellHitTester.HitTest(shape, slidePt.X, slidePt.Y);
-        if (!cellHit.HasValue)
-            return false;
-
-        _editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
-
-        if (clickCount >= 2)
-            ActivateCellEdit(shape.Id, cellHit.Value.Row, cellHit.Value.Col);
-
-        return true;
     }
 
     private void OnTextBoxKeyDown(object? sender, KeyEventArgs e)
@@ -1111,45 +1107,24 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             _cellHighlight = null;
         }
 
-        var state = AvaloniaTableCellEditAdapter.PlanSelectedCell(_editor);
-        if (!state.CanEditText ||
-            state.ShapeId is null ||
-            state.Row is null ||
-            state.Col is null)
+        if (TableCellPointerPlanner.PlanHighlight(
+                _editor.CurrentSlide,
+                _editor.SelectedShapeIds,
+                _editor.ActiveTableCell,
+                _canvas.CurrentTransform) is not { } highlight)
         {
             UpdateOverlayState();
             return;
         }
 
-        var shape = _editor.CurrentSlide is { } currentSlide
-            ? ShapeHitTester.FindShape(currentSlide, state.ShapeId.Value)
-            : null;
-        if (shape?.Kind != SlideShapeKind.Table)
-        {
-            UpdateOverlayState();
-            return;
-        }
-
-        var cellRect = TableCellHitTester.GetCellRect(shape, state.Row.Value, state.Col.Value);
-        if (cellRect is null)
-        {
-            UpdateOverlayState();
-            return;
-        }
-
-        var placement = TableCellEditPlanner.PlanCellEditorPlacement(
-            shape,
-            cellRect.Value,
-            _canvas.CurrentTransform,
-            minimumWidth: 0,
-            minimumHeight: 0);
+        var placement = highlight.Placement;
         _cellHighlight = new Border
         {
             Width = Math.Max(1, placement.Width),
             Height = Math.Max(1, placement.Height),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
-            BorderThickness = new Thickness(2),
-            Background = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
+            BorderBrush = new SolidColorBrush(Color.FromUInt32(highlight.StrokeArgb)),
+            BorderThickness = new Thickness(highlight.StrokeThickness),
+            Background = new SolidColorBrush(Color.FromUInt32(highlight.FillArgb)),
             IsHitTestVisible = false,
         };
 
