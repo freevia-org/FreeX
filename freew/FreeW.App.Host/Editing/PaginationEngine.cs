@@ -1526,10 +1526,24 @@ internal static class PaginationEngine
         // only when the sequence is complete; an uncertain mapping must not move a section break.
         if (modelParagraphs.Count == renderedParagraphs.Count)
         {
-            for (int i = 0; i < modelParagraphs.Count - 1; i++)
+            // The paragraph list skips tables, so "the next paragraph" is only the block after a marker when
+            // the marker is directly followed by a paragraph. A marker followed by a table is handled by
+            // ApplyTableSectionBreakFlags; flagging the next paragraph here too pushed whatever paragraph
+            // came after the table (e.g. the 1pt section-end mark) onto a page of its own.
+            var blocks = editor.Model.Blocks;
+            var paragraphOrdinal = 0;
+            for (var blockIndex = 0; blockIndex < blocks.Count; blockIndex++)
             {
-                if (IsPageTypeSectionBreak(modelParagraphs[i].SectionBreak))
-                    renderedParagraphs[i + 1].BreakPageBefore = true;
+                if (blocks[blockIndex] is not FreeW.Core.Model.Paragraph marker)
+                    continue;
+                var ordinal = paragraphOrdinal++;
+                if (ordinal < modelParagraphs.Count - 1
+                    && IsPageTypeSectionBreak(marker.SectionBreak)
+                    && blockIndex + 1 < blocks.Count
+                    && blocks[blockIndex + 1] is FreeW.Core.Model.Paragraph)
+                {
+                    renderedParagraphs[ordinal + 1].BreakPageBefore = true;
+                }
             }
         }
 
