@@ -20957,4 +20957,16 @@ and {0} more.</value>
   <data name="WorkbookPerformance_ReportHelpText" xml:space="preserve">
     <value>Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.</value>
   </data>
+  <data name="Options_EditCustomListsButton" xml:space="preserve">
+    <value>Edit Custom Lists...</value>
+  </data>
+  <data name="Options_CustomListsTitle" xml:space="preserve">
+    <value>Custom Lists</value>
+  </data>
+  <data name="Options_CustomListsDescription" xml:space="preserve">
+    <value>Enter one list per line, with the entries separated by commas. The fill handle continues these lists.</value>
+  </data>
+  <data name="Options_CustomListsEditorAutomationName" xml:space="preserve">
+    <value>Custom lists</value>
+  </data>
 </root>

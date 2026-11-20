@@ -26,16 +26,25 @@ internal static class FormulaBarAvaloniaInputAdapter
             _ => FormulaEditorKey.None
         };
 
-    public static FormulaEditorModifiers ToFormulaEditorModifiers(KeyModifiers modifiers)
+    public static FormulaEditorModifiers ToFormulaEditorModifiers(KeyModifiers modifiers) =>
+        ToFormulaEditorModifiers(modifiers, OperatingSystem.IsMacOS());
+
+    /// <param name="metaIsCommand">
+    /// True on macOS, where Cmd is the platform command modifier: the shared edit-key planners only
+    /// know the Windows Ctrl chords (Ctrl+Enter fills the selection, Ctrl+Arrow jumps while pointing
+    /// a formula reference), so Cmd is projected onto <see cref="FormulaEditorModifiers.Control"/>.
+    /// </param>
+    public static FormulaEditorModifiers ToFormulaEditorModifiers(KeyModifiers modifiers, bool metaIsCommand)
     {
         var result = FormulaEditorModifiers.None;
         if (modifiers.HasFlag(KeyModifiers.Shift))
             result |= FormulaEditorModifiers.Shift;
-        if (modifiers.HasFlag(KeyModifiers.Control))
+        if (modifiers.HasFlag(KeyModifiers.Control) ||
+            metaIsCommand && modifiers.HasFlag(KeyModifiers.Meta))
             result |= FormulaEditorModifiers.Control;
         if (modifiers.HasFlag(KeyModifiers.Alt))
             result |= FormulaEditorModifiers.Alt;
-        if (modifiers.HasFlag(KeyModifiers.Meta))
+        if (!metaIsCommand && modifiers.HasFlag(KeyModifiers.Meta))
             result |= FormulaEditorModifiers.Meta;
         return result;
     }

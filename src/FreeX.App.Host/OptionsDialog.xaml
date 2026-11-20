@@ -413,6 +413,11 @@
                         <CheckBox x:Name="OptAdvancedAutoComplete"
                                   Content="{local:Loc Key=Options_EnableAutoCompleteForCellValues}"
                                   IsChecked="True" FontSize="12" Margin="0,0,0,6"/>
+                        <Button x:Name="OptEditCustomLists" Width="150" Height="24" HorizontalAlignment="Left"
+                                Margin="0,0,0,6" FontSize="12"
+                                Content="{local:Loc Key=Options_EditCustomListsButton}"
+                                AutomationProperties.AutomationId="OptionsEditCustomListsButton"
+                                Click="EditCustomLists_Click"/>
 
                         <TextBlock Text="{local:Loc Key=Options_DisplayOptionsForThisWorkbook}"
                                    FontWeight="SemiBold" FontSize="13" Margin="0,18,0,5"/>
