@@ -36,7 +36,9 @@ public sealed class DialogTabControlKeyboardSwitchTests
             {
                 var tabs = FindByAutomationId<TabControl>(dialog, "FormatCellsTabStrip")!;
                 tabs.ItemCount.Should().Be(6);
-                tabs.SelectedIndex.Should().Be(0, "Format Cells always opens on its first tab");
+                // A default open reuses the last-selected tab (WPF parity), which depends on test order;
+                // start the keyboard walk from a known first tab.
+                tabs.SelectedIndex = 0;
 
                 // Ctrl+Tab must visit every one of the six tabs, in order, purely via the keyboard --
                 // with no programmatic SelectedIndex assignment anywhere in this loop -- and land focus

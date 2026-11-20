@@ -17165,6 +17165,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return list;
     }
 
+    // WPF FormatCellsDialog._lastSelectedTab: process-wide, updated on every tab change.
+    private static int s_formatCellsLastSelectedTabIndex;
+
+    internal static int ResolveFormatCellsEffectiveInitialTabIndex(int initialTabIndex) =>
+        initialTabIndex == 0 ? s_formatCellsLastSelectedTabIndex : initialTabIndex;
+
     private async Task ShowFormatCellsDialogAsync(int initialTabIndex = 0)
     {
         if (!TryCommitPendingFormulaEdit())
@@ -19186,7 +19192,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         var tabStrip = new TabControl
         {
-            SelectedIndex = Math.Clamp(initialTabIndex, 0, 5),
+            // WPF FormatCellsDialog: a Number (default) request reopens on the tab last selected in any
+            // Format Cells dialog this session; explicit non-Number requests (Alignment launcher,
+            // Ctrl+Shift+F Font, Find/Replace format) always open the requested tab.
+            SelectedIndex = Math.Clamp(ResolveFormatCellsEffectiveInitialTabIndex(initialTabIndex), 0, 5),
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 8),
             ItemsSource = new[]
@@ -19223,7 +19232,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             dialog.ResizeClient(targetSize);
         }
 
-        tabStrip.SelectionChanged += (_, _) => ApplyFormatCellsDialogFrameForSelectedTab();
+        tabStrip.SelectionChanged += (_, e) =>
+        {
+            // Only the TabControl's own selection (not bubbled child-list selections) is remembered.
+            if (ReferenceEquals(e.Source, tabStrip) && tabStrip.SelectedIndex is >= 0 and <= 5)
+                s_formatCellsLastSelectedTabIndex = tabStrip.SelectedIndex;
+            ApplyFormatCellsDialogFrameForSelectedTab();
+        };
+        // WPF records the initial selection too (its Loaded handler sets SelectedIndex).
+        s_formatCellsLastSelectedTabIndex = tabStrip.SelectedIndex;
         ApplyFormatCellsDialogFrameForSelectedTab();
 
         var buttonRow = new StackPanel
