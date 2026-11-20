@@ -39,16 +39,16 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
     public const string MimeType = "application/vnd.oasis.opendocument.text";
 
     // ODF / OpenDocument namespaces (the subset this adapter touches).
-    private static readonly XNamespace Office = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
-    private static readonly XNamespace Text = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
-    private static readonly XNamespace Style = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
-    private static readonly XNamespace Fo = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
-    private static readonly XNamespace TableNs = "urn:oasis:names:tc:opendocument:xmlns:table:1.0";
-    private static readonly XNamespace Draw = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0";
-    private static readonly XNamespace Svg = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
-    private static readonly XNamespace Xlink = "http://www.w3.org/1999/xlink";
-    private static readonly XNamespace Meta = "urn:oasis:names:tc:opendocument:xmlns:meta:1.0";
-    private static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
+    private static readonly XNamespace Office = OdfNamespaces.Office;
+    private static readonly XNamespace Text = OdfNamespaces.Text;
+    private static readonly XNamespace Style = OdfNamespaces.Style;
+    private static readonly XNamespace Fo = OdfNamespaces.Fo;
+    private static readonly XNamespace TableNs = OdfNamespaces.Table;
+    private static readonly XNamespace Draw = OdfNamespaces.Draw;
+    private static readonly XNamespace Svg = OdfNamespaces.Svg;
+    private static readonly XNamespace Xlink = OdfNamespaces.Xlink;
+    private static readonly XNamespace Meta = OdfNamespaces.Meta;
+    private static readonly XNamespace Dc = OdfNamespaces.DublinCore;
 
     private static readonly OpenDocumentXmlEntryOptions XmlEntryOptions = new(
         OmitXmlDeclaration: false,

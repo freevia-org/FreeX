@@ -40,20 +40,20 @@ public sealed partial class OdsFileAdapter : IFileAdapter
     internal const string MimeType = "application/vnd.oasis.opendocument.spreadsheet";
 
     // ODF namespaces used across content.xml / styles.xml / manifest.xml.
-    internal static readonly XNamespace OfficeNs = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
-    internal static readonly XNamespace TableNs = "urn:oasis:names:tc:opendocument:xmlns:table:1.0";
-    internal static readonly XNamespace TextNs = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
-    internal static readonly XNamespace StyleNs = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
-    internal static readonly XNamespace FoNs = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
-    internal static readonly XNamespace NumberNs = "urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0";
-    internal static readonly XNamespace SvgNs = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
+    internal static readonly XNamespace OfficeNs = OdfNamespaces.Office;
+    internal static readonly XNamespace TableNs = OdfNamespaces.Table;
+    internal static readonly XNamespace TextNs = OdfNamespaces.Text;
+    internal static readonly XNamespace StyleNs = OdfNamespaces.Style;
+    internal static readonly XNamespace FoNs = OdfNamespaces.Fo;
+    internal static readonly XNamespace NumberNs = OdfNamespaces.Number;
+    internal static readonly XNamespace SvgNs = OdfNamespaces.Svg;
 
     /// <summary>
     /// r293: XLink, which is where ODF puts a hyperlink target -- <c>text:a/@xlink:href</c> inside the
     /// cell's paragraph. The adapter previously had no hyperlink handling on either side, so a
     /// workbook saved to .ods lost every hyperlink silently, in a format that can represent them.
     /// </summary>
-    internal static readonly XNamespace XlinkNs = "http://www.w3.org/1999/xlink";
+    internal static readonly XNamespace XlinkNs = OdfNamespaces.Xlink;
 
     /// <summary>
     /// The OpenFormula namespace. Every formula this adapter writes is prefixed "of:=" per ODF 1.2's
@@ -62,7 +62,7 @@ public sealed partial class OdsFileAdapter : IFileAdapter
     /// to parse every formula FreeX wrote to .ods and evaluated the lot to #VALUE!, while FreeX's own
     /// reader never noticed because it strips the "of:=" prefix textually without resolving it.
     /// </summary>
-    internal static readonly XNamespace OfNs = "urn:oasis:names:tc:opendocument:xmlns:of:1.2";
+    internal static readonly XNamespace OfNs = OdfNamespaces.OpenFormula;
 
     private static readonly OpenDocumentXmlEntryOptions XmlEntryOptions = new(
         OmitXmlDeclaration: false,
