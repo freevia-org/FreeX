@@ -11738,6 +11738,11 @@ public sealed partial class DocumentView : RichTextBox
                 t_cellTextWidthDip = null;
                 if (modelCell.NestedTables.Count > 0)
                     InsertNestedTableBlocks(wpfCell, modelCell, document);
+                // Word draws "automatic" text colour white on a dark cell fill; only runs with no colour of
+                // their own take it (the overlay skips runs that already carry one).
+                if (styleTextColorHex is null && wpfCell.Background is SolidColorBrush { Color: var cellFillColor }
+                    && IsDarkAutoTextBackground(cellFillColor))
+                    styleTextColorHex = "FFFFFF";
                 if (styleBold || styleTextColorHex is not null)
                     ApplyTableStyleRunOverlay(wpfCell, styleBold, styleTextColorHex);
                 // Word keeps the space-after of a cell's last paragraph inside the cell, and so does WPF: the
@@ -12237,6 +12242,10 @@ public sealed partial class DocumentView : RichTextBox
     // stamps an explicit weight on every run, so cell-level inheritance cannot carry it. The rendered
     // snapshot on the run's marker is updated alongside the live property, so CommitToModel sees no
     // difference and never bakes the style-derived value into the run's direct formatting.
+    /// <summary>Word's rule for automatic text colour: white on a fill whose perceived brightness is under half.</summary>
+    internal static bool IsDarkAutoTextBackground(Color fill) =>
+        fill.A > 0 && (0.299 * fill.R + 0.587 * fill.G + 0.114 * fill.B) < 128.0;
+
     private static void ApplyTableStyleRunOverlay(WpfTableCell cell, bool bold, string? colorHex)
     {
         Brush? brush = TryParseColor(colorHex, out var color) ? new SolidColorBrush(color) : null;
@@ -14775,12 +14784,16 @@ public sealed partial class DocumentView : RichTextBox
         return marker;
     }
 
-    private static void ApplyNoteReferencePresentation(WpfRun marker, TextDocument document)
+    internal static void ApplyNoteReferencePresentation(WpfRun marker, TextDocument document)
     {
         marker.BaselineAlignment = BaselineAlignment.Baseline;
         marker.FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale;
         marker.TextEffects.Add(new TextEffect
         {
+            // A TextEffect with the default PositionCount (0) covers no characters, so without an explicit
+            // count the mark never left the baseline (it printed lowered next to Word's raised mark).
+            PositionStart = 0,
+            PositionCount = int.MaxValue,
             Transform = new TranslateTransform(0, -NoteReferenceSuperscriptOffsetDip)
         });
     }
@@ -16556,6 +16569,8 @@ public sealed partial class DocumentView : RichTextBox
 
         run.TextEffects.Add(new TextEffect
         {
+            PositionStart = 0,
+            PositionCount = int.MaxValue,
             Transform = new TranslateTransform(0, offsetDip)
         });
     }

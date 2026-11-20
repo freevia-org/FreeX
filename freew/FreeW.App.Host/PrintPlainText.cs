@@ -45,6 +45,40 @@ internal static class PrintPlainText
         return block;
     }
 
+    /// <summary>
+    /// Builds a note row the way Word prints it: the note's reference mark as a raised, reduced-size label
+    /// directly followed by the note text (no "85. " plain-text prefix).
+    /// </summary>
+    internal static TextBlock BuildNote(
+        string? label,
+        string text,
+        FontFamily family,
+        double fontSizeDip,
+        Brush brush,
+        double maxWidthDip)
+    {
+        if (string.IsNullOrEmpty(label))
+            return Build(text, family, fontSizeDip, brush, maxWidthDip);
+
+        var block = new TextBlock
+        {
+            FontFamily = family,
+            FontSize = fontSizeDip,
+            FontWeight = FontWeights.Normal,
+            Foreground = brush,
+            TextWrapping = TextWrapping.Wrap
+        };
+        block.Inlines.Add(new Run(label)
+        {
+            BaselineAlignment = BaselineAlignment.Superscript,
+            FontSize = fontSizeDip * 0.65
+        });
+        block.Inlines.Add(new Run(text));
+        Typography.SetKerning(block, false);
+        block.Measure(new Size(Math.Max(1, maxWidthDip), double.PositiveInfinity));
+        return block;
+    }
+
     /// <summary>Arranges <paramref name="block"/> at the given page position and returns its height.</summary>
     internal static double Place(ContainerVisual parent, TextBlock block, double x, double y)
     {
