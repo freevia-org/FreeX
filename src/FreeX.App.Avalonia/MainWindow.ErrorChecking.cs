@@ -117,9 +117,9 @@ public sealed partial class MainWindow
         var actionPanel = new GroupBox
         {
             Header = StripDisplayMnemonic(UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey)),
-            // The WPF 180 px panel is a minimum: a wider platform font grows it so the stretched
-            // action buttons ("Show Calculation Steps...") are never clipped.
-            MinWidth = ErrorCheckingDialogVisualMetrics.ActionPanelWidth,
+            // WPF fixes the help group at this width; the intro text wraps inside it (an unbounded
+            // dock measure would otherwise keep it on one line and grow the group past the WPF size).
+            Width = ErrorCheckingDialogVisualMetrics.ActionPanelWidth,
             Margin = new Thickness(10, 0, 0, 0),
             Padding = new Thickness(8),
             Content = actionStack,
@@ -408,7 +408,7 @@ public sealed partial class MainWindow
 
     // Issue captions such as "FormulaStore..." are wider than the WPF 80 px column at the Linux
     // dialog font; the columns scroll horizontally, so the Issue column is widened to show them.
-    private const double ErrorCheckingAvaloniaIssueColumnWidth = 120;
+    private const double ErrorCheckingAvaloniaIssueColumnWidth = 0;
     private const double ErrorCheckingAvaloniaDescriptionColumnWidth = 420;
 
     // WPF ListViewItem, selected and focused: a #98DDFB frame around a glassy two-segment gradient

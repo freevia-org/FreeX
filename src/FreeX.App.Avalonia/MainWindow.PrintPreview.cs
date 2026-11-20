@@ -527,18 +527,61 @@ public sealed partial class MainWindow
         printIcon.Click += (_, _) => exportButton.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         printIcon.Bind(IsEnabledProperty, new Binding(nameof(IsEnabled)) { Source = exportButton });
 
-        var documentToolbar = CreatePreviewDocumentToolbar(
+        // WPF's DocumentViewer toolbar shows only icon buttons: print, copy | zoom in, zoom out |
+        // actual size, page width, whole page. The page navigation, zoom box, Margins and Page Setup
+        // controls stay fully functional but sit in a trailing overflow row (the chevron at the end
+        // of the icon row toggles it), out of the default visible toolbar.
+        var actualSizeIndex = documentToolbarPlan.ZoomSelectedIndex;
+        var actualSizeButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, zoomOptions[actualSizeIndex].Text, chrome);
+        AutomationProperties.SetAutomationId(actualSizeButton, "PrintPreviewActualSizeButton");
+        actualSizeButton.Click += (_, _) => zoomBox.SelectedIndex = actualSizeIndex;
+        actualSizeButton.IsEnabled = pageCount > 0;
+        var overflowToggle = new global::Avalonia.Controls.Primitives.ToggleButton
+        {
+            Width = chrome.ButtonWidth,
+            MinWidth = chrome.ButtonWidth,
+            Height = chrome.ButtonHeight,
+            MinHeight = chrome.ButtonHeight,
+            MaxHeight = chrome.ButtonHeight,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            Content = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 1 1 L 5 5 L 9 1"),
+                Stroke = Brush(92, 92, 92),
+                StrokeThickness = 1.5,
+                Width = 10,
+                Height = 6,
+            },
+        };
+        AutomationProperties.SetAutomationId(overflowToggle, "PrintPreviewToolbarOverflowButton");
+        AutomationProperties.SetName(overflowToggle, UiText.Get("PrintPreview_ZoomAutomationName"));
+        var primaryToolbar = CreatePreviewDocumentToolbar(
         [
             printIcon, copyIcon,
             CreateDocumentToolbarSeparator(chrome),
+            zoomInButton, zoomOutButton,
+            CreateDocumentToolbarSeparator(chrome),
+            actualSizeButton, fitWidthButton, fitPageButton,
+            overflowToggle,
+        ]);
+        var overflowToolbar = CreatePreviewDocumentToolbar(
+        [
             firstButton, prevButton, nextButton, lastButton,
             new TextBlock { Text = documentToolbarPlan.PageLabelText, VerticalAlignment = AvaloniaVerticalAlignment.Center },
             pageNumberBox, pageStatusText,
             CreateDocumentToolbarSeparator(chrome),
-            zoomOutButton, zoomBox, zoomInButton, fitPageButton, fitWidthButton,
+            zoomBox,
             CreateDocumentToolbarSeparator(chrome),
             marginsButton, pageSetupButton,
         ]);
+        overflowToolbar.IsVisible = false;
+        overflowToggle.IsCheckedChanged += (_, _) => overflowToolbar.IsVisible = overflowToggle.IsChecked == true;
+        var documentToolbar = new StackPanel { Children = { primaryToolbar, overflowToolbar } };
         var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost, findBar);
         // An externally supplied static page source has no live sheet/session behind it, so its rail
         // stays read-only. A real preview is backed by the live active sheet and its settings rail is
