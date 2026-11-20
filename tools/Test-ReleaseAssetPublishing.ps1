@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param()
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 # Offline proof of the two pieces that make release publication resumable without ever overwriting a

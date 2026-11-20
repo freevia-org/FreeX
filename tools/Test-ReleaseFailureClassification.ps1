@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param()
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 # Offline proof of the failure classifier that decides when a release run is stopped early and when it
