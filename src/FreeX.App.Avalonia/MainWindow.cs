@@ -3869,6 +3869,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         button.Click += (_, _) => action();
+        // WPF: Cursor Hand and the ribbon-style tooltip (bold title with the key tip, grey description).
+        button.Cursor = new Cursor(StandardCursorType.Hand);
+        ToolTip.SetTip(
+            button,
+            AvaloniaRibbonRenderer.CreateRibbonTooltipContent(
+                FormulaBarText(plan.AutomationNameResourceKey),
+                FormulaBarText(plan.HelpTextResourceKey),
+                plan.KeyTip));
         AutomationProperties.SetAutomationId(button, plan.AutomationId);
         AutomationProperties.SetName(button, FormulaBarText(plan.AutomationNameResourceKey));
         AutomationProperties.SetHelpText(button, FormulaBarText(plan.HelpTextResourceKey));
@@ -3887,6 +3895,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _formulaExpandButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _formulaExpandButton.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        _formulaExpandButton.Cursor = new Cursor(StandardCursorType.Hand);
         _formulaExpandButton.Click += (_, _) => ToggleFormulaBarExpansion();
         var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
         AutomationProperties.SetAutomationId(_formulaExpandButton, plan.Button.AutomationId);
@@ -3920,8 +3929,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = plan.HostHeight;
         _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
         ApplyFormulaBarExpandAutomation(plan.Button);
-        ToolTip.SetTip(_formulaExpandButton,
-            $"{FormulaBarText(plan.TooltipTitleResourceKey)}\n{FormulaBarText(plan.TooltipDescriptionResourceKey)}");
+        ToolTip.SetTip(
+            _formulaExpandButton,
+            AvaloniaRibbonRenderer.CreateRibbonTooltipContent(
+                FormulaBarText(plan.TooltipTitleResourceKey),
+                FormulaBarText(plan.TooltipDescriptionResourceKey),
+                plan.Button.KeyTip));
     }
 
     private void ApplyFormulaBarExpandAutomation(FormulaBarChromeElementPlan plan)
@@ -4137,6 +4150,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statusBarBackground = AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.StatusSurfaceBrush) ?? StatusBarSurface;
         // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
         var statusBarHeight = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarHeight, 28.0);
+        ApplyStatusBarWpfInteractionParity();
         // WPF StatusBarRoot has no explicit height: it is the 24px control row inside Padding 8,3
         // under a 1px FreeXBorderBrush top rule, 31px in all. A 28px bar squeezes the 24px view and
         // zoom rows into 22px, so the bar is never shorter than its WPF content.
@@ -4340,10 +4354,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             else
                 ZoomOut();
         };
-        AutomationProperties.SetName(button, isZoomIn ? "Zoom in" : "Zoom out");
-        AutomationProperties.SetHelpText(button, isZoomIn
-            ? "Increases the worksheet zoom."
-            : "Decreases the worksheet zoom.");
+        ConfigureStatusBarZoomButtonParity(button, isZoomIn);
         return button;
     }
 
@@ -4984,17 +4995,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab)
     {
         var isIdle = !_isOpening && !_isSaving;
-        var sheetTabIndex = FindSheetTabIndex(tab.Id);
         var menu = new ContextMenu
         {
-            ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray(),
+            ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle).ToArray(),
         };
         // WPF chrome (12px rows, seeded command icons). No key letters: the WPF tab menu hides
         // them when it is opened with the mouse (HideSheetTabContextMenuInputGestures).
         return AvaloniaContextMenuChrome.Apply(menu);
     }
 
-    private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
+    private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle)
     {
         // R139-workbook-protection: mirrors MainWindow.SheetTabs.cs (WPF)'s BuildSheetTabContextMenuState
         // -- gray out structural tab commands under workbook structure protection (F2) and
@@ -5023,8 +5033,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // Item order and separators follow the WPF sheet-tab menu (SheetTabContextMenuPlanner order,
         // with the outline settings item spliced in before the select-all block exactly as
-        // MainWindow.SheetTabs.cs RebuildSheetTabContextMenu does). The Avalonia-only commands
-        // (duplicate, move left/right) follow in a trailing block.
+        // MainWindow.SheetTabs.cs RebuildSheetTabContextMenu does). The WPF menu has no duplicate or
+        // move left/right rows (those stay on the native Sheet menu), so none are added here.
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
@@ -5041,14 +5051,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.SelectAllSheets), SelectAllVisibleSheets, Enabled(SheetTabContextMenuAction.SelectAllSheets));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.UngroupSheets), UngroupSheets, Enabled(SheetTabContextMenuAction.UngroupSheets));
-        yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
-        yield return CreateSheetTabContextMenuItem(
-            tab,
-            UiText.Get("MainWindow_Header_MoveRight"),
-            MoveActiveSheetRight,
-            isIdle && sheetTabIndex >= 0 && sheetTabIndex < _session.SheetTabs.Count - 1);
     }
 
     private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Action action, bool isEnabled)
