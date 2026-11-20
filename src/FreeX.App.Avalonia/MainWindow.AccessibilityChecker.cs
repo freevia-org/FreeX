@@ -54,10 +54,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            // WPF AccessibilityCheckerDialog: Width/Height are *outer* sizes of a resizable window;
-            // Avalonia sizes the client area, so take the Windows caption/frame off.
-            Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,
-            Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,
+            // Same client-size contract as the issues dialog below (the clean dialog shares the metrics).
+            Width = AccessibilityCheckerDialogMetrics.Width,
+            Height = AccessibilityCheckerDialogMetrics.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
@@ -140,10 +139,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            // WPF AccessibilityCheckerDialog: Width/Height are *outer* sizes of a resizable window;
-            // Avalonia sizes the client area, so take the Windows caption/frame off.
-            Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,
-            Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,
+            // The WPF parity surface (RenderAccessibilityCheckerDialog) draws the planner metrics as the
+            // CLIENT area (a 360x520 canvas with a 176px results tree), not as the outer window, so the
+            // Avalonia client takes them unreduced; subtracting the Windows frame left the star-row
+            // results tree ~40px short of that reference.
+            Width = AccessibilityCheckerDialogMetrics.Width,
+            Height = AccessibilityCheckerDialogMetrics.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,

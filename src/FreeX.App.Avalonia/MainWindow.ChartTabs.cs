@@ -145,7 +145,6 @@ public sealed partial class MainWindow
     /// authorable families. Returns the chosen <see cref="ChartType"/> or null on cancel.
     /// </summary>
     private const double ChartPickerRowHeight = 20;
-    private const int ChartPickerVisibleRows = 10;
 
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
@@ -159,10 +158,9 @@ public sealed partial class MainWindow
         bodyGrid.Height = double.NaN;
         bodyGrid.MaxHeight = ChartTypeChangePlanner.PickerPanelHeight;
         bodyGrid.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        // WPF lists show exactly ten full 20px rows (plus the 2px borders); a fixed height of whole rows
-        // keeps the same rows visible with no half-clipped last row.
-        categoryList.Height = ChartPickerVisibleRows * ChartPickerRowHeight + 4;
-        subtypeGallery.Height = ChartPickerVisibleRows * ChartPickerRowHeight + 4;
+        // The WPF lists keep the shared 230px picker height (ChartTypeChangePlanner.PickerListHeight, which
+        // BuildAllChartsPickerBody applies) and show eleven 20px rows; the 204px "ten rows" override left the
+        // Avalonia lists ~26px short of the WPF capture, so there is no per-dialog height override here.
 
         var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
         // WPF ChangeChartTypeDialog is a 640x390 outer NoResize window; Avalonia sizes the client
@@ -234,6 +232,9 @@ public sealed partial class MainWindow
         var pickerRowStyle = new global::Avalonia.Styling.Style(x => global::Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
         pickerRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
         categoryList.Styles.Add(pickerRowStyle);
+        // The row style alone left the rows at the compact 18px pitch; the container itself carries the
+        // WPF 20px row so the lists keep the WPF pitch and visible-row count.
+        categoryList.ContainerPrepared += (_, e) => e.Container.MinHeight = ChartPickerRowHeight;
         var pickerGalleryRowStyle = new global::Avalonia.Styling.Style(x => global::Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
         pickerGalleryRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
         AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
@@ -251,6 +252,7 @@ public sealed partial class MainWindow
             },
         };
         subtypeGallery.Styles.Add(pickerGalleryRowStyle);
+        subtypeGallery.ContainerPrepared += (_, e) => e.Container.MinHeight = ChartPickerRowHeight;
         AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(subtypeGallery, $"{automationIdPrefix}SubtypeGallery");
 

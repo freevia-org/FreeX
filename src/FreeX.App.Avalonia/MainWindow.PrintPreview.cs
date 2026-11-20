@@ -1249,6 +1249,12 @@ public sealed partial class MainWindow
 
         var ignorePrintAreaBox = new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily };
         AutomationProperties.SetAutomationId(ignorePrintAreaBox, "PrintPreviewSettingsIgnorePrintAreaBox");
+        // Print windows are outside the scoped dialog chrome (DialogControlStyles.IsOutOfScope), so
+        // Fluent's disabled foreground would grey the label. WPF greys only the glyph of a disabled
+        // check box (the label keeps its ink), so the disabled label brushes stay at the rail's ink.
+        ignorePrintAreaBox.Resources["CheckBoxForegroundUncheckedDisabled"] = Brushes.Black;
+        ignorePrintAreaBox.Resources["CheckBoxForegroundCheckedDisabled"] = Brushes.Black;
+        ignorePrintAreaBox.Resources["CheckBoxForegroundIndeterminateDisabled"] = Brushes.Black;
         if (interaction is not null)
         {
             ignorePrintAreaBox.IsCheckedChanged += (_, _) => ApplyAction(
@@ -1305,13 +1311,21 @@ public sealed partial class MainWindow
             },
         };
 
-        return new ScrollViewer
+        // WPF shows the classic always-expanded vertical bar beside the rail while its rows overflow.
+        // The print windows sit outside the scoped dialog chrome, so the rail carries the classic bar
+        // resources and reserves the bar's lane (no overlay auto-hide) itself.
+        var railScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            AllowAutoHide = false,
             Background = Brush(245, 245, 245),
             Content = panel,
         };
+        ClassicScrollBarChrome.ApplyResources(railScroll.Resources);
+        foreach (var barStyle in ClassicScrollBarChrome.CreateDialogScrollBarStyles())
+            railScroll.Styles.Add(barStyle);
+        return railScroll;
     }
 
     private static Grid CreatePageRangeRow(
