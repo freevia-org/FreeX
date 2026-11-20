@@ -3155,10 +3155,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (OperatingSystem.IsWindows())
             return;
 
-        if (Application.Current is { } app)
-            NativeDock.SetMenu(app, menu);
+        TryInstallNativeDockMenu(Application.Current, menu);
 
         NativeMenu.SetMenu(this, menu);
+    }
+
+    /// <summary>
+    /// The Dock menu is one application-wide native menu. AppKit's native menu proxy is bound to the
+    /// first managed <see cref="NativeMenu"/> it receives, and re-pointing it at a different instance
+    /// throws <c>ArgumentException: The menu being updated does not match</c> from inside Avalonia's
+    /// property-changed propagation. Every additional MainWindow (View > New Window, Dock reopen,
+    /// hidden capture windows) builds its own menu, so only the first one may become the Dock menu,
+    /// and a failure here must never escape the window constructor or the UI loop.
+    /// </summary>
+    public static bool TryInstallNativeDockMenu(Application? app, NativeMenu menu)
+    {
+        if (app is null || NativeDock.GetMenu(app) is not null)
+            return false;
+
+        try
+        {
+            NativeDock.SetMenu(app, menu);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     private void ConfigureWorkbookDropTarget()
