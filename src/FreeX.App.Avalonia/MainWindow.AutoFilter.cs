@@ -28,6 +28,8 @@ public sealed partial class MainWindow
 
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
+    private const double AutoFilterPopupContentWidth = 276;
+
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
     private static readonly IBrush AutoFilterBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(142, 153, 166));
     private static readonly IBrush AutoFilterGlyphBrush = new ImmutableSolidColorBrush(Color.FromRgb(45, 55, 65));
@@ -461,14 +463,21 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(cancelButton, "AutoFilterCancelButton");
         AvaloniaCompactDialogChrome.ApplyButton(cancelButton, AutoFilterDialogChromeStyle, 72);
         cancelButton.Click += (_, _) => flyout.Hide();
-        var chrome = new DockPanel { MinWidth = 260, MaxWidth = 340 };
+        // WPF AutoFilterDialog: a 312 outer / 296 client window with a 10px margin, so 276 of content.
+        // The popup padding (8) plus the presenter frame stand in for that margin.
+        var chrome = new DockPanel { Width = AutoFilterPopupContentWidth };
         var actions = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 6, 0, 0));
         DockPanel.SetDock(actions, Dock.Bottom);
         chrome.Children.Add(actions);
+        // WPF scrolls the whole menu only past its 560 outer MaxHeight (470 of content once the margin and
+        // button row come off); the value list scrolls itself. The window-height term only shrinks the
+        // menu when the main window is shorter than that.
         chrome.Children.Add(new ScrollViewer
         {
             Content = panel,
-            MaxHeight = Math.Clamp(Bounds.Height - 120, 240, 560),
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = Math.Clamp(Bounds.Height - 24, 240, 470),
         });
 
         chrome.KeyDown += (_, e) =>
@@ -836,6 +845,10 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(0),
             IsEnabled = isEnabled,
         };
+        // WPF dims only the text of a disabled menu row; Fluent also fills the disabled button face
+        // (this popup sits outside the scoped dialog resources), which shaded the unavailable rows.
+        button.Resources["ButtonBackgroundDisabled"] = Brushes.Transparent;
+        button.Resources["ButtonBorderBrushDisabled"] = Brushes.Transparent;
         button.Click += (_, _) => onClick();
         return button;
     }

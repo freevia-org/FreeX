@@ -65,8 +65,12 @@ public sealed class AccessibilityCheckerSourceTests
         avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle");
         avaloniaSource.Should().NotContain("AccessibilityCheckerDialogMetrics.ResultsTreeHeight");
         avaloniaSource.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,*,Auto\"),");
-        avaloniaSource.Should().Contain("Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,");
-        avaloniaSource.Should().Contain("Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,");
+        // The WPF parity surface draws the planner metrics as the CLIENT area, so the Avalonia client
+        // takes them unreduced (no Windows frame subtraction).
+        avaloniaSource.Should().Contain("Width = AccessibilityCheckerDialogMetrics.Width,");
+        avaloniaSource.Should().Contain("Height = AccessibilityCheckerDialogMetrics.Height,");
+        avaloniaSource.Should().NotContain("AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight");
+        avaloniaSource.Should().NotContain("AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth");
         avaloniaSource.Should().Contain("Class(\":selected\")");
         avaloniaSource.Should().Contain("Template().OfType<Border>().Name(\"PART_LayoutRoot\")");
         avaloniaSource.Should().Contain("Color.FromRgb(0xE6, 0xF0, 0xFA)");
