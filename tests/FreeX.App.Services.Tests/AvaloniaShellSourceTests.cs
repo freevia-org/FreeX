@@ -3310,10 +3310,11 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog);");
-        source.Should().Contain("const double scenarioManagerWidth = ScenarioManagerDialogLayout.DialogWidth + 60;");
-        source.Should().Contain("Width = scenarioManagerWidth,");
+        source.Should().Contain("Width = ScenarioManagerDialogLayout.DialogWidth,");
         source.Should().Contain("Height = ScenarioManagerDialogLayout.DialogHeight,");
-        source.Should().Contain("MaxWidth = scenarioManagerWidth,");
+        source.Should().Contain("MaxWidth = ScenarioManagerDialogLayout.DialogWidth,");
+        // The window must stay at the WPF size: a wider Avalonia frame is not a like-for-like comparison.
+        source.Should().NotContain("scenarioManagerWidth");
         source.Should().Contain("MaxHeight = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("CanResize = false,");
         source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);");
@@ -4839,7 +4840,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FormatCellsBorderColorTextBox");
         source.Should().Contain("CreateBorderPalette(borderColorBox)");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"80,*,*\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*,*\")");
+        source.Should().Contain("borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;");
         source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +

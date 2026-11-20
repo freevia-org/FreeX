@@ -227,7 +227,7 @@ public sealed class AutoFilterMenuPlannerTests
         source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome(iconKind, 14, null, Brush(0x21, 0x21, 0x21))");
         source.Should().Contain("Text = label,");
         // WPF SetMenuCommandButtonContent: submenu rows end in a "›" cascade glyph.
-        source.Should().Contain("Text = \"\\u203A\"");
+        source.Should().Contain("Text = \"›\"");
         // A column without cell colours still lists the disabled Sort/Filter by Color cascade rows.
         source.Should().Contain("AddUnavailableColorRow(\"AutoFilter_SortByColor\")");
         source.Should().Contain("AddUnavailableColorRow(\"AutoFilter_FilterByColor\")");

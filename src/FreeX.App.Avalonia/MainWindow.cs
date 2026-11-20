@@ -23239,17 +23239,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var plan = initialPlan;
         string? selectedScenarioName = plan.SelectedScenario?.Name;
-        // The WPF window is 360 wide with Segoe UI; the cross-platform UI font is wider, so the
-        // Avalonia client gets extra room (labels and buttons size to content) instead of clipping.
-        const double scenarioManagerWidth = ScenarioManagerDialogLayout.DialogWidth + 60;
         var dialog = new Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
-            Width = scenarioManagerWidth,
+            Width = ScenarioManagerDialogLayout.DialogWidth,
             Height = ScenarioManagerDialogLayout.DialogHeight,
-            MinWidth = scenarioManagerWidth,
+            MinWidth = ScenarioManagerDialogLayout.DialogWidth,
             MinHeight = ScenarioManagerDialogLayout.DialogHeight,
-            MaxWidth = scenarioManagerWidth,
+            MaxWidth = ScenarioManagerDialogLayout.DialogWidth,
             MaxHeight = ScenarioManagerDialogLayout.DialogHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
