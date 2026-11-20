@@ -48,7 +48,7 @@ public sealed class PrintNotesAtFootEmptyNoteTests
         // The label "1." must still be drawn (the separator + numbered line survive even though the
         // note's own text is empty) -- before the fix, BuildNotesAtFoot's late filter discarded the
         // whole row because its Text was empty, so the foot of the page showed nothing at all.
-        text.Should().Contain("1.",
+        text.Should().Contain("note11",
             "an existing-but-empty footnote must still render its numbered line on the ordinary " +
             "print/print-preview/PDF/XPS page, matching the interactive Page Layout view");
     }

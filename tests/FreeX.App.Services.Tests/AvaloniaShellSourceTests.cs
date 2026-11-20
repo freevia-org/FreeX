@@ -776,7 +776,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_Open\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenBackstage)");
-        source.Should().Contain("_openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));");
+        source.Should().Contain("_openMenuItem.Click += (_, _) => RunGuarded(() =>");
+        source.Should().Contain("ShowBackstageOpenPane();");
         source.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_OpenRecent\"");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
@@ -2777,8 +2778,9 @@ public sealed class AvaloniaShellSourceTests
         hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.LinkTypeColumnWidth");
         hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.LabelColumnWidth");
         hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
-        hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\"), HyperlinkTargetKind.CreateNewDocument)");
-        hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\"), HyperlinkTargetKind.PlaceInThisDocument)");
+        hyperlinkSource.Should().Contain("HyperlinkTargetKind.CreateNewDocument => UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\")");
+        hyperlinkSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument => UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\")");
+        hyperlinkSource.Should().Contain("HyperlinkDialogPanePlanner.LinkTypeOrder");
         parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
         parityCaptureSource.Should().Contain("EvaluateFormulaParityFixture.CreateSummary(_session.ActiveSheet.Id)");
@@ -5094,8 +5096,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("internal bool SelectSheetForContextCommand(SheetId sheetId)");
         pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
         pointerSource.Should().Contain("if (args.ClickCount >= 2)");
-        pointerSource.Should().Contain("if (SelectSheetForContextCommand(sheetId))");
-        pointerSource.Should().Contain("RunGuarded(RenameActiveSheetAsync);");
+        pointerSource.Should().Contain("HandleSheetTabRightPress(sheetId)");
+        pointerSource.Should().Contain("BeginInlineSheetTabRename(sheetId);");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");
         source.Should().Contain("NavigateSheetTabFromKeyboard(sheetId, args);");
         source.Should().Contain("private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)");

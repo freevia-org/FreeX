@@ -427,6 +427,9 @@ public class ProtectionGuardCoverageTests
             ["EditCellsCommand"] = (wb, sheet) =>
                 EditCellsCommand.ForValue(sheet.Id, new CellAddress(sheet.Id, 1, 1), new TextValue("x")),
 
+            ["InsertedBandFormatCommand"] = (wb, sheet) =>
+                new InsertedBandFormatCommand(sheet.Id, rows: true, start: 2, count: 1, InsertedBandFormat.Clear),
+
             ["GroupedEditCellsCommand"] = (wb, sheet) =>
             {
                 var addr = new CellAddress(sheet.Id, 1, 1);

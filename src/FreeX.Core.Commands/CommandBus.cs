@@ -200,6 +200,17 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     public long GetUndoStackVersion(WorkbookId workbookId) =>
         _stacks.TryGetValue(workbookId, out var stack) ? stack.Version : 0;
 
+    /// <summary>The command on top of the undo stack (what the next Undo reverts), if any.</summary>
+    public bool TryPeekUndoCommand(WorkbookId workbookId, out IWorkbookCommand? command)
+    {
+        command = null;
+        if (!_stacks.TryGetValue(workbookId, out var stack) || !stack.TryPeekUndo(out var entry))
+            return false;
+
+        command = entry.Command;
+        return true;
+    }
+
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount) =>
         maxCount <= 0 || !_stacks.TryGetValue(workbookId, out var stack)
             ? []

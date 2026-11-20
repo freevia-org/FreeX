@@ -13,13 +13,13 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };");
         source.Should().Contain("findFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);");
         source.Should().Contain("findChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);");
-        // The open tab height still comes from the WPF-authoritative planner metrics; the mode it
-        // is chosen by now routes through the shared FindReplaceOpenMode projection.
-        source.Should().Contain("var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)");
-        source.Should().Contain("? FindReplaceDialogPlanner.ReplaceTabHeight");
-        source.Should().Contain(": FindReplaceDialogPlanner.FindTabHeight;");
-        source.Should().Contain("Height = openTabHeight,");
-        source.Should().Contain("tabs.Height = tabHeight;");
+        // The compact WPF host (3d5eb06c4a) auto-sizes its tab host: no fixed per-tab height remains,
+        // the surface is non-resizable, sized to content and capped at the WPF compact maximum height.
+        source.Should().Contain("Width = FindReplaceDialogPlanner.WpfCompactWidth - WpfResizableFrameWidth,");
+        source.Should().Contain("MaxHeight = FindReplaceDialogPlanner.WpfCompactMaximumHeight - WpfResizableFrameHeight,");
+        source.Should().Contain("Children = { replaceAllButton, replaceButton, findAllButton, findNextButton, closeButton },");
+        source.Should().Contain("FindReplaceDialogPlanner.WpfCompactActionButtonSpacing");
+        source.Should().NotContain("tabs.Height = tabHeight;");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions($\"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto\")");
         source.Should().Contain("new Thickness(6, 1)");
         source.Should().Contain("BorderBrush = Brush(68, 114, 196)");
@@ -28,8 +28,6 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("resultsHeader.Height = FindReplaceDialogPlanner.ResultsHeaderHeight;");
         source.Should().Contain("FindReplaceDialogPlanner.FieldMinWidth");
         source.Should().Contain("FindReplaceDialogPlanner.ResultBookColumnWidth");
-        source.Should().Contain("FindReplaceDialogPlanner.ActionButtonSpacing");
-        source.Should().Contain("FindReplaceDialogPlanner.AvaloniaRootRightMargin");
         source.Should().Contain("button.CornerRadius = new CornerRadius(0);");
         source.Should().Contain("textBox.CornerRadius = new CornerRadius(0);");
         source.Should().Contain("optionsHeader.Width = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;");

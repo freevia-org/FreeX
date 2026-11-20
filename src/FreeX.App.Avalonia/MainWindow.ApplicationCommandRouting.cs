@@ -91,6 +91,7 @@ public partial class MainWindow
             CustomSort = Handled(async () => await ShowSortDialogAsync()),
             ToggleFilter = Handled<WorkbookApplicationCommandInvocation>(invocation => ToggleAutoFilter()),
             ClearFilter = Handled(() => ClearActiveSheetFilters()),
+            FilterBySelectedCellValue = Handled(FilterBySelectedCellValue),
             ReapplyFilter = Handled<WorkbookApplicationCommandVariant>(variant => ReapplyCurrentFilterSort()),
             OpenDataValidation = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
                 await ShowDataValidationDialogAsync()),

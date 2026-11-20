@@ -1,0 +1,101 @@
+name: Release Auto Retry
+
+# Why this exists.
+#
+# A release run is long, spread over three operating systems and several pools of hosted runners,
+# and some of what ends it has nothing to do with the commit: a macOS runner that was never
+# scheduled ("job abandoned"), a runner that lost communication with the service, a GitHub service
+# blip while a job set itself up. Re-dispatching the whole release for that costs the better part of an
+# hour, and it also forgets which jobs had already passed.
+#
+# So when a Full Signed Release run ends in failure, this classifies every failed job with the same
+# tools/Get-ReleaseRunFailureClass.ps1 the in-run watcher uses and, ONLY if every failure is
+# infrastructure, re-runs the failed jobs (and what depended on them) once.
+#
+# It cannot mask a real failure or loop:
+#   * a real failure, a timeout, an unreadable annotation listing -- anything the classifier cannot
+#     positively call infrastructure -- classifies as real and is never retried;
+#   * a run is retried only on its FIRST attempt, so the re-run itself is never retried again;
+#   * a cancelled run (including one the early-abort watcher cancelled for a real failure) is never
+#     retried; only a run that concluded 'failure' is.
+# A re-run does not bypass any gate: a Windows signing job parks at the public-preview approval again,
+# and publication still needs every upstream job of the run to have succeeded.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Full Signed Release run to classify and, if only infrastructure failed, re-run once
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["Full Signed Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: release-auto-retry-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    name: Re-run infrastructure-failed jobs once
+    # The payload is only a pre-filter; the step below re-reads the run from the API before acting.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt == 1 &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      github.event.workflow_run.path == '.github/workflows/full-release.yml' &&
+      github.event.workflow_run.repository.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout the classifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: tools/Get-ReleaseRunFailureClass.ps1
+          sparse-checkout-cone-mode: false
+      - name: Classify the failed run and re-run it once when only infrastructure failed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $runId = if ([string]::IsNullOrWhiteSpace($env:EVENT_RUN_ID)) { $env:INPUT_RUN_ID } else { $env:EVENT_RUN_ID }
+          if ($runId -notmatch '^[0-9]+$') { throw "Run id '$runId' is not numeric." }
+
+          function Stop-Without-Retry([string]$Reason) {
+            Write-Host "Not retrying run ${runId}: $Reason"
+            "### Not retried`n$Reason" >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+
+          $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$runId" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $null -eq $run) { throw "Could not read run $runId." }
+          if ([string]$run.path -ne ".github/workflows/full-release.yml") { Stop-Without-Retry "run $runId is not a Full Signed Release run." }
+          if ([string]$run.status -ne "completed") { Stop-Without-Retry "run $runId has not finished." }
+          if ([string]$run.conclusion -ne "failure") { Stop-Without-Retry "run $runId concluded '$($run.conclusion)', not 'failure' (cancelled runs are never retried)." }
+          if ([int]$run.run_attempt -ne 1) { Stop-Without-Retry "run $runId is already attempt $($run.run_attempt); it is retried at most once." }
+
+          $json = pwsh -NoProfile -File tools/Get-ReleaseRunFailureClass.ps1 -Repository $env:GITHUB_REPOSITORY -RunId $runId
+          if ($LASTEXITCODE -ne 0) { Stop-Without-Retry "the failure classifier could not run, so the failure is treated as real." }
+          $state = ($json -join "`n") | ConvertFrom-Json
+          Write-Host ($state.failedJobs | Format-Table name, class, reason -AutoSize -Wrap | Out-String)
+
+          if (-not $state.retryable) {
+            $why = if ($state.hasRealFailure) { "a real failure is present: $($state.firstRealFailure)" } else { "no failed job was found" }
+            Stop-Without-Retry $why
+          }
+
+          gh run rerun $runId --repo $env:GITHUB_REPOSITORY --failed
+          if ($LASTEXITCODE -ne 0) { throw "Could not re-run the failed jobs of run $runId." }
+          "### Re-running infrastructure failures`nEvery failed job of run $runId was classified as infrastructure; its failed jobs were re-run once (attempt 2).`n`n" +
+            (($state.failedJobs | ForEach-Object { "- $($_.name): $($_.reason)" }) -join "`n") >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "Re-ran the failed jobs of run $runId (attempt 2)."

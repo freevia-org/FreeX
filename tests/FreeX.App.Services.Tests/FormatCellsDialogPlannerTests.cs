@@ -254,6 +254,26 @@ public sealed class FormatCellsDialogPlannerTests
     }
 
     [Fact]
+    public void TryCreateCompactPlan_CarriesChangedTextDirectionOnly()
+    {
+        FormatCellsDialogPlanner.TryCreateCompactPlan(ValidCompactInput(), out var unchanged, out _).Should().BeTrue();
+        unchanged!.Request.ReadingOrder.Should().BeNull();
+
+        FormatCellsDialogPlanner.TryCreateCompactPlan(
+            ValidCompactInput() with { ReadingOrder = CellReadingOrder.Context },
+            out var same,
+            out _).Should().BeTrue();
+        same!.Request.ReadingOrder.Should().BeNull();
+
+        FormatCellsDialogPlanner.TryCreateCompactPlan(
+            ValidCompactInput() with { ReadingOrder = CellReadingOrder.RightToLeft },
+            out var changed,
+            out _).Should().BeTrue();
+        changed!.Request.ReadingOrder.Should().Be(CellReadingOrder.RightToLeft);
+        FormatCellsCompactPlanner.Plan(changed.Request).ReadingOrder.Should().Be(CellReadingOrder.RightToLeft);
+    }
+
+    [Fact]
     public void TryCreateCompactPlan_UsesExcelFontLimitAndSharedValidationDescriptor()
     {
         var input = ValidCompactInput() with { FontSizeText = "410" };

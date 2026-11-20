@@ -140,7 +140,7 @@ public sealed class DialogInteractionValidationTests
                         // The dialog exposes FindReplaceReplaceWithChooseFormatFromCellButton; there is
                         // no "...Replacement..." id, so this lookup could never match.
                         AutomationProperties.GetAutomationId(button) == "FindReplaceReplaceWithChooseFormatFromCellButton")
-                    .IsVisible.Should().BeTrue();
+                    .IsVisible.Should().BeFalse("the compact WPF Replace surface hides the format buttons until Options is expanded");
                 findReplace.Close();
 
                 await owner.ShowWatchWindowDialogForTestAsync();

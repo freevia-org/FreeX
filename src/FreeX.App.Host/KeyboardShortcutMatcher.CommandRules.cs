@@ -47,7 +47,6 @@ public static partial class KeyboardShortcutMatcher
             new(KeyboardCommandShortcut.SaveAs, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F12),
             new(KeyboardCommandShortcut.OpenHelp, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F1),
             new(KeyboardCommandShortcut.ShowKeyTips, (key, modifiers) => modifiers == ModifierKeys.None && key == Key.F10),
-            new(KeyboardCommandShortcut.ToggleRibbonVisibility, (key, modifiers) => modifiers == ModifierKeys.Control && key == Key.F1),
             new(KeyboardCommandShortcut.CycleShellFocus, (key, modifiers) => modifiers is ModifierKeys.None or ModifierKeys.Shift && key == Key.F6),
             new(KeyboardCommandShortcut.OpenContextMenu, (key, modifiers) => modifiers == ModifierKeys.Shift && key == Key.F10 || modifiers == ModifierKeys.None && key == Key.Apps),
             new(KeyboardCommandShortcut.InsertWorksheet, (key, modifiers) => modifiers == (ModifierKeys.Alt | ModifierKeys.Shift) && key == Key.F1),

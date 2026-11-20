@@ -431,6 +431,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         ConfigureBackstageInfoActionButtons();
         InitializeBackstageFrame();
         RegisterKeyboardCommandShortcuts();
+        InitializeRibbonDisplayState();
 
         SheetTabsControl.ItemsSource = _sheetTabs;
         
@@ -455,6 +456,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         SheetGrid.AutofillRequested += OnAutofillRequested;
         SheetGrid.AutofillEdgeScrollRequested += OnAutofillEdgeScrollRequested;
         SheetGrid.AutofillHandleDoubleClicked += OnAutofillHandleDoubleClicked;
+        SheetGrid.SelectionBorderDoubleClicked += OnSelectionBorderDoubleClicked;
         SheetGrid.SelectionMoveModifiersResolved += ctrlHeld => _selectionMoveCtrlHeld = ctrlHeld;
         SheetGrid.SelectionMoveRequested += OnSelectionMoveRequested;
         SheetGrid.ContextMenuRequested += OnGridContextMenuRequested;

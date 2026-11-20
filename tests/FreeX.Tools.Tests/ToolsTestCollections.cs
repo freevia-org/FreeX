@@ -16,6 +16,14 @@ internal static class ToolsTestCollections
     /// they still run beside every other class.
     /// </summary>
     public const string GeneratedDocsBuild = "Tools generated-docs build";
+
+    /// <summary>
+    /// The whole-repository scan scripts run end to end (cross-platform portability, generated docs,
+    /// tool scripts). Alone each finishes in well under a minute, but overlapping one another and the
+    /// rest of this suite on a loaded machine they repeatedly stalled past the five-minute script
+    /// bound inside the integration gate. They run one at a time, after every parallel class.
+    /// </summary>
+    public const string RepositoryScans = "Tools repository scans";
 }
 
 [CollectionDefinition(ToolsTestCollections.Serial, DisableParallelization = true)]
@@ -23,3 +31,6 @@ public sealed class ToolsSerialCollection;
 
 [CollectionDefinition(ToolsTestCollections.GeneratedDocsBuild)]
 public sealed class ToolsGeneratedDocsBuildCollection;
+
+[CollectionDefinition(ToolsTestCollections.RepositoryScans, DisableParallelization = true)]
+public sealed class ToolsRepositoryScansCollection;

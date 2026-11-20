@@ -151,6 +151,7 @@ public static class InteractiveValidationInventory
         Shortcut("shortcut.formulas.trace-references", "Formulas", "FormulaAuditing", "Ctrl+[ / Ctrl+] / Ctrl+Shift+[ / Ctrl+Shift+]", "Selects direct or all traceable precedents or dependents.", ["Ctrl+]", "Ctrl+Shift+[", "Ctrl+Shift+]"]),
 
         Shortcut("shortcut.view.outline-symbols", "View", "WorksheetView", "Ctrl+8", "Toggles worksheet outline symbols with undo support."),
+        Shortcut("shortcut.view.toggle-ribbon", "View", "ApplicationShell", "Ctrl+F1", "Shows or hides the ribbon commands, leaving only the tabs (Show tabs only)."),
 
         Shortcut("shortcut.review.spelling", "Review", "ReviewWorkflows", "F7", "Runs the worksheet spelling check."),
         Shortcut("shortcut.review.note-comment", "Review", "ReviewWorkflows", "Shift+F2 / Ctrl+Shift+F2", "Opens the simple-note editor or the threaded-comment workflow.", ["Ctrl+Shift+F2"]),
@@ -377,6 +378,7 @@ public static class InteractiveValidationInventory
         "shortcut.review.note-comment" => [K("Shift+F2", Worksheet, "F2", Shift), K("Ctrl+Shift+F2", Worksheet, "F2", CtrlShift)],
 
         "shortcut.help.online" => [K("F1", Application, "F1")],
+        "shortcut.view.toggle-ribbon" => [K("Ctrl+F1", Application, "F1", Ctrl)],
 
         "shortcut.view.mouse-zoom" => [Mouse("Ctrl+Mouse Wheel", Worksheet, "MouseWheel", Ctrl)],
         "shortcut.view.keyboard-zoom" =>

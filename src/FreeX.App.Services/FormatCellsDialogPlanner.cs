@@ -160,7 +160,8 @@ public sealed record FormatCellsCompactDialogInput(
     CellBorder? BorderTop,
     CellBorder? BorderRight,
     CellBorder? BorderBottom,
-    CellBorder? BorderLeft);
+    CellBorder? BorderLeft,
+    CellReadingOrder? ReadingOrder = null);
 
 public sealed record FormatCellsCompactDialogPlan(
     FormatCellsCompactRequest Request,
@@ -494,6 +495,7 @@ public static class FormatCellsDialogPlanner
             ShrinkToFit: Changed(current.ShrinkToFit, input.ShrinkToFit),
             IndentLevel: Changed(current.IndentLevel, indentLevel.Value),
             TextRotation: Changed(current.TextRotation, textRotation.Value),
+            ReadingOrder: input.ReadingOrder is { } readingOrder ? Changed(current.ReadingOrder, readingOrder) : null,
             FontName: ChangedText(current.FontName, fontName),
             Locked: Changed(current.Locked, input.Locked),
             Hidden: Changed(current.Hidden, input.Hidden),
