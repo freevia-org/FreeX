@@ -346,10 +346,15 @@ public static partial class DocxReader
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
     /// autoHyphenation leaves it disabled.
     /// </summary>
+    private const int LegacyDefaultCompatibilityMode = 12;
+
     private static void ReadSettings(ZipArchive archive, TextDocument document)
     {
         var settingsXml = LoadPart(archive, ResolveSettingsPartPath(archive) ?? "word/settings.xml");
         var root = settingsXml?.Root;
+        // Word opens a package without a compatibilityMode setting (no settings part, or no w:compat) as a
+        // Word 2007 (12) document, so that is what the renderer must assume; w:compat below may refine it.
+        document.CompatibilityMode = LegacyDefaultCompatibilityMode;
         if (root is null)
             return;
 
@@ -439,12 +444,11 @@ public static partial class DocxReader
         // valid on token requires consuming applications to retain the embedded image data when saving.
         document.DoNotAutoCompressPictures = ReadToggle(root, "doNotAutoCompressPictures");
 
-        // Layout compatibility (w:compat): the compatibilityMode compatSetting plus the enabled legacy flags.
-        // A w:compat without a compatibilityMode setting is a Word 2007 (12) document; no w:compat leaves the
-        // current default. The settings element itself stays preserved verbatim for the writer.
+        // Layout compatibility (w:compat): the compatibilityMode compatSetting plus the enabled legacy flags. The
+        // settings element itself stays preserved verbatim for the writer.
         if (root.Element(W + "compat") is { } compat)
         {
-            var compatMode = 12;
+            var compatMode = LegacyDefaultCompatibilityMode;
             foreach (var child in compat.Elements())
             {
                 if (child.Name == W + "compatSetting")

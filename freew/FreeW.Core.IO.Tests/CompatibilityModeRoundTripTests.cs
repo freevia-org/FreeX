@@ -46,12 +46,23 @@ public sealed class CompatibilityModeRoundTripTests
     }
 
     [Fact]
-    public void SettingsWithoutCompat_KeepsTheCurrentDefault()
+    public void SettingsWithoutCompat_IsWord2007()
     {
         var document = Read(BuildPackage(new XElement(W + "doNotTrackMoves")));
 
-        document.CompatibilityMode.Should().Be(TextDocument.CurrentCompatibilityMode);
-        document.UsesLegacyCompatibilityLayout.Should().BeFalse();
+        document.CompatibilityMode.Should().Be(12);
+        document.UsesLegacyCompatibilityLayout.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PackageWithoutSettingsPart_IsWord2007AndResavesWithoutOne()
+    {
+        var bytes = Write(new TextDocument());
+
+        HasEntry(bytes, "word/settings.xml").Should().BeFalse();
+        var reopened = Read(bytes);
+        reopened.CompatibilityMode.Should().Be(12);
+        HasEntry(Write(reopened), "word/settings.xml").Should().BeFalse();
     }
 
     [Fact]
@@ -62,15 +73,6 @@ public sealed class CompatibilityModeRoundTripTests
             new XElement(W + "doNotExpandShiftReturn"))));
 
         document.CompatibilityFlags.Should().Equal("doNotExpandShiftReturn");
-    }
-
-    [Fact]
-    public void AuthoredDefaultDocument_WritesNoSettingsPart()
-    {
-        var bytes = Write(new TextDocument());
-
-        HasEntry(bytes, "word/settings.xml").Should().BeFalse();
-        Read(bytes).CompatibilityMode.Should().Be(TextDocument.CurrentCompatibilityMode);
     }
 
     [Theory]

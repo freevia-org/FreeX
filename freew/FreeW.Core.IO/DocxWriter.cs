@@ -270,8 +270,7 @@ public static partial class DocxWriter
             || hasBackground
             || hasEmbeddedFonts
             || hasPreservedSettings
-            || document.CompatibilityMode != TextDocument.CurrentCompatibilityMode
-            || document.CompatibilityFlags.Count > 0
+            || BuildCompat(document.CompatibilityMode, document.CompatibilityFlags) is not null
             || !document.FootnoteNumbering.IsDefault
             || !document.EndnoteNumbering.IsDefault;
 
@@ -9639,15 +9638,16 @@ public static partial class DocxWriter
     /// <summary>
     /// Builds w:compat for a freshly authored settings part: the enabled legacy flags (as empty toggles) and, when
     /// the mode is not the current default, the compatibilityMode compatSetting. Null when nothing needs writing.
-    /// A mode of 12 without the setting is how Word 2007 files read back, so it is emitted as flags only.
+    /// Mode 12 is the reader's default for a package without the setting, so it is emitted as flags only.
     /// </summary>
     private static XElement? BuildCompat(int mode, IReadOnlyList<string>? flags)
     {
         var hasFlags = flags is { Count: > 0 };
-        if (mode == TextDocument.CurrentCompatibilityMode && !hasFlags)
+        // A package without the setting reads back as 12 (Word's own rule), so 12 needs no element of its own and
+        // an authored current-mode document without flags stays minimal; every other mode is explicit.
+        if ((mode == TextDocument.CurrentCompatibilityMode || mode == 12) && !hasFlags)
             return null;
 
-        // A w:compat without the setting reads back as 12, so every other mode (15 beside flags included) is explicit.
         var writeMode = mode != 12;
 
         var compat = new XElement(W + "compat");

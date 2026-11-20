@@ -4218,9 +4218,10 @@ public sealed class TextDocument
     /// <summary>
     /// The Word layout compatibility mode (<c>w:settings/w:compat/w:compatSetting[@w:name="compatibilityMode"]/@w:val</c>):
     /// 11 = Word 2003, 12 = Word 2007, 14 = Word 2010, 15 = Word 2013 and later. A <c>w:compat</c> element without the
-    /// setting is Word 2007 (12); a document with no <c>w:compat</c> at all is <see cref="CurrentCompatibilityMode"/>.
-    /// The settings part itself is preserved verbatim on save, so this is read-only data for the renderer; a freshly
-    /// authored document writes the setting only when it differs from <see cref="CurrentCompatibilityMode"/>.
+    /// setting, and a package with no settings part at all, is Word 2007 (12) when read - Word's own rule. A newly
+    /// created document starts at <see cref="CurrentCompatibilityMode"/>. The settings part itself is preserved
+    /// verbatim on save, so this is read-only data for the renderer; a freshly authored document writes the setting
+    /// only for a mode other than 12 and 15 (or beside legacy flags).
     /// </summary>
     public int CompatibilityMode { get; set; } = CurrentCompatibilityMode;
 
