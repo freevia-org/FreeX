@@ -231,10 +231,10 @@ public sealed partial class MainWindow
             },
         };
         // WPF list rows are 20px tall.
-        var pickerRowStyle = new global::Avalonia.Styling.Style(x => x.OfType<ListBoxItem>());
+        var pickerRowStyle = new global::Avalonia.Styling.Style(x => global::Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
         pickerRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
         categoryList.Styles.Add(pickerRowStyle);
-        var pickerGalleryRowStyle = new global::Avalonia.Styling.Style(x => x.OfType<ListBoxItem>());
+        var pickerGalleryRowStyle = new global::Avalonia.Styling.Style(x => global::Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
         pickerGalleryRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
         AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
         AutomationProperties.SetAutomationId(categoryList, $"{automationIdPrefix}CategoryList");
