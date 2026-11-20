@@ -40,7 +40,7 @@ public sealed class SharedProgressReportingF2StatusBarProgressBarTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new F2TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("F2-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
 
@@ -112,7 +112,7 @@ public sealed class SharedProgressReportingF2StatusBarProgressBarTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new F2TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("F2-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
 
@@ -156,7 +156,7 @@ public sealed class SharedProgressReportingF2StatusBarProgressBarTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new F2TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("F2-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
 
@@ -200,32 +200,5 @@ public sealed class SharedProgressReportingF2StatusBarProgressBarTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(marker));
         using var stream = File.Create(path);
         adapter.Save(workbook, stream);
-    }
-
-    private sealed class F2TempDirectory : IDisposable
-    {
-        public string Path { get; } =
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "F2-" + Guid.NewGuid().ToString("N"));
-
-        public F2TempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (!Directory.Exists(Path))
-                return;
-
-            for (var attempt = 0; ; attempt++)
-            {
-                try
-                {
-                    Directory.Delete(Path, recursive: true);
-                    return;
-                }
-                catch (IOException) when (attempt < 20)
-                {
-                    Thread.Sleep(25);
-                }
-            }
-        }
     }
 }

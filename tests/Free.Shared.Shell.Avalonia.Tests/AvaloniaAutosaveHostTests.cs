@@ -32,16 +32,15 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
         WriteSnapshot: WriteDocument,
         ReadSnapshot: ReadDocument);
 
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(),
-        "AvaloniaAutosaveHostTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("AvaloniaAutosaveHostTests_");
+
+    private string _directory => _temporaryDirectory.Path;
 
     private readonly AutosaveSnapshotStore _store;
     private readonly List<AvaloniaAutosaveHost<HostTestDocument>> _hosts = [];
 
     public AvaloniaAutosaveHostTests()
     {
-        Directory.CreateDirectory(_directory);
         _store = new AutosaveSnapshotStore(_directory);
     }
 
@@ -50,8 +49,7 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
         foreach (var host in _hosts)
             host.Dispose(); // releases the snapshot ownership lock file
 
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
+        _temporaryDirectory.Dispose();
     }
 
     [Fact]

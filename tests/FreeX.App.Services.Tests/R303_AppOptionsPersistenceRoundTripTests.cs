@@ -25,14 +25,11 @@ namespace FreeX.App.Services.Tests;
 /// </summary>
 public sealed class R303_AppOptionsPersistenceRoundTripTests : IDisposable
 {
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(), "freex-r303-" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("freex-r303-");
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
-    }
+    private string _directory => _temporaryDirectory.Path;
+
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private string StorePath()
     {

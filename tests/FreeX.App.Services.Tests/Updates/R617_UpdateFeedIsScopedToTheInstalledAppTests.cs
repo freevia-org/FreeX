@@ -64,19 +64,11 @@ public sealed class R617_UpdateFeedIsScopedToTheInstalledAppTests
 
     private static async Task<VelopackAsset?> CheckForUpdate(IUpdateSource source, string installedAppId, string installedVersion)
     {
-        var packages = Path.Combine(Path.GetTempPath(), "r617-packages-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(packages);
-        try
-        {
-            var locator = new TestVelopackLocator(installedAppId, installedVersion, packages, new NullVelopackLogger());
-            var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = "win" }, locator);
-            var info = await manager.CheckForUpdatesAsync();
-            return info?.TargetFullRelease;
-        }
-        finally
-        {
-            Directory.Delete(packages, recursive: true);
-        }
+        using var temporaryDirectory = new TestTemporaryDirectory("r617-packages-");
+        var locator = new TestVelopackLocator(installedAppId, installedVersion, temporaryDirectory.Path, new NullVelopackLogger());
+        var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = "win" }, locator);
+        var info = await manager.CheckForUpdatesAsync();
+        return info?.TargetFullRelease;
     }
 
     // Newest release first, as GithubSource orders it: FreeW has shipped 0.8.191 alone.
