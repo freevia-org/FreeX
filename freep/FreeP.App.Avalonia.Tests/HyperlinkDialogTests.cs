@@ -97,28 +97,36 @@ public sealed class HyperlinkDialogTests
     }
 
     [Fact]
-    public async Task HyperlinkDialog_LeavesInvalidInputOpenAndPropagatesAcceptedResult()
+    public async Task HyperlinkDialog_InvalidInputShowsWarningAndKeepsDialogOpen()
     {
-        await Session.Dispatch(() =>
+        await Session.Dispatch(async () =>
         {
             var dialog = new HyperlinkDialog(CreateRequest());
             var validation = GetField<TextBlock>(dialog, "_validationText");
+            (string Message, string Title)? warning = null;
 
-            dialog.ApplyInputForTests(
+            (await dialog.ApplyInputForTests(
                 HyperlinkDialogTargetKind.Url,
                 "not a url",
                 0,
-                string.Empty).Should().BeFalse();
+                string.Empty,
+                (message, title) =>
+                {
+                    warning = (message, title);
+                    return Task.CompletedTask;
+                })).Should().BeFalse();
 
             validation.Text.Should().Be(HyperlinkDialogPlanner.UnsupportedUrlMessage);
             validation.IsVisible.Should().BeTrue();
             dialog.Result.Should().BeNull();
+            warning.Should().Be((HyperlinkDialogPlanner.UnsupportedUrlMessage, HyperlinkDialogPlanner.Caption));
 
-            dialog.ApplyInputForTests(
+            (await dialog.ApplyInputForTests(
                 HyperlinkDialogTargetKind.Url,
                 "https://example.test/accepted",
                 0,
-                "tip").Should().BeTrue();
+                "tip",
+                (_, _) => throw new InvalidOperationException("Valid input must not show a warning."))).Should().BeTrue();
 
             dialog.Result.Should().BeEquivalentTo(new Hyperlink
             {
@@ -127,6 +135,7 @@ public sealed class HyperlinkDialogTests
             });
             validation.Text.Should().BeEmpty();
             validation.IsVisible.Should().BeTrue();
+            return true;
         }, CancellationToken.None);
     }
 

@@ -17,11 +17,20 @@ public sealed class PrintPreviewPaginationContextTests
     }
 
     [Fact]
-    public void TryCreate_EmptySheetReturnsFalse()
+    public void TryCreate_EmptySheetUsesPaperOrientationAndFooter()
     {
         var (workbook, sheet) = CreateBook();
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
 
-        PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out _).Should().BeFalse();
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out var context).Should().BeTrue();
+
+        context.PageCount.Should().Be(1);
+        var layout = context.BuildPage(0)!;
+        layout.Cells.Should().NotContain(cell => cell.Text.Length > 0);
+        layout.FooterRuns.Select(run => run.Text).Should().ContainSingle("Page 1 of 1");
+        var painting = context.BuildPainting(0)!;
+        painting.PageBounds.Width.Should().BeGreaterThan(painting.PageBounds.Height);
     }
 
     [Fact]
@@ -46,6 +55,33 @@ public sealed class PrintPreviewPaginationContextTests
 
         PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out var context).Should().BeTrue();
         context.PageCount.Should().BeGreaterThan(1);
+    }
+
+    [Fact]
+    public void ActiveSheetCommentAppendixCountsTowardFooterTotalAndUsesPrintedCells()
+    {
+        var (workbook, sheet) = CreateBook();
+        var printedCell = new CellAddress(sheet.Id, 1, 1);
+        var excludedCell = new CellAddress(sheet.Id, 10, 2);
+        sheet.SetCell(printedCell, new TextValue("Printed value"));
+        sheet.PrintArea = new GridRange(printedCell, printedCell);
+        sheet.FirstPageNumber = 4;
+        sheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
+        sheet.PrintComments = WorksheetPrintComments.AtEnd;
+        sheet.Comments[printedCell] = "Printed note";
+        sheet.Comments[excludedCell] = "Excluded note";
+
+        PrintPreviewPaginationContext.TryCreate(workbook, sheet, Measurer, out var context).Should().BeTrue();
+
+        context.PageCount.Should().Be(2);
+        context.BuildPage(0)!.FooterRuns.Select(run => run.Text).Should().ContainSingle("Page 4 of 2");
+        var appendix = context.BuildPainting(1)!;
+        appendix.PageNumber.Should().Be(5);
+        appendix.Instructions.Select(instruction => instruction.Text)
+            .Should().Contain("Comments")
+            .And.Contain("A1: Printed note")
+            .And.NotContain("B10: Excluded note");
+        context.BuildPainting(2).Should().BeNull();
     }
 
     [Fact]

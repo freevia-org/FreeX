@@ -88,6 +88,9 @@ public sealed record AvaloniaPrintDialogOptions
     /// <summary>Creates optional product-owned content, such as FreeX workbook scope selection.</summary>
     public Func<Control?>? CreateAdditionalContent { get; init; }
 
+    /// <summary>Creates an optional control below the printer selector, such as printer properties.</summary>
+    public Func<Window, ComboBox, Control?>? CreatePrinterAccessory { get; init; }
+
     /// <summary>
     /// Keeps submission available when no native printer exists and the product has a fallback
     /// destination, such as FreeX's print-ready PDF save path.
@@ -108,6 +111,9 @@ public sealed record AvaloniaPrintDialogOptions
 /// </summary>
 public static class AvaloniaPrintDialogWorkflow
 {
+    private const double FieldLabelWidth = 95;
+    private const double FieldSpacing = 8;
+
     /// <summary>
     /// Configures the real print-selection surface without opening a modal window or submitting a job.
     /// This is used by deterministic visual harnesses for unavailable-printer states.
@@ -271,6 +277,14 @@ public static class AvaloniaPrintDialogWorkflow
         }
 
         AddRow(content, text.PrinterLabel, printer);
+        if (options.CreatePrinterAccessory?.Invoke(dialog, printer) is { } printerAccessory)
+        {
+            content.Children.Add(new Border
+            {
+                Padding = new Thickness(FieldLabelWidth + FieldSpacing, 0, 0, 0),
+                Child = printerAccessory,
+            });
+        }
         var additionalContent = options.CreateAdditionalContent?.Invoke();
         if (additionalContent is not null)
             content.Children.Add(additionalContent);
@@ -383,10 +397,11 @@ public static class AvaloniaPrintDialogWorkflow
         panel.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = FieldSpacing,
             Children =
             {
-                new TextBlock { Text = label, Width = 95, VerticalAlignment = VerticalAlignment.Center }, control,
+                new TextBlock { Text = label, Width = FieldLabelWidth, VerticalAlignment = VerticalAlignment.Center },
+                control,
             },
         });
     }

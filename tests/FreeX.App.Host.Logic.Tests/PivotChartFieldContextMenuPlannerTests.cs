@@ -188,4 +188,89 @@ public sealed class PivotChartFieldContextMenuPlannerTests
         separator.Action.Should().Be(PivotChartFieldContextMenuAction.None);
         separator.ToolTip.Should().BeNull();
     }
+
+    public static IEnumerable<object[]> EveryStateCombination()
+    {
+        foreach (var hasFilterState in new[] { false, true })
+        foreach (var canValueFilter in new[] { false, true })
+        foreach (var hasAnyFilter in new[] { false, true })
+        foreach (var canValueFieldSettings in new[] { false, true })
+            yield return new object[]
+            {
+                hasFilterState,
+                canValueFilter,
+                hasAnyFilter,
+                canValueFieldSettings
+            };
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryStateCombination))]
+    public void BuildCommands_ExhaustiveStateFlagsPreserveTopologyAndEnablement(
+        bool hasFilterState,
+        bool canValueFilter,
+        bool hasAnyFilter,
+        bool canValueFieldSettings)
+    {
+        const string summary = "Filter summary";
+        const string selectItemsHeader = "Select Items... (2 selected)";
+        const string labelFilterHeader = "Label Filter... (contains 'A')";
+        const string valueFilterHeader = "Value Filter... (> 10)";
+        const string clearFilterHeader = "Clear Filters from Region";
+        var state = new PivotChartFieldContextMenuState(
+            hasFilterState,
+            summary,
+            selectItemsHeader,
+            labelFilterHeader,
+            valueFilterHeader,
+            clearFilterHeader,
+            canValueFilter,
+            hasAnyFilter,
+            canValueFieldSettings);
+
+        var commands = PivotChartFieldContextMenuPlanner.BuildCommands(state);
+
+        commands
+            .Select(command => command.IsSeparator ? "—" : command.Action.ToString())
+            .Should()
+            .Equal(hasFilterState
+                ? new[]
+                {
+                    "Summary", "—", "SortAscending", "SortDescending", "MoreSortOptions", "—",
+                    "SelectItems", "LabelFilter", "ValueFilter", "ClearFilter", "—", "ValueFieldSettings"
+                }
+                : new[]
+                {
+                    "SortAscending", "SortDescending", "MoreSortOptions", "—", "SelectItems",
+                    "LabelFilter", "ValueFilter", "ClearFilter", "—", "ValueFieldSettings"
+                });
+
+        var byAction = commands.Where(command => !command.IsSeparator)
+            .ToDictionary(command => command.Action);
+        byAction[PivotChartFieldContextMenuAction.SortAscending].IsEnabled.Should().BeTrue();
+        byAction[PivotChartFieldContextMenuAction.SortDescending].IsEnabled.Should().BeTrue();
+        byAction[PivotChartFieldContextMenuAction.MoreSortOptions].IsEnabled.Should().Be(hasFilterState);
+        byAction[PivotChartFieldContextMenuAction.SelectItems].IsEnabled.Should().Be(hasFilterState);
+        byAction[PivotChartFieldContextMenuAction.LabelFilter].IsEnabled.Should().Be(hasFilterState);
+        byAction[PivotChartFieldContextMenuAction.ValueFilter].IsEnabled.Should().Be(canValueFilter);
+        byAction[PivotChartFieldContextMenuAction.ClearFilter].IsEnabled.Should().Be(hasAnyFilter);
+        byAction[PivotChartFieldContextMenuAction.ValueFieldSettings].IsEnabled.Should().Be(canValueFieldSettings);
+
+        if (hasFilterState)
+        {
+            byAction[PivotChartFieldContextMenuAction.Summary].Header.Should().Be(summary);
+            byAction[PivotChartFieldContextMenuAction.Summary].IsEnabled.Should().BeFalse();
+        }
+
+        byAction[PivotChartFieldContextMenuAction.SelectItems].Header.Should().Be(selectItemsHeader);
+        byAction[PivotChartFieldContextMenuAction.LabelFilter].Header.Should().Be(labelFilterHeader);
+        byAction[PivotChartFieldContextMenuAction.ValueFilter].Header.Should().Be(valueFilterHeader);
+        byAction[PivotChartFieldContextMenuAction.ClearFilter].Header.Should().Be(clearFilterHeader);
+        byAction[PivotChartFieldContextMenuAction.ClearFilter].ToolTip.Should().Be(hasAnyFilter
+            ? null
+            : PivotChartFieldContextMenuPlanner.ClearFilterDisabledToolTip);
+        byAction[PivotChartFieldContextMenuAction.ValueFieldSettings].ToolTip.Should().Be(canValueFieldSettings
+            ? PivotChartFieldContextMenuPlanner.ValueFieldSettingsEnabledToolTip
+            : PivotChartFieldContextMenuPlanner.ValueFieldSettingsDisabledToolTip);
+    }
 }

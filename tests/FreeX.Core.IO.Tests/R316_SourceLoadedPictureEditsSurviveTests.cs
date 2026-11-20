@@ -50,6 +50,8 @@ public sealed class R316_SourceLoadedPictureEditsSurviveTests
         if (type == typeof(int)) return (value is int i ? i : 0) + 7;
         if (type == typeof(uint)) return (value is uint u ? u : 0u) + 7u;
         if (type == typeof(long)) return (value is long l ? l : 0L) + 7L;
+        if (property.Name == nameof(PictureModel.DrawingLockChildrenXml))
+            return """<root><ext xmlns="urn:r316" /></root>""";
         if (type == typeof(string)) return "r316-" + property.Name;
         if (type == typeof(double))
         {
@@ -100,18 +102,7 @@ public sealed class R316_SourceLoadedPictureEditsSurviveTests
         [nameof(PictureModel.Name)] =
             "Name is the IDENTITY key: XlsxSourceDrawingGeometryRewriter pairs a model with its "
             + "xdr:pic element by matching cNvPr@name, so a rename cannot also be written through it",
-        // r317 corrects r316's reasons for these three. "Not written back onto replayed XML" implied
-        // a source-loaded gap, i.e. that a freshly authored picture keeps them. It does not: the
-        // drawing writer emits no cNvPr@hidden and no a:picLocks at all, so these three are model
-        // state the .xlsx format layer never records by ANY path. That is a wider gap than this test
-        // is about, and naming it accurately is the difference between a lead and a wrong lead.
-        // r318 removed IsVisible from this list by making it persist: the Selection Pane's hide
-        // toggle now survives a save. The two that remain are the lock pair, which PictureModel.Locked
-        // itself documents as a deliberate deferral (R111-model-drawing-object-lock-1-1) -- the field
-        // is session-only by decision, not by oversight, and that decision is recorded at the model
-        // rather than only here.
-        [nameof(PictureModel.LockAspectRatio)] = "no write path emits a:picLocks@noChangeAspect (R111 deferral)",
-        [nameof(PictureModel.Locked)] = "no write path emits a:picLocks; PictureModel.Locked documents this as deferred",
+
     };
 
     private static Workbook RoundTrip(Workbook workbook)

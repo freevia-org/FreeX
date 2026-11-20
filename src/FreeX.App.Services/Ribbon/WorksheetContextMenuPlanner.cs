@@ -348,18 +348,20 @@ public static class WorksheetContextMenuPlanner
         Freeze([
         new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
         new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
-        new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
-        new("Insert Row Above", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "Insert Row _Above"),
-        new("Delete Row(s)", WorksheetContextMenuAction.DeleteRows, AccessHeader: "Delete _Row(s)"),
+        Submenu(
+            "Paste Options",
+            "_Paste Options",
+            new WorksheetContextMenuCommand("Paste Special", WorksheetContextMenuAction.PasteSpecial, AccessHeader: "Paste _Special")),
         WorksheetContextMenuCommand.Separator,
-        .. BuildRowSizingVisibilityCommands(rowSelectionOrder: true),
+        new("Insert", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "_Insert"),
+        new("Delete", WorksheetContextMenuAction.DeleteRows, AccessHeader: "_Delete"),
         WorksheetContextMenuCommand.Separator,
-        new("Group", WorksheetContextMenuAction.Group, AccessHeader: "_Group"),
-        new("Ungroup", WorksheetContextMenuAction.Ungroup, AccessHeader: "_Ungroup"),
+        new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents"),
+        new("Format Cells", WorksheetContextMenuAction.FormatCells, AccessHeader: "Format _Cells"),
         WorksheetContextMenuCommand.Separator,
-        new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
-        WorksheetContextMenuCommand.Separator,
-        new("Clear Contents", WorksheetContextMenuAction.ClearContents, AccessHeader: "Clear C_ontents")
+        new("Row Height", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height"),
+        new("Hide", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide"),
+        new("Unhide", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Un_hide")
     ]);
 
     private static WorksheetContextMenuCommand BuildThreadedCommentResolveCommand(WorksheetContextMenuState state) =>

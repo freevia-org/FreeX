@@ -20,14 +20,14 @@ public sealed class ZoomDialog : Window
     {
         Result = new ZoomDialogSelection(currentZoomPercent);
         Title = UiText.Get("Zoom_Zoom");
-        Width = ZoomDialogPlanner.Width;
-        Height = ZoomDialogPlanner.Height;
+        Width = ZoomDialogVisualMetrics.WindowWidth;
+        Height = ZoomDialogVisualMetrics.WindowHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         _zoomBox.Text = currentZoomPercent.ToString(CultureInfo.InvariantCulture);
         AutomationProperties.SetName(_zoomBox, UiText.Get("Zoom_CustomZoomPercent"));
-        AutomationProperties.SetAutomationId(_zoomBox, "ZoomCustomPercentBox");
+        AutomationProperties.SetAutomationId(_zoomBox, ZoomDialogVisualMetrics.CustomPercentBoxAutomationId);
         AutomationProperties.SetHelpText(_zoomBox, UiText.Get("Zoom_EnterAWholeZoomPercentageFrom10To400"));
         _zoomBox.GotKeyboardFocus += (_, _) => _customZoomButton.IsChecked = true;
         Content = CreateZoomContent(currentZoomPercent);
@@ -128,15 +128,15 @@ public sealed class ZoomDialog : Window
 
     private UIElement CreateZoomContent(int currentZoomPercent)
     {
-        var stack = new StackPanel { Margin = new Thickness(12) };
+        var stack = new StackPanel { Margin = new Thickness(ZoomDialogVisualMetrics.OuterPadding) };
         var group = new GroupBox
         {
             Header = UiText.Get("Zoom_Magnification"),
-            Padding = new Thickness(8),
-            Margin = new Thickness(0, 0, 0, 12)
+            Padding = new Thickness(ZoomDialogVisualMetrics.MagnificationGroupPadding),
+            Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.MagnificationGroupBottomMargin)
         };
         var choices = new Grid();
-        choices.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
+        choices.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ZoomDialogVisualMetrics.PresetColumnWidth) });
         choices.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var presets = new StackPanel();
         foreach (var preset in ZoomDialogPlanner.Presets)
@@ -147,7 +147,7 @@ public sealed class ZoomDialog : Window
                 GroupName = "Zoom",
                 Tag = preset,
                 IsChecked = preset == currentZoomPercent,
-                Margin = new Thickness(0, 0, 0, 4)
+                Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.PresetItemBottomMargin)
             };
             _presetButtons.Add(button);
             presets.Children.Add(button);
@@ -156,12 +156,12 @@ public sealed class ZoomDialog : Window
         choices.Children.Add(presets);
         var customChoices = new StackPanel();
         _customZoomButton.IsChecked = !ZoomDialogPlanner.IsPreset(currentZoomPercent);
-        _fitSelectionButton.Margin = new Thickness(0, 0, 0, 10);
+        _fitSelectionButton.Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.FitSelectionBottomMargin);
         customChoices.Children.Add(_fitSelectionButton);
         var customRow = new StackPanel { Orientation = Orientation.Horizontal };
         customRow.Children.Add(_customZoomButton);
-        _zoomBox.Width = 72;
-        _zoomBox.Height = 24;
+        _zoomBox.Width = ZoomDialogVisualMetrics.CustomPercentBoxWidth;
+        _zoomBox.Height = ZoomDialogVisualMetrics.CustomPercentBoxHeight;
         customRow.Children.Add(_zoomBox);
         customRow.Children.Add(new TextBlock { Text = "%", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0) });
         customChoices.Children.Add(customRow);
@@ -169,7 +169,7 @@ public sealed class ZoomDialog : Window
         choices.Children.Add(customChoices);
         group.Content = choices;
         stack.Children.Add(group);
-        stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
+        stack.Children.Add(DialogButtonRowFactory.Create(Accept, ZoomDialogVisualMetrics.ActionButtonWidth));
         return stack;
     }
 }

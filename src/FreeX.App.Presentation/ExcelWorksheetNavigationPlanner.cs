@@ -66,6 +66,10 @@ public readonly record struct ExcelWorksheetNavigationResolution(
 
 public static class ExcelWorksheetNavigationPlanner
 {
+    /// <summary>Returns the next row's first cell after a row was entered with Tab.</summary>
+    public static CellAddress GetEnterAfterTabTarget(CellAddress current) =>
+        new(current.Sheet, (uint)Math.Min((long)CellAddress.MaxRow, (long)current.Row + 1), 1);
+
     /// <summary>
     /// The single "key -> target cell" decision shared by the WPF and Avalonia shells. Returns null
     /// when the key/modifier combination is not a worksheet navigation key (see

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Globalization;
 
 namespace Free.Shared.AppServices.Printing;
@@ -17,6 +18,12 @@ public static class CupsPrintCommandPlanner
 
     public static ProcessInvocation ReadDefaultPrinter() =>
         new("lpstat", ["-d"]);
+
+    public static ProcessInvocation ListPrinterOptions(string printerName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(printerName);
+        return new("lpoptions", ["-p", printerName, "-l"]);
+    }
 
     public static ProcessInvocation Submit(
         string pdfPath,
@@ -48,6 +55,18 @@ public static class CupsPrintCommandPlanner
         };
         if (sides is not null)
             arguments.AddRange(["-o", $"sides={sides}"]);
+        if (selection.PrinterOptions is { Values.Count: > 0 } printerOptions)
+        {
+            var options = printerOptions.Values.ToArray();
+            if (!CupsPrinterOptions.MatchesQueue(printerOptions, printerName) ||
+                !CupsPrinterOptions.AreSafeOverrides(options))
+            {
+                throw new ArgumentException("The job contains invalid printer options.", nameof(selection));
+            }
+
+            foreach (var (key, value) in options)
+                arguments.AddRange(["-o", $"{key}={value}"]);
+        }
         if (!string.IsNullOrWhiteSpace(selection.JobTitle))
             arguments.AddRange(["-t", selection.JobTitle.Trim()]);
 
@@ -63,10 +82,10 @@ public enum CupsPrinterDiscoveryMode
 }
 
 /// <summary>
-/// Portable Linux/macOS printer adapter backed by the CUPS-compatible <c>lpstat</c> and <c>lp</c>
-/// commands. Process execution is injected so discovery and submission stay deterministic in tests.
+/// Portable Linux/macOS printer adapter backed by the CUPS-compatible <c>lpstat</c>,
+/// <c>lpoptions</c>, and <c>lp</c> commands. Process execution is injected for tests.
 /// </summary>
-public sealed class CupsPrintService : IPlatformPrintService
+public sealed class CupsPrintService : IPlatformPrintService, IPlatformPrinterOptionsService
 {
     private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
 
@@ -92,6 +111,55 @@ public sealed class CupsPrintService : IPlatformPrintService
     public bool IsSupported =>
         _isSupportedOverride ?? (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS());
 
+    public async Task<PrinterOptionsResult> GetOptionsAsync(
+        string printerName,
+        CancellationToken cancellationToken = default)
+    {
+        var invocation = CupsPrintCommandPlanner.ListPrinterOptions(printerName);
+        const string cancelledMessage = "Reading printer options was cancelled.";
+        const string timeoutMessage = "Reading CUPS printer options timed out.";
+        if (cancellationToken.IsCancellationRequested)
+            return new(PrinterOptionsStatus.Cancelled, [], cancelledMessage);
+        if (!IsSupported)
+            return new(PrinterOptionsStatus.Unavailable, [], "CUPS printer options are unavailable on this host.");
+
+        try
+        {
+            var result = await RunAsync(invocation, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (result.TimedOut)
+                return new(PrinterOptionsStatus.Unavailable, [], timeoutMessage);
+            if (!result.Succeeded)
+                return new(PrinterOptionsStatus.Unavailable, [], FormatProcessFailure("lpoptions -l", result));
+
+            // CUPS can report a PPD retrieval error on stderr with a successful exit code.
+            if (string.IsNullOrWhiteSpace(result.StandardOutput) && !string.IsNullOrWhiteSpace(result.StandardError))
+            {
+                return new(
+                    PrinterOptionsStatus.Unavailable, [],
+                    $"CUPS could not read the printer options. {result.StandardError.Trim()}");
+            }
+
+            return CupsPrinterOptions.Parse(result.StandardOutput);
+        }
+        catch (OperationCanceledException)
+        {
+            return new(PrinterOptionsStatus.Cancelled, [], cancelledMessage);
+        }
+        catch (TimeoutException)
+        {
+            return new(PrinterOptionsStatus.Unavailable, [], timeoutMessage);
+        }
+        catch (Win32Exception)
+        {
+            return new(PrinterOptionsStatus.Unavailable, [], "The CUPS lpoptions command could not be started.");
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return new(PrinterOptionsStatus.Failed, [], $"Reading printer options failed. {ex.Message}");
+        }
+    }
+
     public async Task<PrinterDiscoveryResult> DiscoverAsync(
         CancellationToken cancellationToken = default)
     {
@@ -110,6 +178,18 @@ public sealed class CupsPrintService : IPlatformPrintService
         {
             var listPrinters = CupsPrintCommandPlanner.ListPrinters(_discoveryMode);
             var printersResult = await RunAsync(listPrinters, cancellationToken).ConfigureAwait(false);
+            // lpstat exits non-zero with "No destinations added." when the machine has no print queue
+            // at all. That is the ordinary "no printers" state, not an unavailable spooler, so it must
+            // reach the no-printers path rather than be reported as a failed CUPS command.
+            if (IsNoDestinationsResult(printersResult))
+            {
+                return new(
+                    PrinterDiscoveryStatus.NoPrinters,
+                    [],
+                    null,
+                    "No printers are installed or available.");
+            }
+
             if (!printersResult.Succeeded)
             {
                 return new(
@@ -223,6 +303,46 @@ public sealed class CupsPrintService : IPlatformPrintService
 
         try
         {
+            if (selection.PrinterOptions is { Values.Count: > 0 } requestedOptions)
+            {
+                var overrides = new Dictionary<string, string>(requestedOptions.Values, StringComparer.Ordinal);
+                if (!CupsPrinterOptions.MatchesQueue(requestedOptions, printer))
+                {
+                    return new(
+                        PrintSubmissionStatus.Failed, printer,
+                        Message: "The printer options belong to a different printer.");
+                }
+                if (!CupsPrinterOptions.AreSafeOverrides(overrides))
+                    return new(PrintSubmissionStatus.Failed, printer, Message: "The job contains invalid printer options.");
+
+                var capabilities = await GetOptionsAsync(printer, cancellationToken).ConfigureAwait(false);
+                if (capabilities.Status != PrinterOptionsStatus.Available)
+                {
+                    var status = capabilities.Status switch
+                    {
+                        PrinterOptionsStatus.Cancelled => PrintSubmissionStatus.Cancelled,
+                        PrinterOptionsStatus.Unavailable => PrintSubmissionStatus.Unavailable,
+                        _ => PrintSubmissionStatus.Failed,
+                    };
+                    return new(status, printer, Message: capabilities.Message);
+                }
+
+                var definitions = capabilities.Options.ToDictionary(option => option.Key, StringComparer.Ordinal);
+                foreach (var (key, value) in overrides)
+                {
+                    if (!definitions.TryGetValue(key, out var definition) ||
+                        !definition.Choices.Any(choice => choice.Value == value))
+                    {
+                        return new(
+                            PrintSubmissionStatus.Failed, printer,
+                            Message: $"The printer no longer supports the selected value for {key}. Open Printer Properties to review the options.");
+                    }
+                }
+
+                selection = selection with { PrinterOptions = requestedOptions with { Values = overrides } };
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
             var result = await RunAsync(
                 CupsPrintCommandPlanner.Submit(
                     pdfPath,
@@ -306,6 +426,12 @@ public sealed class CupsPrintService : IPlatformPrintService
                 $"{invocation.FileName} did not exit within {_commandTimeout.TotalSeconds:n0} seconds.");
         }
     }
+
+    private static bool IsNoDestinationsResult(ProcessResult result) =>
+        !result.Succeeded &&
+        !result.TimedOut &&
+        (result.StandardError.Contains("No destinations added", StringComparison.OrdinalIgnoreCase) ||
+         result.StandardOutput.Contains("No destinations added", StringComparison.OrdinalIgnoreCase));
 
     private static string? ParseDefaultPrinter(string output)
     {

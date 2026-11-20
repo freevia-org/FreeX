@@ -513,6 +513,7 @@ public static class WorkbookApplicationCommandRouter
         const WorkbookApplicationCommandAvailability selection = WorkbookApplicationCommandAvailability.Selection;
 
         yield return Shortcut(WorkbookShortcutRoute.NewWorkbook, WorkbookApplicationCommandIntent.NewWorkbook, always);
+        yield return Shortcut(WorkbookShortcutRoute.OpenBackstage, WorkbookApplicationCommandIntent.OpenWorkbook, always);
         yield return Shortcut(WorkbookShortcutRoute.OpenWorkbook, WorkbookApplicationCommandIntent.OpenWorkbook, always);
         yield return Shortcut(WorkbookShortcutRoute.SaveWorkbook, WorkbookApplicationCommandIntent.SaveWorkbook, always);
         yield return Shortcut(WorkbookShortcutRoute.PrintWorkbook, WorkbookApplicationCommandIntent.PrintWorkbook, worksheet);

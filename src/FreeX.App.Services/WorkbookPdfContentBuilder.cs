@@ -103,7 +103,7 @@ public static class WorkbookPdfContentBuilder
         var pages = exportPlan.PageRequests
             .Select(request => BuildPageWithPageSetup(workbook, exportPlan, request, workbookDirectory, textMeasurer))
             .ToArray();
-        return new PdfContentDocument(pages);
+        return CreateDocument(workbook, exportPlan, pages);
     }
 
     /// <summary>
@@ -143,6 +143,8 @@ public static class WorkbookPdfContentBuilder
 
         var (pageW, pageH, mL, mR, mT, mB, _, _) =
             SheetPdfPageSetupResolver.ComputePdfGeometry(sheet);
+        if (request.IsCommentSummaryPage)
+            return BuildCommentSummaryPage(request, pageW, pageH, mL, mT, measurer);
 
         // Effective scale for rendering (percent / 100).
         var scaleRatio = ResolveScaleRatio(sheet, exportPlan, request);
@@ -459,38 +461,24 @@ public static class WorkbookPdfContentBuilder
         foreach (var cellBounds in validationCircleCellBounds)
             DrawValidationCircle(ops, cellBounds);
 
+
+
         if (sheet.PrintHeadings)
         {
             AddPrintHeadings(ops, offsetContentLeft, offsetContentTop, headingWidthPt, headingHeightPt,
                 colWidths, rowHeights, colXs, rowYs, contentPlan, measurer);
         }
 
-        // ── Header band ────────────────────────────────────────────────────────
-        // N45/N46: page.SheetPageNumber is always 1-based per print area (PrintPageGridPlanner
-        // numbers every area's pages 1..N independently), so it neither honors sheet.FirstPageNumber
-        // nor continues across a sheet's multiple print areas. Resolve the printed page number the
-        // same way WorksheetPrintRenderPlanner.TryBuild does for WPF: a single counter, seeded from
-        // FirstPageNumber, running across every page that belongs to this sheet (all its print areas,
-        // in export order).
         AddVectorDrawingOps(workbook, sheet, exportPlan, request, ops, pageW, pageH, measurer);
 
-        var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
-        var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
-        // R127-services-draft-quality-vector-drawings-1: header/footer (&G) pictures are raster
-        // graphics too -- Excel's Draft Quality suppresses them exactly like it suppresses charts and
-        // sheet pictures, matching PrintRenderer.HeaderFooterDrawing.cs's `!draftQuality` guard on
-        // leftPicture/centerPicture/rightPicture (the WPF path). Resolved to Empty (both sections'
-        // pictures null) here at the single choke point RenderHeaderFooterBand reads from, rather than
-        // threading draftQuality through every downstream picture-drawing call.
+        var (pageNumber, totalPages) = ResolveHeaderFooterPagination(exportPlan, request, sheet);
+        var headerFooter = WorksheetPrintPageContentPlanner.ResolveHeaderFooterVariant(sheet, pageNumber);
+        var header = headerFooter.Header;
+        var footer = headerFooter.Footer;
+        // Draft Quality suppresses raster pictures in the header and footer as it does on the sheet.
         var (headerPictures, footerPictures) = sheet.PrintDraftQuality
             ? (WorksheetHeaderFooterPictureSet.Empty, WorksheetHeaderFooterPictureSet.Empty)
-            : ResolveHeaderFooterPicturesForPage(sheet, pageNumber);
-        // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
-        // (RenderWorksheet computes totalPages = printPlan.GridPageCount + comment pages, scoped to
-        // that one sheet) -- NOT exportPlan.TotalPageCount, which sums every sheet in the export and
-        // would leak whole-workbook page counts into every sheet's &N when printing/exporting more
-        // than one sheet at once (O41).
-        var totalPages = ResolveEffectiveSheetTotalPages(exportPlan, sheet);
+            : (headerFooter.HeaderPictures, headerFooter.FooterPictures);
 
         // Header text: rendered just below the header margin from the top of the page. The band
         // height (mT - headerEdgePt, the gap between the header edge and the content's top margin)
@@ -559,6 +547,21 @@ public static class WorkbookPdfContentBuilder
             headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor,
             lineIndex => footerY - (lineIndex * headerFooterLineHeightPt), measurer);
 
+        if (request.DisplayedComments.Count > 0)
+        {
+            // WPF clamps comment boxes before scaling the sheet at its content origin.
+            var commentPage = new LayoutRect(
+                offsetContentLeft * (1 - effectiveScaleRatio),
+                (pageH - offsetContentTop) * (1 - effectiveScaleRatio),
+                pageW * effectiveScaleRatio,
+                pageH * effectiveScaleRatio);
+            AddDisplayedCommentOps(
+                ops, request.DisplayedComments, commentPage, pageH, sheet.PrintBlackAndWhite, measurer,
+                PixelToPointRatio * effectiveScaleRatio,
+                (row, column) => new LayoutRect(
+                    colXs[column], pageH - rowYs[row] - rowHeights[row], colWidths[column], rowHeights[row]));
+        }
+
         return new PdfContentPage(pageW, pageH, ops);
     }
 
@@ -583,7 +586,75 @@ public static class WorkbookPdfContentBuilder
         var pages = exportPlan.PageRequests
             .Select(request => BuildPage(workbook, exportPlan, request, options))
             .ToArray();
-        return new PdfContentDocument(pages);
+        return CreateDocument(workbook, exportPlan, pages);
+    }
+
+    private static PdfContentDocument CreateDocument(
+        Workbook workbook,
+        PortablePdfExportPlan plan,
+        IReadOnlyList<PdfContentPage> pages)
+    {
+        if (plan.PublishOptions is not { } options)
+            return new(pages, plan.PdfLanguage is { } language ? new PdfDocumentProperties { Language = language } : null);
+
+        var metadata = ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options);
+        if (plan.ExportPrintPlan.Intent.OutputKind == WorkbookExportPrintOutputKind.Xps)
+        {
+            return new PdfContentDocument(pages, metadata is null
+                ? null
+                : new PdfDocumentProperties(metadata.Title, metadata.Creator, metadata.Subject, metadata.Keywords));
+        }
+
+        var pageLayout = options.InitialView switch
+        {
+            PdfInitialView.OneColumn => PdfViewerPageLayout.OneColumn,
+            PdfInitialView.TwoColumnLeft => PdfViewerPageLayout.TwoColumnLeft,
+            PdfInitialView.TwoColumnRight => PdfViewerPageLayout.TwoColumnRight,
+            _ => PdfViewerPageLayout.SinglePage
+        };
+        var openMode = options.OpenMode switch
+        {
+            PdfOpenMode.Outlines => PdfViewerOpenMode.Outlines,
+            PdfOpenMode.FullScreen => PdfViewerOpenMode.FullScreen,
+            _ => PdfViewerOpenMode.Normal
+        };
+        var properties = new PdfDocumentProperties(
+            metadata?.Title, metadata?.Creator, metadata?.Subject, metadata?.Keywords, ExportDocumentPropertiesPlanner.DefaultCreator)
+        {
+            Language = plan.PdfLanguage,
+            ViewerSettings = new PdfDocumentViewerSettings(pageLayout, openMode, DisplayDocumentTitle: metadata?.Title is not null),
+            Outlines = PortablePdfOutlinePlanner.Build(workbook, plan.PageRequests, options.EffectiveBookmarkMode)
+        };
+        return new PdfContentDocument(pages, properties);
+    }
+
+    private static PdfContentPage BuildCommentSummaryPage(
+        PortablePdfExportPageRequest request,
+        double width,
+        double height,
+        double marginLeft,
+        double marginTop,
+        ITextMeasurer measurer)
+    {
+        var page = new PrintPreviewCommentSummaryPage(
+            request.SheetPageNumber,
+            new LayoutRect(0, 0, width / PixelToPointRatio, height / PixelToPointRatio),
+            marginLeft / PixelToPointRatio,
+            marginTop / PixelToPointRatio,
+            request.CommentSummaryEntries);
+        var drawing = PrintPreviewCommentSummaryInstructionBuilder.Build(page, measurer);
+        // The PDF page is white by default. Convert preview text origins from top-left DIPs to
+        // bottom-left PDF points, using the font size to offset the baseline below the top edge.
+        var ops = new List<PdfDrawOp>();
+        foreach (var instruction in drawing.Instructions)
+        {
+            if (instruction.Kind != PrintPreviewPaintKind.Text)
+                continue;
+
+            AddPrintTextOp(ops, instruction, height, PixelToPointRatio);
+        }
+
+        return new PdfContentPage(width, height, ops);
     }
 
     public static PdfContentPage BuildPage(
@@ -595,6 +666,13 @@ public static class WorkbookPdfContentBuilder
         var contentPlan = PortablePdfPageContentPlanner.CreatePlan(workbook, request);
         if (!contentPlan.IsReady)
             throw new InvalidOperationException(contentPlan.StatusText);
+
+        if (request.IsCommentSummaryPage)
+        {
+            return BuildCommentSummaryPage(
+                request, options.PageWidthPoints, options.PageHeightPoints,
+                options.MarginPoints, options.MarginPoints, PortablePdfTextMeasurer.Instance);
+        }
 
         // shared-localization-rtl-F1: resolve the same sheet the page-setup-aware path resolves
         // (BuildPageWithPageSetup above) -- by the print AREA that owns this page's PrintRange
@@ -734,6 +812,20 @@ public static class WorkbookPdfContentBuilder
         foreach (var cellBounds in validationCircleCellBounds)
             DrawValidationCircle(ops, cellBounds);
 
+        if (!sheet.PrintDraftQuality && sheet.DrawingShapes.Count > 0)
+        {
+            var shapes = BuildLegacyShapeBlocks(workbook, sheet, contentPlan, options).ToDictionary(shape => shape.Id);
+            foreach (var entry in DrawingObjectZOrder.GetNormalizedOrder(sheet))
+            {
+                if (entry.Kind != SelectionPaneObjectKind.Shape || !shapes.TryGetValue(entry.Id, out var shape)) continue;
+                var shapeOps = new List<PdfDrawOp>();
+                AddShapeOps(shapeOps, shape, options.PageHeightPoints, PixelToPointRatio, PixelToPointRatio, PortablePdfTextMeasurer.Instance);
+                var clip = shape.BodyClip;
+                ops.Add(new PdfClipGroup(clip.Left * PixelToPointRatio, options.PageHeightPoints - clip.Bottom * PixelToPointRatio,
+                    clip.Width * PixelToPointRatio, clip.Height * PixelToPointRatio, shapeOps));
+            }
+        }
+
         ops.Add(new PdfText(
             options.MarginPoints,
             options.MarginPoints - 12,
@@ -742,12 +834,107 @@ public static class WorkbookPdfContentBuilder
             FooterTextColor,
             $"FreeX portable PDF - {request.SheetName} page {request.SheetPageNumber}"));
 
+        if (request.DisplayedComments.Count > 0)
+        {
+            AddDisplayedCommentOps(
+                ops, request.DisplayedComments,
+                new LayoutRect(0, 0, options.PageWidthPoints, options.PageHeightPoints), options.PageHeightPoints,
+                sheet.PrintBlackAndWhite, PortablePdfTextMeasurer.Instance, PixelToPointRatio,
+                (row, column) => new LayoutRect(
+                    gridLeft + (column * columnWidth),
+                    options.PageHeightPoints - gridTop + (row * options.RowHeightPoints),
+                    columnWidth, options.RowHeightPoints));
+        }
+
         return new PdfContentPage(options.PageWidthPoints, options.PageHeightPoints, ops);
+    }
+
+    internal static IReadOnlyList<PageShapeBlock> BuildLegacyShapeBlocks(Workbook workbook, Sheet sheet,
+        PortablePdfPageContentPlan contentPlan, PortablePdfDocumentOptions options)
+    {
+        if (sheet.PrintDraftQuality || sheet.DrawingShapes.Count == 0) return [];
+        var rows = contentPlan.Rows.Select(row => row.Row).ToArray();
+        var columns = contentPlan.Columns.Select(column => column.Column).ToArray();
+        var bodyRows = contentPlan.Rows.Where(row => row.Role == PortablePdfPageAxisRole.Body).Select(row => row.Row).ToArray();
+        var bodyColumns = contentPlan.Columns.Where(column => column.Role == PortablePdfPageAxisRole.Body).Select(column => column.Column).ToArray();
+        var columnWidth = ResolveColumnWidth(options.PageWidthPoints - options.MarginPoints * 2, Math.Max(1, contentPlan.ColumnCount), options);
+        var measurement = new PrintGridMeasurement(0, 0, columnWidth / PixelToPointRatio, options.RowHeightPoints / PixelToPointRatio);
+        return PageShapeLayoutPlanner.Build(sheet.DrawingShapes, sheet, workbook.Theme, rows, columns,
+            options.MarginPoints / PixelToPointRatio, (options.MarginPoints + options.HeaderHeightPoints) / PixelToPointRatio,
+            measurement, bodyRows: bodyRows, bodyColumns: bodyColumns, uniformGrid: true);
     }
 
     // -----------------------------------------------------------------------
     // Page-setup helpers
     // -----------------------------------------------------------------------
+
+    private static void AddDisplayedCommentOps(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<WorksheetDisplayedComment> comments,
+        LayoutRect pageBounds,
+        double pageHeight,
+        bool blackAndWhite,
+        ITextMeasurer measurer,
+        double geometryScale,
+        Func<int, int, LayoutRect> getCellBounds)
+    {
+        foreach (var comment in comments)
+        {
+            var block = PrintDisplayedCommentPlanner.BuildBlock(
+                comment, getCellBounds(comment.RowIndex, comment.ColumnIndex), pageBounds, geometryScale);
+            foreach (var instruction in PrintDisplayedCommentPlanner.BuildInstructions(block, blackAndWhite, measurer, geometryScale))
+            {
+                switch (instruction.Kind)
+                {
+                    case PrintPreviewPaintKind.Polygon when instruction.Points is { Count: 3 } points && instruction.Fill is { } color:
+                        ops.Add(new PdfFilledTriangle(
+                            points[0].X, pageHeight - points[0].Y,
+                            points[1].X, pageHeight - points[1].Y,
+                            points[2].X, pageHeight - points[2].Y,
+                            ToPdfColor(color)));
+                        break;
+
+                    case PrintPreviewPaintKind.Rectangle:
+                        var bottom = pageHeight - instruction.Top - instruction.Height;
+                        if (instruction.Fill is { } fill)
+                        {
+                            ops.Add(new PdfFillRect(
+                                instruction.Left, bottom, instruction.Width, instruction.Height, ToPdfColor(fill)));
+                        }
+
+                        if (instruction.Stroke is { } stroke)
+                        {
+                            ops.Add(new PdfStrokeRect(
+                                instruction.Left, bottom, instruction.Width, instruction.Height,
+                                ToPdfColor(stroke), instruction.StrokeThickness));
+                        }
+
+                        break;
+
+                    case PrintPreviewPaintKind.Text:
+                        AddPrintTextOp(ops, instruction, pageHeight);
+                        break;
+                }
+            }
+        }
+    }
+
+    private static void AddPrintTextOp(
+        List<PdfDrawOp> ops,
+        PrintPreviewPaintInstruction instruction,
+        double pageHeight,
+        double coordinateScale = 1.0)
+    {
+        var font = instruction.Font;
+        ops.Add(new PdfText(
+            instruction.X1 * coordinateScale,
+            pageHeight - (instruction.Y1 + font.FontSize) * coordinateScale,
+            font.FontSize * coordinateScale,
+            ToPdfFontFace(font.Bold, font.Italic),
+            ToPdfColor(font.Color),
+            instruction.Text,
+            font.FontFamily));
+    }
 
     private static void DrawValidationCircle(List<PdfDrawOp> ops, LayoutRect cellBounds)
     {
@@ -988,7 +1175,7 @@ public static class WorkbookPdfContentBuilder
 
         var layout = BuildPageContentLayout(workbook, sheet, exportPlan, request, textMeasurer);
         if (layout is null ||
-            (layout.Charts.Count == 0 && layout.TextBoxes.Count == 0 && layout.Pictures.Count == 0))
+            (layout.Charts.Count == 0 && layout.TextBoxes.Count == 0 && layout.Pictures.Count == 0 && layout.Shapes.Count == 0))
         {
             return;
         }
@@ -996,71 +1183,185 @@ public static class WorkbookPdfContentBuilder
         var scaleX = pageWidthPoints / layout.PageBounds.Width;
         var scaleY = pageHeightPoints / layout.PageBounds.Height;
 
-        // R127-services-draft-quality-vector-drawings-1: layout.Charts/layout.Pictures are already
-        // empty here when Sheet.PrintDraftQuality is set -- PageContentRenderModelBuilder.Build (the
-        // single upstream choke point BOTH this PDF-export path and the Avalonia interactive
-        // print-preview canvas read from) omits them at their source, matching the WPF native
-        // print/PDF path's own `!draftQuality` guard (PrintRenderer.HeaderFooter.cs) around charts and
-        // raster pictures. No local guard needed here: text boxes stay unconditional below (vector
-        // text content, not "graphics" -- Excel's Draft Quality does not suppress them).
+        var shapeMap = layout.Shapes.ToDictionary(item => item.Id);
+        var chartMap = layout.Charts.ToDictionary(item => item.Id);
+        var pictureMap = layout.Pictures.ToDictionary(item => item.Id);
+        var textMap = layout.TextBoxes.ToDictionary(item => item.Id);
+        ChartLayoutRequestBuilder.ChartCellAccessor? chartCellAccessor = null;
+        CellColor[]? seriesPalette = null;
         if (layout.Charts.Count > 0)
         {
-            var chartCellAccessor = BuildChartCellAccessor(workbook, sheet);
-            var seriesPalette = ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme);
-            foreach (var chart in layout.Charts)
-            {
-                AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
-                AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
-                AddChartPlotOps(
-                    workbook,
-                    sheet,
-                    chart,
-                    chartCellAccessor,
-                    seriesPalette,
-                    ops,
-                    pageHeightPoints,
-                    scaleX,
-                    scaleY,
-                    textMeasurer);
-
-                foreach (var overlay in chart.TextOverlays)
-                    AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
-            }
+            chartCellAccessor = BuildChartCellAccessor(workbook, sheet);
+            seriesPalette = ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme);
         }
-
-        // R92-consumer-wiring-sweep-1: sheet pictures (Insert > Pictures, or a raster non-linked
-        // Paste Special > Picture) were never emitted here at all, so an inserted picture silently
-        // never appeared in print/PDF on either platform even though it always rendered on screen
-        // (GridView.DrawingObjects.Pictures.cs). Paint order matches the on-screen z-order fallback
-        // this codebase already uses for charts vs. text boxes: pictures sit above the chart layer,
-        // below text-box annotations.
-        foreach (var picture in layout.Pictures)
-            AddPictureImage(ops, picture, pageHeightPoints, scaleX, scaleY);
-
-        foreach (var textBox in layout.TextBoxes)
+        foreach (var entry in layout.GetDrawingOrder())
         {
-            if (textBox.Fill is { } fill)
-                AddFillRect(ops, textBox.Bounds, fill, pageHeightPoints, scaleX, scaleY, textBox.FillAlpha / 255d);
-
-            // R91-commands-insert-object-5-1: Outline is null when the text box's line is
-            // explicitly suppressed (TextBoxModel.OutlineHasNoFill) -- emit no stroke rather than
-            // always forcing one.
-            if (textBox.Outline is { } outline)
-                AddStrokeRect(ops, textBox.Bounds, outline, textBox.OutlineThickness, pageHeightPoints, scaleX, scaleY);
-
-            if (!string.IsNullOrWhiteSpace(textBox.Text))
+            switch (entry.Kind)
             {
-                var fontSize = Math.Max(1, textBox.Font.FontSize * scaleY);
-                ops.Add(new PdfText(
-                    textBox.TextBounds.Left * scaleX,
-                    pageHeightPoints - ((textBox.TextBounds.Top * scaleY) + fontSize),
-                    fontSize,
-                    ToPdfFontFace(textBox.Font.Bold, textBox.Font.Italic),
-                    ToPdfColor(textBox.Font.Color),
-                    PdfWinAnsiTextCapability.Truncate(textBox.Text, 128),
-                    textBox.Font.FontFamily));
+                case SelectionPaneObjectKind.Shape when shapeMap.TryGetValue(entry.Id, out var shape):
+                    var shapeOps = new List<PdfDrawOp>();
+                    AddShapeOps(shapeOps, shape, pageHeightPoints, scaleX, scaleY, textMeasurer);
+                    var clip = shape.BodyClip;
+                    ops.Add(new PdfClipGroup(clip.Left * scaleX, pageHeightPoints - clip.Bottom * scaleY,
+                        clip.Width * scaleX, clip.Height * scaleY, shapeOps));
+                    break;
+                case SelectionPaneObjectKind.Chart when chartMap.TryGetValue(entry.Id, out var chart):
+                    AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
+                    AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+                    AddChartPlotOps(workbook, sheet, chart, chartCellAccessor!, seriesPalette!, ops, pageHeightPoints, scaleX, scaleY, textMeasurer);
+                    foreach (var overlay in chart.TextOverlays)
+                        AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SelectionPaneObjectKind.Picture when pictureMap.TryGetValue(entry.Id, out var picture):
+                    AddPictureImage(ops, picture, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SelectionPaneObjectKind.TextBox when textMap.TryGetValue(entry.Id, out var textBox):
+                    if (textBox.Fill is { } fill)
+                        AddFillRect(ops, textBox.Bounds, fill, pageHeightPoints, scaleX, scaleY, textBox.FillAlpha / 255d);
+                    if (textBox.Outline is { } outline)
+                        AddStrokeRect(ops, textBox.Bounds, outline, textBox.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+                    if (!string.IsNullOrWhiteSpace(textBox.Text))
+                    {
+                        var fontSize = Math.Max(1, textBox.Font.FontSize * scaleY);
+                        ops.Add(new PdfText(textBox.TextBounds.Left * scaleX,
+                            pageHeightPoints - ((textBox.TextBounds.Top * scaleY) + fontSize), fontSize,
+                            ToPdfFontFace(textBox.Font.Bold, textBox.Font.Italic), ToPdfColor(textBox.Font.Color),
+                            PdfWinAnsiTextCapability.Truncate(textBox.Text, 128), textBox.Font.FontFamily));
+                    }
+                    break;
             }
         }
+    }
+
+    private static void AddShapeOps(List<PdfDrawOp> output, PageShapeBlock shape, double pageHeight, double scaleX, double scaleY, ITextMeasurer textMeasurer)
+    {
+        PdfPathPoint Point(Free.Shared.Drawing.LayoutPoint point) => new(point.X * scaleX, pageHeight - point.Y * scaleY);
+        var children = new List<PdfDrawOp>();
+        foreach (var (contour, isArrowhead) in shape.Geometry.Contours.Select(item => (item, false))
+                     .Concat(shape.Arrowheads.SelectMany(arrow => arrow.Contours).Select(item => (item, true))))
+        {
+            var segments = new List<PdfPathSegment>();
+            var previous = contour.Start;
+            foreach (var segment in contour.Segments)
+            {
+                var pieces = segment.Kind == Free.Shared.Drawing.ShapeSegmentKind.Arc
+                    ? Free.Shared.Drawing.ShapeArcToBezier.Convert(previous, segment)
+                    : [segment];
+                foreach (var piece in pieces)
+                    segments.Add(piece.Kind == Free.Shared.Drawing.ShapeSegmentKind.CubicBezier
+                        ? PdfPathSegment.BezierTo(Point(piece.Control1), Point(piece.Control2), Point(piece.End))
+                        : PdfPathSegment.LineTo(Point(piece.End)));
+                previous = segment.End;
+            }
+            var paint = shape.Appearance.Paint;
+            var path = new PdfPathContour(Point(contour.Start), segments, contour.Closed);
+            if (isArrowhead)
+            {
+                children.Add(new PdfPath([path], shape.BlackAndWhite ? PdfColor.Black : ToPdfColor(paint.Outline), null, 0));
+                continue;
+            }
+            var strokeWidth = paint.HasOutline ? shape.Appearance.Outline.ThicknessDip * (scaleX + scaleY) / 2 : 0;
+            var dash = Enum.TryParse<Free.Shared.Drawing.DrawingMlPresetDash>(shape.Appearance.Outline.Dash.ToString(), out var preset)
+                && Free.Shared.Drawing.DrawingMlPresetDashPattern.Get(preset) is { } pattern
+                ? new PdfDashPattern(pattern.Select(value => value * strokeWidth).ToArray()) : null;
+            var fill = contour.Filled && paint.HasFill && !shape.BlackAndWhite ? ToPdfColor(paint.Fill) : (PdfColor?)null;
+            var stroke = paint.HasOutline ? shape.BlackAndWhite ? PdfColor.Black : ToPdfColor(paint.Outline) : (PdfColor?)null;
+            if (fill is not null && shape.Appearance.FillGradient is { } gradient)
+            {
+                var left = shape.Bounds.Left * scaleX;
+                var right = shape.Bounds.Right * scaleX;
+                var top = pageHeight - shape.Bounds.Top * scaleY;
+                var bottom = pageHeight - shape.Bounds.Bottom * scaleY;
+                var (startX, startY, endX, endY) = gradient.Direction switch
+                {
+                    DrawingShapeGradientDirection.Horizontal => (left, top, right, top),
+                    DrawingShapeGradientDirection.Vertical => (left, top, left, bottom),
+                    DrawingShapeGradientDirection.DiagonalUp => (left, bottom, right, top),
+                    _ => (left, top, right, bottom)
+                };
+                var gradientFill = new PdfLinearGradient(startX, startY, endX, endY,
+                    [new PdfGradientStop(0, fill.Value), new PdfGradientStop(1, ToPdfColor(gradient.EndColor))]);
+                children.Add(new PdfPathLinearGradient([path], gradientFill, fill, null, stroke, strokeWidth, dash));
+            }
+            else children.Add(new PdfPath([path], fill, stroke, strokeWidth, dash));
+        }
+        var transform = shape.Appearance.Transform;
+        var centerX = (shape.Bounds.Left + shape.Bounds.Width / 2) * scaleX;
+        var centerY = pageHeight - (shape.Bounds.Top + shape.Bounds.Height / 2) * scaleY;
+        output.Add(new PdfRotationGroup(centerX, centerY, transform.RotationDegrees,
+            children, transform.FlipHorizontal, transform.FlipVertical));
+        if (!string.IsNullOrWhiteSpace(shape.Text))
+        {
+            var fontSize = Math.Max(1, shape.TextFont.FontSize * scaleY);
+            var leftInset = shape.TextInsets?.Left ?? 4;
+            var rightInset = shape.TextInsets?.Right ?? 4;
+            var topInset = shape.TextInsets?.Top ?? 4;
+            var bottomInset = shape.TextInsets?.Bottom ?? 4;
+            var availableWidth = Math.Max(0, shape.Bounds.Width - leftInset - rightInset);
+            var availableHeight = Math.Max(0, shape.Bounds.Height - topInset - bottomInset);
+            var lineHeight = textMeasurer.Measure("Ag", shape.TextFont.FontFamily, shape.TextFont.FontSize, shape.TextFont.Bold, shape.TextFont.Italic).Height;
+            if (!double.IsFinite(lineHeight) || lineHeight <= 0) lineHeight = shape.TextFont.FontSize;
+            var lines = WrapShapeText(shape.Text, shape.TextFont, availableWidth, shape.TextWrap, textMeasurer);
+            var totalHeight = lines.Count * lineHeight;
+            var textTop = shape.TextVerticalAlignment switch
+            {
+                DrawingShapeTextVAnchor.Middle => shape.Bounds.Top + topInset + Math.Max(0, (availableHeight - totalHeight) / 2),
+                DrawingShapeTextVAnchor.Bottom => shape.Bounds.Bottom - bottomInset - Math.Min(availableHeight, totalHeight),
+                _ => shape.Bounds.Top + topInset
+            };
+            var textOps = new List<PdfDrawOp>();
+            for (var index = 0; index < lines.Count && index * lineHeight < availableHeight; index++)
+            {
+                var line = lines[index];
+                var lineWidth = textMeasurer.Measure(line, shape.TextFont.FontFamily, shape.TextFont.FontSize, shape.TextFont.Bold, shape.TextFont.Italic).Width;
+                var left = shape.TextHorizontalAlignment switch
+                {
+                    DrawingShapeTextHAlign.Center => shape.Bounds.Left + leftInset + Math.Max(0, (availableWidth - lineWidth) / 2),
+                    DrawingShapeTextHAlign.Right => shape.Bounds.Right - rightInset - Math.Min(availableWidth, lineWidth),
+                    _ => shape.Bounds.Left + leftInset
+                };
+                textOps.Add(new PdfText(left * scaleX, pageHeight - ((textTop + index * lineHeight) * scaleY + fontSize), fontSize,
+                    ToPdfFontFace(shape.TextFont.Bold, shape.TextFont.Italic), shape.BlackAndWhite ? PdfColor.Black : ToPdfColor(shape.TextFont.Color),
+                    line, shape.TextFont.FontFamily));
+            }
+            var clip = new PdfClipGroup(shape.Bounds.Left * scaleX, pageHeight - shape.Bounds.Bottom * scaleY,
+                shape.Bounds.Width * scaleX, shape.Bounds.Height * scaleY, textOps);
+            output.Add(new PdfRotationGroup(centerX, centerY, transform.RotationDegrees, [clip]));
+        }
+    }
+
+    private static IReadOnlyList<string> WrapShapeText(string text, PageTextFont font, double width, bool wrap, ITextMeasurer measurer)
+    {
+        var lines = new List<string>();
+        foreach (var paragraph in text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            if (!wrap || width <= 0) { lines.Add(paragraph); continue; }
+            var current = "";
+            foreach (var word in paragraph.Split(' '))
+            {
+                var candidate = current.Length == 0 ? word : current + " " + word;
+                if (current.Length > 0 && measurer.Measure(candidate, font.FontFamily, font.FontSize, font.Bold, font.Italic).Width > width)
+                {
+                    lines.Add(current);
+                    current = "";
+                }
+                else if (current.Length > 0) { current = candidate; continue; }
+                var elements = StringInfo.GetTextElementEnumerator(word);
+                while (elements.MoveNext())
+                {
+                    var part = elements.GetTextElement();
+                    var next = current + part;
+                    if (current.Length > 0 && measurer.Measure(next, font.FontFamily, font.FontSize, font.Bold, font.Italic).Width > width)
+                    {
+                        lines.Add(current);
+                        current = part;
+                    }
+                    else current = next;
+                }
+            }
+            lines.Add(current);
+        }
+        return lines;
     }
 
     private static void AddChartPlotOps(
@@ -2287,89 +2588,40 @@ public static class WorkbookPdfContentBuilder
         PagePrintTextPlanner.ExpandHeaderFooterText(
             raw, pageNumber, totalPages, workbookName, workbookDirectory, sheetName, now);
 
-    /// <summary>
-    /// Computes the printed page number for <paramref name="request"/> honoring
-    /// <see cref="Sheet.FirstPageNumber"/> and continuing sequentially across every print area that
-    /// belongs to the same sheet, matching <c>WorksheetPrintRenderPlanner.TryBuild</c>'s single
-    /// running counter (seeded from <c>sheet.FirstPageNumber ?? 1</c>) across areas -- unlike
-    /// <see cref="PortablePdfExportPageRequest.SheetPageNumber"/>, which <see cref="PrintPageGridPlanner"/>
-    /// always numbers 1..N independently per print area.
-    /// </summary>
-    private static int ResolveEffectiveSheetPageNumber(
+    private static (int PageNumber, int PageCount) ResolveHeaderFooterPagination(
         PortablePdfExportPlan exportPlan,
         PortablePdfExportPageRequest request,
         Sheet sheet)
     {
         var firstPageNumber = sheet.FirstPageNumber ?? 1;
-        var offset = 0;
+        var intent = exportPlan.ExportPrintPlan.Intent;
+        if (!intent.UseSheetPageNumbering &&
+            intent.Scope is WorkbookExportPrintScope.VisibleWorkbook or WorkbookExportPrintScope.GroupedSheets)
+        {
+            // WPF applies the document offset to the sheet's configured starting number. The
+            // total includes every page in the original job, including comment appendices.
+            var (documentPageNumber, documentPageCount) =
+                request.OriginalDocumentPagination ?? (request.ExportPageNumber, exportPlan.TotalPageCount);
+            return (firstPageNumber + documentPageNumber - 1, documentPageCount);
+        }
+
+        if (request.OriginalSheetPagination is { } originalSheet)
+            return (firstPageNumber + originalSheet.PageIndex, originalSheet.PageCount);
+
+        var pageNumber = firstPageNumber + request.SheetPageNumber - 1;
+        var sheetPageCount = 0;
         foreach (var candidate in exportPlan.PageRequests)
         {
             if (candidate.PrintRange.Start.Sheet != sheet.Id)
                 continue;
 
             if (candidate.ExportPageNumber == request.ExportPageNumber)
-                return firstPageNumber + offset;
+                pageNumber = firstPageNumber + sheetPageCount;
 
-            offset++;
+            sheetPageCount++;
         }
 
-        // Should not happen (request always comes from exportPlan.PageRequests), but fall back to
-        // the area-local numbering rather than throwing.
-        return firstPageNumber + request.SheetPageNumber - 1;
-    }
-
-    /// <summary>
-    /// Computes the &amp;N total-page-count value for <paramref name="sheet"/>: the count of every
-    /// actual <see cref="PortablePdfExportPageRequest"/> belonging to that sheet (a sheet can have more
-    /// than one configured print area — see N45/N46), INCLUDING any "at end of sheet" comment-summary
-    /// pages <c>PortablePdfExportPlanner.AddCommentSummaryPageRequests</c> appends after the grid pages
-    /// -- NOT merely <see cref="WorkbookSheetExportPrintPlanSummary.PageCount"/> (grid pages only), and
-    /// NOT <see cref="WorkbookExportPrintPlan.TotalPageCount"/>, which sums across every sheet in the
-    /// export. Real Excel resets &amp;N per sheet in a multi-sheet print job and includes the appended
-    /// comment pages in that count, and so does FreeX's own WPF path (<c>PrintRenderer.RenderWorksheet</c>
-    /// computes totalPages = printPlan.GridPageCount + commentSummaryPages.Count).
-    /// </summary>
-    private static int ResolveEffectiveSheetTotalPages(PortablePdfExportPlan exportPlan, Sheet sheet)
-    {
-        var total = 0;
-        foreach (var candidate in exportPlan.PageRequests)
-        {
-            if (candidate.PrintRange.Start.Sheet == sheet.Id)
-                total++;
-        }
-
-        // Should not happen (the sheet owning this page must have at least one request), but fall
-        // back to the whole-export total rather than reporting 0 pages.
-        return total > 0 ? total : exportPlan.TotalPageCount;
-    }
-
-    private static (WorksheetHeaderFooter Header, WorksheetHeaderFooter Footer)
-        ResolveHeaderFooterForPage(Sheet sheet, int pageNumber)
-    {
-        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeader, sheet.FirstPageFooter);
-
-        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeader, sheet.EvenPageFooter);
-
-        return (sheet.PageHeader, sheet.PageFooter);
-    }
-
-    /// <summary>
-    /// Resolves the header/footer picture sets (<c>&amp;G</c> images) for the page the same way
-    /// <see cref="ResolveHeaderFooterForPage"/> resolves the header/footer text, so a first-page or
-    /// odd/even override's picture set is honored consistently with its text.
-    /// </summary>
-    private static (WorksheetHeaderFooterPictureSet HeaderPictures, WorksheetHeaderFooterPictureSet FooterPictures)
-        ResolveHeaderFooterPicturesForPage(Sheet sheet, int pageNumber)
-    {
-        if (sheet.DifferentFirstPageHeaderFooter && pageNumber == (sheet.FirstPageNumber ?? 1))
-            return (sheet.FirstPageHeaderPictures, sheet.FirstPageFooterPictures);
-
-        if (sheet.DifferentOddEvenHeaderFooter && pageNumber % 2 == 0)
-            return (sheet.EvenPageHeaderPictures, sheet.EvenPageFooterPictures);
-
-        return (sheet.PageHeaderPictures, sheet.PageFooterPictures);
+        return (pageNumber, sheetPageCount == 0 ? exportPlan.TotalPageCount : sheetPageCount);
     }
 
     // -----------------------------------------------------------------------

@@ -13,8 +13,15 @@ public sealed partial class NativeJsonAdapter
     /// <summary>Exposed for unit tests to verify the static instance is reused.</summary>
     internal static JsonSerializerOptions SaveOptionsForTest => SaveOptions;
 
-    public void Save(Workbook workbook, Stream stream) =>
+    public void Save(Workbook workbook, Stream stream)
+    {
+        // Native files do not yet carry arbitrary drawing-part relationship graphs. Reject before
+        // touching the destination so saving cannot silently discard an opaque target or part.
+        if (workbook.Sheets.SelectMany(sheet => sheet.DrawingShapes)
+            .Any(shape => shape is not null && shape.ShapeTextDocument is { } document && XlsxShapeTextDocumentCodec.HasOpaqueRelationships(document)))
+            throw new InvalidOperationException("Native save cannot preserve opaque shape text relationships.");
         Save(workbook, stream, includeCells: true, includeStyleOnlyCells: true, includeCellStyles: true, includeWorksheetFilterState: true);
+    }
 
     internal void SaveForFingerprint(Workbook workbook, Stream stream) =>
         Save(workbook, stream, includeCells: true, includeStyleOnlyCells: false, includeCellStyles: true, includeWorksheetFilterState: true);

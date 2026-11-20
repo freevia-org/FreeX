@@ -1549,7 +1549,10 @@ public static class AvaloniaCompactDialogChrome
 
             var content = new ContentPresenter
             {
+                FontFamily = style.FontFamily,
+                FontSize = style.FontSize,
                 VerticalContentAlignment = VerticalAlignment.Center,
+                Foreground = foreground,
                 RecognizesAccessKey = true,
             };
             content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });

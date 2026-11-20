@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using Free.Shared.AppServices;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
@@ -23,6 +24,8 @@ public sealed class WorkbookStatisticsDialog : Window
         Height = WorkbookStatisticsDialogPlanner.Height;
         MinWidth = WorkbookStatisticsDialogPlanner.MinWidth;
         MinHeight = WorkbookStatisticsDialogPlanner.MinHeight;
+        FontFamily = new System.Windows.Media.FontFamily(WorkbookStatisticsDialogVisualMetrics.FontFamily);
+        FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResizeWithGrip;
         ShowInTaskbar = false;
@@ -35,7 +38,7 @@ public sealed class WorkbookStatisticsDialog : Window
 
     private Grid CreateTextContent(string message)
     {
-        var root = new Grid { Margin = new Thickness(16) };
+        var root = new Grid { Margin = new Thickness(WorkbookStatisticsDialogVisualMetrics.ContentMargin) };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
@@ -46,11 +49,12 @@ public sealed class WorkbookStatisticsDialog : Window
             Background = SystemColors.WindowBrush,
             BorderBrush = SystemColors.ControlDarkBrush,
             IsReadOnly = true,
-            Padding = new Thickness(8),
+            Padding = new Thickness(WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             TextWrapping = TextWrapping.Wrap,
-            MinHeight = 260
+            MinHeight = WorkbookStatisticsDialogVisualMetrics.SummaryMinHeight,
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
         AutomationProperties.SetAutomationId(
@@ -71,7 +75,7 @@ public sealed class WorkbookStatisticsDialog : Window
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
+            Margin = new Thickness(0, WorkbookStatisticsDialogVisualMetrics.ActionRowTopMargin, 0, 0)
         };
 
         var copyContent = UiText.Get("WorkbookStatistics_CopyToClipboard");
@@ -79,8 +83,8 @@ public sealed class WorkbookStatisticsDialog : Window
         var copy = new Button
         {
             Content = copyContent,
-            MinWidth = 132,
-            Margin = new Thickness(0, 0, 8, 0)
+            MinWidth = WorkbookStatisticsDialogVisualMetrics.CopyButtonMinWidth,
+            Margin = new Thickness(0, 0, WorkbookStatisticsDialogVisualMetrics.ActionButtonSpacing, 0)
         };
         AutomationProperties.SetName(copy, UiText.CreateAutomationName(copyContent));
         AutomationProperties.SetAutomationId(
@@ -93,7 +97,7 @@ public sealed class WorkbookStatisticsDialog : Window
         var ok = new Button
         {
             Content = UiText.Ok,
-            MinWidth = 76,
+            MinWidth = WorkbookStatisticsDialogVisualMetrics.OkButtonMinWidth,
             IsDefault = true,
             IsCancel = true
         };

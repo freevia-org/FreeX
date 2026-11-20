@@ -33,6 +33,8 @@ public static class SkiaPdfDocumentExporter
             throw new ArgumentException("PDF export requires a writable stream.", nameof(stream));
         if (!exportPlan.IsReady)
             throw new InvalidOperationException(exportPlan.StatusText);
+        if (exportPlan.ExportPrintPlan.Intent.OutputKind != WorkbookExportPrintOutputKind.Pdf)
+            throw new ArgumentException("The export plan must target PDF.", nameof(exportPlan));
 
         // Use the page-setup-aware builder when the export plan was produced by
         // CreatePlanFromPageSetup (page dimensions/gridlines/header-footer honored per sheet).
@@ -57,13 +59,15 @@ public static class SkiaPdfDocumentExporter
         // an unrecognized format): that image is silently omitted from the page unless this sink
         // catches the diagnostic, so callers can surface the loss instead of the export looking clean.
         var imageDiagnostics = new List<string>();
-        var pageCount = SkiaPdfWriter.Write(document, stream, imageDiagnostics);
+        var pageCount = exportPlan.RasterDpi is { } dpi
+            ? SkiaPdfWriter.WriteRasterized(document, stream, dpi, exportPlan.IncludeSelectableText, imageDiagnostics)
+            : SkiaPdfWriter.Write(document, stream, imageDiagnostics);
 
-        var statusText = imageDiagnostics.Count == 0
-            ? $"Exported PDF (Skia, embedded fonts): {pageCount} {(pageCount == 1 ? "page" : "pages")}."
-            : $"Exported PDF (Skia, embedded fonts): {pageCount} {(pageCount == 1 ? "page" : "pages")} " +
-              $"({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")}).";
+        var backendDescription = exportPlan.IncludeSelectableText ? "Skia, embedded fonts" : "Skia, bitmap text";
+        var statusText = $"Exported PDF ({backendDescription}): {pageCount} {(pageCount == 1 ? "page" : "pages")}";
+        if (imageDiagnostics.Count > 0)
+            statusText += $" ({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")})";
 
-        return new PortablePdfDocumentExportResult(pageCount, statusText, imageDiagnostics);
+        return new PortablePdfDocumentExportResult(pageCount, statusText + ".", imageDiagnostics);
     }
 }

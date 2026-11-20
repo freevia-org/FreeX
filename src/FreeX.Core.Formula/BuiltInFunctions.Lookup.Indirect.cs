@@ -349,6 +349,39 @@ public static partial class BuiltInFunctions
         return true;
     }
 
+    // Geometry-only INDIRECT parsing, deliberately excluding defined-name evaluation so callers
+    // can resolve named formulas without allocating a RangeValue or clamping full-sheet axes.
+    internal static bool TryGetIndirectGeometryParts(
+        IReadOnlyList<ScalarValue> args, IEvalContext ctx,
+        out IndirectRangeReference range, out string refText, out bool useA1,
+        out string? sheetName, out ScalarValue? error)
+    {
+        range = default;
+        if (!TryGetIndirectReferenceParts(args, out refText, out useA1, out sheetName, out error))
+            return false;
+
+        uint r0, c0, r1, c1;
+        if (useA1 && TryParseA1RangeRef(refText, out r0, out c0, out r1, out c1))
+            return CompleteIndirectRange(ctx, sheetName, r0, c0, r1, c1, out range, out error);
+        if (useA1 && TryParseA1FullRowRangeRef(refText, out r0, out r1))
+            return CompleteIndirectRange(ctx, sheetName, r0, 1, r1, CellAddress.MaxCol, out range, out error, isFullRowRange: true);
+        if (useA1 && TryParseA1FullColumnRangeRef(refText, out c0, out c1))
+            return CompleteIndirectRange(ctx, sheetName, 1, c0, CellAddress.MaxRow, c1, out range, out error, isFullColumnRange: true);
+        if (!useA1 && TryParseR1C1RangeRef(refText, ctx.CurrentCellAddress, out r0, out c0, out r1, out c1))
+            return CompleteIndirectRange(ctx, sheetName, r0, c0, r1, c1, out range, out error);
+        if (!useA1 && TryParseR1C1FullRowRangeRef(refText, ctx.CurrentCellAddress, out r0, out r1))
+            return CompleteIndirectRange(ctx, sheetName, r0, 1, r1, CellAddress.MaxCol, out range, out error, isFullRowRange: true);
+        if (!useA1 && TryParseR1C1FullColumnRangeRef(refText, ctx.CurrentCellAddress, out c0, out c1))
+            return CompleteIndirectRange(ctx, sheetName, 1, c0, CellAddress.MaxRow, c1, out range, out error, isFullColumnRange: true);
+        if (!useA1 && TryParseR1C1FullRowRef(refText, ctx.CurrentCellAddress, out r0))
+            return CompleteIndirectRange(ctx, sheetName, r0, 1, r0, CellAddress.MaxCol, out range, out error, isFullRowRange: true);
+        if (!useA1 && TryParseR1C1FullColumnRef(refText, ctx.CurrentCellAddress, out c0))
+            return CompleteIndirectRange(ctx, sheetName, 1, c0, CellAddress.MaxRow, c0, out range, out error, isFullColumnRange: true);
+        if (useA1 ? TryParseA1Ref(refText, out r0, out c0) : TryParseR1C1Ref(refText, ctx.CurrentCellAddress, out r0, out c0))
+            return CompleteIndirectRange(ctx, sheetName, r0, c0, r0, c0, out range, out error);
+        return false;
+    }
+
     private static bool TryGetIndirectReferenceParts(
         IReadOnlyList<ScalarValue> args,
         out string refText,

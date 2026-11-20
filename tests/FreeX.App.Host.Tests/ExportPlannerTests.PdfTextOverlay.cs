@@ -163,6 +163,17 @@ public partial class ExportPlannerTests
                 ShowDataLabelCategoryName = true,
                 ShowDataLabelValue = true
             });
+            sheet.Charts.Add(new ChartModel
+            {
+                Type = ChartType.Column,
+                DataRange = new GridRange(new CellAddress(sheet.Id, 30, 30), new CellAddress(sheet.Id, 33, 31)),
+                Title = "Nonprinting Chart PDF Text",
+                Left = 24,
+                Top = 24,
+                Width = 380,
+                Height = 210,
+                PrintObject = false
+            });
             var document = PrintRenderer.RenderWorksheet(workbook, sheet.Id, new ViewportService());
 
             PdfDocumentExporter.Save(
@@ -174,6 +185,7 @@ public partial class ExportPlannerTests
 
             var pdfText = Encoding.ASCII.GetString(File.ReadAllBytes(path));
             pdfText.Should().Contain("Chart Title PDF Text");
+            pdfText.Should().NotContain("Nonprinting Chart PDF Text");
             pdfText.Should().Contain("Month Axis PDF Text");
             pdfText.Should().Contain("Sales Axis PDF Text");
             pdfText.Should().Contain("PDF Rev");

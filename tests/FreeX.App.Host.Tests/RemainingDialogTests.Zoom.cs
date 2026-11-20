@@ -33,15 +33,15 @@ public sealed partial class RemainingDialogTests
         var source = ReadRemainingDialogSources();
         var captureSource = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
 
-        source.Should().Contain("Width = ZoomDialogPlanner.Width");
-        source.Should().Contain("Height = ZoomDialogPlanner.Height");
+        source.Should().Contain("Width = ZoomDialogVisualMetrics.WindowWidth");
+        source.Should().Contain("Height = ZoomDialogVisualMetrics.WindowHeight");
         source.Should().Contain("ZoomDialogPlanner.Presets");
         source.Should().Contain("ZoomDialogPlanner.IsPreset(currentZoomPercent)");
         source.Should().Contain("_fitSelectionButton");
         source.Should().Contain("UiText.Get(\"Zoom_FitSelection\")");
         source.Should().Contain("_customZoomButton");
         source.Should().Contain("_zoomBox");
-        captureSource.Should().Contain("\"dialog.Zoom\" => (ZoomDialogPlanner.Width, ZoomDialogPlanner.Height)");
+        captureSource.Should().Contain("\"dialog.Zoom\" => (ZoomDialogVisualMetrics.WindowWidth, ZoomDialogVisualMetrics.WindowHeight)");
     }
 
     [Fact]
@@ -62,8 +62,8 @@ public sealed partial class RemainingDialogTests
             {
                 var bitmap = ParityCapture.RenderDialogClientFrameForTest(
                     dialog,
-                    ZoomDialogPlanner.Width,
-                    ZoomDialogPlanner.Height);
+                    ZoomDialogVisualMetrics.WindowWidth,
+                    ZoomDialogVisualMetrics.WindowHeight);
                 var content = dialog.Content.Should().BeAssignableTo<FrameworkElement>().Subject;
                 var group = WpfTestTree.FindVisualDescendants<GroupBox>(content).Single();
                 var buttons = WpfTestTree.FindVisualDescendants<Button>(content).ToArray();
@@ -79,15 +79,15 @@ public sealed partial class RemainingDialogTests
                 groupBounds.Offset(content.Margin.Left, content.Margin.Top);
 
                 (content.ActualWidth + content.Margin.Left + content.Margin.Right)
-                    .Should().BeApproximately(ZoomDialogPlanner.Width, 0.25);
+                    .Should().BeApproximately(ZoomDialogVisualMetrics.WindowWidth, 0.25);
                 (content.ActualHeight + content.Margin.Top + content.Margin.Bottom)
-                    .Should().BeApproximately(ZoomDialogPlanner.Height, 0.5,
+                    .Should().BeApproximately(ZoomDialogVisualMetrics.WindowHeight, 0.5,
                         "WPF layout rounding can vary by a fraction of a device-independent pixel across hosted runners");
-                groupBounds.Right.Should().BeLessThanOrEqualTo(ZoomDialogPlanner.Width);
+                groupBounds.Right.Should().BeLessThanOrEqualTo(ZoomDialogVisualMetrics.WindowWidth);
                 buttonBounds.Should().HaveCount(2);
-                buttonBounds.Should().OnlyContain(bounds => bounds.Right <= ZoomDialogPlanner.Width);
-                bitmap.PixelWidth.Should().Be((int)ZoomDialogPlanner.Width);
-                bitmap.PixelHeight.Should().Be((int)ZoomDialogPlanner.Height);
+                buttonBounds.Should().OnlyContain(bounds => bounds.Right <= ZoomDialogVisualMetrics.WindowWidth);
+                bitmap.PixelWidth.Should().Be((int)ZoomDialogVisualMetrics.WindowWidth);
+                bitmap.PixelHeight.Should().Be((int)ZoomDialogVisualMetrics.WindowHeight);
                 CountNonWhitePixels(bitmap, new Rect(groupBounds.Right - 2, groupBounds.Top, 3, groupBounds.Height))
                     .Should().BeGreaterThan(
                         80,
@@ -116,7 +116,7 @@ public sealed partial class RemainingDialogTests
         var source = ReadClassSource("ZoomDialog.cs", "public sealed class ZoomDialog", "public sealed record __NoNextZoomDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_zoomBox, UiText.Get(\"Zoom_CustomZoomPercent\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_zoomBox, \"ZoomCustomPercentBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_zoomBox, ZoomDialogVisualMetrics.CustomPercentBoxAutomationId);");
         source.Should().Contain("AutomationProperties.SetHelpText(_zoomBox, UiText.Get(\"Zoom_EnterAWholeZoomPercentageFrom10To400\"));");
     }
 

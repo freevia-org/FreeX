@@ -402,7 +402,10 @@ public sealed class WorkbookCellEditService
                 affectedCells,
                 RecalcReport: null,
                 IsNoOp: true,
-                DrawingObjectSelection: outcome.DrawingObjectSelection);
+                DrawingObjectSelection: outcome.DrawingObjectSelection)
+            {
+                RestoredCustomViewSheetIds = outcome.RestoredCustomViewSheetIds
+            };
         }
 
         UpdateFormulaDependencies(workbook, affectedCells);
@@ -431,7 +434,10 @@ public sealed class WorkbookCellEditService
             affectedCells,
             recalcReport,
             IsNoOp: outcome.IsNoOp,
-            DrawingObjectSelection: outcome.DrawingObjectSelection);
+            DrawingObjectSelection: outcome.DrawingObjectSelection)
+        {
+            RestoredCustomViewSheetIds = outcome.RestoredCustomViewSheetIds
+        };
     }
 
     /// <summary>

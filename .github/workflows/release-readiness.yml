@@ -170,8 +170,8 @@ jobs:
           path: |
             **/obj
             obj-build-cache-commit.txt
-          key: readiness-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
-          restore-keys: readiness-v1-${{ runner.os }}-${{ matrix.displayGateId }}-
+          key: readiness-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          restore-keys: readiness-v2-${{ runner.os }}-${{ matrix.displayGateId }}-
       - name: Make build-cache timestamps honest
         shell: pwsh
         run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
@@ -199,7 +199,7 @@ jobs:
           path: |
             **/obj
             obj-build-cache-commit.txt
-          key: readiness-v1-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          key: readiness-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -111,6 +111,7 @@ public sealed partial class MainWindow : Window
         _autosaveCoordinator?.NotifyAutosaveSaved();
         var previousSession = _session;
         previousSession.WorkbookChanged -= Session_WorkbookChanged;
+        _drawingObjectClipboard.Clear();
         _session = replacement;
         // Every session replacement (New, Open, recovery-snapshot load) starts a fresh document
         // identity -- any external-modification write-time snapshot captured for the PREVIOUS

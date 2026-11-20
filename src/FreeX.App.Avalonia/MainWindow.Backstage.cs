@@ -213,7 +213,7 @@ public sealed partial class MainWindow
         exportButton.Click += (_, _) => RunGuarded(async () =>
         {
             dialog.Close();
-            await ExportWorkbookPdfAsync(selectedScope, selectedFormat);
+            await ExportWorkbookFixedLayoutAsync(selectedScope, selectedFormat);
         });
 
         var cancelButton = new Button

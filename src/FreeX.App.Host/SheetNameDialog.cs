@@ -26,6 +26,7 @@ public sealed class SheetNameDialog : Window
         AutomationProperties.SetHelpText(_nameBox, UiText.Get("SheetName_EnterAWorksheetNameUpTo31Characters"));
         Content = ObjectSizeDialog.CreateSingleInputContent(UiText.Get("SheetName_SheetName2"), _nameBox, Accept);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
+        PreviewKeyDown += HandlePreviewKeyDown;
     }
 
     public static SheetNameDialogResult CreateResult(string sheetName) =>
@@ -68,5 +69,14 @@ public sealed class SheetNameDialog : Window
     private void FocusInitialKeyboardTarget()
     {
         DialogFocus.FocusAndSelect(_nameBox);
+    }
+
+    private void HandlePreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Escape || e.KeyboardDevice.Modifiers != System.Windows.Input.ModifierKeys.None)
+            return;
+
+        e.Handled = true;
+        DialogResult = false;
     }
 }

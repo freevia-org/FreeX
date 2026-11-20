@@ -25,17 +25,19 @@ public sealed partial class WorksheetContextMenuPlannerTests
         {
             WorksheetContextMenuTargetKind.RowSelection,
             [
-                "Insert Row Above",
-                "Delete Row(s)",
-                "Row Height...",
-                "AutoFit Row Height",
-                "Group",
-                "Ungroup"
+                "Insert",
+                "Delete",
+                "Row Height",
+                "Hide",
+                "Unhide"
             ],
             [
                 "Insert...",
                 "Data Validation...",
                 "Column Width...",
+                "AutoFit Row Height",
+                "Group",
+                "Ungroup",
                 "Format Picture..."
             ]
         },
@@ -145,10 +147,9 @@ public sealed partial class WorksheetContextMenuPlannerTests
         {
             WorksheetContextMenuTargetKind.RowSelection,
             [
-                new("Row Height...", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height..."),
-                new("AutoFit Row Height", WorksheetContextMenuAction.AutoFitRowHeight, AccessHeader: "AutoFit Row He_ight"),
-                new("Hide Rows", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide Rows"),
-                new("Unhide Rows", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Unhide Ro_ws")
+                new("Row Height", WorksheetContextMenuAction.RowHeight, AccessHeader: "Row _Height"),
+                new("Hide", WorksheetContextMenuAction.HideRows, AccessHeader: "_Hide"),
+                new("Unhide", WorksheetContextMenuAction.UnhideRows, AccessHeader: "Un_hide")
             ]
         },
         {

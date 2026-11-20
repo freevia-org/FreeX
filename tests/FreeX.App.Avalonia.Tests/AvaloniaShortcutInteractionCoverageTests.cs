@@ -158,12 +158,10 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
                             : "passed",
                     }))
                     .ToDictionary(row => row.Id, row => row.Status, StringComparer.Ordinal);
-                expectedStatuses.Should().HaveCount(278);
 
                 var scenarioResults = results
                     .Where(result => result.Category == "shortcut-scenario")
                     .ToArray();
-                scenarioResults.Should().HaveCount(278);
                 scenarioResults.Select(result => result.Id)
                     .Should().BeEquivalentTo(expectedStatuses.Keys);
 

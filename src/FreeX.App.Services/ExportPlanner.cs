@@ -179,6 +179,9 @@ public static class ExportPlanner
             ? ExportFileFormat.Xps
             : ExportFileFormat.Pdf;
 
+    public static int ResolvePdfRasterDpi(ExportQuality quality) =>
+        quality == ExportQuality.MinimumSize ? 72 : 96;
+
     public static string NormalizePdfLanguage(string? pdfLanguage)
     {
         return TryNormalizePdfLanguage(pdfLanguage, out var normalized, out _)

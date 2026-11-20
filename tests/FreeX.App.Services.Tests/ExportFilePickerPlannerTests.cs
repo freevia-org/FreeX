@@ -20,6 +20,19 @@ public sealed class ExportFilePickerPlannerTests
     }
 
     [Fact]
+    public void BuildPortablePickerPlan_UsesXpsDescriptorAndSuggestedName()
+    {
+        var plan = ExportFilePickerPlanner.BuildPortablePickerPlan(
+            "Quarterly Budget.xlsx", "FreeX", ExportFileFormat.Xps);
+
+        plan.SuggestedFileName.Should().Be("Quarterly Budget.xps");
+        plan.DefaultExtensionWithoutDot.Should().Be("xps");
+        var type = plan.FileTypes.Should().ContainSingle().Subject;
+        type.DisplayName.Should().Be(ExportFilePickerPlanner.XpsPickerDisplayName);
+        type.Patterns.Should().Equal("*.xps");
+    }
+
+    [Fact]
     public void BuildPortablePdfPickerPlan_FallsBackWhenSourceNameIsBlank()
     {
         var plan = ExportFilePickerPlanner.BuildPortablePdfPickerPlan(

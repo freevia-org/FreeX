@@ -370,7 +370,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowAnimationRendererRouteKind.Trajectory:");
         source.Should().Contain("TrajectoryEffect(element, plan, onReveal);");
         source.Should().Contain("SlideShowAnimationEffectFramePlanner.Build(");
-        source.Should().Contain("SlideShowAnimationEffectFramePlanner.SampleSmooth(");
+        source.Should().Contain("AvaloniaSlideShowAnimationTiming.BuildTrajectoryTimeline(");
+        source.Should().Contain("AvaloniaSlideShowAnimationTiming.SampleTrajectory(");
+        source.Should().NotContain("SlideShowAnimationEffectFramePlanner.SampleSmooth(");
         source.Should().NotContain("private void BounceEffect(");
         source.Should().NotContain("private void FloatEffect(");
         source.Should().NotContain("private void SwoopEffect(");

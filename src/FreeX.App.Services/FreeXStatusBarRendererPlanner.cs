@@ -14,14 +14,20 @@ public static class FreeXStatusBarRendererPlanner
         int zoomPercent,
         string readyText,
         WorksheetViewMode viewMode,
-        IStatusBarTextProvider textProvider)
+        IStatusBarTextProvider textProvider,
+        bool isSingleCellSelection = false)
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
         var statusBarViewMode = WorksheetViewModeUiStatePlanner.ToStatusBarViewMode(viewMode);
         return stats.IsEmpty
             ? StatusBarDisplayModelBuilder.Ready(statusBarViewMode, zoomPercent, readyText)
-            : StatusBarDisplayModelBuilder.Stats(statusBarViewMode, zoomPercent, stats, textProvider);
+            : StatusBarDisplayModelBuilder.Stats(
+                statusBarViewMode,
+                zoomPercent,
+                stats,
+                textProvider,
+                isSingleCellSelection);
     }
 
     public static StatusBarRendererPlan BuildRendererPlan(

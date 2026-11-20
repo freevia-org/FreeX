@@ -15319,11 +15319,15 @@ public partial class FileAdapterSmokeTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var workbookXml = LoadPackageXml(archive.GetEntry("xl/workbook.xml")!);
+        workbookXml.Root!.Element(workbookNs + "customWorkbookViews")!
+            .Elements(workbookNs + "customWorkbookView").Should().ContainSingle()
+            .Which.Attribute("guid")!.Value.Should().Be("{11111111-1111-1111-1111-111111111111}");
         var firstWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
-        firstWorksheetXml.Root!
-            .Element(workbookNs + "customSheetViews")
-            .Should()
-            .BeNull();
+        var retainedViews = firstWorksheetXml.Root!.Element(workbookNs + "customSheetViews");
+        retainedViews.Should().NotBeNull();
+        retainedViews!.Elements(workbookNs + "customSheetView").Should().ContainSingle()
+            .Which.Attribute("guid")!.Value.Should().Be("{11111111-1111-1111-1111-111111111111}");
 
         var secondWorksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet2.xml")!);
         secondWorksheetXml.Root!

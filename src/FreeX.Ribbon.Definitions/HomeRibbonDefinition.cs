@@ -32,7 +32,7 @@ public static class HomeRibbonDefinition
                 .ComboBox("Font", "Font", c => c with
                 {
                     Width = 120,
-                    Items = new[] { "Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana" }
+                    Items = new[] { "Aptos Narrow", "Calibri", "Arial", "Times New Roman", "Segoe UI", "Verdana" }
                 })
                 .ComboBox("Font Size", "Font Size", c => c with
                 {

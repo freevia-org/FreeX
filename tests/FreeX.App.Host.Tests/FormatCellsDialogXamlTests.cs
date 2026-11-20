@@ -36,6 +36,18 @@ public sealed partial class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_RetainsTabAndExposesAlignmentDirectionAndOrientationControls()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.xaml.cs");
+
+        source.Should().Contain("_lastSelectedTab");
+        source.Should().Contain("initialTab == FormatCellsDialogTab.Number ? _lastSelectedTab : initialTab");
+        xaml.Should().Contain("x:Name=\"DlgTextRotationSlider\"");
+        xaml.Should().Contain("x:Name=\"DlgReadingOrderBox\"");
+    }
+
+    [Fact]
     public void FormatCellsParityCapture_UsesSameTabOrderAsDialog()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");

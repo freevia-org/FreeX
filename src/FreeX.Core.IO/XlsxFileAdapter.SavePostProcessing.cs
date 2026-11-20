@@ -423,6 +423,7 @@ public sealed partial class XlsxFileAdapter
                 packageStream.Position = 0;
                 XlsxExternalLinkAuthoringWriter.Save(packageStream, workbook);
             }
+            XlsxDefaultCellStyleWriter.Save(packageStream, workbook.GetStyle(StyleId.Default));
             NormalizeStylesheetForSchema();
             // shared-document-properties F2: this brand-new workbook has no source package for
             // XlsxDocumentPropertiesPreserver.Preserve (inside PreserveSourcePackageParts,
@@ -515,6 +516,8 @@ public sealed partial class XlsxFileAdapter
             // (R107) -- reached the model and never the saved file.
             packageStream.Position = 0;
             XlsxSourceDrawingHyperlinkRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
+            packageStream.Position = 0;
+            XlsxSourceDrawingLockRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         // R118-io-drawing-zorder-1: Bring Forward/Send Backward/Selection Pane commands only ever
@@ -614,7 +617,26 @@ public sealed partial class XlsxFileAdapter
         }
 
         NormalizeStylesheetForSchema();
+        XlsxCustomViewNativeMetadata? customViewMetadata = null;
+        if (workbook.CustomViews.Count > 0 && sourcePackage?.SourceSheetIdsByLocalId is { } sourceSheetIds)
+        {
+            using var source = sourcePackage.OpenRead();
+            customViewMetadata = XlsxCustomViewNativeMetadata.Capture(source, sourceSheetIds);
+        }
         NormalizeSourcePackageForExcelCompatibility();
+        // Compatibility normalization removes source custom views, which can contain
+        // malformed Excel-incompatible window state. Re-author the current model after
+        // that pass so saved edits and deletions are not silently discarded.
+        if (workbook.CustomViews.Count > 0)
+        {
+            packageStream.Position = 0;
+            XlsxCustomViewMapper.Save(packageStream, workbook);
+            if (customViewMetadata is not null)
+            {
+                packageStream.Position = 0;
+                customViewMetadata.Apply(packageStream, workbook);
+            }
+        }
         NormalizeDocumentPropertiesPackageGraph();
         NormalizeWorkbookForSchema();
 

@@ -6,11 +6,13 @@ namespace FreeX.Core.Commands;
 /// Undo-safe command that applies the result of a Goal Seek operation
 /// by setting the changing cell to the found value.
 /// </summary>
-public sealed class GoalSeekCommand : IWorkbookCommand
+public sealed class GoalSeekCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly CellAddress _changingCell;
     private readonly double _newValue;
     private Cell? _originalCell;
+    private TableHeaderRenameTransaction? _headerRename;
+    public int EstimatedBytes => (int)Math.Min(int.MaxValue, 300L + (_headerRename?.EstimatedBytes ?? 0));
 
     public string Label => "Goal Seek";
 
@@ -43,12 +45,16 @@ public sealed class GoalSeekCommand : IWorkbookCommand
         }
 
         _originalCell = sheet.GetCell(_changingCell)?.Clone();
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, [_changingCell]);
         sheet.SetCell(_changingCell, new NumberValue(_newValue));
-        return new CommandOutcome(true, AffectedCells: [_changingCell]);
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        return new CommandOutcome(true, AffectedCells: new[] { _changingCell }.Concat(_headerRename.Affected).Distinct().ToArray());
     }
 
     public void Revert(ICommandContext ctx)
     {
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_changingCell.Sheet);
         if (sheet is null) return;
 

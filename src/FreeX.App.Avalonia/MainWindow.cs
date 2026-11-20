@@ -48,6 +48,7 @@ using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -474,6 +475,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Border? _activeCellBorder;
     private Border? _activeSelectionOutlineVisual;
     private Border? _autofillHandleVisual;
+    private AvaloniaRectangle? _autofillPreviewVisual;
     // R75-render-selection-marquee-4-2: minimal port of the WPF host's GridView.ClipboardRange/
     // ClipboardIsCut (GridView.Overlays.cs RenderMarchingAnts) -- this shell drew NO Copy/Cut
     // marquee at all. Set by CopySelectedRangeToClipboardAsync/CutSelectedRangeToClipboardAsync,
@@ -851,6 +853,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private CellAddress? _selectionExtensionAnchor;
     private CellAddress? _selectionExtensionCursor;
     private bool _endMode;
+    private bool _lastWorksheetNavigationWasTab;
     private bool _autofillDragging;
     private GridRange? _autofillSourceRange;
     private CellAddress? _autofillTarget;
@@ -1002,6 +1005,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ArgumentNullException.ThrowIfNull(printService);
 
         _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession();
+        _formulaBarExpanded = _optionsRuntimeSession.LiveOptions.FormulaBarExpanded;
+        _isFormulaBarHidden = !_optionsRuntimeSession.LiveOptions.ShowFormulaBar;
         _statusBarOptionVisibility = StatusBarOptionVisibilityStore
             .ToVisibility(_optionsRuntimeSession.LiveOptions)
             .ToDictionary();
@@ -1544,22 +1549,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // ─────────────────────────────────────────────────────────────────────────────
 
                     // Page Layout ▸ Themes preset submenu ids + customize entries.
-                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => RunGuarded(ShowThemeColorsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeOffice] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.OfficeThemePreset.CreateTheme()),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorful] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.FreeXColorfulThemePreset.CreateTheme()),
+                    [FreeXRibbonCommandIds.PageLayoutThemeGrayscale] = () => ApplyWorkbookTheme(WorkbookThemeCatalog.GrayscaleThemePreset.CreateTheme()),
                     [FreeXRibbonCommandIds.PageLayoutThemeCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(ShowThemeColorsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => RunGuarded(ShowThemeFontsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
-                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => RunGuarded(ShowThemeEffectsGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsOffice] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.OfficeColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsColorful] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.FreeXColorfulColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsGrayscale] = () => ApplyWorkbookThemeColorPreset(WorkbookThemeCatalog.GrayscaleColorPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeColorsCustomize] = () => RunGuarded(() => CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Colors)),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsOffice] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.OfficeFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsArial] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.ArialFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsTimesNewRoman] = () => ApplyWorkbookThemeFontPreset(WorkbookThemeCatalog.TimesNewRomanFontPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeFontsCustomize] = () => RunGuarded(ShowThemesGalleryAsync),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsOffice] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.OfficeEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsSubtle] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.SubtleEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsRefined] = () => ApplyWorkbookThemeEffectPreset(WorkbookThemeCatalog.RefinedEffectPreset),
+                    [FreeXRibbonCommandIds.PageLayoutThemeEffectsCustomize] = () => RunGuarded(() => CustomizeWorkbookThemeAsync(WorkbookThemeEditorMode.Effects)),
 
                     // Shape Format ▸ Shape Effects submenu items (also wired via BuildPictureShapeTabCommands;
                     // declared here so the hygiene guard finds them in this file's ExtraCommands block).
@@ -1828,6 +1833,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
         _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
         AttachSplitPanePointerHandlers();
+        AttachPageLayoutRulerPointerHandlers();
 
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -3060,6 +3066,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             NativeMenuGestureKey.G => Key.G,
             NativeMenuGestureKey.H => Key.H,
             NativeMenuGestureKey.I => Key.I,
+            NativeMenuGestureKey.K => Key.K,
             NativeMenuGestureKey.M => Key.M,
             NativeMenuGestureKey.R => Key.R,
             NativeMenuGestureKey.U => Key.U,
@@ -3747,6 +3754,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = collapsedFormulaBarPlan.HostHeight;
         _formulaBarHost.Child = formulaDock;
         ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(!_isFormulaBarHidden);
         AutomationProperties.SetAutomationId(_formulaBarHost, "FormulaBarRow");
         AutomationProperties.SetName(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.AutomationNameResourceKey));
         AutomationProperties.SetHelpText(_formulaBarHost, FormulaBarText(FormulaBarChromePlanner.Row.HelpTextResourceKey));
@@ -3837,14 +3845,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _formulaExpandButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _formulaExpandButton.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        _formulaExpandButton.Click += (_, _) =>
-        {
-            _formulaBarExpanded = !_formulaBarExpanded;
-            ApplyFormulaBarExpansion();
-        };
+        _formulaExpandButton.Click += (_, _) => ToggleFormulaBarExpansion();
         var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
         AutomationProperties.SetAutomationId(_formulaExpandButton, plan.Button.AutomationId);
         ApplyFormulaBarExpandAutomation(plan.Button);
+    }
+
+    private void ToggleFormulaBarExpansion()
+    {
+        var expanded = !_formulaBarExpanded;
+        var result = _optionsRuntimeSession.MutateFresh(options => options.FormulaBarExpanded = expanded);
+        _formulaBarExpanded = result.Options.FormulaBarExpanded;
+        ApplyFormulaBarExpansion();
+        if (!result.IsPersisted)
+            ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
+    }
+
+    private void ApplyFormulaBarOptions(AppOptions options)
+    {
+        _formulaBarExpanded = options.FormulaBarExpanded;
+        ApplyFormulaBarExpansion();
+        ApplyFormulaBarVisibility(options.ShowFormulaBar);
     }
 
     private void ApplyFormulaBarExpansion()
@@ -3857,6 +3878,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = plan.HostHeight;
         _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
         ApplyFormulaBarExpandAutomation(plan.Button);
+        ToolTip.SetTip(_formulaExpandButton,
+            $"{FormulaBarText(plan.TooltipTitleResourceKey)}\n{FormulaBarText(plan.TooltipDescriptionResourceKey)}");
     }
 
     private void ApplyFormulaBarExpandAutomation(FormulaBarChromeElementPlan plan)
@@ -5054,6 +5077,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildSheetGrid()
     {
         RecordSheetGridBuilt();
+        _pageLayoutRuler = null;
+        _autofillPreviewVisual = null;
         if (IsChartsheet(_session.ActiveSheet))
             return BuildChartsheetView();
         _formulaReferenceGridOverlay = null;
@@ -6256,8 +6281,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // Returns Control (not TextBlock) so an outline layer Panel can be returned when needed.
     private static Control CreateShapeTextOverlay(DrawingObjectBounds d, double w, double h)
     {
-        const double HPad = 4;
-        const double VPad = 2;
+        var leftInset = d.ShapeTextInsets?.Left / 9525d ?? 4;
+        var rightInset = d.ShapeTextInsets?.Right / 9525d ?? 4;
+        var topInset = d.ShapeTextInsets?.Top / 9525d ?? 2;
+        var bottomInset = d.ShapeTextInsets?.Bottom / 9525d ?? 2;
         const double DefaultFontSizePt = 11.0;
         const double PtToDip = 96.0 / 72.0;
 
@@ -6322,7 +6349,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalAlignment = vAlign,
             TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
             TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
-            Margin = new Thickness(HPad, VPad, HPad, VPad),
+            Margin = new Thickness(leftInset, topInset, rightInset, bottomInset),
             IsHitTestVisible = false,
         };
 
@@ -6363,7 +6390,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     VerticalAlignment = vAlign,
                     TextWrapping = d.ShapeTextWrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
                     TextTrimming = d.ShapeTextWrap ? TextTrimming.None : TextTrimming.CharacterEllipsis,
-                    Margin = new Thickness(HPad + dx, VPad + dy, HPad - dx, VPad - dy),
+                    Margin = new Thickness(leftInset + dx, topInset + dy, rightInset - dx, bottomInset - dy),
                     IsHitTestVisible = false,
                 });
             }
@@ -7572,7 +7599,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DetachCellSelectionDragHandlers();
         // Also defensively clear stale drag-state flags so a stranded autofill/move drag cannot
         // accidentally commit against a stale source range on the next drag.
-        _autofillDragging = false;
+        ClearAutofillPreview();
         _autofillSourceRange = null;
         _autofillTarget = null;
         _selectionMoveDragging = false;
@@ -7627,7 +7654,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
-        _autofillDragging = false;
+        ClearAutofillPreview();
         _autofillSourceRange = null;
         _autofillTarget = null;
         _selectionMoveDragging = false;
@@ -7668,6 +7695,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RequestCellDragAutoScroll(args);
 
+        if (_autofillDragging)
+        {
+            ContinueAutofillDrag(args);
+            return;
+        }
+
         var target = TryResolveCellPointerAddress(args, out var pointerAddress)
             ? pointerAddress
             : address;
@@ -7675,12 +7708,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_selectionMoveDragging)
         {
             ContinueSelectionMoveDrag(args, target);
-            return;
-        }
-
-        if (_autofillDragging)
-        {
-            ContinueAutofillDrag(args, target);
             return;
         }
 
@@ -7792,7 +7819,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var formulaRangeEditor = GetFormulaRangeEntryEditor();
         if (_autofillDragging)
+        {
+            ClearAutofillPreview();
             CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
+        }
         else if (_selectionMoveDragging)
             await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control));
 
@@ -7806,7 +7836,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellDragFormulaReferenceLength = null;
         _selectionExtensionAnchor = null;
         _selectionExtensionCursor = null;
-        _autofillDragging = false;
         _autofillSourceRange = null;
         _autofillTarget = null;
         _selectionMoveDragging = false;
@@ -8382,13 +8411,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             hitPadding: hitPadding);
     }
 
-    private void ContinueAutofillDrag(PointerEventArgs args, CellAddress target)
+    private void ContinueAutofillDrag(PointerEventArgs args)
     {
-        if (_autofillSourceRange is null)
+        args.Handled = true;
+        if (_autofillSourceRange is not { } source)
             return;
 
+        var viewport = _session.Viewport;
+        var pointer = args.GetPosition(_sheetGridHost);
+        var geometry = CreateAvaloniaViewportGeometrySettings(viewport, _session.IsShowingHeadings, GetActiveZoomFactor());
+        if (GridAutofillPlanner.CalculateDragTarget(viewport, source, new GridPoint(pointer.X, pointer.Y), geometry)
+            is not { } target)
+        {
+            return;
+        }
+
+        // A real hit inside a linear source can still retract the fill handle and clear the tail.
+        if (target == source.End && source.Start != source.End && (source.RowCount == 1 || source.ColCount == 1) &&
+            ViewportGeometryPlanner.HitTestCell(viewport, source.Start.Sheet, new LayoutPoint(pointer.X, pointer.Y), geometry)
+                is { } hit && source.Contains(hit))
+        {
+            target = hit;
+        }
+
         ContinueAutofillDragCore(target);
-        args.Handled = true;
     }
 
     /// <summary>
@@ -8411,6 +8457,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _autofillTarget = constrainedTarget;
         RefreshShellForGridPreview();
+    }
+
+    private void ClearAutofillPreview()
+    {
+        _autofillDragging = false;
+        if (_autofillPreviewVisual is { Parent: AvaloniaGrid grid } preview)
+            grid.Children.Remove(preview);
+
+        _autofillPreviewVisual = null;
     }
 
     private void CommitAutofillDrag(bool ctrlHeld = false)
@@ -9606,7 +9661,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RefreshFormulaSignatureHelp(editor);
 
             if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
-                ApplyInlineCellValueAutoCompleteSuggestion(address, editor);
+                ApplyCellValueAutoCompleteSuggestion(address, editor);
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
@@ -9799,10 +9854,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
         {
+            var enterAfterTab = args.Key == Key.Enter && _lastWorksheetNavigationWasTab;
+            _lastWorksheetNavigationWasTab = args.Key == Key.Tab;
             var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
                 _session.Workbook.GetSheet(address.Sheet),
                 address,
-                target);
+                enterAfterTab
+                    ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(address)
+                    : target);
             CommitInlineCellEdit(address, adjustedTarget, args.Key, args.KeyModifiers.HasFlag(KeyModifiers.Shift));
             args.Handled = true;
         }
@@ -9844,14 +9903,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// keystroke (which re-runs this same check for the new prefix), and Backspace/Delete rejects it
     /// via the session's one-shot suppression state.
     /// </summary>
-    private void ApplyInlineCellValueAutoCompleteSuggestion(CellAddress address, TextBox editor)
+    private void ApplyCellValueAutoCompleteSuggestion(CellAddress address, TextBox editor)
     {
-        if (_applyingInlineCellValueAutoCompleteSuggestion ||
-            !Equals(_inlineCellEditAddress, address) ||
-            !ReferenceEquals(_inlineCellEditor, editor))
-        {
+        if (_applyingInlineCellValueAutoCompleteSuggestion)
             return;
-        }
 
         var text = editor.Text ?? "";
         var sheet = _session.Workbook.GetSheet(address.Sheet);
@@ -9872,8 +9927,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             editor.CaretIndex = plan.Value.Text.Length;
             editor.SelectionStart = plan.Value.SelectionStart;
             editor.SelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
-            _inlineCellEditSelectionStart = plan.Value.SelectionStart;
-            _inlineCellEditSelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
+            if (ReferenceEquals(_inlineCellEditor, editor) && Equals(_inlineCellEditAddress, address))
+            {
+                _inlineCellEditSelectionStart = plan.Value.SelectionStart;
+                _inlineCellEditSelectionEnd = plan.Value.SelectionStart + plan.Value.SelectionLength;
+            }
         }
         finally
         {
@@ -10782,6 +10840,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaGrid.SetColumn(preview, colIndex + headerOffset);
         AvaloniaGrid.SetColumnSpan(preview, colSpan);
         grid.Children.Add(preview);
+        _autofillPreviewVisual = preview;
     }
 
     /// <summary>
@@ -11107,6 +11166,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
+        if (_inlineCellEditor?.IsVisible != true &&
+            !_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression() &&
+            _session.FormulaEditAddress is { } address)
+        {
+            ApplyCellValueAutoCompleteSuggestion(address, _formulaBox);
+        }
         RefreshFormulaFunctionAutocomplete(_formulaBox);
         RefreshFormulaSignatureHelp(_formulaBox);
     }
@@ -12879,7 +12944,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// Resolves a plain worksheet cell click to either an extend (<see cref="SelectRange"/>) or a
     /// collapse (<see cref="SelectCell"/>), matching Excel: a physical Shift+click always extends,
     /// and so does a plain click while F8 (Extend Selection mode, <see cref="ExcelSelectionMode.Extend"/>)
-    /// is active -- mirroring the keyboard path (<c>TryHandleStickySelectionNavigation</c>), which
+    /// is active -- mirroring the keyboard path (<c>NavigateActiveCell</c>), which
     /// likewise treats Extend mode as an implicit Shift on arrow-key navigation. Before this fix a
     /// plain click always collapsed the selection even with F8 armed (R68-app-selection-
     /// navigation-6-1).
@@ -13365,8 +13430,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ZoomToSelection()
     {
-        var zoomPercent = CalculateZoomToSelectionPercent();
-        ApplyZoomPercent(zoomPercent, "Zoom to Selection failed.");
+        if (!CanApplyZoom())
+            return;
+
+        var range = ZoomSelectionPlanner.ResolveFitRange(_session.SelectedRange, _session.SelectedRanges);
+        var zoomPercent = CalculateZoomToSelectionPercent(range);
+        ApplyPreparedZoomPercent(zoomPercent, "Zoom to Selection failed.", range.Start);
     }
 
     private async Task ShowZoomDialogAsync()
@@ -13386,12 +13455,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // (TryGetFixedDialogClientCaptureSize), so the reference canvas is the client size: the
             // 16x39 Windows frame is not subtracted here. A 284x201 client would also cut the action
             // row, which ends at y=202 in this top-down layout.
-            Width = ZoomDialogPlanner.Width,
-            Height = ZoomDialogPlanner.Height,
-            MinWidth = ZoomDialogPlanner.Width,
-            MaxWidth = ZoomDialogPlanner.Width,
-            MinHeight = ZoomDialogPlanner.Height,
-            MaxHeight = ZoomDialogPlanner.Height,
+            Width = ZoomDialogVisualMetrics.WindowWidth,
+            Height = ZoomDialogVisualMetrics.WindowHeight,
+            MinWidth = ZoomDialogVisualMetrics.WindowWidth,
+            MaxWidth = ZoomDialogVisualMetrics.WindowWidth,
+            MinHeight = ZoomDialogVisualMetrics.WindowHeight,
+            MaxHeight = ZoomDialogVisualMetrics.WindowHeight,
             SizeToContent = SizeToContent.Manual,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -13399,14 +13468,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var zoomDialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ControlHeight = 20,
-            CompactRadioButtonHeight = 16,
-            TextBoxHeight = ZoomDialogPlanner.CustomPercentBoxHeight,
-            ButtonHeight = 22,
+            ControlHeight = ZoomDialogVisualMetrics.AvaloniaControlHeight,
+            CompactRadioButtonHeight = ZoomDialogVisualMetrics.AvaloniaCompactRadioButtonHeight,
+            TextBoxHeight = ZoomDialogVisualMetrics.CustomPercentBoxHeight,
+            ButtonHeight = ZoomDialogVisualMetrics.AvaloniaButtonHeight,
             ButtonPadding = new Thickness(10, 1),
+            ForegroundBrush = Brushes.Black,
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(dialog, "ZoomDialog");
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
+        AutomationProperties.SetAutomationId(dialog, ZoomDialogVisualMetrics.DialogAutomationId);
 
         var presetButtons = new List<RadioButton>();
         var presetPanel = new StackPanel { Spacing = 0 };
@@ -13419,10 +13490,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 GroupName = "ZoomDialogOptions",
                 IsChecked = currentZoom == zoom,
                 // WPF: every preset radio button carries Margin = (0, 0, 0, 4).
-                Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.PresetItemBottomMargin),
+                Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.PresetItemBottomMargin),
             };
             AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);
-            AutomationProperties.SetAutomationId(button, $"ZoomPreset{zoom}Button");
+            AutomationProperties.SetAutomationId(button, ZoomDialogVisualMetrics.PresetButtonAutomationId(zoom));
             presetButtons.Add(button);
             presetPanel.Children.Add(button);
         }
@@ -13431,10 +13502,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Content = StripDisplayMnemonic(UiText.Get("Zoom_FitSelection")),
             GroupName = "ZoomDialogOptions",
-            Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.FitSelectionBottomMargin),
+            Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.FitSelectionBottomMargin),
         };
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(fitSelectionButton, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(fitSelectionButton, "ZoomFitSelectionButton");
+        AutomationProperties.SetAutomationId(fitSelectionButton, ZoomDialogVisualMetrics.FitSelectionButtonAutomationId);
 
         var customButton = new RadioButton
         {
@@ -13443,17 +13514,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsChecked = !presetButtons.Any(button => button.IsChecked == true),
         };
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(customButton, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(customButton, "ZoomCustomButton");
+        AutomationProperties.SetAutomationId(customButton, ZoomDialogVisualMetrics.CustomButtonAutomationId);
 
         var customBox = new TextBox
         {
             Text = currentZoom.ToString(CultureInfo.InvariantCulture),
-            Width = ZoomDialogPlanner.CustomPercentBoxWidth,
+            Width = ZoomDialogVisualMetrics.CustomPercentBoxWidth,
             // WPF ZoomDialog leaves the percent box at the TextBox default: left-aligned text.
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(customBox, zoomDialogChrome);
-        AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
+        AutomationProperties.SetAutomationId(customBox, ZoomDialogVisualMetrics.CustomPercentBoxAutomationId);
         AutomationProperties.SetName(customBox, UiText.Get("Zoom_CustomZoomPercent"));
 
         customBox.GotFocus += (_, _) => customButton.IsChecked = true;
@@ -13464,23 +13535,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetAutomationId(errorText, "ZoomValidationText");
+        AutomationProperties.SetAutomationId(errorText, ZoomDialogVisualMetrics.ValidationTextAutomationId);
 
         var okButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
-            Width = ZoomDialogPlanner.ActionButtonWidth,
+            Width = ZoomDialogVisualMetrics.ActionButtonWidth,
             IsDefault = true,
         };
-        AutomationProperties.SetAutomationId(okButton, "ZoomOkButton");
+        AutomationProperties.SetAutomationId(okButton, ZoomDialogVisualMetrics.OkButtonAutomationId);
 
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
-            Width = ZoomDialogPlanner.ActionButtonWidth,
+            Width = ZoomDialogVisualMetrics.ActionButtonWidth,
             IsCancel = true,
         };
-        AutomationProperties.SetAutomationId(cancelButton, "ZoomCancelButton");
+        AutomationProperties.SetAutomationId(cancelButton, ZoomDialogVisualMetrics.CancelButtonAutomationId);
 
         void Accept()
         {
@@ -13567,7 +13638,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var choices = new AvaloniaGrid
         {
             ColumnDefinitions = new ColumnDefinitions(
-                $"{ZoomDialogPlanner.PresetColumnWidth},*"),
+                $"{ZoomDialogVisualMetrics.PresetColumnWidth},*"),
         };
         choices.Children.Add(presetPanel);
         var customChoices = new StackPanel
@@ -13584,8 +13655,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var magnificationGroup = new GroupBox
         {
             Header = UiText.Get("Zoom_Magnification"),
-            Padding = new Thickness(ZoomDialogPlanner.MagnificationGroupPadding),
-            Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.MagnificationGroupBottomMargin),
+            Padding = new Thickness(ZoomDialogVisualMetrics.MagnificationGroupPadding),
+            Margin = new Thickness(0, 0, 0, ZoomDialogVisualMetrics.MagnificationGroupBottomMargin),
             Content = choices,
         };
         AvaloniaCompactDialogChrome.ApplyGroupBox(magnificationGroup, zoomDialogChrome);
@@ -13593,17 +13664,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaCompactDialogChrome.ApplyButton(
             okButton,
             zoomDialogChrome,
-            ZoomDialogPlanner.ActionButtonWidth,
+            ZoomDialogVisualMetrics.ActionButtonWidth,
             isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(
             cancelButton,
             zoomDialogChrome,
-            ZoomDialogPlanner.ActionButtonWidth);
+            ZoomDialogVisualMetrics.ActionButtonWidth);
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(ZoomDialogPlanner.OuterPadding),
+            Margin = new Thickness(ZoomDialogVisualMetrics.OuterPadding),
             Children =
             {
                 magnificationGroup,
@@ -13638,12 +13709,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ApplyZoomPercent(int zoomPercent, string errorMessage)
     {
-        if (_isOpening || _isSaving)
-            return;
+        if (CanApplyZoom())
+            ApplyPreparedZoomPercent(zoomPercent, errorMessage);
+    }
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
+    private bool CanApplyZoom() => !_isOpening && !_isSaving && TryCommitPendingFormulaEdit();
 
+    private void ApplyPreparedZoomPercent(int zoomPercent, string errorMessage, CellAddress? revealCell = null)
+    {
         ClearSelectedDrawingObject();
         zoomPercent = StatusBarZoomSliderPlanner.ClampZoomPercent(zoomPercent);
         var result = _session.SetZoomPercent(zoomPercent);
@@ -13654,99 +13727,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshViewportSizeForZoom();
+        if (revealCell is { } cell)
+            _session.RevealCellInViewport(cell);
+
         RefreshShell(UiText.Format(
             "MainLoc_ActionRangeStatusFormat",
             UiText.Get("MainWindow_Text_Zoom"),
             StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)));
     }
 
-    /// <summary>
-    /// Selections larger than this (e.g. an entire selected row/column, which can span up to a
-    /// million+ cells) fall back to the default-cell-size overload instead of building a per-cell
-    /// pixel list — Excel's own Zoom-to-Selection degenerates to the minimum zoom for such
-    /// selections anyway, and there is no benefit to walking that many dictionary lookups.
-    /// </summary>
-    private const int ZoomToSelectionMetricsCap = 4096;
+    private int CalculateZoomToSelectionPercent() =>
+        CalculateZoomToSelectionPercent(_session.SelectedRange);
 
-    private int CalculateZoomToSelectionPercent()
+    private int CalculateZoomToSelectionPercent(GridRange range)
     {
         if (!TryGetSheetViewportDisplaySize(out var viewportHeight, out var viewportWidth))
             return 100;
 
-        var range = _session.SelectedRange;
-        if (range.ColCount > ZoomToSelectionMetricsCap || range.RowCount > ZoomToSelectionMetricsCap)
-        {
-            return ZoomSelectionPlanner.CalculateFitWholePercent(
-                viewportWidth,
-                viewportHeight,
-                range.ColCount,
-                range.RowCount);
-        }
-
-        var columnWidths = BuildSelectionColumnWidthsPixels(range);
-        var rowHeights = BuildSelectionRowHeightsPixels(range);
         return ZoomSelectionPlanner.CalculateFitWholePercent(
             viewportWidth,
             viewportHeight,
-            columnWidths,
-            rowHeights);
-    }
-
-    /// <summary>
-    /// Builds the selection's actual per-column pixel widths: prefers the currently materialized
-    /// <see cref="ViewportModel.ColMetrics"/> (already-computed display pixels, accounting for any
-    /// custom width), falling back to <see cref="Sheet.ColumnWidths"/>/<see cref="Sheet.DefaultColumnWidth"/>
-    /// converted via <see cref="ColumnWidthPixelMapper"/> for columns outside the materialized
-    /// viewport — so Zoom to Selection fits the selection's real extent instead of assuming every
-    /// column is the Excel default width (M24).
-    /// </summary>
-    private IReadOnlyList<double> BuildSelectionColumnWidthsPixels(GridRange range)
-    {
-        var metricsByCol = new Dictionary<uint, double>();
-        foreach (var metric in _session.Viewport.ColMetrics)
-        {
-            if (metric.Col >= range.Start.Col && metric.Col <= range.End.Col)
-                metricsByCol[metric.Col] = metric.Width;
-        }
-
-        var sheet = _session.ActiveSheet;
-        var widths = new List<double>((int)range.ColCount);
-        for (var col = range.Start.Col; col <= range.End.Col; col++)
-        {
-            widths.Add(metricsByCol.TryGetValue(col, out var width)
-                ? width
-                : ColumnWidthPixelMapper.ColumnWidthToPixels(
-                    sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth)));
-        }
-
-        return widths;
-    }
-
-    /// <summary>
-    /// Builds the selection's actual per-row pixel heights: prefers the currently materialized
-    /// <see cref="ViewportModel.RowMetrics"/>, falling back to <see cref="Sheet.RowHeights"/>/
-    /// <see cref="Sheet.DefaultRowHeight"/> (already stored in pixels) for rows outside the
-    /// materialized viewport — the row analogue of <see cref="BuildSelectionColumnWidthsPixels"/>.
-    /// </summary>
-    private IReadOnlyList<double> BuildSelectionRowHeightsPixels(GridRange range)
-    {
-        var metricsByRow = new Dictionary<uint, double>();
-        foreach (var metric in _session.Viewport.RowMetrics)
-        {
-            if (metric.Row >= range.Start.Row && metric.Row <= range.End.Row)
-                metricsByRow[metric.Row] = metric.Height;
-        }
-
-        var sheet = _session.ActiveSheet;
-        var heights = new List<double>((int)range.RowCount);
-        for (var row = range.Start.Row; row <= range.End.Row; row++)
-        {
-            heights.Add(metricsByRow.TryGetValue(row, out var height)
-                ? height
-                : sheet.RowHeights.GetValueOrDefault(row, sheet.DefaultRowHeight));
-        }
-
-        return heights;
+            _session.ActiveSheet,
+            range);
     }
 
     private void ToggleShowFormulas()
@@ -13898,7 +13900,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         sheetBox.DoubleTapped += (_, _) => Accept();
 
         var okButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")) };
-        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")) };
+        var cancelButton = new Button
+        {
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
+            IsCancel = true,
+        };
         ApplyDialogButtonChrome(okButton, width: 72, isDefault: true);
         ApplyDialogButtonChrome(cancelButton, width: 72);
         AutomationProperties.SetAutomationId(okButton, "UnhideSheetOkButton");
@@ -15201,12 +15207,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = UiText.Get("GoTo_GoTo"),
             // WPF GoToDialog is a 420x320 *outer* NoResize window; Avalonia sizes the client area, so
             // take the Windows caption/frame off both axes (the history list owns the star row).
-            Width = 420 - WpfNoResizeFrameWidth,
-            Height = 320 - WpfNoResizeClientFrameHeight,
-            MinWidth = 420 - WpfNoResizeFrameWidth,
-            MinHeight = 320 - WpfNoResizeClientFrameHeight,
-            MaxWidth = 420 - WpfNoResizeFrameWidth,
-            MaxHeight = 320 - WpfNoResizeClientFrameHeight,
+            Width = GoToDialogVisualMetrics.WindowWidth - WpfNoResizeFrameWidth,
+            Height = GoToDialogVisualMetrics.WindowHeight - WpfNoResizeClientFrameHeight,
+            MinWidth = GoToDialogVisualMetrics.WindowWidth - WpfNoResizeFrameWidth,
+            MinHeight = GoToDialogVisualMetrics.WindowHeight - WpfNoResizeClientFrameHeight,
+            MaxWidth = GoToDialogVisualMetrics.WindowWidth - WpfNoResizeFrameWidth,
+            MaxHeight = GoToDialogVisualMetrics.WindowHeight - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
@@ -15215,24 +15221,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // an 18 px box (16 px text area inside the 1 px frame) and 20 px buttons.
         var dialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ButtonHeight = 20,
-            TextBoxHeight = 18,
+            ButtonHeight = GoToDialogVisualMetrics.ButtonHeight,
+            ActionSpacing = GoToDialogVisualMetrics.ButtonGap,
+            TextBoxHeight = GoToDialogVisualMetrics.TextBoxHeight,
             TextBoxPadding = new Thickness(2, 0),
             FontFamily = FormulaBarFontFamily,
+            ForegroundBrush = Brushes.Black,
         };
         AvaloniaCompactDialogChrome.ApplyWindow(dialog, dialogChrome);
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
 
         var defaultReference = FormatRangeReference(_session.SelectedRange);
 
         var historyList = new ListBox
         {
             ItemsSource = BuildGoToReferenceChoices(defaultReference),
-            MinHeight = 130,
-            Margin = new Thickness(0, 24, 0, 0),
+            MinHeight = GoToDialogVisualMetrics.HistoryListMinHeight,
+            Margin = new Thickness(0, GoToDialogVisualMetrics.HistoryListTopMargin, 0, 0),
         };
+        AvaloniaCompactDialogChrome.ApplyListBox(historyList, dialogChrome);
         AutomationProperties.SetName(historyList, UiText.Get("GoTo_GoTo"));
         AutomationProperties.SetHelpText(historyList, UiText.Get("GoTo_RecentReferencesAndDefinedNames"));
-        AutomationProperties.SetAutomationId(historyList, "GoToHistoryList");
+        AutomationProperties.SetAutomationId(historyList, GoToDialogVisualMetrics.HistoryListAutomationId);
 
         // WPF GoToDialog leaves the reference box to the star column (no minimum width); a 330px
         // minimum pushed it past the right margin.
@@ -15247,31 +15257,31 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var specialButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("GoTo_Special")),
-            Width = 86,
-            MinWidth = 86,
+            Width = GoToDialogVisualMetrics.SpecialButtonWidth,
+            MinWidth = GoToDialogVisualMetrics.SpecialButtonWidth,
         };
-        AutomationProperties.SetAutomationId(specialButton, "GoToSpecialButton");
-        AvaloniaCompactDialogChrome.ApplyButton(specialButton, dialogChrome, minWidth: 86);
+        AutomationProperties.SetAutomationId(specialButton, GoToDialogVisualMetrics.SpecialButtonAutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(specialButton, dialogChrome, minWidth: GoToDialogVisualMetrics.SpecialButtonWidth);
 
         var acceptButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
-            Width = 72,
-            MinWidth = 72,
+            Width = GoToDialogVisualMetrics.StandardButtonWidth,
+            MinWidth = GoToDialogVisualMetrics.StandardButtonWidth,
             IsDefault = true,
         };
-        AutomationProperties.SetAutomationId(acceptButton, "GoToReferenceBoxAcceptButton");
-        AvaloniaCompactDialogChrome.ApplyButton(acceptButton, dialogChrome, minWidth: 72, isDefault: true);
+        AutomationProperties.SetAutomationId(acceptButton, GoToDialogVisualMetrics.AcceptButtonAutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(acceptButton, dialogChrome, minWidth: GoToDialogVisualMetrics.StandardButtonWidth, isDefault: true);
 
         var cancelButton = new Button
         {
             Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
-            Width = 72,
-            MinWidth = 72,
+            Width = GoToDialogVisualMetrics.StandardButtonWidth,
+            MinWidth = GoToDialogVisualMetrics.StandardButtonWidth,
             IsCancel = true,
         };
-        AutomationProperties.SetAutomationId(cancelButton, "GoToReferenceBoxCancelButton");
-        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, dialogChrome, minWidth: 72);
+        AutomationProperties.SetAutomationId(cancelButton, GoToDialogVisualMetrics.CancelButtonAutomationId);
+        AvaloniaCompactDialogChrome.ApplyButton(cancelButton, dialogChrome, minWidth: GoToDialogVisualMetrics.StandardButtonWidth);
 
         historyList.SelectionChanged += (_, _) =>
         {
@@ -15325,20 +15335,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var root = new AvaloniaGrid
         {
-            Margin = new Thickness(12),
+            Margin = new Thickness(GoToDialogVisualMetrics.RootMargin),
         };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(90) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GoToDialogVisualMetrics.HistoryColumnWidth) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         var historyLabel = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("GoTo_GoTo2")),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 4),
+            Margin = new Thickness(0, 0, GoToDialogVisualMetrics.HistoryLabelRightMargin, GoToDialogVisualMetrics.HistoryLabelBottomMargin),
         };
         Grid.SetRow(historyLabel, 0);
         Grid.SetColumnSpan(historyLabel, 2);
@@ -15352,12 +15362,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = StripDisplayMnemonic(UiText.Get("GoTo_Reference")),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Margin = new Thickness(0, 10, 8, 12),
+            Margin = new Thickness(0, GoToDialogVisualMetrics.ReferenceLabelTopMargin, GoToDialogVisualMetrics.ReferenceLabelRightMargin, GoToDialogVisualMetrics.ReferenceLabelBottomMargin),
         };
         Grid.SetRow(referenceLabel, 2);
         root.Children.Add(referenceLabel);
 
-        inputBox.Margin = new Thickness(0, 8, 0, 12);
+        inputBox.Margin = new Thickness(0, GoToDialogVisualMetrics.ReferenceInputTopMargin, 0, GoToDialogVisualMetrics.ReferenceInputBottomMargin);
         Grid.SetRow(inputBox, 2);
         Grid.SetColumn(inputBox, 1);
         root.Children.Add(inputBox);
@@ -15484,24 +15494,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Title = UiText.Get("GoToSpecial_GoToSpecial"),
             // WPF GoToSpecialDialog is a 430x438 *outer* NoResize window; Avalonia sizes the client
             // area, so take the Windows caption/frame off both axes.
-            Width = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
-            Height = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
-            MinWidth = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
-            MinHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
-            MaxWidth = GoToSpecialDialogPlanner.Width - WpfNoResizeFrameWidth,
-            MaxHeight = GoToSpecialDialogPlanner.Height - WpfNoResizeClientFrameHeight,
+            Width = GoToSpecialDialogMetrics.Width - WpfNoResizeFrameWidth,
+            Height = GoToSpecialDialogMetrics.Height - WpfNoResizeClientFrameHeight,
+            MinWidth = GoToSpecialDialogMetrics.Width - WpfNoResizeFrameWidth,
+            MinHeight = GoToSpecialDialogMetrics.Height - WpfNoResizeClientFrameHeight,
+            MaxWidth = GoToSpecialDialogMetrics.Width - WpfNoResizeFrameWidth,
+            MaxHeight = GoToSpecialDialogMetrics.Height - WpfNoResizeClientFrameHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
+        var goToSpecialChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ForegroundBrush = Brushes.Black,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, goToSpecialChromeStyle);
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
 
         var choices = CreateGoToSpecialChoices();
         var kindButtons = new List<RadioButton>(choices.Length);
         var choiceGrid = CreateGoToSpecialChoiceGrid(choices, kindButtons);
         AutomationProperties.SetAutomationId(choiceGrid, "GoToSpecialKindBox");
         foreach (var button in kindButtons)
-            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, AvaloniaCompactDialogChrome.WindowsStyle);
+            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, goToSpecialChromeStyle);
 
         var numbersBox = CreateGoToSpecialValueTypeBox(
             StripDisplayMnemonic(UiText.Get("GoToSpecial_Numbers")),
@@ -15515,10 +15530,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var errorsBox = CreateGoToSpecialValueTypeBox(
             StripDisplayMnemonic(UiText.Get("GoToSpecial_Errors")),
             "GoToSpecialErrorsBox");
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, AvaloniaCompactDialogChrome.WindowsStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(textBox, AvaloniaCompactDialogChrome.WindowsStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(logicalsBox, AvaloniaCompactDialogChrome.WindowsStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(errorsBox, AvaloniaCompactDialogChrome.WindowsStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(numbersBox, goToSpecialChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(textBox, goToSpecialChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(logicalsBox, goToSpecialChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(errorsBox, goToSpecialChromeStyle);
 
         var okButton = new Button
         {
@@ -15601,7 +15616,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var valueTypeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = GoToSpecialDialogPlanner.AvaloniaValueTypeSpacing,
+            Spacing = GoToSpecialDialogMetrics.AvaloniaValueTypeSpacing,
             Margin = new Thickness(8, 6, 8, 1),
             Children =
             {
@@ -15614,52 +15629,58 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // The planner's right/bottom margins were measured against a client area as large as the WPF
         // *outer* window, so they carry the Windows frame on top of the WPF 12px content margin
-        // (DockPanel { Margin = GoToSpecialDialogPlanner.ContentMargin }). The window is now sized to
+        // (DockPanel { Margin = GoToSpecialDialogMetrics.ContentMargin }). The window is now sized to
         // the client area, so that frame share comes back off and the gutters match the left/top ones.
         const double goToSpecialFrameShareOfRightMargin =
-            GoToSpecialDialogPlanner.AvaloniaContentRightMargin - GoToSpecialDialogPlanner.AvaloniaContentLeftMargin;
+            GoToSpecialDialogMetrics.AvaloniaContentRightMargin - GoToSpecialDialogMetrics.AvaloniaContentLeftMargin;
         const double goToSpecialFrameShareOfBottomMargin =
-            GoToSpecialDialogPlanner.ActionRowBottomMargin - GoToSpecialDialogPlanner.ContentMargin;
+            GoToSpecialDialogMetrics.ActionRowBottomMargin - GoToSpecialDialogMetrics.ContentMargin;
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [okButton, cancelButton],
             new Thickness(
                 0,
-                GoToSpecialDialogPlanner.ActionRowTopMargin,
-                GoToSpecialDialogPlanner.ActionRowRightMargin - goToSpecialFrameShareOfRightMargin,
-                GoToSpecialDialogPlanner.ActionRowBottomMargin - goToSpecialFrameShareOfBottomMargin));
+                GoToSpecialDialogMetrics.ActionRowTopMargin,
+                GoToSpecialDialogMetrics.ActionRowRightMargin - goToSpecialFrameShareOfRightMargin,
+                GoToSpecialDialogMetrics.ActionRowBottomMargin - goToSpecialFrameShareOfBottomMargin));
 
         var availableGroup = new GroupBox
         {
             Header = UiText.Get("GoToSpecial_GoToSpecial"),
             Margin = new Thickness(
                 0,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupTopMargin,
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupTopMargin,
                 0,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomMargin),
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupBottomMargin),
             Padding = new Thickness(
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding,
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupHorizontalPadding,
                 1,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupHorizontalPadding,
-                GoToSpecialDialogPlanner.AvaloniaChoiceGroupBottomPadding),
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupHorizontalPadding,
+                GoToSpecialDialogMetrics.AvaloniaChoiceGroupBottomPadding),
             Content = choiceGrid,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(availableGroup, borderBrush: Brush(213, 223, 229));
+        AvaloniaCompactDialogChrome.ApplyGroupBox(
+            availableGroup,
+            borderBrush: Brush(213, 223, 229),
+            captionBrush: Brushes.Black);
 
         var valueTypeGroup = new GroupBox
         {
             Header = UiText.Get("GoToSpecial_ValuesForConstantsAndFormulas"),
             Margin = new Thickness(0),
-            Padding = new Thickness(0, 0, 0, GoToSpecialDialogPlanner.AvaloniaValueTypeGroupBottomPadding),
+            Padding = new Thickness(0, 0, 0, GoToSpecialDialogMetrics.AvaloniaValueTypeGroupBottomPadding),
             Content = valueTypeRow,
         };
-        AvaloniaCompactDialogChrome.ApplyGroupBox(valueTypeGroup, borderBrush: Brush(213, 223, 229));
+        AvaloniaCompactDialogChrome.ApplyGroupBox(
+            valueTypeGroup,
+            borderBrush: Brush(213, 223, 229),
+            captionBrush: Brushes.Black);
 
         var content = new StackPanel
         {
             Margin = new Thickness(
-                GoToSpecialDialogPlanner.AvaloniaContentLeftMargin,
-                GoToSpecialDialogPlanner.AvaloniaContentTopMargin,
-                GoToSpecialDialogPlanner.AvaloniaContentRightMargin - goToSpecialFrameShareOfRightMargin,
+                GoToSpecialDialogMetrics.AvaloniaContentLeftMargin,
+                GoToSpecialDialogMetrics.AvaloniaContentTopMargin,
+                GoToSpecialDialogMetrics.AvaloniaContentRightMargin - goToSpecialFrameShareOfRightMargin,
                 0),
             Children =
             {
@@ -15722,8 +15743,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Margin = new Thickness(
                     0,
                     0,
-                    GoToSpecialDialogPlanner.AvaloniaChoiceButtonRightMargin,
-                    GoToSpecialDialogPlanner.AvaloniaChoiceButtonBottomMargin),
+                    GoToSpecialDialogMetrics.AvaloniaChoiceButtonRightMargin,
+                    GoToSpecialDialogMetrics.AvaloniaChoiceButtonBottomMargin),
                 IsChecked = index == 0,
             };
             buttons.Add(button);
@@ -15767,9 +15788,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static void ApplyGoToSpecialButtonSize(Button button)
     {
-        button.Height = GoToSpecialDialogPlanner.ActionButtonHeight;
-        button.MinHeight = GoToSpecialDialogPlanner.ActionButtonHeight;
-        button.MaxHeight = GoToSpecialDialogPlanner.ActionButtonHeight;
+        button.Height = GoToSpecialDialogMetrics.ActionButtonHeight;
+        button.MinHeight = GoToSpecialDialogMetrics.ActionButtonHeight;
+        button.MaxHeight = GoToSpecialDialogMetrics.ActionButtonHeight;
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 
@@ -16386,11 +16407,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = WorkbookStatisticsDialogPlanner.Height - WpfResizableFrameHeight,
             MinWidth = WorkbookStatisticsDialogPlanner.MinWidth - WpfResizableFrameWidth,
             MinHeight = WorkbookStatisticsDialogPlanner.MinHeight - WpfResizableFrameHeight,
-            FontFamily = FormulaBarFontFamily,
-            FontSize = 12,
+            FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily(
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback),
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        var workbookStatisticsChrome = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            FontFamily = AvaloniaCompactDialogChrome.ResolveUiFontFamily(
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaFontFamilyFallback),
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
+            TextBoxPadding = new Thickness(
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryHorizontalInsetAdjustment,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding +
+                WorkbookStatisticsDialogVisualMetrics.AvaloniaSummaryVerticalInsetAdjustment,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding,
+                WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
+            ForegroundBrush = Brushes.Black,
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, workbookStatisticsChrome);
+        TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);
         AutomationProperties.SetAutomationId(dialog, "WorkbookStatisticsDialog");
 
         var okButton = new Button
@@ -16398,7 +16436,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             // WPF: OK MinWidth = 76 (default and cancel), Copy to Clipboard MinWidth = 132, 8px apart.
             // Enter/Escape are routed by the dialog's own key handler below.
-            MinWidth = 76,
+            MinWidth = WorkbookStatisticsDialogVisualMetrics.OkButtonMinWidth,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
         ApplyDialogButtonChrome(okButton, isDefault: true);
@@ -16410,7 +16448,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var copyToClipboardButton = new Button
         {
             Content = UiText.Get("WorkbookStatistics_CopyToClipboard"),
-            MinWidth = 132,
+            MinWidth = WorkbookStatisticsDialogVisualMetrics.CopyButtonMinWidth,
         };
         AutomationProperties.SetName(copyToClipboardButton, UiText.Get("WorkbookStatistics_CopyToClipboard"));
         AutomationProperties.SetAutomationId(
@@ -16437,12 +16475,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
         };
 
-        dialog.Content = CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton);
+        dialog.Content = CreateWorkbookStatisticsDialogContent(
+            statistics,
+            okButton,
+            workbookStatisticsChrome,
+            copyToClipboardButton);
         dialog.Opened += (_, _) => okButton.Focus();
         await dialog.ShowDialog(this);
     }
 
-    private static Control CreateWorkbookStatisticsDialogContent(WorkbookStatistics statistics, Button okButton, Button? copyToClipboardButton = null)
+    private static Control CreateWorkbookStatisticsDialogContent(
+        WorkbookStatistics statistics,
+        Button okButton,
+        AvaloniaCompactDialogChromeStyle workbookStatisticsChrome,
+        Button? copyToClipboardButton = null)
     {
         var statisticsBlock = new TextBox
         {
@@ -16451,16 +16497,31 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             Background = Brushes.White,
+            Foreground = Brushes.Black,
             // WPF: SystemColors.ControlDarkBrush border, Padding = 8, MinHeight = 260.
-            BorderBrush = Brush(160, 160, 160),
-            BorderThickness = new Thickness(1),
+            BorderBrush = Brush(
+                WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent,
+                WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent,
+                WorkbookStatisticsDialogVisualMetrics.SummaryBorderComponent),
+            BorderThickness = new Thickness(WorkbookStatisticsDialogVisualMetrics.SummaryBorderThickness),
             CornerRadius = new CornerRadius(0),
-            Padding = new Thickness(8),
-            MinHeight = 260,
-            FontSize = 12,
+            Padding = new Thickness(WorkbookStatisticsDialogVisualMetrics.SummaryPadding),
+            MinHeight = WorkbookStatisticsDialogVisualMetrics.SummaryMinHeight,
+            FontSize = WorkbookStatisticsDialogVisualMetrics.FontSize,
             // WPF lays the summary out on the 16px line pitch of its 12px dialog font.
-            LineHeight = 16,
-            VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
+            LineHeight = WorkbookStatisticsDialogVisualMetrics.SummaryLineHeight,
+        };
+        AvaloniaCompactDialogChrome.ApplyTextBox(
+            statisticsBlock,
+            workbookStatisticsChrome,
+            fixedHeight: false);
+        statisticsBlock.Padding = workbookStatisticsChrome.TextBoxPadding;
+        statisticsBlock.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
+        statisticsBlock.AttachedToVisualTree += (_, _) =>
+        {
+            TextOptions.SetTextRenderingMode(statisticsBlock, TextRenderingMode.Antialias);
+            foreach (var presenter in statisticsBlock.GetVisualDescendants().OfType<TextPresenter>())
+                TextOptions.SetTextRenderingMode(presenter, TextRenderingMode.Antialias);
         };
         AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
         AutomationProperties.SetAutomationId(
@@ -16473,9 +16534,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = WorkbookStatisticsDialogVisualMetrics.ActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, WorkbookStatisticsDialogVisualMetrics.ActionRowTopMargin, 0, 0),
         };
         if (copyToClipboardButton is not null)
             buttonRow.Children.Add(copyToClipboardButton);
@@ -16483,7 +16544,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var root = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(WorkbookStatisticsDialogVisualMetrics.ContentMargin),
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(buttonRow);
@@ -19536,6 +19597,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             return;
         }
+
+        // Backspace/Delete must be allowed to remove a selected cell-value completion without the
+        // following TextChanged pass immediately offering the same completion again.
+        if (e.Key is Key.Back or Key.Delete)
+            _formulaRangeEditingSession.SuppressNextCellValueAutocomplete();
 
         if (TryToggleFormulaRangeEntrySelectionMode(e.Key, e.KeyModifiers))
         {
@@ -25392,6 +25458,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        if (result.RestoredCustomViewSheetIds is not null)
+            RefreshViewportSizeForZoom();
+
         // R127C-avalonia-clipboard-marquee-undo-redo-1: WorkbookSession.UndoLastEdit/RedoLastEdit
         // already retire the SESSION-level pending Copy/Cut on success (CancelPendingCutAfterMutatingEdit,
         // unconditional since R127-services-clipboard-formats-copy-cancel-1 -- covers a plain Copy too,
@@ -25649,21 +25718,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        if (_drawingObjectClipboard.Content is { } objectClip)
-        {
-            PasteClipboardObject(objectClip);
-            return;
-        }
-
         if (!TryCommitPendingFormulaEdit())
             return;
 
+        var pasteSession = _session;
+        var drawingMarker = _drawingObjectClipboard.Marker;
+        if (_drawingClipboardWrite is { } pendingCopy)
+            await pendingCopy;
+
         var textRead = await ReadClipboardTextForPastePlanningAsync();
+        // An asynchronous read can finish after a workbook change or a newer copy.
+        if (_isOpening || _isSaving || !ReferenceEquals(_session, pasteSession)
+            || _drawingObjectClipboard.Marker != drawingMarker)
+        {
+            return;
+        }
+
         if (!textRead.Available)
         {
             ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
+
+        if (TryHandleDrawingObjectPaste(textRead))
+            return;
 
         var (text, clipboardReadFailed) = (textRead.Text, textRead.ReadFailed);
         if (_session.ShouldPreferExternalClipboardImage(text) &&
@@ -27358,9 +27436,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         args.Key == Key.F6 &&
         (args.KeyModifiers == KeyModifiers.None || args.KeyModifiers == KeyModifiers.Shift);
 
-    private static bool HasOnlyControlModifier(KeyModifiers modifiers) =>
-        modifiers == KeyModifiers.Control;
-
     private static bool IsAutoSumShortcut(KeyEventArgs args) =>
         args.Key == Key.OemPlus && args.KeyModifiers == KeyModifiers.Alt;
 
@@ -27757,7 +27832,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             FindNext();
         }
-        else if (e.Key == Key.K && HasOnlyControlModifier(e.KeyModifiers))
+        else if (e.Key == Key.K && e.KeyModifiers is KeyModifiers.Control or KeyModifiers.Meta)
         {
             e.Handled = true;
             await ShowInsertHyperlinkDialogAsync();
@@ -28215,8 +28290,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (ExcelWorksheetNavigationPlanner.TryToggleEndMode(navigationKey, navigationModifiers, _endMode, out var nextEndMode))
         {
             _endMode = nextEndMode;
+            if (nextEndMode)
+                _keyboardSelectionMode = ExcelSelectionMode.Normal;
             e.Handled = true;
-            RefreshShell(UiText.Get("MainLoc_Ready"));
+            RefreshShell(UiText.Get(ExcelSelectionModePlanner.EndModeStatusBarResourceKey(nextEndMode)));
             return;
         }
 
@@ -28227,12 +28304,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.Viewport, _session.ActiveSheet) - 1);
         var pageCols = Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(
             _session.Viewport, _session.ActiveSheet) - 1);
-        var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var extendSelection = ExcelSelectionModePlanner.ShouldExtendSelection(_keyboardSelectionMode, navigationModifiers);
         var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
+        var addArea = _keyboardSelectionMode == ExcelSelectionMode.Add && !moveOnly;
         var sheet = _session.Workbook.GetSheet(_session.ActiveSheet.Id);
-        var current = extendSelection && !moveOnly && _selectionExtensionCursor is { } cursor
-            ? cursor
+        var current = _keyboardSelectionMode == ExcelSelectionMode.Add
+            ? _session.SelectedRange.Start
             : _session.ActiveCell;
+        if (extendSelection && !moveOnly)
+        {
+            if (_selectionExtensionCursor is { } cursor && _session.SelectedRange.Contains(cursor))
+                current = cursor;
+            else if (addArea)
+                current = _session.SelectedRange.End;
+        }
 
         // The shared planner owns the whole key -> target decision. r188: it reads the End-mode value
         // passed in the request, which is captured BEFORE the flag is cleared below -- Home's target
@@ -28256,10 +28341,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (resolution is not { } resolvedNavigation)
             return;
+        var enterAfterTab = navigationKey == ExcelWorksheetNavigationKey.Enter && _lastWorksheetNavigationWasTab;
+        _lastWorksheetNavigationWasTab = navigationKey == ExcelWorksheetNavigationKey.Tab;
 
         // Presentation owns traversal order, multi-area wrapping, and merged-cell eligibility.
         // Avalonia retains native key conversion and applies only the returned active-cell target.
-        var cyclePlan = moveOnly && resolvedNavigation.CycleKey is { } cycleKey
+        var cyclePlan = _keyboardSelectionMode == ExcelSelectionMode.Normal && resolvedNavigation.CycleKey is { } cycleKey
             ? GridSelectionNavigationPlanner.PlanCycle(
                 sheet,
                 _session.SelectedRange,
@@ -28277,7 +28364,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        var navigationTarget = resolvedNavigation.Target;
+        var navigationTarget = enterAfterTab
+            ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(current)
+            : resolvedNavigation.Target;
 
         // Arrow/Tab/Enter navigation on a protected sheet must SKIP a locked cell it would
         // otherwise land the active cell on (when "Select locked cells" is unchecked), stepping
@@ -28285,18 +28374,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Excel -- rather than moving onto it (R75-services-protection-security-4-1). This also
         // applies to Shift/F8 "extend selection" (extendSelection && !moveOnly): the extending
         // end of the selection must not land on/pass a locked cell either, matching the WPF
-        // host's willSetActiveCell || willExtendSelection gating
-        // (MainWindow.Selection.cs, R87-commands-protection-lock-5-1). Avalonia's keyboard
-        // navigation has no Add-selection-mode branch (unlike WPF's), so unlike WPF there is no
-        // case here where the guard should be skipped -- it always applies on a protected sheet.
-        if (sheet is { IsProtected: true })
+        // host's guard. Additional-area navigation follows the WPF Add Selection path.
+        if (!addArea && sheet is { IsProtected: true })
         {
             var adjustedTarget = ExcelWorksheetNavigationPlanner.ResolveProtectedSheetTarget(
                 _session.Workbook,
                 sheet,
                 navigationTarget,
                 navigationKey,
-                extendSelection);
+                navigationModifiers.HasFlag(ExcelWorksheetNavigationModifiers.Shift));
             if (adjustedTarget is null)
             {
                 // No selectable cell exists further in this direction (e.g. every remaining cell
@@ -28308,10 +28394,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             navigationTarget = adjustedTarget.Value;
         }
 
-        MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
+        if (addArea)
+            AddOrExtendKeyboardSelection(navigationTarget, extendSelection);
+        else
+            MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
         ClearSelectedDrawingObject();
         e.Handled = true;
-        RefreshShell(UiText.Get("MainLoc_Ready"));
+        RefreshShell(UiText.Get(ExcelSelectionModePlanner.StatusBarModeResourceKey(_keyboardSelectionMode)));
     }
 
     private static ExcelWorksheetNavigationKey ToWorksheetNavigationKey(Key key) =>
@@ -29227,7 +29316,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private Task ExportActiveSheetPdfAsync() =>
-        ExportWorkbookPdfAsync(
+        ExportWorkbookFixedLayoutAsync(
             WorkbookExportPrintScope.ActiveSheet,
             WorkbookExportPrintOutputKind.Pdf);
 
@@ -29377,14 +29466,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 ActiveSheetIndex: ResolveActiveSheetIndex()),
             WorkbookExportPrintSurface.MacOs);
 
-    /// <summary>
-    /// Scoped variant of <see cref="ExportActiveSheetPdfAsync"/> used by the backstage Export pane. Reuses
-    /// the same picker → <see cref="WorkbookExportPrintPlanner"/> → <see cref="PortablePdfExportPlanner"/>
-    /// → <see cref="Pdf.AvaloniaPdfDocumentExporter"/> path; the only addition is honoring the user's chosen
-    /// scope (selection / active sheet / whole visible workbook). Output kind is currently PDF on this
-    /// surface (XPS is offered only where the surface advertises it, which macOS does not).
-    /// </summary>
-    private async Task ExportWorkbookPdfAsync(
+    private async Task ExportWorkbookFixedLayoutAsync(
         WorkbookExportPrintScope scope,
         WorkbookExportPrintOutputKind outputKind)
     {
@@ -29396,16 +29478,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (!TryCommitPendingFormulaEdit())
                 return;
 
-            if (!StorageProvider.CanSave)
-            {
-                ShowExportIssue(UiText.Get("MainLoc_PdfExportUnavailable"));
-                return;
-            }
-
             var format = ExportFormatCatalog.Get(outputKind);
-            if (!format.IsPortable)
+            var isXps = format.OutputKind == WorkbookExportPrintOutputKind.Xps;
+            if (!StorageProvider.CanSave || !format.IsPortable)
             {
-                ShowExportIssue("Portable export supports PDF only; XPS remains Windows-only.");
+                ShowExportIssue(UiText.Get(isXps ? "MainLoc_XpsExportUnavailable" : "MainLoc_PdfExportUnavailable"));
                 return;
             }
 
@@ -29422,7 +29499,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (exportOptions is null)
                 return;
 
-            var storageFile = await ShowPortablePdfSavePickerAsync("Export to PDF");
+            var storageFile = isXps
+                ? await ShowPortableExportSavePickerAsync(
+                    UiText.Get("MainWindowMessage_ExportXpsTitle"),
+                    ExportFilePickerPlanner.BuildPortablePickerPlan(_session.DisplayName, ApplicationTitle, format.FileFormat))
+                : await ShowPortablePdfSavePickerAsync("Export to PDF");
 
             if (storageFile is null)
                 return;
@@ -29432,7 +29513,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportRequiresLocalPath"));
+                    ShowExportIssue(UiText.Get(isXps ? "MainLoc_XpsExportRequiresLocalPath" : "MainLoc_PdfExportRequiresLocalPath"));
                     return;
                 }
 
@@ -29441,12 +29522,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     outputKind,
                     exportOptions,
                     File.Exists);
+                PersistPdfExportLanguage(requestPlan);
+                var canceledKey = isXps ? "MainLoc_XpsExportCanceled" : "MainLoc_PdfExportCanceled";
+                var failureKey = isXps ? "MainWindowMessage_ExportXpsFailed" : "MainLoc_PdfExportFailed";
                 if (requestPlan.ShouldConfirmNormalizedOverwrite &&
                     !await ConfirmNormalizedOverwriteAsync(
                         requestPlan.Request.Path,
-                        NormalizedOverwriteTargetKind.Pdf))
+                        isXps ? NormalizedOverwriteTargetKind.Xps : NormalizedOverwriteTargetKind.Pdf))
                 {
-                    ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
+                    ShowExportIssue(UiText.Get(canceledKey));
                     return;
                 }
 
@@ -29457,11 +29541,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         requestPlan.Request,
                         async (effectiveRequest, cancellationToken) =>
                         {
-                            _statusText.Text = UiText.Get("Progress_ExportingPdf");
+                            _statusText.Text = UiText.Get(isXps ? "Progress_ExportingFile" : "Progress_ExportingPdf");
                             _statusText.Foreground = Brush(67, 113, 83);
 
-                            var exportPrintPlan = CreatePortablePdfPrintPlan(effectiveRequest.Options, outputKind);
-                            var exportPlan = PortablePdfExportPlanner.CreatePlan(exportPrintPlan);
+                            var exportPlan = CreatePortableFixedLayoutExportPlan(effectiveRequest.Options, outputKind);
                             if (!exportPlan.IsReady)
                             {
                                 adapterFailureMessage = exportPlan.StatusText;
@@ -29480,17 +29563,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             }
 
                             var exportExecution = await new AtomicExportExecutor()
-                                .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                                .ExecutePathAsync<string>(
                                 effectiveRequest.Path,
-                                (output, token) =>
+                                (temporaryPath, token) =>
                                 {
                                     token.ThrowIfCancellationRequested();
-                                    return ValueTask.FromResult(Pdf.AvaloniaPdfDocumentExporter.Save(
-                                        _session.Workbook,
-                                        effectiveExportPlan,
-                                        output,
-                                        options: null,
-                                        workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter()));
+                                    // The Skia backend adds catalog metadata to the PDF it just wrote.
+                                    using var output = new FileStream(temporaryPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+                                    var workbookDirectory = ResolveWorkbookDirectoryForHeaderFooter();
+                                    var statusText = isXps
+                                        ? Pdf.AvaloniaXpsDocumentExporter.Save(
+                                            _session.Workbook, effectiveExportPlan, output, workbookDirectory).StatusText
+                                        : Pdf.AvaloniaPdfDocumentExporter.Save(
+                                            _session.Workbook, effectiveExportPlan, output, workbookDirectory: workbookDirectory).Result.StatusText;
+                                    return ValueTask.FromResult(statusText);
                                 },
                                 cancellationToken);
                             if (!exportExecution.Succeeded)
@@ -29499,12 +29585,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                                 throw exportExecution.Exception ?? new IOException(
                                     exportExecution.Error?.Detail.Message ??
                                     exportExecution.Validation?.Detail.ToString() ??
-                                    "PDF export did not complete.");
+                                    "File export did not complete.");
                             }
 
                             RefreshShell(UiText.Format(
                                 "MainLoc_StatusFileName",
-                                exportExecution.Value!.Result.StatusText,
+                                exportExecution.Value!,
                                 Path.GetFileName(effectiveRequest.Path)));
                             return true;
                         });
@@ -29517,20 +29603,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         var message = resultPlan.IssueKind switch
                         {
                             WorkbookExportResultIssueKind.Failure when adapterFailureMessage is null => UiText.Format(
-                                "MainLoc_PdfExportFailed",
+                                failureKey,
                                 workflowResult.Exception?.Message ?? resultPlan.Message),
-                            WorkbookExportResultIssueKind.Canceled => UiText.Get("MainLoc_PdfExportCanceled"),
+                            WorkbookExportResultIssueKind.Canceled => UiText.Get(canceledKey),
                             _ => resultPlan.Message
                         };
                         ShowExportIssue(message);
                     }
 
                     if (resultPlan.ShouldOpenDestination)
-                        await TryOpenExportedPdfAsync(resultPlan.DestinationPath);
+                        await TryOpenExportedFileAsync(resultPlan.DestinationPath, isXps ? "XPS" : "PDF");
                 }
                 catch (Exception ex)
                 {
-                    ShowExportIssue(UiText.Format("MainLoc_PdfExportFailed", ex.Message));
+                    ShowExportIssue(UiText.Format(failureKey, ex.Message));
                 }
             }
         }
@@ -29540,24 +29626,37 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private WorkbookExportPrintPlan CreatePortablePdfPrintPlan(
+    private PortablePdfExportPlan CreatePortableFixedLayoutExportPlan(
         ExportOptions options,
         WorkbookExportPrintOutputKind outputKind)
     {
+        var workbook = _session.Workbook;
         var scope = ExportFormatCatalog.ToPrintScope(options.Scope);
         var selectedRange = scope == WorkbookExportPrintScope.SelectedRange
             ? _session.SelectedRange
             : (GridRange?)null;
+        var activeSheetIds = scope == WorkbookExportPrintScope.ActiveSheet
+            ? WorkbookExportSheetSelectionPlanner.ResolveSheetIds(
+                workbook, options, _session.ActiveSheet.Id, _session.GetCurrentGroupedStructureSheetIds())
+            : [];
+        var groupedSheetIds = activeSheetIds.Count > 1 ? activeSheetIds.ToHashSet() : null;
 
-        return WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
-            _session.Workbook,
+        var exportPrintPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
             new WorkbookExportPrintIntent(
-                scope,
+                groupedSheetIds is null ? scope : WorkbookExportPrintScope.GroupedSheets,
                 outputKind,
                 ActiveSheetIndex: ResolveActiveSheetIndex(),
                 SelectedRange: selectedRange,
-                IgnorePrintAreas: options.IgnorePrintAreas),
+                IgnorePrintAreas: options.IgnorePrintAreas)
+            {
+                GroupedSheetIds = groupedSheetIds,
+                UseSheetPageNumbering = groupedSheetIds is not null
+            },
             WorkbookExportPrintSurface.MacOs);
+        return outputKind == WorkbookExportPrintOutputKind.Xps
+            ? PortablePdfExportPlanner.CreateXpsPlan(exportPrintPlan, workbook)
+            : PortablePdfExportPlanner.CreatePlan(exportPrintPlan, workbook);
     }
 
     private int ResolveActiveSheetIndex()
@@ -29566,10 +29665,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return index >= 0 ? index : _session.Workbook.ActiveSheetIndex ?? 0;
     }
 
-    private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)
-    {
-        var pickerPlan = ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle);
-        return AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
+    private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title) =>
+        ShowPortableExportSavePickerAsync(
+            title,
+            ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle));
+
+    private Task<AvaloniaPickedStorageFile?> ShowPortableExportSavePickerAsync(
+        string title,
+        ExportSavePickerPlan pickerPlan) =>
+        AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
             AvaloniaFilePickerSaveRequest.FromDescriptors(
                 title,
@@ -29578,7 +29682,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 pickerPlan.DefaultExtensionWithoutDot,
                 showOverwritePrompt: true,
                 suggestFirstFileType: true));
-    }
 
     private async Task<bool> SaveWorkbookToTargetAsync(
         FileSaveTarget target,

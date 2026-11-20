@@ -64,11 +64,22 @@ public static class WorkbookPrintWorkflow
         PrintJobRequest request,
         PrintExportHostCapabilities host)
     {
-        var readiness = PrintExportHostReadinessPlanner.Create(workbook, hasSelection, request, host);
-        var portablePlan = readiness.NativePrintPlan.JobPlan.IsReady &&
-            readiness.NativePrintPlan.RouteKind != PrintExportNativePrintRouteKind.NativePrintDialog
-                ? PortablePdfExportPlanner.CreatePlan(readiness.NativePrintPlan.JobPlan.ExportPrintPlan)
-                : null;
+        var readiness = PrintExportHostReadinessPlanner.Create(workbook, hasSelection, request, host, out var portablePlan);
+        var nativePlan = readiness.NativePrintPlan;
+        var job = nativePlan.JobPlan;
+        if (!job.IsReady)
+            portablePlan = null;
+
+        // A printer receives the full document and a separate page-range ticket. The saved PDF
+        // has no ticket, so apply the selected pages to the document itself on that route.
+        if (nativePlan.RouteKind == PrintExportNativePrintRouteKind.PrintReadyPdfFallback &&
+            portablePlan is { IsReady: true } &&
+            (job.FirstPage > 1 || job.LastPage < portablePlan.TotalPageCount))
+        {
+            portablePlan = PortablePdfExportPlanner.ApplyPageRange(
+                portablePlan, new ExportPageRange(job.FirstPage, job.LastPage));
+        }
+
         return new WorkbookPrintWorkflowPlan(readiness, portablePlan);
     }
 
@@ -108,8 +119,10 @@ public static class WorkbookPrintWorkflow
             {
                 var job = plan.Readiness.NativePrintPlan.JobPlan;
                 WorkbookPrintRenderResult? platformRenderedDocument = null;
+                var requestedPrinter = string.IsNullOrWhiteSpace(printerId) ? null : printerId.Trim();
+                var printerOptions = job.Request.PrinterOptions;
                 var requestedSelection = new PrintSelection(
-                    PrinterName: string.IsNullOrWhiteSpace(printerId) ? null : printerId.Trim(),
+                    PrinterName: requestedPrinter,
                     Copies: job.Copies,
                     PageRange: job.FirstPage == job.LastPage
                         ? PrintPageRange.Single(job.FirstPage)
@@ -118,6 +131,10 @@ public static class WorkbookPrintWorkflow
                     JobTitle: jobTitle)
                 {
                     Sides = job.Request.Sides,
+                    PrinterOptions = requestedPrinter is not null &&
+                        string.Equals(requestedPrinter, printerOptions?.PrinterName, StringComparison.OrdinalIgnoreCase)
+                            ? printerOptions
+                            : null,
                 };
                 var portableExecution = await new PortablePrintSubmissionWorkflow(printService).ExecuteAsync(
                     static (intent, _) => Task.FromResult<PrintSelection?>(intent.RequestedSelection),

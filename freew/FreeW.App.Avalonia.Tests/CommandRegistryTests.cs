@@ -267,6 +267,102 @@ public sealed class CommandRegistryTests
     }
 
     [Fact]
+    public void Legacy_form_field_options_command_uses_the_host_dialog_callback()
+    {
+        var opened = 0;
+        var callbacks = NoopCallbacks() with { OpenLegacyFormFieldOptions = () => opened++ };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        Execute(registry, "freew.ff-options");
+
+        opened.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Legacy_form_field_shading_command_toggles_screen_only_field_chrome(bool initialVisibility)
+    {
+        await Session.Dispatch(() =>
+        {
+            var editor = new DocumentView();
+            editor.LoadDocument(TextDocument.CreateEmpty());
+            editor.InsertLegacyFormField(LegacyFormFieldKind.Text);
+            editor.Measure(new Size(800, 1200));
+            var fieldRun = LegacyFormField.Enumerate(editor.Document).Single().Run;
+            var originalText = fieldRun.Text;
+            var originalField = fieldRun.ComplexField;
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
+            var placed = (System.Collections.IEnumerable)(typeof(DocumentView)
+                .GetField("_placed", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(editor)!);
+            placed.Cast<object>().Where(item => (bool)item.GetType().GetProperty("IsLegacyFormField")!.GetValue(item)!)
+                .Should().HaveCount(originalText.Length, "the renderer must tag only glyphs from the WPF-shaded field run");
+
+            // The preference is process-wide, so other commands may have changed it before this test.
+            // Exercise both states and restore the original even if an assertion fails.
+            var previousVisibility = DocumentView.LegacyFormFieldShadingVisible;
+            try
+            {
+                if (previousVisibility != initialVisibility)
+                    editor.ToggleLegacyFormFieldShading();
+
+                // WPF's matching command flips screen-only shading without editing the field.
+                Execute(registry, "freew.ff-shading");
+                DocumentView.LegacyFormFieldShadingVisible.Should().Be(!initialVisibility);
+                fieldRun.Text.Should().Be(originalText);
+                fieldRun.ComplexField.Should().BeSameAs(originalField);
+
+                Execute(registry, "freew.ff-shading");
+                DocumentView.LegacyFormFieldShadingVisible.Should().Be(initialVisibility);
+            }
+            finally
+            {
+                if (DocumentView.LegacyFormFieldShadingVisible != previousVisibility)
+                    editor.ToggleLegacyFormFieldShading();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public void Legacy_form_field_options_apply_and_undo_as_one_model_edit()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(TextDocument.CreateEmpty());
+        view.InsertLegacyFormField(LegacyFormFieldKind.Text);
+        var target = view.LegacyFormFieldOptionsTargetAtCaret();
+        target.Should().NotBeNull();
+
+        var captured = target!.Value;
+        var updated = captured.FormField with { DefaultText = "Revised default" };
+        view.ApplyLegacyFormFieldOptions(captured.Field, updated).Should().BeTrue();
+        LegacyFormField.Enumerate(view.Document).Single().Run.Text.Should().Be("Revised default");
+
+        view.Undo();
+        LegacyFormField.Enumerate(view.Document).Single().FormField.DefaultText.Should().BeNull();
+        LegacyFormField.Enumerate(view.Document).Single().Run.Text.Should().Be(captured.Text);
+
+        view.Redo();
+        LegacyFormField.Enumerate(view.Document).Single().FormField.DefaultText.Should().Be("Revised default");
+        LegacyFormField.Enumerate(view.Document).Single().Run.Text.Should().Be("Revised default");
+    }
+
+    [Fact]
+    public void Legacy_form_field_options_unchanged_result_is_a_successful_no_op()
+    {
+        var view = new DocumentView();
+        view.LoadDocument(TextDocument.CreateEmpty());
+        view.InsertLegacyFormField(LegacyFormFieldKind.Text);
+        var target = view.LegacyFormFieldOptionsTargetAtCaret();
+        target.Should().NotBeNull();
+
+        var captured = target!.Value;
+        view.ApplyLegacyFormFieldOptions(captured.Field, captured.FormField).Should().BeTrue();
+
+        LegacyFormField.Enumerate(view.Document).Single().Field.Should().BeSameAs(captured.Field);
+    }
+
+    [Fact]
     public void Home_definition_uses_wpf_command_ids_for_editing_and_paragraph_slice()
     {
         var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");

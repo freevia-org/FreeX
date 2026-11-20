@@ -10,6 +10,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
     private List<(SheetId SheetId, CellEditCompanionSnapshot Snapshot)>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
 
     // R115-data-table-master-formula-refresh: mirrors EditCellsCommand's _appliedTableEffects --
     // a grouped edit that lands on a registered Data Table's master formula cell on one of the
@@ -26,7 +27,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
     public string Label => "Edit Grouped Sheets";
 
     /// <inheritdoc/>
-    public int EstimatedBytes => (int)Math.Min((long)_sheetIds.Count * _sourceEdits.Count * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min((long)_sheetIds.Count * _sourceEdits.Count * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public GroupedEditCellsCommand(
         IReadOnlyCollection<SheetId> sheetIds,
@@ -86,6 +87,8 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             }
         }
 
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx,
+            _sheetIds.SelectMany(id => _sourceEdits.Select(edit => RemapAddress(edit.Address, id))));
         _snapshot = [];
         var affected = new List<CellAddress>();
         var appliedEdits = new List<(CellAddress Address, Cell NewCell)>();
@@ -129,6 +132,9 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
         // a Data Table's body is a one-time text-baked substitution of its master formula, so
         // re-derive it here whenever this grouped edit lands on that master/header formula cell on
         // any of the grouped sheets.
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        affected.AddRange(_headerRename.Affected);
         var dataTableRefreshCells = DataTableAutoRefreshEffects.Apply(ctx, appliedEdits, _appliedTableEffects);
         if (dataTableRefreshCells.Count > 0)
             affected.AddRange(dataTableRefreshCells);
@@ -145,6 +151,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
             _appliedTableEffects[i].Revert(ctx);
         _appliedTableEffects.Clear();
 
+        _headerRename?.Revert();
         foreach (var (sheetId, snapshot) in _snapshot)
             snapshot.Restore(ctx.GetSheet(sheetId));
     }

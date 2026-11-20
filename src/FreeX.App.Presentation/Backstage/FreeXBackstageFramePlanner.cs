@@ -4,6 +4,7 @@ public sealed record FreeXBackstagePaneSelectionPlan(
     FreeXBackstagePaneId DefaultPane,
     string DefaultPaneAutomationId,
     string HomePaneAutomationId,
+    string OpenPaneAutomationId,
     string InfoPaneAutomationId,
     string PrintPaneAutomationId)
 {
@@ -11,6 +12,7 @@ public sealed record FreeXBackstagePaneSelectionPlan(
         pane switch
         {
             FreeXBackstagePaneId.Home => HomePaneAutomationId,
+            FreeXBackstagePaneId.Open => OpenPaneAutomationId,
             FreeXBackstagePaneId.Info => InfoPaneAutomationId,
             FreeXBackstagePaneId.Print => PrintPaneAutomationId,
             _ => throw new ArgumentOutOfRangeException(nameof(pane), pane, null)
@@ -46,6 +48,7 @@ public static class FreeXBackstageFramePlanner
         pane switch
         {
             FreeXBackstagePaneId.Home => "freex.backstage.pane.home",
+            FreeXBackstagePaneId.Open => "freex.backstage.pane.open",
             FreeXBackstagePaneId.Info => "freex.backstage.pane.info",
             FreeXBackstagePaneId.Print => "freex.backstage.pane.print",
             _ => throw new ArgumentOutOfRangeException(nameof(pane), pane, null),
@@ -106,6 +109,7 @@ public static class FreeXBackstageFramePlanner
             defaultPane.PaneFlow!.Pane,
             RequiredAutomationId(defaultPane.Navigation),
             FindPaneAutomationId(entries, FreeXBackstagePaneId.Home),
+            FindPaneAutomationId(entries, FreeXBackstagePaneId.Open),
             FindPaneAutomationId(entries, FreeXBackstagePaneId.Info),
             FindPaneAutomationId(entries, FreeXBackstagePaneId.Print));
     }

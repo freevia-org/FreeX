@@ -174,7 +174,7 @@ public sealed class R96_PrintPreviewDataBarIconSetRenderTests
 
         var pageView = MainWindow.BuildPreviewPageView(context, pageIndex: 0);
         var border = pageView.Should().BeOfType<Border>().Subject;
-        return border.Child.Should().BeOfType<Canvas>().Subject;
+        return border.Child.Should().BeAssignableTo<Canvas>().Which;
     }
 
     private static (Workbook Workbook, Sheet Sheet) CreateWorkbook(string name = "Book1.xlsx")

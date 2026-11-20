@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 using AvaloniaProofingHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;

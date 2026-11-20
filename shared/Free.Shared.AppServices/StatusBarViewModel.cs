@@ -22,6 +22,9 @@ public sealed record StatusBarViewModel(
     bool AreStatsVisible,
     IReadOnlyList<StatusBarReadoutItem> Readouts)
 {
+    /// <summary>True when the selection is exactly one cell, for Excel-like aggregate suppression.</summary>
+    public bool IsSingleCellSelection { get; init; }
+
     /// <summary>An empty readout list, reused for the ready state to avoid allocations.</summary>
     public static readonly IReadOnlyList<StatusBarReadoutItem> NoReadouts = [];
 

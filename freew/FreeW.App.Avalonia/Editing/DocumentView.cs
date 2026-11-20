@@ -434,6 +434,7 @@ public sealed partial class DocumentView : Control
 
     /// <summary>Raised after any change to the document (edit, undo/redo, load) so the shell can refresh chrome.</summary>
     public event Action? DocumentChanged;
+    internal event Action? DocumentLoaded;
 
     /// <summary>Raised when a Find result moves the caret, so the shell can scroll it into view.</summary>
     public event Action? ScrollToCaretRequested;
@@ -648,9 +649,11 @@ public sealed partial class DocumentView : Control
         // AV-PROOFING: Ignore All is session-scoped to the OPEN DOCUMENT, not the editor instance —
         // without this, words ignored in one document stayed silently ignored after loading another.
         _ignoredProofingWords.Clear();
+        ResetProofingReviewState();
         _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
+        DocumentLoaded?.Invoke();
         DocumentChanged?.Invoke();
     }
 
@@ -9718,12 +9721,12 @@ public sealed partial class DocumentView : Control
                     _tabLeaderSpans.Add((tabX, segmentStartX, pageSpaceY, lineHeight, plan.Leader, cells[c].Fmt));
 
                 // Place the tab character with its computed advance width (for caret hit-testing).
-                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control));
+                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), tabX, pageSpaceY, tabAdvance, lineHeight, cells[c].Fmt, '\t', Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control, IsLegacyFormField: cells[c].IsLegacyFormField));
                 x = segmentStartX;
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control));
+            _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control, IsLegacyFormField: cells[c].IsLegacyFormField));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -12238,6 +12241,8 @@ public sealed partial class DocumentView : Control
 
             var ft = Build(pc.Ch.ToString(), drawFmt);
             drawY += baselineOffsetDip;
+            if (pc.IsLegacyFormField && LegacyFormFieldShadingVisible)
+                context.FillRectangle(LegacyFormFieldShadeBrush, new Rect(pc.X, pc.Y, Math.Max(1, pc.W), pc.LineHeight));
             context.DrawText(ft, new Point(pc.X, drawY));
 
             DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
@@ -26601,7 +26606,8 @@ public sealed partial class DocumentView : Control
                     StyleId: run.StyleId,
                     // AV-CCEDIT: carry the run's content control so the field survives an edit to the
                     // body text around it.
-                    Control: run.Control));
+                    Control: run.Control,
+                    IsLegacyFormField: run.ComplexField?.FormField is not null));
         }
         return cells;
     }
@@ -26669,7 +26675,8 @@ public sealed partial class DocumentView : Control
                 // AV-CCEDIT: carry the control on the display path too, so a field keeps its chrome in a
                 // paragraph that layout routes here (one holding a note mark, field or equation).
                 cells.Add(new Cell(ch, displayFormatting, run.CommentId, run.Revision, run.RevisionAuthor,
-                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId, Control: run.Control));
+                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId, Control: run.Control,
+                    IsLegacyFormField: run.ComplexField?.FormField is not null));
         }
         return cells;
     }
@@ -27435,6 +27442,9 @@ public sealed partial class DocumentView : Control
     private static ImmutableSolidColorBrush ContentControlShadeBrush { get; } =
         new ImmutableSolidColorBrush(Color.FromRgb(0xEC, 0xEC, 0xF4));
 
+    private static ImmutableSolidColorBrush LegacyFormFieldShadeBrush { get; } =
+        new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
+
     // ── AV-COMMENT: comment-anchor render assets ──────────────────────────────────────────────────
     // Light amber tint behind commented glyphs (active threads) and a muted grey tint for resolved ones.
     private static ImmutableSolidColorBrush CommentTintBrush { get; } = new ImmutableSolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xC1, 0x07));
@@ -27503,7 +27513,8 @@ public sealed partial class DocumentView : Control
         // paragraphs used to be excluded from editing outright. Grouped by REFERENCE (see
         // SameContentControl): ContentControl is a record, so two distinct but identically-configured
         // fields would otherwise merge into one on an unrelated edit.
-        ModelContentControl? Control = null);
+        ModelContentControl? Control = null,
+        bool IsLegacyFormField = false);
 
     /// <summary>
     /// Whether two cells belong to the same content control instance. Reference identity, not record
@@ -27602,7 +27613,8 @@ public sealed partial class DocumentView : Control
         string? FormatRevisionAuthor = null,
         // AV-CCEDIT: the content control this glyph belongs to (null = ordinary text), so the render can
         // shade the field's region and the pointer can offer its tooltip / click affordance.
-        ModelContentControl? Control = null)
+        ModelContentControl? Control = null,
+        bool IsLegacyFormField = false)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;

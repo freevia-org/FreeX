@@ -58,6 +58,17 @@ public static class FreeXBackstageFlowPlanner
                 RefreshPrintPreview: false,
                 FocusTarget: FreeXBackstagePaneFocusTarget.None),
 
+            FreeXBackstagePaneId.Open => new(
+                pane,
+                RefreshGreeting: false,
+                ResetRecentTab: true,
+                RefreshRecentFiles: true,
+                RefreshInfo: false,
+                ResetPrintPreviewSettings: false,
+                RefreshPrintOptions: false,
+                RefreshPrintPreview: false,
+                FocusTarget: FreeXBackstagePaneFocusTarget.None),
+
             FreeXBackstagePaneId.Info => new(
                 pane,
                 RefreshGreeting: false,

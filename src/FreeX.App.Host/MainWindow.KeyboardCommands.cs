@@ -11,6 +11,7 @@ public partial class MainWindow
     private void RegisterKeyboardCommandShortcuts()
     {
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.NewWorkbook, WorkbookShortcutRoute.NewWorkbook);
+        RegisterPortableKeyboardCommand(KeyboardCommandShortcut.OpenBackstage, WorkbookShortcutRoute.OpenBackstage);
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.OpenWorkbook, WorkbookShortcutRoute.OpenWorkbook);
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.SaveWorkbook, WorkbookShortcutRoute.SaveWorkbook);
         RegisterPortableKeyboardCommand(KeyboardCommandShortcut.Copy, WorkbookShortcutRoute.Copy);
@@ -80,6 +81,7 @@ public partial class MainWindow
         });
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHelp, HelpOnlineBtn_Click);
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ShowKeyTips, (_, _) => EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel));
+        _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.ToggleRibbonVisibility, (_, _) => ToggleRibbonVisibility());
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.CycleShellFocus, (_, _) => CycleShellFocus(reverse: Keyboard.Modifiers == System.Windows.Input.ModifierKeys.Shift));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, (_, _) => SwitchWorkbookWindow(forward: true));
         _keyboardCommandDispatcher.Register(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, (_, _) => SwitchWorkbookWindow(forward: false));

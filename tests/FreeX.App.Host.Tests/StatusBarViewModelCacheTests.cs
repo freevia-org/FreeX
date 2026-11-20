@@ -26,6 +26,20 @@ public sealed class StatusBarViewModelCacheTests
     }
 
     [Fact]
+    public void GetStats_DistinguishesSingleCellFromMultiCellSelection()
+    {
+        var cache = CreateCache();
+        var stats = new WorkbookSelectionStats(42, 1, 1, 42, 42, 42);
+
+        var multiCell = cache.GetStats(StatusBarViewMode.Normal, 0, stats);
+        var singleCell = cache.GetStats(StatusBarViewMode.Normal, 0, stats, isSingleCellSelection: true);
+
+        singleCell.Should().NotBeSameAs(multiCell);
+        multiCell.IsSingleCellSelection.Should().BeFalse();
+        singleCell.IsSingleCellSelection.Should().BeTrue();
+    }
+
+    [Fact]
     public void GetReady_ReusesNeutralModelWhenTextIsUnchanged()
     {
         var cache = CreateCache();

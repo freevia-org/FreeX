@@ -635,10 +635,25 @@ public partial class MainWindow
         if (TryHandleShowKeyTipsPreview(e, sender))
             return;
 
+        if (KeyboardShortcutMatcher.TryGetCommandShortcut(
+                e.Key,
+                e.SystemKey,
+                Keyboard.Modifiers,
+                out var ribbonShortcut) &&
+            ribbonShortcut == KeyboardCommandShortcut.ToggleRibbonVisibility)
+        {
+            ExecuteCommandShortcut(ribbonShortcut, sender, e);
+            e.Handled = true;
+            return;
+        }
+
         if (Keyboard.FocusedElement is TextBox or ComboBox)
             return;
 
-        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None && IsStartScreenVisible())
+        if (e.Key == Key.Escape &&
+            Keyboard.Modifiers == ModifierKeys.None &&
+            IsStartScreenVisible() &&
+            !_ribbonKeyTipSession.IsActive)
         {
             HideStartScreen();
             e.Handled = true;
@@ -665,6 +680,19 @@ public partial class MainWindow
 
         ExecuteCommandShortcut(commandShortcut, sender, e);
         e.Handled = true;
+    }
+
+    private bool _ribbonContentCollapsed;
+
+    private void ToggleRibbonVisibility()
+    {
+        RibbonTabs.ApplyTemplate();
+        if (RibbonTabs.Template.FindName("PART_SelectedContentHost", RibbonTabs) is not ContentPresenter contentHost)
+            return;
+
+        _ribbonContentCollapsed = !_ribbonContentCollapsed;
+        contentHost.Visibility = _ribbonContentCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        RibbonTabs.MinHeight = _ribbonContentCollapsed ? 0 : 132;
     }
 
     private bool TryHandleShowKeyTipsPreview(System.Windows.Input.KeyEventArgs e, object sender)
@@ -933,7 +961,12 @@ public partial class MainWindow
             AppOptionsEnterDirectionMapper.ToFormulaEditor(_options.AfterEnterDirection));
         if (resolution is not { } resolvedNavigation) return;
 
-        CellAddress? target = resolvedNavigation.Target;
+        var enterAfterTab = e.Key == Key.Enter && _lastWorksheetNavigationWasTab;
+        _lastWorksheetNavigationWasTab = e.Key == Key.Tab;
+
+        CellAddress? target = enterAfterTab
+            ? ExcelWorksheetNavigationPlanner.GetEnterAfterTabTarget(current)
+            : resolvedNavigation.Target;
 
         if (_endMode)
             SetEndMode(false);
@@ -1353,7 +1386,10 @@ public partial class MainWindow
         var expanded = sheet is null
             ? SelectionRangeService.GetWholeRows(range)
             : StructuredTableSelectionPlanner.PlanWholeRows(sheet, range).Range;
-        SetSelectionRange(expanded, range.Start);
+        var activeCell = SheetGrid.ActiveCell is { } currentActiveCell && expanded.Contains(currentActiveCell)
+            ? currentActiveCell
+            : range.Start;
+        SetSelectionRange(expanded, activeCell);
     }
 
     /// <summary>
@@ -1371,7 +1407,10 @@ public partial class MainWindow
         var expanded = sheet is null
             ? SelectionRangeService.GetWholeColumns(range)
             : StructuredTableSelectionPlanner.PlanWholeColumns(sheet, range).Range;
-        SetSelectionRange(expanded, range.Start);
+        var activeCell = SheetGrid.ActiveCell is { } currentActiveCell && expanded.Contains(currentActiveCell)
+            ? currentActiveCell
+            : range.Start;
+        SetSelectionRange(expanded, activeCell);
     }
 
     // R92-commands-merge-edge-5-2: navigating (Name Box / Go To / hyperlink / any other caller of
@@ -1393,7 +1432,7 @@ public partial class MainWindow
         var effectiveActiveCell = sheet is { MergedRegions.Count: > 0 } && sheet.GetMergeRegion(activeCell) is { } activeMerge
             ? activeMerge.Start
             : activeCell;
-        _selectionAnchor = expandedRange.Start;
+        _selectionAnchor = effectiveActiveCell;
         _selectionCursor = expandedRange.End;
         SetSelectedRangesIfChanged(null);
         SheetGrid.SelectedRange = expandedRange;
@@ -1586,10 +1625,9 @@ public partial class MainWindow
     internal void CompleteDragSelectionStatusRefresh()
     {
         // The Name Box shows a live "{rows}R x {cols}C" dimension readout while the drag was in
-        // progress (ExtendSelection); now that the drag has ended, revert it to the plain range
-        // address, matching Excel (R69-render-active-cell-selection-6-2).
+        // progress (ExtendSelection); afterward, restore Excel's active-cell or defined-name text.
         if (SheetGrid.SelectedRange is { } activeRange)
-            SetCellAddressBoxSelectionText(FormatRangeReference(activeRange.Start, activeRange.End));
+            SetCellAddressBoxSelectionText(FormatNameBoxSelectionText(activeRange));
 
         if (!_dragSelectStatusRefreshPending)
             return;

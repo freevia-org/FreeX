@@ -18,6 +18,36 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class FormatCellsDialogXamlTests
 {
     [Fact]
+    public void FormatCellsDialog_GeneralPreviewUsesSelectedCellTextAndBlankRemainsEmpty()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = ShowDialogForTest(new CellStyle(), numberPreviewText: "Selected value");
+            try
+            {
+                GetControl<TextBlock>(dialog, "NumberPreview").Text.Should().Be("Selected value");
+                GetControl<ListBox>(dialog, "NumberCategoryList").SelectedItem = "Number";
+                GetControl<ListBox>(dialog, "NumberCategoryList").SelectedItem = "General";
+                GetControl<TextBlock>(dialog, "NumberPreview").Text.Should().Be("Selected value");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+
+            var blankDialog = ShowDialogForTest(new CellStyle());
+            try
+            {
+                GetControl<TextBlock>(blankDialog, "NumberPreview").Text.Should().BeEmpty();
+            }
+            finally
+            {
+                blankDialog.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void FormatCellsDialog_NumberTab_AppliesDecimalSymbolAndNegativeControlsToNumberFormats()
     {
         StaTestRunner.Run(() =>

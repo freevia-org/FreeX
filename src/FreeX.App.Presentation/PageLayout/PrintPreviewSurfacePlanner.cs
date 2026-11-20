@@ -18,7 +18,7 @@ public sealed record PrintPreviewTopToolbarPlan(
     double SidesComboWidth,
     string SidesLabelText,
     string StatusText,
-    string PageRangeText,
+    IReadOnlyList<PrintPreviewPageRangeChoice> PageRangeChoices,
     double PageRangeComboWidth,
     string CloseButtonText);
 
@@ -143,7 +143,7 @@ public static class PrintPreviewSurfacePlanner
             SidesComboWidth: ToolbarSidesComboWidth,
             SidesLabelText: Text(textResolver, "PrintPreview_SidesLabel", "Sides:"),
             StatusText: PrintPreviewToolbarStatePlanner.CreateStatusText(printerName, 1, totalPages),
-            PageRangeText: rangePlan.Choices[0].Text,
+            PageRangeChoices: rangePlan.Choices,
             PageRangeComboWidth: ToolbarPageRangeComboWidth,
             CloseButtonText: Text(textResolver, "PrintPreview_CloseButton", "Close"));
     }

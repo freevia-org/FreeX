@@ -23,6 +23,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     private readonly bool _ctrlHeld;
     private readonly IReadOnlyList<IReadOnlyList<string>> _customLists;
     private List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
     private List<(CellAddress Address, bool HadPhoneticGuide, CellPhoneticGuide? PhoneticGuide)>? _phoneticGuideSnapshot;
@@ -52,7 +53,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     public string Label => "Autofill";
 
     /// <inheritdoc/>
-    public int EstimatedBytes => (int)Math.Min(_fillRange.CellCount * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min(_fillRange.CellCount * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     /// <param name="ctrlHeld">
     /// True when the user held Ctrl while releasing the fill-handle drag. Excel uses Ctrl to flip
@@ -81,6 +82,20 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        var inward = _sourceRange.Contains(_fillRange) && _fillRange != _sourceRange;
+        var headers = TableHeaderRenameTransaction.IntersectingHeaders(sheet, inward ? _sourceRange : _fillRange)
+            .Where(a => !inward || !_fillRange.Contains(a));
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, headers);
+        var outcome = ApplyCore(ctx);
+        if (!outcome.Success || outcome.IsNoOp) return outcome;
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        return outcome with { AffectedCells = (outcome.AffectedCells ?? []).Concat(_headerRename.Affected).Distinct().ToArray() };
+    }
+
+    private CommandOutcome ApplyCore(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
 
@@ -527,6 +542,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
 
     public void Revert(ICommandContext ctx)
     {
+        _headerRename?.Revert();
         if (_snapshot is null) return;
 
         // Unwind table auto-expand / calculated-column propagation before the base fill

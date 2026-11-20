@@ -44,6 +44,9 @@ public sealed partial class MainWindow
     private static readonly IBrush PageBreakBorderBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakLineBrush = Brush(11, 112, 116);
     private static readonly IBrush PageBreakWatermarkBrush = Brush(60, 11, 112, 116);
+    private static readonly IBrush PageLayoutPageSurfaceBrush = Brush(42, 255, 255, 255);
+    private static readonly IBrush PageLayoutBorderBrush = Brush(128, 128, 128);
+    private static readonly IBrush PageLayoutHeaderFooterBrush = Brush(156, 156, 156);
     private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
 
     // A custom header/footer matches no preset, so the combo's selection box is templated with a null
@@ -469,8 +472,16 @@ public sealed partial class MainWindow
         if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var printRanges))
             return null;
 
+        var isPageLayout = _session.ViewMode == WorksheetViewMode.PageLayout;
+        var layoutViewport = isPageLayout && viewport.SplitPanes is not null
+            ? viewport with
+            {
+                RowMetrics = CombineSplitRowMetrics(viewport),
+                ColMetrics = CombineSplitColumnMetrics(viewport),
+            }
+            : viewport;
         var displayViewport = PageBreakPreviewInstructionBuilder.ProjectToDisplaySpace(
-            viewport,
+            layoutViewport,
             zoomFactor,
             MinimumDisplayedColumnWidth,
             MinimumDisplayedRowHeight);
@@ -505,10 +516,6 @@ public sealed partial class MainWindow
             sheet.IsRowEffectivelyHidden,
             sheet.IsColEffectivelyHidden);
 
-        var instructions = PageBreakPreviewInstructionBuilder.Build(layout);
-        if (instructions.IsEmpty)
-            return null;
-
         var overlay = new Canvas
         {
             Width = actualWidth,
@@ -516,11 +523,75 @@ public sealed partial class MainWindow
             ClipToBounds = true,
             IsHitTestVisible = false,
         };
-        AutomationProperties.SetAutomationId(overlay, "PageBreakPreviewOverlay");
+        if (isPageLayout)
+        {
+            AutomationProperties.SetAutomationId(overlay, "PageLayoutOverlay");
+            RenderPageLayoutPages(overlay, layout, _session.IsShowingRulers);
+            if (_session.IsShowingRulers)
+            {
+                _pageLayoutRuler = new PageLayoutMarginRuler(
+                    sheet, displayViewport, printRanges[0], rowHeaderWidth, columnHeaderHeight)
+                {
+                    Width = actualWidth,
+                    Height = actualHeight,
+                };
+                if (_pageLayoutRuler.Guide is not null)
+                    overlay.Children.Add(_pageLayoutRuler);
+            }
+        }
+        else
+        {
+            AutomationProperties.SetAutomationId(overlay, "PageBreakPreviewOverlay");
+            RenderPageBreakInstructions(overlay, PageBreakPreviewInstructionBuilder.Build(layout));
+        }
 
-        RenderPageBreakInstructions(overlay, instructions);
-        return overlay;
+        return overlay.Children.Count == 0 ? null : overlay;
     }
+
+    private static void RenderPageLayoutPages(Canvas overlay, PageBreakPreviewLayout layout, bool showRulers)
+    {
+        foreach (var page in layout.Pages)
+        {
+            var bounds = page.Bounds;
+            var surface = new AvaloniaRectangle
+            {
+                Width = bounds.Width,
+                Height = bounds.Height,
+                Fill = PageLayoutPageSurfaceBrush,
+            };
+            Canvas.SetLeft(surface, bounds.Left);
+            Canvas.SetTop(surface, bounds.Top);
+            overlay.Children.Add(surface);
+            AddPageBorder(
+                overlay,
+                new PageBreakBorderInstruction(bounds.Left, bounds.Top, bounds.Width, bounds.Height, page.VisibleEdges),
+                PageLayoutBorderBrush,
+                thickness: 1.5);
+
+            if (!showRulers || bounds.Width <= 24 || bounds.Height <= 48)
+                continue;
+
+            var inset = Math.Clamp(bounds.Width * 0.08, 12, 28);
+            var offset = Math.Clamp(bounds.Height * 0.08, 16, 28);
+            if (page.VisibleEdges.Top)
+                AddPageLayoutCue(overlay, bounds.Left + inset, bounds.Right - inset, bounds.Top + offset);
+            if (page.VisibleEdges.Bottom)
+                AddPageLayoutCue(overlay, bounds.Left + inset, bounds.Right - inset, bounds.Bottom - offset);
+        }
+
+        foreach (var line in layout.AutomaticBreakLines)
+            AddPageBreakLine(overlay, line.Start.X, line.Start.Y, line.End.X, line.End.Y);
+    }
+
+    private static void AddPageLayoutCue(Canvas overlay, double left, double right, double y) =>
+        overlay.Children.Add(new AvaloniaControlShapesLine
+        {
+            StartPoint = new Point(left, y),
+            EndPoint = new Point(right, y),
+            Stroke = PageLayoutHeaderFooterBrush,
+            StrokeThickness = 1,
+            StrokeDashArray = [4, 4],
+        });
 
     private static void RenderPageBreakInstructions(Canvas overlay, PageBreakPreviewInstructions instructions)
     {
@@ -557,23 +628,23 @@ public sealed partial class MainWindow
         }
 
         foreach (var border in instructions.Borders)
-            AddPageBorder(overlay, border);
+            AddPageBorder(overlay, border, PageBreakBorderBrush, thickness: 2);
 
         foreach (var line in instructions.Lines)
-        {
-            var shape = new AvaloniaControlShapesLine
-            {
-                StartPoint = new Point(line.X1, line.Y1),
-                EndPoint = new Point(line.X2, line.Y2),
-                Stroke = PageBreakLineBrush,
-                StrokeThickness = 1,
-                StrokeDashArray = [4, 3],
-            };
-            overlay.Children.Add(shape);
-        }
+            AddPageBreakLine(overlay, line.X1, line.Y1, line.X2, line.Y2);
     }
 
-    private static void AddPageBorder(Canvas overlay, PageBreakBorderInstruction border)
+    private static void AddPageBreakLine(Canvas overlay, double x1, double y1, double x2, double y2) =>
+        overlay.Children.Add(new AvaloniaControlShapesLine
+        {
+            StartPoint = new Point(x1, y1),
+            EndPoint = new Point(x2, y2),
+            Stroke = PageBreakLineBrush,
+            StrokeThickness = 1,
+            StrokeDashArray = [4, 3],
+        });
+
+    private static void AddPageBorder(Canvas overlay, PageBreakBorderInstruction border, IBrush brush, double thickness)
     {
         var left = border.Left;
         var top = border.Top;
@@ -581,23 +652,24 @@ public sealed partial class MainWindow
         var bottom = border.Top + border.Height;
 
         if (border.Edges.Top)
-            AddBorderEdge(overlay, left, top, right, top);
+            AddBorderEdge(overlay, left, top, right, top, brush, thickness);
         if (border.Edges.Bottom)
-            AddBorderEdge(overlay, left, bottom, right, bottom);
+            AddBorderEdge(overlay, left, bottom, right, bottom, brush, thickness);
         if (border.Edges.Left)
-            AddBorderEdge(overlay, left, top, left, bottom);
+            AddBorderEdge(overlay, left, top, left, bottom, brush, thickness);
         if (border.Edges.Right)
-            AddBorderEdge(overlay, right, top, right, bottom);
+            AddBorderEdge(overlay, right, top, right, bottom, brush, thickness);
     }
 
-    private static void AddBorderEdge(Canvas overlay, double x1, double y1, double x2, double y2)
+    private static void AddBorderEdge(
+        Canvas overlay, double x1, double y1, double x2, double y2, IBrush brush, double thickness)
     {
         overlay.Children.Add(new AvaloniaControlShapesLine
         {
             StartPoint = new Point(x1, y1),
             EndPoint = new Point(x2, y2),
-            Stroke = PageBreakBorderBrush,
-            StrokeThickness = 2,
+            Stroke = brush,
+            StrokeThickness = thickness,
         });
     }
 
@@ -1033,6 +1105,8 @@ public sealed partial class MainWindow
             "PageSetup_OverThenDown", "PageSetupPageOrder", surface.ChoiceIndexes.PageOrder == 1,
             PageSetupDialogPlanner.OverThenDownRadioAutomationId);
         overThenDownRadio.Margin = new Thickness(0, 4, 0, 0);
+        downThenOverRadio.Height = overThenDownRadio.Height = PageSetupCheckBoxHeight;
+        downThenOverRadio.MinHeight = overThenDownRadio.MinHeight = PageSetupCheckBoxHeight;
         var pageOrderPanel = new StackPanel { Children = { downThenOverRadio, overThenDownRadio } };
         AutomationProperties.SetAutomationId(pageOrderPanel, PageSetupDialogPlanner.PageOrderBoxAutomationId);
 
@@ -1428,7 +1502,9 @@ public sealed partial class MainWindow
                 PageSetupFieldRowHeight + 8,
                 PageSetupCheckBoxHeight + 8,
                 PageSetupCheckBoxHeight + 8,
-                PageSetupFieldRowHeight,
+                // Two stacked radios (15 + 4 + 15): WPF sizes this Auto row from its StackPanel, so a
+                // 22px row would let "Over, then down" run into the Black and white check below.
+                PageSetupCheckBoxHeight + 4 + PageSetupCheckBoxHeight,
                 8 + PageSetupCheckBoxHeight + 8,
                 PageSetupCheckBoxHeight,
                 8 + PageSetupFieldRowHeight,
@@ -1488,6 +1564,8 @@ public sealed partial class MainWindow
         AddSheetValue(3, gridlinesCheck, margin: new Thickness(0, 0, 0, 8));
         AddSheetValue(4, headingsCheck, margin: new Thickness(0, 0, 0, 8));
         AddSheetLabel(5, UiText.Get("PageSetup_PageOrder"), new Thickness(0, 0, 8, 0));
+        // PageSetupDialog.xaml: the Page order label is VerticalAlignment=Top beside its two radios.
+        sheetGrid.Children[^1].VerticalAlignment = AvaloniaVerticalAlignment.Top;
         AddSheetValue(5, pageOrderPanel, margin: new Thickness(0));
         AddSheetValue(6, blackAndWhiteCheck, margin: new Thickness(0, 8, 0, 8));
         AddSheetValue(7, draftQualityCheck, margin: new Thickness(0));

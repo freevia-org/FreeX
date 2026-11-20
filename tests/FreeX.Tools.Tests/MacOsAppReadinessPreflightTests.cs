@@ -15,7 +15,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("net10.0-macos");
         script.Should().Contain("SupportedOSPlatformVersion");
         script.Should().Contain("MacOs/**/*.cs");
-        script.Should().Contain("FREEX_MACOS_SHARE_SHEET");
+        script.Should().Contain("Avalonia app must include macOS share-sheet source in the shipping net10.0 build.");
         script.Should().Contain("Avalonia app RuntimeIdentifiers");
         script.Should().Contain("GetFileNameWithoutExtension($portableInclude)");
         script.Should().Contain("ApplicationTitle");
@@ -1222,9 +1222,6 @@ public sealed class MacOsAppReadinessPreflightTests
               <ItemGroup>
                 <Content Include="$(BrandMacOsIconPath)" Link="$(BrandMacOsIconFileName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
               </ItemGroup>
-              <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">
-                <Compile Remove="MacOs\**\*.cs" />
-              </ItemGroup>
               <PropertyGroup>
                 <AssemblyName>FreeX</AssemblyName>
                 <ApplicationTitle>FreeX</ApplicationTitle>
@@ -1233,9 +1230,6 @@ public sealed class MacOsAppReadinessPreflightTests
                 <SupportedOSPlatformVersion Condition="'$(TargetFramework)' == 'net10.0-macos'">12.0</SupportedOSPlatformVersion>
                 <TargetFramework Condition="'$(EnableMacOsTargetFramework)' != 'true'">{{TargetFramework}}</TargetFramework>
                 <TargetFrameworks Condition="'$(EnableMacOsTargetFramework)' == 'true'">net10.0;net10.0-macos</TargetFrameworks>
-              </PropertyGroup>
-              <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
-                <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
               </PropertyGroup>
             </Project>
             """.Replace("{{TargetFramework}}", targetFramework));
@@ -2565,7 +2559,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     NativeFileMenuItemId.ExportPdf => _exportPdfMenuItem,
                     HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf)
                     private Task ExportActiveSheetPdfAsync() =>
-                    ExportWorkbookPdfAsync(
+                    ExportWorkbookFixedLayoutAsync(
                     var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
                     requestPlan.ShouldConfirmNormalizedOverwrite
                     !await ConfirmNormalizedOverwriteAsync(
@@ -2576,10 +2570,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)
                     AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
+                    Pdf.AvaloniaPdfDocumentExporter.Save(
+                    Pdf.AvaloniaXpsDocumentExporter.Save(
                     var exportExecutor = new AtomicExportExecutor();
                     var exportExecution = await exportExecutor
-                        .ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(
+                        .ExecutePathAsync<string>(
                     StatusBarReadoutKind.Average,
                     StatusBarReadoutKind.NumericalCount,
                     StatusBarReadoutKind.Maximum,

@@ -42,19 +42,31 @@ public sealed class TextBoxModel
     /// <summary>
     /// R111-model-drawing-object-lock-1-1: whether this text box is locked against move/resize while
     /// its sheet is protected with the "Edit objects" permission blocked -- mirrors
-    /// <see cref="DrawingShapeModel.Locked"/> (matching OOXML <c>&lt;a:spLocks noMove="1" noResize="1".../&gt;</c>).
+    /// <see cref="DrawingShapeModel.Locked"/> (OOXML anchor <c>xdr:clientData@fLocksWithSheet</c>).
     /// Defaults to <see langword="true"/>, matching Excel's default of a locked text box. When an author
     /// explicitly unlocks a text box (unchecks Format Shape &gt; Properties &gt; Locked) that one text
     /// box stays movable/resizable even while the sheet protection has "Edit objects" turned off, while
     /// other (default-locked) text boxes on the same protected sheet remain immovable.
     /// </summary>
-    /// <remarks>
-    /// Reading/writing the OOXML per-text-box lock attribute (<c>a:spLocks</c>) on load/save is
-    /// deferred follow-up work, exactly like <see cref="DrawingShapeModel.Locked"/> -- this field is
-    /// currently in-memory/session-only and defaults to locked, matching Excel's authored default when
-    /// no lock override is present.
-    /// </remarks>
     public bool Locked { get; set; } = true;
+    /// <summary>Whether this visible drawing is included when printing.</summary>
+    public bool PrintObject { get; set; } = true;
+    internal bool? SourceXlsxPrintObject { get; set; }
+    /// <summary>Independent DrawingML movement restriction, when explicitly authored.</summary>
+    public bool? DrawingNoMove { get; set; }
+    /// <summary>Independent DrawingML resize restriction, when explicitly authored.</summary>
+    public bool? DrawingNoResize { get; set; }
+    /// <summary>Other explicitly authored DrawingML lock attributes.</summary>
+    public IReadOnlyDictionary<string, string>? DrawingLockAttributes { get; set; }
+
+    /// <summary>Preserved XML children of the DrawingML lock element, wrapped in a root element.</summary>
+    public string? DrawingLockChildrenXml { get; set; }
+    internal string? SourceXlsxLockChildrenXml { get; set; }
+    internal string? SourceXlsxName { get; set; }
+    internal bool? SourceXlsxLocked { get; set; }
+    internal bool? SourceXlsxNoMove { get; set; }
+    internal bool? SourceXlsxNoResize { get; set; }
+    internal IReadOnlyDictionary<string, string>? SourceXlsxLockAttributes { get; set; }
 
     public bool HasFill { get; set; } = true;
     public CellColor? FillColor { get; set; }

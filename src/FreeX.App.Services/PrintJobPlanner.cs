@@ -52,6 +52,17 @@ public sealed record PrintJobRequest(
 {
     /// <summary>Init-only so the positional constructor keeps its signature for already-compiled callers.</summary>
     public PrintSides Sides { get; init; } = PrintSides.PrinterDefault;
+
+    /// <summary>Job-only overrides from the selected printer's properties.</summary>
+    public PrinterOptionSelection? PrinterOptions { get; init; }
+
+    public IReadOnlySet<SheetId>? GroupedSheetIds { get; init; }
+
+    internal WorkbookExportPrintIntent CreateExportIntent(WorkbookExportPrintOutputKind outputKind) =>
+        new(Scope, outputKind, ActiveSheetIndex, SelectedRange, IgnorePrintAreas)
+        {
+            GroupedSheetIds = GroupedSheetIds
+        };
 }
 
 /// <summary>
@@ -71,8 +82,10 @@ public sealed record PrintJobPlan(
 {
     public bool IsReady => ValidationStatus == PrintJobValidationStatus.Ready;
 
+    internal int? DocumentPageCount { get; init; }
+
     /// <summary>Total pages the chosen scope produces (across all sheets), before any page-range trim.</summary>
-    public int TotalPageCount => ExportPrintPlan.TotalPageCount;
+    public int TotalPageCount => DocumentPageCount ?? ExportPrintPlan.TotalPageCount;
 
     /// <summary>Pages actually sent to the printer (inclusive window), before copy multiplication.</summary>
     public int SelectedPageCount => IsReady ? Math.Max(0, LastPage - FirstPage + 1) : 0;
@@ -105,12 +118,7 @@ public static class PrintJobPlanner
 
         var exportPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
             workbook,
-            new WorkbookExportPrintIntent(
-                request.Scope,
-                WorkbookExportPrintOutputKind.Pdf,
-                request.ActiveSheetIndex,
-                request.SelectedRange,
-                request.IgnorePrintAreas),
+            request.CreateExportIntent(WorkbookExportPrintOutputKind.Pdf),
             surface);
 
         return BuildJobPlan(request, exportPlan);
@@ -128,19 +136,15 @@ public static class PrintJobPlanner
 
         var exportPlan = WorkbookExportPrintPlanner.CreatePlan(
             workbook,
-            new WorkbookExportPrintIntent(
-                request.Scope,
-                WorkbookExportPrintOutputKind.Pdf,
-                request.ActiveSheetIndex,
-                request.SelectedRange,
-                request.IgnorePrintAreas),
+            request.CreateExportIntent(WorkbookExportPrintOutputKind.Pdf),
             pageCapacity,
             surface);
 
         return BuildJobPlan(request, exportPlan);
     }
 
-    private static PrintJobPlan BuildJobPlan(PrintJobRequest request, WorkbookExportPrintPlan exportPlan)
+    internal static PrintJobPlan BuildJobPlan(
+        PrintJobRequest request, WorkbookExportPrintPlan exportPlan, int? documentPageCount = null)
     {
         if (!exportPlan.IsReady)
         {
@@ -160,14 +164,14 @@ public static class PrintJobPlanner
                 "Print requires at least one copy.");
         }
 
-        var totalPages = exportPlan.TotalPageCount;
+        var totalPages = documentPageCount ?? exportPlan.TotalPageCount;
         if (!TryResolvePageWindow(request, totalPages, out var firstPage, out var lastPage))
         {
             return Invalid(
                 request,
                 exportPlan,
                 PrintJobValidationStatus.InvalidPageRange,
-                $"Enter a page range between 1 and {totalPages}.");
+                $"Enter a page range between 1 and {totalPages}.") with { DocumentPageCount = documentPageCount };
         }
 
         return new PrintJobPlan(
@@ -178,7 +182,10 @@ public static class PrintJobPlanner
             request.Copies,
             request.Collate,
             firstPage,
-            lastPage);
+            lastPage)
+        {
+            DocumentPageCount = documentPageCount
+        };
     }
 
     private static bool TryResolvePageWindow(

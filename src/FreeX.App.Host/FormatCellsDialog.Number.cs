@@ -76,9 +76,9 @@ public partial class FormatCellsDialog
             || NumberNegativeNumbersList is null)
             return;
 
-        if (NumberCategoryList.SelectedItem is "General" && _numberPreviewText is not null)
+        if (NumberCategoryList.SelectedItem is "General")
         {
-            NumberPreview.Text = _numberPreviewText;
+            NumberPreview.Text = _numberPreviewText ?? string.Empty;
             return;
         }
 

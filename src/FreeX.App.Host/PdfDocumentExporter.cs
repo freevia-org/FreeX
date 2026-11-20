@@ -31,7 +31,6 @@ internal sealed record PdfBookmark(string Title, int PageIndex);
 internal static class PdfDocumentExporter
 {
     private const double StandardDpi = 96.0;
-    private const double MinimumSizeDpi = 72.0;
 
     // WPF lays visuals out in device-independent pixels (1/96 inch); PDF user space is points (1/72 inch).
     private const double DipToPoint = 72.0 / StandardDpi;
@@ -107,9 +106,7 @@ internal static class PdfDocumentExporter
     }
 
     internal static double ResolveRasterDpi(ExportQuality quality) =>
-        quality == ExportQuality.MinimumSize
-            ? MinimumSizeDpi
-            : StandardDpi;
+        ExportPlanner.ResolvePdfRasterDpi(quality);
 
     private static void SavePages(
         FixedDocument document,

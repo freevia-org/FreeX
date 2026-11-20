@@ -5,8 +5,8 @@ namespace FreeX.App.Services.Tests;
 public sealed class WorkbookCreationDefaultsTests
 {
     [Theory]
-    [InlineData(null, "Calibri")]
-    [InlineData("  ", "Calibri")]
+    [InlineData(null, "Aptos Narrow")]
+    [InlineData("  ", "Aptos Narrow")]
     [InlineData(" Aptos ", "Aptos")]
     public void FontNameNormalization_IsShared(string? value, string expected)
     {

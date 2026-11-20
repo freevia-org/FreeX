@@ -22,8 +22,10 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
 
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _edits;
-    private readonly IReadOnlyList<CellAddress> _affectedCells;
+    private readonly IReadOnlyList<CellAddress> _directlyEditedCells;
+    private IReadOnlyList<CellAddress> _affectedCells;
     private List<CellEditCompanionSnapshot>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
 
     /// <inheritdoc/>
     /// <remarks>
@@ -40,6 +42,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
             foreach (var effect in _appliedTableEffects)
                 if (effect is IEstimatesMemory mem)
                     bytes += mem.EstimatedBytes;
+            bytes += _headerRename?.EstimatedBytes ?? 0;
             return (int)Math.Min(bytes, int.MaxValue);
         }
     }
@@ -62,7 +65,8 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
         var affectedCells = new CellAddress[edits.Count];
         for (var i = 0; i < edits.Count; i++)
             affectedCells[i] = edits[i].Address;
-        _affectedCells = affectedCells;
+        _directlyEditedCells = affectedCells;
+        _affectedCells = _directlyEditedCells;
     }
 
     /// <summary>Convenience constructor for editing a single cell value.</summary>
@@ -93,9 +97,11 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
             }
         }
 
-        if (CommandGuards.RejectIfSplitsArray(sheet, _affectedCells, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
+        if (CommandGuards.RejectIfSplitsArray(sheet, _directlyEditedCells, allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
+        _affectedCells = _directlyEditedCells;
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, _affectedCells);
         _snapshot = [];
 
         foreach (var (addr, newCell) in _edits)
@@ -145,7 +151,19 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
             sheet.CellPhoneticGuides.Remove(addr);
         }
 
-        var extraAffectedCells = new List<CellAddress>();
+        try
+        {
+            _headerRename.Apply(ctx);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _headerRename.Revert();
+            foreach (var snapshot in _snapshot) snapshot.Restore(sheet);
+            _snapshot = null;
+            return new CommandOutcome(false, ex.Message);
+        }
+
+        var extraAffectedCells = new List<CellAddress>(_headerRename.Affected);
         extraAffectedCells.AddRange(StructuredTableEditEffects.Apply(ctx, _edits, _appliedTableEffects));
         // R115-data-table-master-formula-refresh: a Data Table's body is a one-time text-baked
         // substitution of its master formula, so re-derive it here whenever this edit lands on that
@@ -165,9 +183,14 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (extraAffectedCells.Count == 0)
             return new CommandOutcome(true, AffectedCells: _affectedCells);
 
+        var directSet = _directlyEditedCells.ToHashSet();
+        if (extraAffectedCells.All(directSet.Contains))
+            return new CommandOutcome(true, AffectedCells: _affectedCells);
+
         var allAffectedCells = new List<CellAddress>(_affectedCells.Count + extraAffectedCells.Count);
         allAffectedCells.AddRange(_affectedCells);
         allAffectedCells.AddRange(extraAffectedCells);
+        _affectedCells = allAffectedCells.Distinct().ToArray();
         return new CommandOutcome(true, AffectedCells: allAffectedCells);
     }
 
@@ -176,6 +199,7 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand, 
         if (_snapshot is null) return;
 
         StructuredTableEditEffects.Revert(ctx, _appliedTableEffects);
+        _headerRename?.Revert();
 
         var sheet = ctx.GetSheet(_sheetId);
 

@@ -219,7 +219,8 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                 input.TargetKind,
                 input.Url,
                 input.SelectedSlideIndex,
-                input.Tooltip);
+                input.Tooltip,
+                (_, _) => Task.CompletedTask).GetAwaiter().GetResult();
 
         public void PrepareCustomShowsValidation(Window dialog) =>
             Require<CustomShowDialog>(dialog).PrepareMissingNameForTests();

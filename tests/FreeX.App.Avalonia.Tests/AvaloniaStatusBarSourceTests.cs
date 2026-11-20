@@ -33,13 +33,15 @@ public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
         WorkbookSelectionStats stats,
         int zoomPercent,
         string readyText,
-        WorksheetViewMode viewMode = WorksheetViewMode.Normal) =>
+        WorksheetViewMode viewMode = WorksheetViewMode.Normal,
+        bool isSingleCellSelection = false) =>
         FreeXStatusBarRendererPlanner.BuildModel(
             stats,
             zoomPercent,
             readyText,
             viewMode,
-            TextProvider);
+            TextProvider,
+            isSingleCellSelection);
 
     // A representative multi-cell selection: Count=4, Numerical Count=3, Sum/Avg/Min/Max numeric.
     private static WorkbookSelectionStats SampleStats() =>
@@ -117,14 +119,40 @@ public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
 
         var text = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, visibility).VisibleReadoutText;
 
-        // Defaults mirror WPF: Average, Count, Sum are on; Numerical Count/Min/Max are off.
+        // Excel defaults show Average, Count, and Sum for a multi-cell selection.
         Assert.Equal("Average: 20   Count: 4   Sum: 60", text);
+    }
+
+    [Fact]
+    public void FormatVisibleReadouts_SingleCellSelectionHidesDefaultAndCustomizedAggregates()
+    {
+        var visibility = DefaultVisibility();
+        visibility["NumericalCount"] = true;
+        visibility["Minimum"] = true;
+        var model = BuildModel(
+            new WorkbookSelectionStats(13, 1, 1, 13, 13, 13),
+            zoomPercent: 100,
+            readyText: "Ready",
+            isSingleCellSelection: true);
+
+        var plan = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, visibility);
+
+        Assert.Equal("", plan.VisibleReadoutText);
+        Assert.False(plan.IsElementVisible(StatusBarPresentationElement.StatsPanel));
+        Assert.False(plan.IsElementVisible(StatusBarPresentationElement.Average));
+        Assert.False(plan.IsElementVisible(StatusBarPresentationElement.Count));
+        Assert.True(visibility["Average"]);
+        Assert.True(visibility["Count"]);
+        Assert.True(visibility["Sum"]);
+        Assert.True(visibility["NumericalCount"]);
+        Assert.True(visibility["Minimum"]);
     }
 
     [Fact]
     public void FormatVisibleReadouts_HonorsPerOptionToggles()
     {
         var visibility = DefaultVisibility();
+        visibility["Count"] = true;
         visibility["Average"] = false;
         visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
@@ -153,6 +181,8 @@ public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
     public void BuildPresentation_UsesSharedStatusBarPlan()
     {
         var visibility = DefaultVisibility();
+        visibility["Average"] = true;
+        visibility["Count"] = true;
         visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
         var model = BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
@@ -171,6 +201,8 @@ public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
     public void BuildRendererPlan_UsesSharedStatusBarRendererPlan()
     {
         var visibility = DefaultVisibility();
+        visibility["Average"] = true;
+        visibility["Count"] = true;
         visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
         var model = BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
@@ -216,7 +248,9 @@ public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
         Assert.Equal(expectedTags, registered.Keys.ToHashSet());
 
         // The toggle items are checkboxes reflecting the supplied option state.
-        Assert.True(registered["Sum"].IsChecked);     // default-on
+        Assert.True(registered["Average"].IsChecked);
+        Assert.True(registered["Count"].IsChecked);
+        Assert.True(registered["Sum"].IsChecked);
         Assert.False(registered["NumericalCount"].IsChecked); // default-off
         Assert.False(registered["Minimum"].IsChecked); // default-off
         Assert.All(registered.Values, item => Assert.Equal(MenuItemToggleType.CheckBox, item.ToggleType));
@@ -239,7 +273,7 @@ public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
             registered);
         _ = menu; // keep the menu rooted while we drive its item
 
-        // Sum starts on; clicking the checkbox toggles it off and routes through onToggle.
+        // Sum starts on; clicking the checkbox disables it through onToggle.
         var sumItem = registered["Sum"];
         Assert.True(sumItem.IsChecked);
         sumItem.IsChecked = false;

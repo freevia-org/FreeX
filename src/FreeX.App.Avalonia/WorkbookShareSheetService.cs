@@ -34,16 +34,9 @@ internal interface IWorkbookShareSheetService
 internal static class WorkbookShareSheetServiceFactory
 {
     public static IWorkbookShareSheetService Create(string shareSheetLabel) =>
-        CreatePlatformService(shareSheetLabel);
-
-    private static IWorkbookShareSheetService CreatePlatformService(string shareSheetLabel)
-    {
-#if FREEX_MACOS_SHARE_SHEET
-        return new MacOsWorkbookShareSheetService(shareSheetLabel);
-#else
-        return new UnavailableWorkbookShareSheetService(shareSheetLabel);
-#endif
-    }
+        OperatingSystem.IsMacOS()
+            ? new MacOsWorkbookShareSheetService(shareSheetLabel)
+            : new UnavailableWorkbookShareSheetService(shareSheetLabel);
 }
 
 internal sealed class UnavailableWorkbookShareSheetService : IWorkbookShareSheetService

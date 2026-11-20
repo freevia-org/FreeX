@@ -32,10 +32,16 @@ public static class ExportFilePickerPlanner
     public static ExportSavePickerPlan BuildPortablePdfPickerPlan(
         string? sourceName,
         string fallbackDisplayName) =>
+        BuildPortablePickerPlan(sourceName, fallbackDisplayName, ExportFileFormat.Pdf);
+
+    public static ExportSavePickerPlan BuildPortablePickerPlan(
+        string? sourceName,
+        string fallbackDisplayName,
+        ExportFileFormat format) =>
         new(
-            [BuildPickerType(ExportFileFormat.Pdf)],
-            BuildSuggestedExportFileName(sourceName, fallbackDisplayName, ExportFileFormat.Pdf),
-            PdfExtensionWithDot[1..]);
+            [BuildPickerType(format)],
+            BuildSuggestedExportFileName(sourceName, fallbackDisplayName, format),
+            ExtensionFor(format)[1..]);
 
     public static ExportSaveDialogPlan BuildPdfXpsDialogPlan(
         string? sourceName,

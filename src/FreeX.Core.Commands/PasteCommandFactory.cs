@@ -1816,7 +1816,14 @@ internal sealed class ExternalTextPasteValuesCommand : IWorkbookCommand, IAffect
         foreach (var (address, text) in _edits)
         {
             Cell newCell;
-            if (_preserveText || IsDestinationTextFormatted(ctx, sheet, address))
+            if (text.Length == 0)
+            {
+                // A blank field in a copied rectangular range is a genuinely blank cell, not an
+                // empty text value. Excel clears the destination for ordinary paste, and counting
+                // an empty string here also makes status-bar Count and XLSX serialization diverge.
+                newCell = Cell.FromValue(BlankValue.Instance);
+            }
+            else if (_preserveText || IsDestinationTextFormatted(ctx, sheet, address))
             {
                 // A destination pre-formatted as Text (or an explicit paste-as-text request) keeps
                 // the pasted field as a literal string exactly as Excel does, even when it looks

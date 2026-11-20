@@ -24,6 +24,28 @@ public sealed class SheetTabViewModel(SheetId id, string name, CellColor? tabCol
         }
     }
 
+    private string _editName = name;
+    public string EditName
+    {
+        get => _editName;
+        set
+        {
+            _editName = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(EditName)));
+        }
+    }
+
+    private bool _isRenaming;
+    public bool IsRenaming
+    {
+        get => _isRenaming;
+        set
+        {
+            _isRenaming = value;
+            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsRenaming)));
+        }
+    }
+
     private bool _isActive;
     public bool IsActive
     {

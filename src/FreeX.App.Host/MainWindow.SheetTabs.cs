@@ -304,6 +304,7 @@ public partial class MainWindow
     private void SheetTab_MouseRightButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is not SheetTabViewModel tab) return;
+        var tabId = tab.Id;
         if (_groupedSheetIds.Count > 1 && _groupedSheetIds.Contains(tab.Id))
         {
             _currentSheetId = tab.Id;
@@ -317,6 +318,15 @@ public partial class MainWindow
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
+
+        e.Handled = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            var refreshedTab = FindSheetTab(tabId);
+            var target = refreshedTab is null ? null : FindSheetTabContextMenuTarget(refreshedTab);
+            if (target is not null)
+                TryOpenSheetTabContextMenu(target, fromKeyboard: false);
+        }, DispatcherPriority.Input);
     }
 
     private void SheetTab_LabelMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -324,16 +334,85 @@ public partial class MainWindow
         if (e.ChangedButton != MouseButton.Left || e.ClickCount != 2) return;
         var tab = (sender as System.Windows.FrameworkElement)?.DataContext as SheetTabViewModel;
         if (tab is null) return;
-        RenameSheetFromTab(tab);
+        BeginInlineSheetTabRename(tab);
         e.Handled = true;
     }
 
-    private void RenameSheetFromTab(SheetTabViewModel tab)
+    private void BeginInlineSheetTabRename(SheetTabViewModel tab)
     {
         SelectSingleSheetTab(tab.Id);
         UpdateViewport();
         RefreshSheetTabs();
-        RenameSheet(tab.Name);
+        var refreshedTab = FindSheetTab(tab.Id);
+        if (refreshedTab is null)
+            return;
+
+        refreshedTab.EditName = refreshedTab.Name;
+        refreshedTab.IsRenaming = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            var target = FindSheetTab(refreshedTab.Id);
+            var tabChrome = target is null ? null : FindSheetTabContextMenuTarget(target);
+            var editor = tabChrome is null
+                ? null
+                : FindVisualDescendant<TextBox>(tabChrome, static control => control.Name == "SheetTabRenameEditor");
+            if (editor is null)
+                return;
+
+            editor.Focus();
+            editor.SelectAll();
+        }, DispatcherPriority.Input);
+    }
+
+    private void SheetTabRenameEditor_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox editor || editor.DataContext is not SheetTabViewModel tab)
+            return;
+
+        if (e.Key == Key.Enter)
+        {
+            CommitInlineSheetTabRename(tab);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            CancelInlineSheetTabRename(tab);
+            e.Handled = true;
+        }
+    }
+
+    private void CommitInlineSheetTabRename(SheetTabViewModel tab)
+    {
+        var name = tab.EditName;
+        if (!string.IsNullOrWhiteSpace(name) && name != tab.Name)
+        {
+            SynchronizeWorkbookSessionSelection();
+            if (!CompleteWorksheetSessionCommand(_session.RenameActiveSheet(name), "Rename Sheet"))
+            {
+                tab.IsRenaming = true;
+                return;
+            }
+
+            RefreshSheetTabs();
+        }
+
+        FinishInlineSheetTabRename(tab.Id);
+    }
+
+    private void CancelInlineSheetTabRename(SheetTabViewModel tab)
+    {
+        tab.EditName = tab.Name;
+        FinishInlineSheetTabRename(tab.Id);
+    }
+
+    private void FinishInlineSheetTabRename(SheetId sheetId)
+    {
+        var tab = FindSheetTab(sheetId);
+        if (tab is null)
+            return;
+
+        tab.IsRenaming = false;
+        Dispatcher.BeginInvoke(() => FocusSheetTab(sheetId), DispatcherPriority.Input);
     }
 
     private void AddSheetButton_Click(object sender, RoutedEventArgs e)
@@ -1377,7 +1456,7 @@ public partial class MainWindow
         }
 
         var target = FindSheetTabContextMenuTarget(focusedElement);
-        if (target?.ContextMenu is not { } contextMenu)
+        if (target?.ContextMenu is null)
             return false;
 
         if (target.DataContext is SheetTabViewModel tab)
@@ -1386,16 +1465,24 @@ public partial class MainWindow
             SelectSheetTabForKeyboardContextMenu(tabId);
             var refreshedTab = FindSheetTab(tabId);
             target = refreshedTab is null ? target : FindSheetTabContextMenuTarget(refreshedTab) ?? target;
-            contextMenu = target.ContextMenu;
-            if (contextMenu is null)
+            if (target.ContextMenu is null)
                 return false;
         }
 
-        _isOpeningSheetTabContextMenuFromKeyboard = true;
+        return TryOpenSheetTabContextMenu(target, fromKeyboard: true);
+    }
+
+    private bool TryOpenSheetTabContextMenu(FrameworkElement target, bool fromKeyboard)
+    {
+        if (target.ContextMenu is not { } contextMenu)
+            return false;
+
+        _isOpeningSheetTabContextMenuFromKeyboard = fromKeyboard;
         try
         {
             RebuildSheetTabContextMenu(contextMenu, target.DataContext as SheetTabViewModel);
-            MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
+            if (fromKeyboard)
+                MenuKeyTipAssigner.AssignUniqueKeyTips(contextMenu.Items.OfType<MenuItem>());
             contextMenu.Opened -= SheetTabContextMenu_Opened;
             contextMenu.Opened += SheetTabContextMenu_Opened;
             contextMenu.PlacementTarget = target;

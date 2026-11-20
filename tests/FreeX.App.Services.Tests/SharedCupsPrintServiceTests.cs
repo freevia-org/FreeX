@@ -302,6 +302,65 @@ public sealed class SharedCupsPrintServiceTests
     }
 
     [Fact]
+    public async Task GetOptionsAsync_ReadsOnlyTheRequestedQueueAndKeepsExactChoiceTokens()
+    {
+        var runner = new FakeProcessRunner(new ProcessResult(0, """
+            PageSize/Paper Size: *A4 Letter Custom.WIDTHxHEIGHT
+            InputSlot/Paper Source: *Auto Tray1 ManualFeed
+            ColorModel/Output: Color Mode: *Gray RGB Gray
+            cupsPrintQuality/cupsPrintQuality: Draft *Normal High
+            PrinterResolution/Resolution: *600dpi 1200dpi Invalid=sides
+            jclduplex/Duplex: *False True
+            Print-scaling/Scaling: *auto fit
+            Extra/Extra: *A B
+            extra/Duplicate: X *Y
+            Unrelated output that does not describe an option
+            """, ""));
+
+        IPlatformPrinterOptionsService service = FreeXCups(runner);
+        var result = await service.GetOptionsAsync("Office");
+
+        result.Status.Should().Be(PrinterOptionsStatus.Available);
+        result.Options.Select(option => option.Key)
+            .Should().Equal("PageSize", "InputSlot", "ColorModel", "cupsPrintQuality", "PrinterResolution");
+        result.Options[0].Choices.Select(choice => choice.Value).Should().Equal("A4", "Letter");
+        result.Options[1].DefaultValue.Should().Be("Auto");
+        result.Options[1].Choices.Should().Equal(
+            new PrinterOptionChoice("Auto", "Automatic"),
+            new PrinterOptionChoice("Tray1", "Tray 1"),
+            new PrinterOptionChoice("ManualFeed", "Manual Feed"));
+        result.Options[2].Label.Should().Be("Output: Color Mode");
+        result.Options[2].Choices[0].Should().Be(new PrinterOptionChoice("Gray", "Grayscale"));
+        result.Options[2].Choices.Select(choice => choice.Value).Should().Equal("Gray", "RGB");
+        result.Options[3].Label.Should().Be("Print Quality");
+        result.Options[3].DefaultValue.Should().Be("Normal");
+        result.Options[4].Choices.Select(choice => choice.Value).Should().Equal("600dpi", "1200dpi");
+        var invocation = runner.Invocations.Should().ContainSingle().Subject;
+        invocation.FileName.Should().Be("lpoptions");
+        invocation.Arguments.Should().Equal("-p", "Office", "-l");
+    }
+
+    [Theory]
+    [InlineData(0, "", "", PrinterOptionsStatus.NoOptions)]
+    [InlineData(0, "Duplex/Two-Sided: *False True", "", PrinterOptionsStatus.NoOptions)]
+    [InlineData(0, "invalid CUPS output", "", PrinterOptionsStatus.Failed)]
+    [InlineData(0, "", "lpoptions: Unable to get PPD file for Office.", PrinterOptionsStatus.Unavailable)]
+    [InlineData(1, "", "lpoptions: No printers.", PrinterOptionsStatus.Unavailable)]
+    public async Task GetOptionsAsync_ReportsAnEmptyListSeparatelyFromErrors(
+        int exitCode,
+        string output,
+        string error,
+        PrinterOptionsStatus expected)
+    {
+        var result = await FreeXCups(new FakeProcessRunner(new ProcessResult(exitCode, output, error)))
+            .GetOptionsAsync("Office");
+
+        result.Status.Should().Be(expected);
+        result.Options.Should().BeEmpty();
+        result.Message.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public async Task SubmitAsync_BuildsSupersetCupsArguments()
     {
         var pdfPath = await CreatePdfStubAsync();
@@ -325,6 +384,101 @@ public sealed class SharedCupsPrintServiceTests
                         "-d", "Office", "-n", "2", "-P", "2-4", "-o", "collate=false",
                         "-o", "orientation-requested=4", "-t", "Budget", pdfPath,
                     ]));
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_RevalidatesSpecificOptionsAndAddsThemOnlyToTheJob()
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new FakeProcessRunner(
+                new ProcessResult(0, "Office\nWarehouse\n", ""),
+                new ProcessResult(0, "system default destination: Warehouse\n", ""),
+                new ProcessResult(0, "InputSlot/Paper Source: *Auto Tray1\n", ""),
+                new ProcessResult(0, "request id is Office-22 (1 file(s))\n", ""));
+            var selection = new PrintSelection(
+                "Office", 2, PrintPageRange.Between(2, 4), PrintOrientation.Landscape, Collate: false)
+            {
+                Sides = PrintSides.TwoSidedShortEdge,
+                PrinterOptions = new("Office", new Dictionary<string, string> { ["InputSlot"] = "Tray1" }),
+            };
+
+            var result = await FreeXCups(runner).SubmitAsync(pdfPath, selection);
+
+            result.Status.Should().Be(PrintSubmissionStatus.Submitted);
+            runner.Invocations.Select(invocation => invocation.FileName)
+                .Should().Equal("lpstat", "lpstat", "lpoptions", "lp");
+            runner.Invocations[2].Arguments.Should().Equal("-p", "Office", "-l");
+            runner.Invocations[3].Arguments.Should().Equal(
+                "-d", "Office", "-n", "2", "-P", "2-4", "-o", "collate=false",
+                "-o", "orientation-requested=4", "-o", "sides=two-sided-short-edge",
+                "-o", "InputSlot=Tray1", pdfPath);
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Theory]
+    [InlineData("Warehouse", "InputSlot", "Tray1", false)]
+    [InlineData("Office", "JCLDuplex", "True", false)]
+    [InlineData("Office", "InputSlot", "Tray1 sides=two-sided-short-edge", false)]
+    [InlineData("Office", "InputSlot", "Tray2", true)]
+    public async Task SubmitAsync_RejectsQueueMismatchesAndUntrustedOptions(
+        string optionsQueue,
+        string key,
+        string value,
+        bool revalidates)
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new FakeProcessRunner(
+                new ProcessResult(0, "Office\nWarehouse\n", ""),
+                new ProcessResult(0, "system default destination: Office\n", ""),
+                new ProcessResult(0, "InputSlot/Paper Source: *Auto Tray1\n", ""));
+            var selection = new PrintSelection
+            {
+                PrinterOptions = new(optionsQueue, new Dictionary<string, string> { [key] = value }),
+            };
+
+            var result = await FreeXCups(runner).SubmitAsync(pdfPath, selection);
+
+            result.Status.Should().Be(PrintSubmissionStatus.Failed);
+            runner.Invocations.Select(invocation => invocation.FileName).Should().Equal(revalidates
+                ? new[] { "lpstat", "lpstat", "lpoptions" }
+                : new[] { "lpstat", "lpstat" });
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_CancellationWhileRevalidatingOptionsPreventsSpooling()
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new CancellingSubmitProcessRunner();
+            var selection = new PrintSelection
+            {
+                PrinterOptions = new("Office", new Dictionary<string, string> { ["InputSlot"] = "Tray1" }),
+            };
+
+            var result = await FreeXCups(runner).SubmitAsync(pdfPath, selection);
+
+            result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
+            runner.Invocations.Select(invocation => invocation.FileName)
+                .Should().Equal("lpstat", "lpstat", "lpoptions");
         }
         finally
         {
@@ -390,6 +544,59 @@ public sealed class SharedCupsPrintServiceTests
 
         result.Status.Should().Be(PrinterDiscoveryStatus.Unavailable);
         result.Message.Should().Contain("lpstat");
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_AgainstTheRealSpoolerNeverThrowsAndReportsADefinedStatus()
+    {
+        if (!OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux())
+            return;
+
+        // Real lpstat on whatever queues this machine has (installed, none, or no CUPS at all): the
+        // discovery contract is a defined status, never an exception into the File > Print flow.
+        var result = await new CupsPrintService(
+                new SystemProcessRunner(),
+                discoveryMode: CupsPrinterDiscoveryMode.DestinationNames)
+            .DiscoverAsync();
+
+        result.Status.Should().BeOneOf(
+            PrinterDiscoveryStatus.Available,
+            PrinterDiscoveryStatus.NoPrinters,
+            PrinterDiscoveryStatus.Unavailable,
+            PrinterDiscoveryStatus.Failed);
+        if (result.Status == PrinterDiscoveryStatus.Available)
+            result.Printers.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_NoDestinationsAddedIsReportedAsNoPrintersNotAFailure()
+    {
+        var runner = new FakeProcessRunner(new ProcessResult(1, "", "lpstat: No destinations added."));
+
+        var result = await FreeXCups(runner).DiscoverAsync();
+
+        result.Status.Should().Be(PrinterDiscoveryStatus.NoPrinters);
+        result.Printers.Should().BeEmpty();
+        runner.Invocations.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_NoDestinationsAddedReturnsNoPrintersWithoutCallingLp()
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new FakeProcessRunner(new ProcessResult(1, "", "lpstat: No destinations added."));
+
+            var result = await FreeXCups(runner).SubmitAsync(pdfPath, new PrintSelection());
+
+            result.Status.Should().Be(PrintSubmissionStatus.NoPrinters);
+            runner.Invocations.Should().HaveCount(1);
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
     }
 
     [Fact]

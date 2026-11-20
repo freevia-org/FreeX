@@ -107,7 +107,12 @@ public sealed partial class MainWindow
         ShowSelectDataSourceDialogAsync(initialRange, firstColumnIsCategories);
 
     // The capture canvas is sized to the shell's default window so ribbon/grid framing matches the WPF shell.
-    private const int ParityCaptureWindowWidth = 1120;
+    // FREEX_PARITY_CAPTURE_WIDTH opts into wider canvases (for example 1280 or 1920) so the adaptive
+    // ribbon collapse states users see on larger windows can be reviewed; the default stays 1120.
+    private static readonly int ParityCaptureWindowWidth =
+        int.TryParse(Environment.GetEnvironmentVariable("FREEX_PARITY_CAPTURE_WIDTH"), out var parityWidthOverride) && parityWidthOverride is >= 640 and <= 3840
+            ? parityWidthOverride
+            : 1120;
     private const int ParityCaptureWindowHeight = 720;
     private const int ParityCaptureTitleBarHeight = 30;
     // Only bounds how long a dialog may take to appear; the wait returns as soon as it does, so a

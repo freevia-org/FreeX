@@ -34,9 +34,14 @@ public sealed class PortablePdfDocumentExporterTests
         sheet.GetCell(2, 2)!.StyleId = currencyStyle;
 
         var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:B2", sheet.Id));
+        PortablePdfExportPlanner.TryApplyOptions(
+            exportPlan,
+            ExportOptions.ExcelLikeDefault,
+            out var standardPlan,
+            out var error).Should().BeTrue(error);
         using var stream = new MemoryStream();
 
-        var result = PortablePdfDocumentExporter.Save(workbook, exportPlan, stream);
+        var result = PortablePdfDocumentExporter.Save(workbook, standardPlan, stream);
 
         result.PageCount.Should().Be(1);
         result.StatusText.Should().Be("Exported portable PDF: 1 page.");
@@ -49,6 +54,48 @@ public sealed class PortablePdfDocumentExporterTests
         pdf.Should().Contain("(Region) Tj");
         pdf.Should().Contain("(North) Tj");
         pdf.Should().Contain("($42.00) Tj");
+    }
+
+    [Theory]
+    [InlineData(ExportQuality.MinimumSize, false)]
+    [InlineData(ExportQuality.Standard, true)]
+    [InlineData(ExportQuality.MinimumSize, true)]
+    public void Save_RejectsRasterOptionsWithoutChangingDestination(ExportQuality quality, bool bitmapText)
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Summary");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));
+        var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            Quality = quality,
+            BitmapTextWhenFontsMayNotBeEmbedded = bitmapText
+        };
+        PortablePdfExportPlanner.TryApplyOptions(exportPlan, options, out var rasterPlan, out var error)
+            .Should().BeTrue(error);
+        const string originalContent = "keep me";
+        const string message =
+            "Minimum Size and Bitmap Text require the Skia PDF renderer. " +
+            "To use the portable PDF fallback, select Standard quality and turn off Bitmap Text.";
+
+        using var stream = new MemoryStream();
+        stream.Write(Encoding.ASCII.GetBytes(originalContent));
+        var streamSave = () => PortablePdfDocumentExporter.Save(workbook, rasterPlan, stream);
+        streamSave.Should().Throw<NotSupportedException>().WithMessage(message);
+        Encoding.ASCII.GetString(stream.ToArray()).Should().Be(originalContent);
+
+        var path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid():N}.pdf");
+        File.WriteAllText(path, originalContent, Encoding.ASCII);
+        try
+        {
+            var pathSave = () => PortablePdfDocumentExporter.Save(workbook, rasterPlan, path);
+            pathSave.Should().Throw<NotSupportedException>().WithMessage(message);
+            File.ReadAllText(path, Encoding.ASCII).Should().Be(originalContent);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
     }
 
     [Fact]

@@ -64,4 +64,23 @@ public sealed class ZoomSelectionPlannerTests
             .Should()
             .Be(expected);
     }
+
+    [Fact]
+    public void CalculateFitWholePercent_UsesVisibleSizesAcrossLargeSelections()
+    {
+        var sheet = new Sheet(SheetId, "Data");
+        var range = new GridRange(new CellAddress(SheetId, 1, 1), new CellAddress(SheetId, 5000, 3));
+        sheet.ColumnWidths[1] = 20;
+        sheet.HiddenCols.Add(2);
+        sheet.GroupHiddenCols.Add(3);
+        sheet.HiddenRows.UnionWith(Enumerable.Range(2, 4996).Select(row => (uint)row));
+        sheet.FilterHiddenRows.Add(4998);
+        sheet.GroupHiddenRows.Add(4999);
+        sheet.RowHeights[1] = 75;
+        sheet.RowHeights[5000] = 25;
+
+        // The visible rows total 100 pixels. Even with a custom width, height determines the fit.
+        ZoomSelectionPlanner.CalculateFitWholePercent(600, 175, sheet, range)
+            .Should().Be(175);
+    }
 }

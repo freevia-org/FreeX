@@ -20,15 +20,16 @@ internal sealed partial class RotationOptionsDialog
 
 internal sealed partial class HyperlinkDialog
 {
-    internal bool ApplyInputForTests(
+    internal Task<bool> ApplyInputForTests(
         HyperlinkDialogTargetKind targetKind,
         string url,
         int selectedSlideIndex,
-        string tooltip)
+        string tooltip,
+        Func<string, string, Task> showWarning)
     {
         var state = _session.SetInput(targetKind, url, selectedSlideIndex, tooltip);
         RenderInputState(state);
-        return Apply();
+        return ApplyAsync(showWarning);
     }
 }
 

@@ -21,6 +21,36 @@ namespace FreeX.Core.Formula.Tests;
 /// </summary>
 public class R94_FormulaRewriterThreeDSpanDeleteSheetTests
 {
+    [Theory]
+    [InlineData("Sheet1:Sheet3!A1", "Sheet1", "Sheet2:Sheet3!A1")]
+    [InlineData("Sheet1:Sheet3!A1:B2", "Sheet3", "Sheet1:Sheet2!A1:B2")]
+    [InlineData("Sheet3:Sheet1!A1", "Sheet3", "Sheet1:Sheet2!A1")]
+    [InlineData("Sheet1:Sheet2!A1", "Sheet1", "Sheet2!A1")]
+    [InlineData("Sheet1:Sheet2!A1:B2", "Sheet2", "Sheet1!A1:B2")]
+    [InlineData("Sheet1:Sheet2!$A:$B", "Sheet2", "Sheet1!$A:$B")]
+    [InlineData("Sheet1:Sheet2!$1:$3", "Sheet1", "Sheet2!$1:$3")]
+    [InlineData("Sheet1:Sheet3!A:A", "Sheet1", "Sheet2:Sheet3!A:A")]
+    public void DeleteEndpoint_UsesOriginalTabOrder(string reference, string deleted, string expected)
+    {
+        var operation = new DeleteSheetOp(deleted, SheetOrder: ["Sheet1", "Sheet2", "Sheet3", "Host"]);
+        FormulaRewriter.Rewrite($"SUM({reference})", operation, "Host")
+            .Should().Be($"SUM({expected})");
+    }
+
+    [Fact]
+    public void PasteOffset_WholeColumnSpan_OnlyMovesColumns()
+    {
+        FormulaRewriter.Rewrite("SUM(Sheet1:Sheet3!A:B)", new PasteOffsetOp(4, 1), "Host")
+            .Should().Be("SUM(Sheet1:Sheet3!B:C)");
+    }
+
+    [Fact]
+    public void DeleteLocalSheet_DoesNotRewriteExternalSpan()
+    {
+        var operation = new DeleteSheetOp("Sheet3", SheetOrder: ["Sheet1", "Sheet2", "Sheet3"]);
+        FormulaRewriter.Rewrite("SUM('[1]Sheet1:Sheet3'!A1)", operation, "Host").Should().BeNull();
+    }
+
     [Fact]
     public void DeleteSheet_SpanStartSheet_CollapsesWholeSpanToRefError()
     {

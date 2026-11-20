@@ -1,5 +1,6 @@
 using System.Windows.Controls;
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
@@ -107,7 +108,7 @@ public sealed class ErrorCheckingDialogSourceTests
         })
             source.Should().Contain($"Content = UiText.Get(ErrorCheckingDialogPlanner.{content})");
 
-        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.CloseButtonKey), Width = ErrorCheckingDialogPlanner.CloseButtonWidth, Height = ErrorCheckingDialogPlanner.ButtonHeight, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
+        source.Should().Contain("Content = UiText.Get(ErrorCheckingDialogPlanner.CloseButtonKey), Width = ErrorCheckingDialogVisualMetrics.CloseButtonWidth, Height = ErrorCheckingDialogVisualMetrics.ButtonHeight, Margin = new Thickness(4, 0, 0, 0), IsCancel = true");
         UiText.Get("ErrorChecking_CloseButton").Should().Be("_Close");
     }
 
@@ -145,7 +146,7 @@ public sealed class ErrorCheckingDialogSourceTests
         var source = ReadErrorCheckingDialogSource();
 
         source.Should().Contain("new Label { Content = UiText.Get(ErrorCheckingDialogPlanner.IssuesLabelKey), Target = _listView");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_listView, ErrorCheckingDialogPlanner.IssuesAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_listView, ErrorCheckingDialogVisualMetrics.IssuesAutomationId);");
         source.Should().Contain("AutomationProperties.SetName(_listView, UiText.Get(ErrorCheckingDialogPlanner.IssuesAutomationNameKey));");
         UiText.Get("ErrorChecking_IssuesLabel").Should().Be("_Issues:");
     }

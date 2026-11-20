@@ -13,6 +13,7 @@ namespace FreeX.App.Host;
 public sealed partial class FindReplaceDialog : Window
 {
     public static GridLength FindReplaceFieldLabelColumnWidth => new(FindReplaceDialogPlanner.FieldLabelColumnWidth);
+    public static Thickness CompactActionButtonMargin => new(0, 0, FindReplaceDialogPlanner.WpfCompactActionButtonSpacing, 0);
     public static DataGridLength FindReplaceResultBookColumnWidth => new(FindReplaceDialogPlanner.ResultBookColumnWidth);
     public static DataGridLength FindReplaceResultSheetColumnWidth => new(FindReplaceDialogPlanner.ResultSheetColumnWidth);
     public static DataGridLength FindReplaceResultNameColumnWidth => new(FindReplaceDialogPlanner.ResultNameColumnWidth);
@@ -153,11 +154,17 @@ public sealed partial class FindReplaceDialog : Window
             _navigateTo(row.Address);
     }
 
-    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) =>
+    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e)
+    {
         OptionsExpander.Header = DialogText(FindReplaceDialogText.OptionsExpanded);
+        UpdateFormatSurfaceVisibility();
+    }
 
-    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) =>
+    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e)
+    {
         OptionsExpander.Header = DialogText(FindReplaceDialogText.Options);
+        UpdateFormatSurfaceVisibility();
+    }
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
     private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
     private void ChooseFindFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromCell(ref _findFormatDiff);
@@ -210,16 +217,15 @@ public sealed partial class FindReplaceDialog : Window
         var matchCase = MatchCaseBox.IsChecked == true;
         var matchEntireCell = MatchEntireBox.IsChecked == true;
         var result = _workflow.FindNext(search, options, matchCase, matchEntireCell);
-        _results = result.Matches;
+        HideFindAllResults();
         _currentIndex = result.SelectedIndex;
-        UpdateResultsGrid();
         if (!result.Success)
         {
             SetStatusText(DialogText(FindReplaceDialogText.NoMatchesFound));
             _currentIndex = -1;
             return;
         }
-        SetStatusText(DialogText(FindReplaceDialogText.MatchStatus, _currentIndex + 1, _results.Count));
+        SetStatusText(DialogText(FindReplaceDialogText.MatchStatus, _currentIndex + 1, result.Matches.Count));
     }
 
     private void FindAll()
@@ -236,6 +242,7 @@ public sealed partial class FindReplaceDialog : Window
         _results = result.Matches;
         _currentIndex = -1;
 
+        ShowFindAllResults();
         UpdateResultsGrid();
         SetStatusText(_results.Count == 0
             ? DialogText(FindReplaceDialogText.NoMatchesFound)
@@ -387,18 +394,44 @@ public sealed partial class FindReplaceDialog : Window
         SetFormatState(_replaceFormatDiff is not null, DialogText(FindReplaceDialogText.ReplaceFormatSetToolTip), ReplaceWithFormatButton, ReplaceWithClearFormatButton);
     }
 
-    private static void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
+    private void UpdateFormatSurfaceVisibility()
+    {
+        var visibility = OptionsExpander.IsExpanded ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var button in new[]
+                 {
+                     FindFormatButton, ReplaceFindFormatButton, ReplaceWithFormatButton,
+                     FindChooseFormatFromCellButton, ReplaceFindChooseFormatFromCellButton, ReplaceWithChooseFormatFromCellButton
+                 })
+        {
+            button.Visibility = visibility;
+        }
+
+        UpdateFormatStateButtons();
+    }
+
+    private void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
     {
         formatButton.Content = isSet
             ? DialogText(FindReplaceDialogText.FormatSetButton)
             : DialogText(FindReplaceDialogText.Format);
         formatButton.ToolTip = isSet ? toolTip : null;
-        clearButton.Visibility = isSet ? Visibility.Visible : Visibility.Collapsed;
+        clearButton.Visibility = isSet && OptionsExpander.IsExpanded ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateResultsGrid()
     {
         FindResultsGrid.ItemsSource = FindReplaceDialogPlanner.BuildFindResultRows(_getWorkbook(), _results);
+    }
+
+    private void ShowFindAllResults() =>
+        FindResultsGrid.Visibility = Visibility.Visible;
+
+    private void HideFindAllResults()
+    {
+        _results = [];
+        FindResultsGrid.SelectedItem = null;
+        FindResultsGrid.ItemsSource = null;
+        FindResultsGrid.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -414,6 +447,7 @@ public sealed partial class FindReplaceDialog : Window
             return;
 
         StatusLabel.Text = text;
+        StatusLabel.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
 
         var previousName = AutomationProperties.GetName(StatusLabel);
         AutomationProperties.SetName(StatusLabel, text);
