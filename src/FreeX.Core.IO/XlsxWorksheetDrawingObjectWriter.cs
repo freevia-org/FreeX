@@ -597,6 +597,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 shape,
                 shapeIndex++,
                 BuildObjectHyperlinkElement(shape.Hyperlink, shape.Name),
+                link => BuildObjectHyperlinkElement(link, null)!.Attribute(relNs + "id")!.Value,
                 spreadsheetDrawingNs,
                 drawingNs));
         }
@@ -778,7 +779,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(drawingNs + "prstGeom",
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked, picture.PrintObject));
 
     /// <summary>
     /// R65-io-image-drawing-6-1: emits a picture inserted via Excel's "Link to File" -- identical to
@@ -832,7 +833,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(drawingNs + "prstGeom",
                         new XAttribute("prst", "rect"),
                         new XElement(drawingNs + "avLst")))),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked, picture.PrintObject));
 
     /// <summary>
     /// Reconstructs a CellRangeSnapshot picture (a "camera" / Paste Special &gt; Linked Picture /
@@ -927,7 +928,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XElement(drawingNs + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
                         new XElement(drawingNs + "chExt", new XAttribute("cx", widthEmu), new XAttribute("cy", heightEmu)))),
                 children),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            ToDrawingClientData(spreadsheetDrawingNs, picture.Locked, picture.PrintObject));
     }
 
     private static XElement ToPictureSnapshotBackgroundShape(
@@ -1015,37 +1016,38 @@ internal static class XlsxWorksheetDrawingObjectWriter
     /// after opening and resaving.
     /// </summary>
     /// <summary>
-    /// r378: persists Format Picture &gt; Size &gt; "Lock aspect ratio" and Properties &gt; "Locked"
-    /// as <c>a:picLocks</c>.
-    ///
-    /// <para>Both flags were session-only: unchecking either, saving and reopening brought the lock
-    /// straight back, because nothing ever wrote the element. Excel persists them, so it is the
-    /// authority here.</para>
-    ///
-    /// <para>Emitted only when a flag departs from the default. Both model properties default to
-    /// TRUE, matching Excel's authored default for a picture, and the OOXML attributes default to
-    /// FALSE when omitted -- so writing nothing means "locked" on the way back in (see the reader's
-    /// matching rule), and the element appears only for a picture the author actually unlocked. That
-    /// keeps an ordinary save byte-identical to what it produced before this change.</para>
+    /// Persists aspect and any independent DrawingML movement/resize restrictions.
+    /// Sheet protection is serialized separately on the anchor's clientData.
     /// </summary>
     private static XElement? ToPictureLocks(XNamespace drawingNs, PictureModel picture)
     {
-        if (picture.LockAspectRatio && picture.Locked)
+        if (!picture.LockAspectRatio && picture.DrawingNoMove is null && picture.DrawingNoResize is null && picture.DrawingLockAttributes is not { Count: > 0 } && picture.DrawingLockChildrenXml is null)
             return null;
 
-        // Every flag is written explicitly once the element exists. Writing only the flag that
-        // changed loses the other one: the reader treats an attribute that is absent from a PRESENT
-        // element as false, per the OOXML defaults, so emitting just noChangeAspect="0" would report
-        // an otherwise-locked picture as unlocked on the way back in. The asymmetry is between
-        // "absent element means locked" (this codebase's documented default, and Excel's authored
-        // one) and "absent attribute means false" (the schema), and it is resolved by making a
-        // written element fully self-describing.
         return new XElement(
             drawingNs + "picLocks",
             new XAttribute("noChangeAspect", picture.LockAspectRatio ? "1" : "0"),
-            new XAttribute("noMove", picture.Locked ? "1" : "0"),
-            new XAttribute("noResize", picture.Locked ? "1" : "0"));
+            picture.DrawingNoMove is { } noMove ? new XAttribute("noMove", noMove ? "1" : "0") : null,
+            picture.DrawingNoResize is { } noResize ? new XAttribute("noResize", noResize ? "1" : "0") : null,
+            OtherLockAttributes(picture.DrawingLockAttributes, includeAspect: true),
+            LockChildren(picture.DrawingLockChildrenXml));
     }
+
+    private static XElement ToDrawingClientData(XNamespace xdr, bool locked, bool printObject) =>
+        new(xdr + "clientData", locked ? null : new XAttribute("fLocksWithSheet", "0"), printObject ? null : new XAttribute("fPrintsWithSheet", "0"));
+
+    private static XElement? ToDrawingMovementLocks(XNamespace drawing, string name, bool? noMove, bool? noResize, IReadOnlyDictionary<string, string>? other, string? children) =>
+        noMove is null && noResize is null && other is not { Count: > 0 } && children is null ? null : new XElement(drawing + name,
+            noMove is { } move ? new XAttribute("noMove", move ? "1" : "0") : null,
+            noResize is { } resize ? new XAttribute("noResize", resize ? "1" : "0") : null,
+            OtherLockAttributes(other, includeAspect: false), LockChildren(children));
+
+    private static IEnumerable<XElement> LockChildren(string? xml) =>
+        xml is null ? Array.Empty<XElement>() : XElement.Parse(xml).Elements().Select(element => new XElement(element));
+
+    private static IEnumerable<XAttribute> OtherLockAttributes(IReadOnlyDictionary<string, string>? other, bool includeAspect) =>
+        (other ?? new Dictionary<string, string>()).Where(pair => pair.Key is not ("noMove" or "noResize") && (!includeAspect || pair.Key != "noChangeAspect"))
+            .Select(pair => new XAttribute(XName.Get(pair.Key), pair.Value));
 
     private static XElement? ToDecorativeExtLst(XNamespace drawingNs, bool isDecorative)
     {
@@ -1155,7 +1157,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         // R149-app-accessibility-checker-decorative-shapes: round-trip Excel's "Mark
                         // as decorative" flag, mirroring the picture path's ToDecorativeExtLst call.
                         ToDecorativeExtLst(drawingNs, textBox.IsDecorative)),
-                    new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"))),
+                    new XElement(spreadsheetDrawingNs + "cNvSpPr", new XAttribute("txBox", "1"),
+                        ToDrawingMovementLocks(drawingNs, "spLocks", textBox.DrawingNoMove, textBox.DrawingNoResize, textBox.DrawingLockAttributes, textBox.DrawingLockChildrenXml))),
                 ToShapePropertiesForDrawingObject(
                     "rect",
                     textBox.RotationDegrees,
@@ -1173,7 +1176,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     // baking in a border Excel/the user never authored.
                     outlineHasNoFill: textBox.OutlineHasNoFill),
                 ToTextBoxTxBody(textBox, drawingNs, spreadsheetDrawingNs)),
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            ToDrawingClientData(spreadsheetDrawingNs, textBox.Locked, textBox.PrintObject));
 
     /// <summary>
     /// Builds the <c>&lt;xdr:txBody&gt;</c> element for a text box, round-tripping the font
@@ -1233,6 +1236,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         DrawingShapeModel shape,
         int shapeIndex,
         XElement? hlinkClick,
+        Func<DrawingObjectHyperlink, string> bindTextRelationship,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs)
     {
@@ -1269,7 +1273,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         // otherwise Excel treats the object as a plain autoshape: no connection-site glue, and it is
         // listed as a generic shape rather than "Connector" in the Selection Pane. Connectors carry no
         // txBody per the OOXML CT_Connector schema, so text (which they never have anyway) is omitted.
-        XElement shapeOrConnectorElement = DrawingShapeKindSupport.IsLineLike(shape.Kind)
+        if (shape.IsDrawingConnector && (shape.HasShapeText || shape.ShapeTextInsets is not null))
+            throw new InvalidOperationException("Connector shapes cannot contain text or text insets in XLSX.");
+        XElement shapeOrConnectorElement = shape.IsDrawingConnector
             ? new XElement(spreadsheetDrawingNs + "cxnSp",
                 new XElement(spreadsheetDrawingNs + "nvCxnSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -1282,6 +1288,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         // as decorative" flag, mirroring the picture path's ToDecorativeExtLst call.
                         ToDecorativeExtLst(drawingNs, shape.IsDecorative)),
                     new XElement(spreadsheetDrawingNs + "cNvCxnSpPr",
+                        ToDrawingMovementLocks(drawingNs, "cxnSpLocks", shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml),
                         // R90-shape-5-3: preserve which shapes this connector's endpoints were glued
                         // to (stCxn/endCxn) so a connector loaded from a source file that goes through
                         // this regenerated-element path (e.g. after any other property edit) doesn't
@@ -1300,9 +1307,10 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         // R149-app-accessibility-checker-decorative-shapes: round-trip Excel's "Mark
                         // as decorative" flag, mirroring the picture path's ToDecorativeExtLst call.
                         ToDecorativeExtLst(drawingNs, shape.IsDecorative)),
-                    new XElement(spreadsheetDrawingNs + "cNvSpPr")),
+                    new XElement(spreadsheetDrawingNs + "cNvSpPr",
+                        ToDrawingMovementLocks(drawingNs, "spLocks", shape.DrawingNoMove, shape.DrawingNoResize, shape.DrawingLockAttributes, shape.DrawingLockChildrenXml))),
                 shapeProperties,
-                shape.HasShapeText ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs) : null);
+                shape.HasShapeText || shape.ShapeTextInsets is not null || shape.ShapeTextDocument is not null ? ToShapeTxBody(shape, drawingNs, spreadsheetDrawingNs, bindTextRelationship) : null);
 
         return new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs, shape.AnchorOffsetX, shape.AnchorOffsetY),
@@ -1310,7 +1318,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(shape.Width)),
                 new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(shape.Height))),
             shapeOrConnectorElement,
-            new XElement(spreadsheetDrawingNs + "clientData"));
+            ToDrawingClientData(spreadsheetDrawingNs, shape.Locked, shape.PrintObject));
     }
 
     /// <summary>
@@ -1337,8 +1345,20 @@ internal static class XlsxWorksheetDrawingObjectWriter
     private static XElement ToShapeTxBody(
         DrawingShapeModel shape,
         XNamespace drawingNs,
-        XNamespace spreadsheetDrawingNs)
+        XNamespace spreadsheetDrawingNs,
+        Func<DrawingObjectHyperlink, string> bindTextRelationship)
     {
+        if (shape.ShapeTextDocument is { } document)
+        {
+            var richBody = XlsxShapeTextDocumentCodec.Write(document, allowSourceRelationships: false, bindTextRelationship);
+            var bodyProperties = richBody.Element(drawingNs + "bodyPr");
+            if (bodyProperties is null) { bodyProperties = new XElement(drawingNs + "bodyPr"); richBody.AddFirst(bodyProperties); }
+            bodyProperties.SetAttributeValue("lIns", shape.ShapeTextInsets?.Left?.ToString(CultureInfo.InvariantCulture));
+            bodyProperties.SetAttributeValue("rIns", shape.ShapeTextInsets?.Right?.ToString(CultureInfo.InvariantCulture));
+            bodyProperties.SetAttributeValue("tIns", shape.ShapeTextInsets?.Top?.ToString(CultureInfo.InvariantCulture));
+            bodyProperties.SetAttributeValue("bIns", shape.ShapeTextInsets?.Bottom?.ToString(CultureInfo.InvariantCulture));
+            return richBody;
+        }
         var anchorValue = shape.ShapeTextVAnchor switch
         {
             DrawingShapeTextVAnchor.Top => "t",
@@ -1416,6 +1436,13 @@ internal static class XlsxWorksheetDrawingObjectWriter
         var bodyPrElement = new XElement(drawingNs + "bodyPr",
             new XAttribute("anchor", anchorValue),
             new XAttribute("wrap", wrapValue));
+        if (shape.ShapeTextInsets is { } insets)
+        {
+            if (insets.Left is { } left) bodyPrElement.SetAttributeValue("lIns", left.ToString(CultureInfo.InvariantCulture));
+            if (insets.Right is { } right) bodyPrElement.SetAttributeValue("rIns", right.ToString(CultureInfo.InvariantCulture));
+            if (insets.Top is { } top) bodyPrElement.SetAttributeValue("tIns", top.ToString(CultureInfo.InvariantCulture));
+            if (insets.Bottom is { } bottom) bodyPrElement.SetAttributeValue("bIns", bottom.ToString(CultureInfo.InvariantCulture));
+        }
         if (!string.IsNullOrEmpty(shape.WarpPreset))
             bodyPrElement.Add(new XElement(drawingNs + "prstTxWarp",
                 new XAttribute("prst", shape.WarpPreset)));

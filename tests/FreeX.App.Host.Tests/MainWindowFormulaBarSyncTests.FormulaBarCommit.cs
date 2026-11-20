@@ -16,6 +16,42 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class MainWindowFormulaBarSyncTests
 {
     [Fact]
+    public void InlineEditorEnter_AfterTabNavigationCommitsValueAndWrapsToColumnAOfNextRow()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SelectActiveCell(1, 1);
+            harness.ShowInlineEditor(1, 1);
+            harness.SetInlineEditorText("first row value");
+            harness.PressInlineEditorKey(Key.Tab).Should().BeTrue();
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 2),
+                new CellAddress(harness.CurrentSheetId, 1, 2)));
+
+            harness.ShowInlineEditor(1, 2);
+            harness.SetInlineEditorText("second row value");
+            harness.PressInlineEditorKey(Key.Tab).Should().BeTrue();
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 3),
+                new CellAddress(harness.CurrentSheetId, 1, 3)));
+
+            harness.ShowInlineEditor(1, 3);
+            harness.SetInlineEditorText("final row value");
+            harness.PressInlineEditorKey(Key.Enter).Should().BeTrue();
+
+            harness.CellText(1, 1).Should().Be("first row value");
+            harness.CellText(1, 2).Should().Be("second row value");
+            harness.CellText(1, 3).Should().Be("final row value");
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 2, 1),
+                new CellAddress(harness.CurrentSheetId, 2, 1)));
+            harness.CellAddressBoxText.Should().Be("A2");
+        });
+    }
+
+    [Fact]
     public void FormulaBarEnter_CommitsEditMovesSelectionAndRefreshesEditors()
     {
         StaTestRunner.Run(() =>

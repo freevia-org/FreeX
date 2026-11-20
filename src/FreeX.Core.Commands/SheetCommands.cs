@@ -123,6 +123,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private Dictionary<string, string>? _namedFormulaSnapshot;
     private Dictionary<(string Name, SheetId Sheet), string>? _scopedNamedFormulaSnapshot;
+    private List<(int Index, WorkbookCustomView View)>? _customViewRenameSnapshot;
     // T6: string sheet-name refs on model objects
     private List<(PivotCacheModel Cache, string OldValue)>? _pivotCacheNameSnapshot;
     private List<(ChartModel Chart, string OldValue)>? _chartPivotSourceNameSnapshot;
@@ -168,6 +169,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // reference as the O25/P113 cell-hyperlink fields above (verbatim, per DrawingObjectHyperlink's
     // own doc comment) but was never rewritten on rename -- see DrawingObjectHyperlinkRewriter.
     private List<(DrawingShapeModel Shape, DrawingObjectHyperlink? OldValue)>? _drawingShapeHyperlinkRenameSnapshot;
+    private List<(DrawingShapeModel Shape, DrawingShapeTextDocument Document)>? _shapeTextHyperlinkRenameSnapshot;
     private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkRenameSnapshot;
     private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkRenameSnapshot;
     private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkRenameSnapshot;
@@ -208,6 +210,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
 
         _oldName = sheet.Name;
         sheet.Name = _newName;
+        RewriteCustomViews(ctx.Workbook, _oldName, _newName);
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
             ctx.Workbook, new RenameSheetOp(_oldName, _newName), _formulaSnapshot);
@@ -453,6 +456,7 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // renamed sheet too (e.g. "Sheet2!A1"), and DuplicateSheetDrawingCloner already proves the
         // codebase treats this as the same class of reference for the Duplicate Sheet path.
         _drawingShapeHyperlinkRenameSnapshot = [];
+        _shapeTextHyperlinkRenameSnapshot = [];
         _textBoxHyperlinkRenameSnapshot = [];
         _pictureHyperlinkRenameSnapshot = [];
         _chartHyperlinkRenameSnapshot = [];
@@ -460,6 +464,15 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         {
             foreach (var shape in s.DrawingShapes)
             {
+                if (shape.ShapeTextDocument is { } document)
+                {
+                    var updatedDocument = document.RewriteHyperlinks(link => DrawingObjectHyperlinkRewriter.Rewrite(link, renameOp, s.Name)!);
+                    if (!ReferenceEquals(document, updatedDocument))
+                    {
+                        _shapeTextHyperlinkRenameSnapshot.Add((shape, document));
+                        shape.ShapeTextDocument = updatedDocument;
+                    }
+                }
                 // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: named distinctively
                 // (not a bare "rewritten") so the R101 patch-safety guard's RHS allowlist regex
                 // can target this exact call shape narrowly -- see
@@ -506,12 +519,101 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         return new CommandOutcome(true);
     }
 
+    private void RewriteCustomViews(Workbook workbook, string oldName, string newName)
+    {
+        _customViewRenameSnapshot = [];
+        var operation = new RenameSheetOp(oldName, newName);
+        for (int index = 0; index < workbook.CustomViews.Count; index++)
+        {
+            var view = workbook.CustomViews[index];
+            var changed = false;
+            var states = new List<WorksheetCustomViewState>(view.Sheets.Count);
+            foreach (var state in view.Sheets)
+            {
+                var name = string.Equals(state.SheetName, oldName, StringComparison.OrdinalIgnoreCase)
+                    ? newName : state.SheetName;
+                var area = RewriteCustomViewExpression(state.OpaquePrintAreaExpression, operation, state.SheetName);
+                var titles = RewriteCustomViewExpression(state.OpaquePrintTitlesExpression, operation, state.SheetName);
+                if (!string.Equals(name, state.SheetName, StringComparison.Ordinal) ||
+                    !string.Equals(area, state.OpaquePrintAreaExpression, StringComparison.Ordinal) ||
+                    !string.Equals(titles, state.OpaquePrintTitlesExpression, StringComparison.Ordinal))
+                    changed = true;
+                states.Add(state with { SheetName = name, OpaquePrintAreaExpression = area, OpaquePrintTitlesExpression = titles });
+            }
+            if (!changed) continue;
+            _customViewRenameSnapshot.Add((index, view));
+            workbook.CustomViews[index] = view with { Sheets = states };
+        }
+    }
+
+    private static string? RewriteCustomViewExpression(string? expression, RenameSheetOp operation, string hostSheetName)
+    {
+        if (string.IsNullOrWhiteSpace(expression))
+            return expression;
+        var equals = expression[0] == '=';
+        var body = equals ? expression[1..] : expression;
+        var parts = SplitCustomViewUnion(body);
+        if (parts is null) return expression;
+        try
+        {
+            // Validate every part before changing any of them: opaque malformed names must
+            // remain byte-for-byte intact rather than being partially rewritten.
+            foreach (var part in parts) _ = new Parser(new Lexer(part).Tokenize()).Parse();
+            var changed = false;
+            for (var i = 0; i < parts.Count; i++)
+            {
+                var rewritten = FormulaRewriter.Rewrite(parts[i], operation, hostSheetName);
+                if (rewritten is null) continue;
+                parts[i] = rewritten;
+                changed = true;
+            }
+            return changed ? (equals ? "=" : "") + string.Join(",", parts) : expression;
+        }
+        catch { return expression; } // Match FormulaRewriter: opaque invalid text is preserved.
+    }
+
+    private static List<string>? SplitCustomViewUnion(string text)
+    {
+        var parts = new List<string>();
+        var start = 0;
+        var depth = 0;
+        var sheetQuote = false;
+        var textQuote = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '\'' && !textQuote)
+            {
+                if (sheetQuote && i + 1 < text.Length && text[i + 1] == '\'') { i++; continue; }
+                sheetQuote = !sheetQuote;
+            }
+            else if (c == '"' && !sheetQuote)
+            {
+                if (textQuote && i + 1 < text.Length && text[i + 1] == '"') { i++; continue; }
+                textQuote = !textQuote;
+            }
+            else if (!sheetQuote && !textQuote)
+            {
+                if (c == '(') depth++;
+                else if (c == ')' && --depth < 0) return null;
+                else if (c == ',' && depth == 0) { parts.Add(text[start..i]); start = i + 1; }
+            }
+        }
+        if (sheetQuote || textQuote || depth != 0) return null;
+        parts.Add(text[start..]);
+        return parts;
+    }
+
     public void Revert(ICommandContext ctx)
     {
         if (_oldName is not null)
         {
             var s = ctx.GetSheet(_sheetId);
             s.Name = _oldName;
+            if (_customViewRenameSnapshot is not null)
+                foreach (var (index, view) in _customViewRenameSnapshot)
+                    if (index < ctx.Workbook.CustomViews.Count)
+                        ctx.Workbook.CustomViews[index] = view;
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
             RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
             RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimRenameSnapshot);
@@ -617,6 +719,9 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_drawingShapeHyperlinkRenameSnapshot is not null)
                 foreach (var (shape, savedDrawingObjectHyperlink) in _drawingShapeHyperlinkRenameSnapshot)
                     shape.Hyperlink = savedDrawingObjectHyperlink;
+            if (_shapeTextHyperlinkRenameSnapshot is not null)
+                foreach (var (shape, document) in _shapeTextHyperlinkRenameSnapshot)
+                    shape.ShapeTextDocument = document;
 
             if (_textBoxHyperlinkRenameSnapshot is not null)
                 foreach (var (textBox, savedDrawingObjectHyperlink) in _textBoxHyperlinkRenameSnapshot)
@@ -750,6 +855,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // same kind of 'Place in This Document' sheet-qualified reference as the R95 cell-hyperlink
     // fields above but was never rewritten to #REF! on delete -- see DrawingObjectHyperlinkRewriter.
     private List<(DrawingShapeModel Shape, DrawingObjectHyperlink? OldValue)>? _drawingShapeHyperlinkDeleteSnapshot;
+    private List<(DrawingShapeModel Shape, DrawingShapeTextDocument Document)>? _shapeTextHyperlinkDeleteSnapshot;
     private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkDeleteSnapshot;
     private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkDeleteSnapshot;
     private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkDeleteSnapshot;
@@ -828,26 +934,26 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // workbook, so cross-sheet Table[...] references to them must become #REF! — pass the
         // captured names through to every DeleteSheetOp below (see DeleteSheetOp.DeletedTableNames).
         var deletedTableNames = sheet.StructuredTables.Select(t => t.Name).ToList();
+        var deleteOp = new DeleteSheetOp(deletedSheetName, deletedTableNames, sheets.Select(s => s.Name).ToArray());
         ctx.Workbook.RemoveSheet(_sheetId);
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
-            ctx.Workbook, new DeleteSheetOp(deletedSheetName, deletedTableNames), _formulaSnapshot);
+            ctx.Workbook, deleteOp, _formulaSnapshot);
         // Defined names whose refers-to is a formula expression are not covered by the named-range
         // pass above; rewrite their sheet-qualified references to the deleted sheet to #REF! too.
-        _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName, deletedTableNames);
+        _namedFormulaSnapshot = RewriteNamedFormulasForDeletedSheet(ctx.Workbook, deleteOp);
         // N3: sheet-scoped named formulas living on SURVIVING sheets can still reference the
         // deleted sheet in their text (e.g. Sheet1-scoped 'Foo' = '=Sheet2!A1*2' when Sheet2 is
         // deleted) — symmetric with the named-range pass above, which already rewrites scoped
         // named RANGES. RemoveSheet only purged the deleted sheet's OWN scoped formulas, so this
         // must run separately over what's left.
         _survivingScopedNamedFormulaRewriteSnapshot =
-            RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName, deletedTableNames);
+            RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deleteOp);
 
         // X3/R102: rewrite CF FormulaText, colorScale/dataBar/iconSet Formula-type thresholds,
         // and DV Formula1/Formula2 on all surviving sheets that reference the deleted sheet,
         // producing #REF! — mirrors RenameSheetCommand's T7/R102 pass via the same shared
         // RewriteRuleFormulas helper (the primitive RenameStructuredTableCommand's R100 fix uses).
-        var deleteOp = new DeleteSheetOp(deletedSheetName, deletedTableNames);
         _cfFormulaDeleteSnapshot = [];
         _cfThresholdDeleteSnapshot = [];
         _dvFormulaDeleteSnapshot = [];
@@ -1187,6 +1293,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         // equivalent pass, using deleteOp so FormulaRewriter converts the sheet-qualified ref to
         // #REF! instead of a new name.
         _drawingShapeHyperlinkDeleteSnapshot = [];
+        _shapeTextHyperlinkDeleteSnapshot = [];
         _textBoxHyperlinkDeleteSnapshot = [];
         _pictureHyperlinkDeleteSnapshot = [];
         _chartHyperlinkDeleteSnapshot = [];
@@ -1194,6 +1301,15 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         {
             foreach (var shape in s.DrawingShapes)
             {
+                if (shape.ShapeTextDocument is { } document)
+                {
+                    var updatedDocument = document.RewriteHyperlinks(link => DrawingObjectHyperlinkRewriter.Rewrite(link, deleteOp, s.Name)!);
+                    if (!ReferenceEquals(document, updatedDocument))
+                    {
+                        _shapeTextHyperlinkDeleteSnapshot.Add((shape, document));
+                        shape.ShapeTextDocument = updatedDocument;
+                    }
+                }
                 // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: see the matching
                 // comment on RenameSheetCommand's equivalent pass above.
                 var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(shape.Hyperlink, deleteOp, s.Name);
@@ -1413,6 +1529,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_drawingShapeHyperlinkDeleteSnapshot is not null)
                 foreach (var (shape, savedDrawingObjectHyperlink) in _drawingShapeHyperlinkDeleteSnapshot)
                     shape.Hyperlink = savedDrawingObjectHyperlink;
+            if (_shapeTextHyperlinkDeleteSnapshot is not null)
+                foreach (var (shape, document) in _shapeTextHyperlinkDeleteSnapshot)
+                    shape.ShapeTextDocument = document;
 
             if (_textBoxHyperlinkDeleteSnapshot is not null)
                 foreach (var (textBox, savedDrawingObjectHyperlink) in _textBoxHyperlinkDeleteSnapshot)
@@ -1531,8 +1650,9 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         };
 
     private static Dictionary<string, string> RewriteNamedFormulasForDeletedSheet(
-        Workbook workbook, string deletedSheetName, IReadOnlyList<string> deletedTableNames)
+        Workbook workbook, DeleteSheetOp deleteOp)
     {
+        var deletedSheetName = deleteOp.SheetName;
         Dictionary<string, string>? snapshot = null;
         // DeleteSheetOp only matches sheet-qualified references, so the host sheet name is
         // irrelevant here — any surviving sheet name (or the deleted one) is fine.
@@ -1542,7 +1662,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         {
             var original = workbook.NamedFormulas[name];
             var rewritten = FormulaRewriter.Rewrite(
-                original, new DeleteSheetOp(deletedSheetName, deletedTableNames), hostSheetName);
+                original, deleteOp, hostSheetName);
             if (rewritten is null || rewritten == original)
                 continue; // null = no change or unparseable; leave the original untouched
 
@@ -1563,7 +1683,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     /// sheet, not by which sheets the formula text references).
     /// </summary>
     private static Dictionary<(string Name, SheetId Sheet), string> RewriteScopedNamedFormulasForDeletedSheet(
-        Workbook workbook, string deletedSheetName, IReadOnlyList<string> deletedTableNames)
+        Workbook workbook, DeleteSheetOp deleteOp)
     {
         Dictionary<(string Name, SheetId Sheet), string>? snapshot = null;
         // DeleteSheetOp only matches sheet-qualified references, so the host sheet name passed to
@@ -1574,7 +1694,7 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             var sheet = workbook.GetSheet(sheetId);
             var hostSheetName = sheet?.Name ?? string.Empty;
             var rewritten = FormulaRewriter.Rewrite(
-                original, new DeleteSheetOp(deletedSheetName, deletedTableNames), hostSheetName);
+                original, deleteOp, hostSheetName);
             if (rewritten is null || rewritten == original)
                 continue; // null = no change or unparseable; leave the original untouched
 

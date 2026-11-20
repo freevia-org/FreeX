@@ -728,7 +728,8 @@ internal static class ParityCapture
             new AddWatchDialog(AddWatchDialogPlanner.ParitySelectedRangeText));
 
         CaptureDialog(results, "dialog.WorkbookStatistics", outDir, () =>
-            new WorkbookStatisticsDialog(WorkbookStatisticsService.GetStatistics(workbook)));
+            new WorkbookStatisticsDialog(
+                WorkbookStatisticsService.GetStatistics(ParityDemoWorkbookFactory.Create())));
 
         CaptureDialog(results, "dialog.RenameSheet", outDir, () =>
             new SheetNameDialog(sheet.Name));
@@ -1225,7 +1226,7 @@ internal static class ParityCapture
             "dialog.About" => (AboutDialogMetrics.Width, AboutDialogMetrics.Height),
             "dialog.ScenarioManager" =>
                 (ScenarioManagerDialogLayout.DialogWidth, ScenarioManagerDialogLayout.DialogHeight),
-            "dialog.Zoom" => (ZoomDialogPlanner.Width, ZoomDialogPlanner.Height),
+            "dialog.Zoom" => (ZoomDialogVisualMetrics.WindowWidth, ZoomDialogVisualMetrics.WindowHeight),
             "dialog.EvaluateFormula" =>
                 (EvaluateFormulaDialogPlanner.Width, EvaluateFormulaDialogPlanner.Height),
             "dialog.TextToColumns" =>

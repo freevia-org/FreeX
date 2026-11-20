@@ -14,7 +14,10 @@ public sealed record WorkbookCellEditResult(
     DrawingObjectSelectionHint? DrawingObjectSelection = null,
     // True when a successful paste consumed an internal Cut clipboard as a move. Renderers use this
     // signal to invalidate the matching OS clipboard payload so it cannot be pasted a second time.
-    bool ClipboardCutMoveCompleted = false);
+    bool ClipboardCutMoveCompleted = false)
+{
+    public IReadOnlyList<SheetId>? RestoredCustomViewSheetIds { get; init; }
+}
 
 public enum WorkbookCellEditFailureKind
 {

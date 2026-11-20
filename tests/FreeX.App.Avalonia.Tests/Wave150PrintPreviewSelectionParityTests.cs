@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -14,6 +15,7 @@ using FluentAssertions;
 
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Text;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -89,6 +91,133 @@ public sealed class Wave150PrintPreviewSelectionParityTests
                 await DrainInputAsync();
 
                 CanvasText(preview).Should().Contain("Selected B2").And.Contain("Outside A1");
+            }
+            finally
+            {
+                CloseOwnedWindows(window);
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BlankWorksheetPreviewsAndContributesToEntireWorkbookPageCount()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                window.ReplaceSession(new WorkbookSessionFactory().CreateNew(600, 800, includeObjects: true));
+                var blankSheet = window.Session.ActiveSheet;
+                blankSheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
+                var dataSheet = window.Session.Workbook.AddSheet("Data");
+                dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new TextValue("Data sheet"));
+                dataSheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
+
+                var preview = await OpenPrintPreviewDialogAsync(window);
+                CanvasText(preview).Should().Contain("Page 1 of 1");
+
+                FindComboBox(preview, "PrintPreviewSettingsPrintWhatBox").SelectedIndex = (int)PrintWhat.EntireWorkbook;
+                await DrainInputAsync();
+                CanvasText(preview).Should().Contain("Page 1 of 2");
+
+                var lastPage = FindButton(preview, PrintPreviewDialogPlanner.LastPageButtonAutomationId);
+                lastPage.IsEffectivelyVisible.Should().BeTrue();
+                lastPage.RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await DrainInputAsync();
+                CanvasText(preview).Should().Contain("Data sheet").And.Contain("Page 2 of 2");
+            }
+            finally
+            {
+                CloseOwnedWindows(window);
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task VisibleDocumentZoomControlsChangeThePageScale()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                var preview = await OpenPrintPreviewDialogAsync(window);
+                var zoom = FindComboBox(preview, PrintPreviewDialogPlanner.ZoomBoxAutomationId);
+                zoom.IsEffectivelyVisible.Should().BeTrue();
+                double PageScale() => FindPageCanvas(preview).TransformToVisual(preview)!.Value.M11;
+
+                zoom.SelectedIndex = 0;
+                await DrainInputAsync();
+                PageScale().Should().Be(0.5);
+
+                FindButton(preview, "PrintPreviewZoomInButton").RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await DrainInputAsync();
+                PageScale().Should().Be(0.75);
+
+                FindButton(preview, "PrintPreviewFitWidthButton").RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await DrainInputAsync();
+                var fitWidthScale = PageScale();
+                fitWidthScale.Should().BeGreaterThan(0.1);
+
+                FindButton(preview, "PrintPreviewFitPageButton").RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await DrainInputAsync();
+                PageScale().Should().BeLessThan(fitWidthScale);
+            }
+            finally
+            {
+                CloseOwnedWindows(window);
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CommentsAtEndRemainNavigableAndFollowTheSelectedScope()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                SeedWorkbook(window);
+                var sheet = window.Session.ActiveSheet;
+                var selected = new CellAddress(sheet.Id, 2, 2);
+                sheet.PrintComments = WorksheetPrintComments.AtEnd;
+                sheet.Comments[new CellAddress(sheet.Id, 1, 1)] = "Outside selection";
+                sheet.Comments[selected] = "Selected note";
+                sheet.Comments[new CellAddress(sheet.Id, 8, 8)] = "Outside print area";
+                window.Session.SelectRange(new GridRange(selected, selected));
+
+                var preview = await OpenPrintPreviewDialogAsync(window);
+                FindButton(preview, PrintPreviewDialogPlanner.LastPageButtonAutomationId).RaiseEvent(
+                    new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                await DrainInputAsync();
+
+                CanvasText(preview).Should().Contain("Comments")
+                    .And.Contain("A1: Outside selection")
+                    .And.Contain("B2: Selected note")
+                    .And.NotContain("H8: Outside print area");
+
+                var printWhat = FindComboBox(preview, "PrintPreviewSettingsPrintWhatBox");
+                printWhat.SelectedIndex = (int)PrintWhat.Selection;
+                await DrainInputAsync();
+
+                CanvasText(preview).Should().Contain("Comments")
+                    .And.Contain("B2: Selected note")
+                    .And.NotContain("A1: Outside selection");
             }
             finally
             {

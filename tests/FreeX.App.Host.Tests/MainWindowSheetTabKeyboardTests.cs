@@ -41,6 +41,30 @@ public sealed class MainWindowSheetTabKeyboardTests
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ViewCode")).Should().Be("V");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_ProtectSheet")).Should().Be("P");
             harness.SheetTabMenuItemGestureText(UiText.Get("MainWindow_Header_TabColor")).Should().Be("T");
+            harness.SheetTabMenuItemEnabled(UiText.Get("MainWindow_Header_ViewCode")).Should().BeFalse();
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_InsertSheet"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_DeleteSheet"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_Hide"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_Unhide"));
+            harness.SheetTabMenuHeaders.Should().NotContain("Link to this Sheet");
+        });
+    }
+
+    [Fact]
+    public void RightClickSheetTab_OpensManagementMenuOnTheSelectedTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create(sheetCount: 2);
+
+            harness.RightClickSheetTab("Sheet2");
+
+            harness.ActiveSheetTabName.Should().Be("Sheet2");
+            harness.SheetTabContextMenuIsOpen.Should().BeTrue(harness.DebugSheetTabs);
+            harness.SheetTabContextMenuPlacementTargetName.Should().Be("Sheet2");
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_MoveOrCopy"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("MainWindow_Header_ProtectSheet"));
+            harness.SheetTabMenuHeaders.Should().Contain(UiText.Get("OutlineSettings_MenuItem"));
         });
     }
 
@@ -513,23 +537,60 @@ public sealed class MainWindowSheetTabKeyboardTests
     }
 
     [Fact]
-    public void SheetTabLabelDoubleClick_RenamesOnlyForLeftButton()
+    public void SheetTabLabelDoubleClick_StartsInlineRenameOnlyForLeftButton()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         var labelMouseDown = source[
             source.IndexOf("private void SheetTab_LabelMouseDown", StringComparison.Ordinal)..
-            source.IndexOf("private void RenameSheetFromTab", StringComparison.Ordinal)];
+            source.IndexOf("private void BeginInlineSheetTabRename", StringComparison.Ordinal)];
 
         labelMouseDown.Should().Contain("e.ChangedButton != MouseButton.Left");
         labelMouseDown.Should().Contain("e.ClickCount != 2");
-        labelMouseDown.Should().Contain("RenameSheetFromTab(tab);");
+        labelMouseDown.Should().Contain("BeginInlineSheetTabRename(tab);");
         labelMouseDown.Should().Contain("e.Handled = true;");
         labelMouseDown.IndexOf("e.ChangedButton != MouseButton.Left", StringComparison.Ordinal)
             .Should()
-            .BeLessThan(labelMouseDown.IndexOf("RenameSheetFromTab(tab);", StringComparison.Ordinal));
-        labelMouseDown.IndexOf("RenameSheetFromTab(tab);", StringComparison.Ordinal)
+            .BeLessThan(labelMouseDown.IndexOf("BeginInlineSheetTabRename(tab);", StringComparison.Ordinal));
+        labelMouseDown.IndexOf("BeginInlineSheetTabRename(tab);", StringComparison.Ordinal)
             .Should()
             .BeLessThan(labelMouseDown.IndexOf("e.Handled = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void InlineSheetTabRename_EnterCommitsAndReturnsFocusToTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.BeginInlineSheetTabRename("Sheet1");
+            var editor = harness.SheetTabRenameEditor("Sheet1");
+            editor.Should().NotBeNull();
+            editor!.IsKeyboardFocusWithin.Should().BeTrue();
+            editor.Text = "Revenue";
+            harness.RaiseRenameKey(editor, Key.Enter);
+
+            harness.Window.Session.Workbook.Sheets[0].Name.Should().Be("Revenue");
+            harness.SheetTabRenameEditor("Revenue").Should().BeNull();
+            harness.FocusSheetTab("Revenue").Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void InlineSheetTabRename_EscapeDiscardsDraftAndReturnsFocusToTab()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.BeginInlineSheetTabRename("Sheet1");
+            var editor = harness.SheetTabRenameEditor("Sheet1");
+            editor.Should().NotBeNull();
+            editor!.Text = "Discard me";
+            harness.RaiseRenameKey(editor, Key.Escape);
+
+            harness.Window.Session.Workbook.Sheets[0].Name.Should().Be("Sheet1");
+            harness.SheetTabRenameEditor("Sheet1").Should().BeNull();
+            harness.FocusSheetTab("Sheet1").Should().BeTrue();
+        });
     }
 
     [Fact]
@@ -727,6 +788,23 @@ public sealed class MainWindowSheetTabKeyboardTests
             RoutedOrActiveSheetTabTarget is { ContextMenu.PlacementTarget: { } target } &&
             ReferenceEquals(target, RoutedOrActiveSheetTabTarget);
 
+        public string? SheetTabContextMenuPlacementTargetName =>
+            (RoutedOrActiveSheetTabTarget?.ContextMenu?.PlacementTarget as FrameworkElement)?.DataContext is SheetTabViewModel tab
+                ? tab.Name
+                : null;
+
+        public IReadOnlyList<string?> SheetTabMenuHeaders =>
+            RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
+                .OfType<MenuItem>()
+                .Select(item => item.Header?.ToString())
+                .ToList() ?? [];
+
+        public bool SheetTabMenuItemEnabled(string header) =>
+            RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
+                .OfType<MenuItem>()
+                .FirstOrDefault(item => string.Equals(item.Header?.ToString(), header, StringComparison.Ordinal))
+                ?.IsEnabled == true;
+
         public string? SheetTabMenuItemGestureText(string header) =>
             RoutedOrActiveSheetTabTarget?.ContextMenu?.Items
                 .OfType<MenuItem>()
@@ -805,6 +883,29 @@ public sealed class MainWindowSheetTabKeyboardTests
             Keyboard.Focus(target);
             PumpDispatcher();
             return focused;
+        }
+
+        public void BeginInlineSheetTabRename(string name)
+        {
+            var method = typeof(MainWindow).GetMethod("BeginInlineSheetTabRename", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            method.Invoke(_window, [SheetTabTarget(name).DataContext]);
+            PumpDispatcher();
+            _window.UpdateLayout();
+        }
+
+        public TextBox? SheetTabRenameEditor(string name) =>
+            WpfTestTree.FindVisualDescendants<TextBox>(SheetTabTarget(name))
+                .FirstOrDefault(control => control.Name == "SheetTabRenameEditor" && control.Visibility == Visibility.Visible);
+
+        public void RaiseRenameKey(TextBox editor, Key key)
+        {
+            var args = new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(editor), Environment.TickCount, key)
+            {
+                RoutedEvent = Keyboard.PreviewKeyDownEvent
+            };
+            editor.RaiseEvent(args);
+            PumpDispatcher();
+            _window.UpdateLayout();
         }
 
         public bool FocusAddSheetButton()

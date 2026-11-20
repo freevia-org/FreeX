@@ -114,11 +114,13 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
     }
 }
 
-public sealed class ApplyScenarioCommand : IWorkbookCommand
+public sealed class ApplyScenarioCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly string _name;
     private List<(CellAddress Address, Cell? PreviousCell)>? _snapshot;
     private bool _applied;
+    private TableHeaderRenameTransaction? _headerRename;
+    public int EstimatedBytes => (int)Math.Min(int.MaxValue, 300L * (_snapshot?.Count ?? 0) + (_headerRename?.EstimatedBytes ?? 0));
 
     public string Label => "Show Scenario";
 
@@ -155,6 +157,7 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         if (alreadyMatches)
             return new CommandOutcome(true, IsNoOp: true);
 
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, scenario.ChangingCells.Select(change => change.Address));
         _snapshot = [];
         foreach (var change in scenario.ChangingCells)
         {
@@ -167,7 +170,9 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         }
 
         _applied = true;
-        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(scenario.ChangingCells));
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        return new CommandOutcome(true, AffectedCells: ScenarioCommandHelpers.BuildAffectedCells(scenario.ChangingCells).Concat(_headerRename.Affected).Distinct().ToArray());
     }
 
     public void Revert(ICommandContext ctx)
@@ -175,6 +180,7 @@ public sealed class ApplyScenarioCommand : IWorkbookCommand
         if (!_applied || _snapshot is null)
             return;
 
+        _headerRename?.Revert();
         foreach (var (address, previousCell) in _snapshot)
         {
             var sheet = ctx.Workbook.GetSheet(address.Sheet);

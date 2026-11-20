@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Services;
+using Free.Shared.Shell;
 
 namespace FreeX.App.Services.Tests;
 
@@ -12,18 +13,19 @@ public sealed class ZoomDialogPlannerTests
     }
 
     [Fact]
-    public void SizeContract_MatchesWpfVisualEvidenceTarget()
+    public void VisualContract_LivesInSharedShellMetrics()
     {
         ZoomDialogPlanner.ValidationFallbackResourceKey.Should().Be("Zoom_EnterAValidZoomPercent");
-        ZoomDialogPlanner.Width.Should().Be(300);
-        ZoomDialogPlanner.Height.Should().Be(240);
-        ZoomDialogPlanner.OuterPadding.Should().Be(12);
-        ZoomDialogPlanner.MagnificationGroupPadding.Should().Be(8);
-        ZoomDialogPlanner.MagnificationGroupBottomMargin.Should().Be(12);
-        ZoomDialogPlanner.PresetColumnWidth.Should().Be(96);
-        ZoomDialogPlanner.CustomPercentBoxWidth.Should().Be(72);
-        ZoomDialogPlanner.CustomPercentBoxHeight.Should().Be(24);
-        ZoomDialogPlanner.ActionButtonWidth.Should().Be(72);
+        ZoomDialogVisualMetrics.WindowWidth.Should().Be(300);
+        ZoomDialogVisualMetrics.WindowHeight.Should().Be(240);
+        ZoomDialogVisualMetrics.OuterPadding.Should().Be(12);
+        ZoomDialogVisualMetrics.MagnificationGroupPadding.Should().Be(8);
+        ZoomDialogVisualMetrics.MagnificationGroupBottomMargin.Should().Be(12);
+        ZoomDialogVisualMetrics.PresetColumnWidth.Should().Be(96);
+        ZoomDialogVisualMetrics.CustomPercentBoxWidth.Should().Be(72);
+        ZoomDialogVisualMetrics.CustomPercentBoxHeight.Should().Be(24);
+        ZoomDialogVisualMetrics.ActionButtonWidth.Should().Be(72);
+        ZoomDialogVisualMetrics.CustomPercentBoxAutomationId.Should().Be("ZoomCustomPercentBox");
     }
 
     [Fact]

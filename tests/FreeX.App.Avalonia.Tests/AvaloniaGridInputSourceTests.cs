@@ -222,9 +222,6 @@ public sealed class AvaloniaGridInputSourceTests
 
         var drag = source[dragStart..dragEnd];
         drag.Should().Contain("RequestCellDragAutoScroll(args);");
-        drag.IndexOf("RequestCellDragAutoScroll(args);", StringComparison.Ordinal)
-            .Should()
-            .BeLessThan(drag.IndexOf("TryResolveCellPointerAddress(args, out var pointerAddress)", StringComparison.Ordinal));
 
         var autoScrollStart = source.IndexOf("private void RequestCellDragAutoScroll(", StringComparison.Ordinal);
         var autoScrollEnd = source.IndexOf("private async Task EndCellSelectionDragAsync(", autoScrollStart, StringComparison.Ordinal);
@@ -237,7 +234,13 @@ public sealed class AvaloniaGridInputSourceTests
         drag.Should().Contain("if (_selectionMoveDragging)");
         drag.Should().Contain("ContinueSelectionMoveDrag(args, target);");
         drag.Should().Contain("if (_autofillDragging)");
-        drag.Should().Contain("ContinueAutofillDrag(args, target);");
+        drag.Should().Contain("ContinueAutofillDrag(args);");
+        drag.IndexOf("RequestCellDragAutoScroll(args);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(drag.IndexOf("ContinueAutofillDrag(args);", StringComparison.Ordinal));
+        drag.IndexOf("ContinueAutofillDrag(args);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(drag.IndexOf("TryResolveCellPointerAddress(args, out var pointerAddress)", StringComparison.Ordinal));
         drag.Should().Contain("SelectRangeFromAnchor(anchor, target);");
     }
 
@@ -365,7 +368,7 @@ public sealed class AvaloniaGridInputSourceTests
         // the anchor, using a persisted extension anchor/cursor).
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);");
+        source.Should().Contain("ExcelSelectionModePlanner.ShouldExtendSelection(_keyboardSelectionMode, navigationModifiers)");
         source.Should().Contain("private CellAddress? _selectionExtensionAnchor;");
         source.Should().Contain("private CellAddress? _selectionExtensionCursor;");
         source.Should().Contain("var anchor = _selectionExtensionAnchor ?? _session.ActiveCell;");

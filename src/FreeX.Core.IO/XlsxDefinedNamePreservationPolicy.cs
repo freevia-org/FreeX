@@ -71,6 +71,10 @@ internal sealed class XlsxDefinedNamePreservationPolicy
         ArgumentNullException.ThrowIfNull(candidate);
 
         var name = candidate.Attribute("name")?.Value;
+        // Custom-view print names are authored from the current view snapshots. Do not
+        // resurrect a source name after its view or captured print setting was removed.
+        if (XlsxCustomViewMapper.IsCustomViewPrintName(name, out _, out _))
+            return false;
         var isModelRepresentable = !string.IsNullOrWhiteSpace(name) &&
             _workbook.ValidateNamedRangeName(name) is null &&
             !XlsxNamedRangeMapper.IsUnmodelableDefinedNameRefersTo(candidate.Value);

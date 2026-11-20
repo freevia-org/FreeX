@@ -59,6 +59,22 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         private readonly MainWindow _window;
         private readonly bool _ownsWindow;
 
+        public double RibbonHeight =>
+            (_window.FindName("RibbonTabs") as FrameworkElement)?.ActualHeight ?? 0;
+
+        public double FormulaBarTop =>
+            (_window.FindName("FormulaBarBorder") as FrameworkElement)?
+                .TransformToAncestor(_window).Transform(new Point(0, 0)).Y ?? 0;
+
+        public void ToggleRibbonVisibility()
+        {
+            var toggle = typeof(MainWindow).GetMethod("ToggleRibbonVisibility", BindingFlags.Instance | BindingFlags.NonPublic);
+            toggle.Should().NotBeNull();
+            toggle!.Invoke(_window, null);
+            _window.UpdateLayout();
+            PumpDispatcher();
+        }
+
         private MainWindowHarness(MainWindow window, bool ownsWindow = false)
         {
             _window = window;

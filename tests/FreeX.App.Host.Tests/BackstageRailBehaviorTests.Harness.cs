@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.UI;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -77,8 +78,90 @@ internal sealed class BackstageRailHarness : IDisposable
         PumpDispatcher();
     }
 
+    public bool EnterBackstageFromAltF()
+    {
+        _window.Activate();
+        var handled = (bool)typeof(MainWindow)
+            .GetMethod("TryHandleDirectRibbonKeyTip", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(_window, [Key.F])!;
+        _window.UpdateLayout();
+        PumpDispatcher();
+        return handled;
+    }
+
+    public void SelectFileTab()
+    {
+        var tabs = (TabControl)_window.FindName("RibbonTabs");
+        var fileHeader = UiText.Get("MainWindow_Header_File");
+        var fileTab = tabs.Items.OfType<TabItem>()
+            .Single(tab => string.Equals(tab.Header?.ToString(), fileHeader, StringComparison.Ordinal));
+        fileTab.IsSelected = true;
+        _window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    public bool IsKeyTipModeActive
+    {
+        get
+        {
+            var session = typeof(MainWindow)
+                .GetField("_ribbonKeyTipSession", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(_window)!;
+            return (bool)session.GetType().GetProperty("IsActive")!.GetValue(session)!;
+        }
+    }
+
+    public void PressEscapeThroughWindowRouting()
+    {
+        var source = PresentationSource.FromVisual(_window)
+            ?? throw new InvalidOperationException("MainWindow has no presentation source.");
+        var args = new KeyEventArgs(Keyboard.PrimaryDevice, source, Environment.TickCount, Key.Escape)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent
+        };
+        typeof(MainWindow)
+            .GetMethod("MainWindow_PreviewKeyDown", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(_window, [_window, args]);
+        if (!args.Handled)
+            _window.MainWindow_KeyDown(_window, args);
+        PumpDispatcher();
+    }
+
     public bool IsBackstageVisible =>
         ((UIElement)_window.FindName("StartScreenOverlay")).Visibility == Visibility.Visible;
+
+    public Workbook Workbook => _window.Session.Workbook;
+    public CellAddress ActiveCell => _window.Session.ActiveCell;
+
+    public void OpenWorkbookBackstageForKeyboard()
+    {
+        _window.OpenWorkbookBackstageForKeyboard();
+        _window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    public void ExecuteOpenShortcut()
+    {
+        if (!WorkbookApplicationCommandRouter.TryRouteShortcut(
+                WorkbookShortcutRoute.OpenBackstage,
+                out var route))
+            throw new InvalidOperationException("Ctrl+O was not registered as a workbook shortcut route.");
+        var bindings = (WorkbookApplicationCommandBindings)typeof(MainWindow)
+            .GetProperty("WorkbookApplicationCommands", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(_window)!;
+        bindings.TryExecuteAsync(route).AsTask().GetAwaiter().GetResult();
+        _window.UpdateLayout();
+        PumpDispatcher();
+    }
+
+    public bool FocusSaveAsFromKeyTip()
+    {
+        var button = RailButton("BackstageSaveAsButton")
+            ?? throw new InvalidOperationException("Backstage Save As button was not found.");
+        var focused = _window.TryFocusBackstageSaveAsKeyTip(button);
+        PumpDispatcher();
+        return focused;
+    }
 
     public string? CurrentEntryId =>
         (string?)_frame.GetType()
@@ -157,6 +240,11 @@ internal sealed class BackstageRailHarness : IDisposable
             .OfType<ContentControl>()
             .Any(host => ReferenceEquals(host.Content, pane));
     }
+
+    public bool HasAutomationId(string automationId) =>
+        Descendants(_frame as DependencyObject)
+            .OfType<FrameworkElement>()
+            .Any(element => AutomationProperties.GetAutomationId(element) == automationId);
 
     public bool IsRailButtonFocused(string automationId) =>
         RailButton(automationId) is { } button &&

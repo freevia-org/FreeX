@@ -384,10 +384,13 @@ public sealed class PageContentRenderModelBuilderTests
         var visible = CreatePrintedChart(sheet, "Visible chart", left: 24, top: 24);
         var hidden = CreatePrintedChart(sheet, "Hidden chart", left: 24, top: 24);
         hidden.IsVisible = false;
+        var nonPrinting = CreatePrintedChart(sheet, "Non-printing chart", left: 24, top: 24);
+        nonPrinting.PrintObject = false;
         var offPage = CreatePrintedChart(sheet, "Off-page chart", left: 10000, top: 10000);
         var clipped = CreatePrintedChart(sheet, "Clipped chart", left: 650, top: 24);
         sheet.Charts.Add(visible);
         sheet.Charts.Add(hidden);
+        sheet.Charts.Add(nonPrinting);
         sheet.Charts.Add(offPage);
         sheet.Charts.Add(clipped);
 
@@ -396,6 +399,8 @@ public sealed class PageContentRenderModelBuilderTests
         layout.Charts.Select(chart => chart.Id).Should().Contain(visible.Id);
         layout.Charts.Select(chart => chart.Id).Should().Contain(clipped.Id);
         layout.Charts.Select(chart => chart.Id).Should().NotContain(hidden.Id);
+        layout.Charts.Select(chart => chart.Id).Should().NotContain(nonPrinting.Id);
+        nonPrinting.IsVisible.Should().BeTrue();
         layout.Charts.Select(chart => chart.Id).Should().NotContain(offPage.Id);
         layout.Charts.Single(chart => chart.Id == visible.Id).TextOverlays
             .Select(overlay => overlay.Text).Should().Contain("Visible chart");

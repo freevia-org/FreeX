@@ -6,7 +6,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class StatusBarCustomizeMenuSourceTests
 {
     [Fact]
-    public void DefaultStatusBarCustomization_MatchesExcelVisibleStatistics()
+    public void DefaultStatusBarCustomization_MatchesExcelAggregateDefaults()
     {
         var options = new AppOptions();
 

@@ -26,7 +26,10 @@ public sealed class PrintPreviewSurfacePlannerTests
             PrintPreviewSidesMode.TwoSidedShortEdge);
         plan.SidesSelectedIndex.Should().Be(0);
         plan.StatusText.Should().Be("Ready: Office Printer; 1 copy; 3 pages");
-        plan.PageRangeText.Should().Be("All pages");
+        plan.PageRangeChoices.Should().Equal(
+            new PrintPreviewPageRangeChoice(PrintPreviewPageRangeMode.AllPages, "All pages", true),
+            new PrintPreviewPageRangeChoice(PrintPreviewPageRangeMode.CurrentPage, "Current page", false),
+            new PrintPreviewPageRangeChoice(PrintPreviewPageRangeMode.Pages, "Pages", false));
         plan.CloseButtonText.Should().Be("Close");
         PrintPreviewSurfacePlanner.ParityPrinterName.Should().Be("FreeX Parity Printer");
     }

@@ -20,12 +20,9 @@ public static class WorkbookFactory
         var defaultStyle = CellStyle.Default.Clone();
         defaultStyle.FontName = NormalizeDefaultFontName(options.DefaultFontName);
         defaultStyle.FontSize = NormalizeDefaultFontSize(options.DefaultFontSize);
-        // When no custom default font is specified the default style follows the workbook theme's
-        // minor (body) font, so switching Theme Fonts re-renders default cells automatically.
-        // An explicit DefaultFontName pins the scheme to None so the user's choice is respected.
-        defaultStyle.FontScheme = string.IsNullOrWhiteSpace(options.DefaultFontName)
-            ? CellFontScheme.Minor
-            : CellFontScheme.None;
+        // The default cell font is independent of the workbook's theme body font (Aptos).
+        // Keep it pinned so the Office default (Aptos Narrow) and user-selected defaults persist.
+        defaultStyle.FontScheme = CellFontScheme.None;
 
         var workbook = new Workbook(NormalizeWorkbookName(options.Name), defaultStyle);
         var sheetCount = NormalizeDefaultSheetCount(options.DefaultSheetCount);

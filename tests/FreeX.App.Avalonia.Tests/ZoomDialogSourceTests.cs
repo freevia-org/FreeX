@@ -10,16 +10,18 @@ public sealed class ZoomDialogSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, zoomDialogChrome);");
-        source.Should().Contain("ControlHeight = 20,");
-        source.Should().Contain("CompactRadioButtonHeight = 16,");
-        source.Should().Contain("TextBoxHeight = ZoomDialogPlanner.CustomPercentBoxHeight,");
+        source.Should().Contain("ForegroundBrush = Brushes.Black,");
+        source.Should().Contain("TextOptions.SetTextRenderingMode(dialog, TextRenderingMode.Antialias);");
+        source.Should().Contain("ControlHeight = ZoomDialogVisualMetrics.AvaloniaControlHeight,");
+        source.Should().Contain("CompactRadioButtonHeight = ZoomDialogVisualMetrics.AvaloniaCompactRadioButtonHeight,");
+        source.Should().Contain("TextBoxHeight = ZoomDialogVisualMetrics.CustomPercentBoxHeight,");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(");
-        source.Should().Contain("ZoomDialogPlanner.PresetColumnWidth");
+        source.Should().Contain("ZoomDialogVisualMetrics.PresetColumnWidth");
         source.Should().Contain("Header = UiText.Get(\"Zoom_Magnification\")");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(magnificationGroup, zoomDialogChrome);");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton])");
-        source.Should().Contain("Width = ZoomDialogPlanner.ActionButtonWidth");
+        source.Should().Contain("Width = ZoomDialogVisualMetrics.ActionButtonWidth");
     }
 
     [Fact]
@@ -30,9 +32,9 @@ public sealed class ZoomDialogSourceTests
         source.Should().Contain("ZoomDialogPlanner.TryCreateResult(customBox.Text, out var customResult, out var validationError)");
         source.Should().Contain("selectedZoomPercent = CalculateZoomToSelectionPercent();");
         source.Should().Contain("selectedZoomPercent = zoom;");
-        source.Should().Contain("AutomationProperties.SetAutomationId(customBox, \"ZoomCustomPercentBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"ZoomOkButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"ZoomCancelButton\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(customBox, ZoomDialogVisualMetrics.CustomPercentBoxAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, ZoomDialogVisualMetrics.OkButtonAutomationId);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, ZoomDialogVisualMetrics.CancelButtonAutomationId);");
     }
 
     private static string RepoFile(params string[] parts) =>

@@ -34,14 +34,25 @@ public static class PrintCommentSummaryPlanner
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(printPlan);
 
+        return FilterToPrintedCells(
+            sheet,
+            printPlan.AreaPlans.Select(area => (
+                area.Pages.SelectMany(page => page.Rows),
+                area.Pages.SelectMany(page => page.Columns))));
+    }
+
+    public static (IReadOnlyDictionary<CellAddress, string> Comments, IReadOnlyDictionary<CellAddress, ThreadedComment> ThreadedComments)
+        FilterToPrintedCells(Sheet sheet, IEnumerable<(IEnumerable<uint> Rows, IEnumerable<uint> Columns)> areas)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        ArgumentNullException.ThrowIfNull(areas);
+
         if (sheet.Comments.Count == 0 && sheet.ThreadedComments.Count == 0)
             return (sheet.Comments, sheet.ThreadedComments);
 
-        var areaCellSets = printPlan.AreaPlans
-            .Select(area => (
-                Rows: new HashSet<uint>(area.Pages.SelectMany(page => page.Rows)),
-                Columns: new HashSet<uint>(area.Pages.SelectMany(page => page.Columns))))
-            .ToList();
+        var areaCellSets = areas
+            .Select(area => (Rows: area.Rows.ToHashSet(), Columns: area.Columns.ToHashSet()))
+            .ToArray();
 
         bool IsPrinted(CellAddress address) =>
             areaCellSets.Any(area => area.Rows.Contains(address.Row) && area.Columns.Contains(address.Col));

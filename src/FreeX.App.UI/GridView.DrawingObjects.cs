@@ -1885,6 +1885,11 @@ public partial class GridView
         var text = shape.ShapeText;
         if (string.IsNullOrEmpty(text))
             return;
+        const double EmusPerDip = 9525.0;
+        var leftInset = shape.ShapeTextInsets?.Left is { } left ? Math.Max(0, left / EmusPerDip) : ShapeTextHPad;
+        var rightInset = shape.ShapeTextInsets?.Right is { } right ? Math.Max(0, right / EmusPerDip) : ShapeTextHPad;
+        var topInset = shape.ShapeTextInsets?.Top is { } top ? Math.Max(0, top / EmusPerDip) : ShapeTextVPad;
+        var bottomInset = shape.ShapeTextInsets?.Bottom is { } bottom ? Math.Max(0, bottom / EmusPerDip) : ShapeTextVPad;
 
         // R60-render-drawing-shapes-6-4: when "Wrap text in shape" is off, Excel keeps the text on
         // a single unconstrained line (which may overflow the shape's left/right edges) instead of
@@ -1892,9 +1897,9 @@ public partial class GridView
         // cell-text renderer uses for its own wrap-off path (see GetDefaultWrappedFormattedText
         // callers in GridView.Rendering.cs) -- disables wrapping entirely.
         var textWidth = shape.ShapeTextWrap
-            ? Math.Max(1, rect.Width - ShapeTextHPad * 2)
+            ? Math.Max(1, rect.Width - leftInset - rightInset)
             : 0;
-        var textHeight = Math.Max(1, rect.Height - ShapeTextVPad * 2);
+        var textHeight = Math.Max(1, rect.Height - topInset - bottomInset);
 
         // Resolve text color: theme → explicit → white-on-dark heuristic.
         var resolvedColor = shape.ResolveShapeTextColor(WorkbookTheme);
@@ -1956,11 +1961,11 @@ public partial class GridView
         var textBlockHeight = formatted.Height;
         var textTop = shape.ShapeTextVAnchor switch
         {
-            DrawingShapeTextVAnchor.Top => rect.Top + ShapeTextVPad,
-            DrawingShapeTextVAnchor.Bottom => Math.Max(rect.Top + ShapeTextVPad,
-                rect.Bottom - ShapeTextVPad - textBlockHeight),
+            DrawingShapeTextVAnchor.Top => rect.Top + topInset,
+            DrawingShapeTextVAnchor.Bottom => Math.Max(rect.Top + topInset,
+                rect.Bottom - bottomInset - textBlockHeight),
             _ => // Middle
-                rect.Top + ShapeTextVPad + Math.Max(0, (textHeight - textBlockHeight) / 2),
+                rect.Top + topInset + Math.Max(0, (textHeight - textBlockHeight) / 2),
         };
 
         // Horizontal origin: a no-wrap run has no width constraint, so center/right alignment is relative to its
@@ -1969,11 +1974,11 @@ public partial class GridView
         var textLeft = !shape.ShapeTextWrap
             ? hAlign switch
             {
-                TextAlignment.Center => rect.Left + rect.Width / 2,
-                TextAlignment.Right => rect.Right - ShapeTextHPad,
-                _ => rect.Left + ShapeTextHPad,
+                TextAlignment.Center => (rect.Left + leftInset + rect.Right - rightInset) / 2,
+                TextAlignment.Right => rect.Right - rightInset,
+                _ => rect.Left + leftInset,
             }
-            : rect.Left + ShapeTextHPad;
+            : rect.Left + leftInset;
 
         // Clip to the shape's bounding rectangle so text doesn't bleed outside.
         var clipRect = new Rect(rect.Left, rect.Top, rect.Width, rect.Height);

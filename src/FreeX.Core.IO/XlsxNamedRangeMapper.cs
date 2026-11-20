@@ -972,7 +972,8 @@ internal static class XlsxNamedRangeMapper
             return true;
 
         var trimmedName = name.Trim();
-        return trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
+        return XlsxCustomViewMapper.IsCustomViewPrintName(trimmedName, out _, out _) ||
+               trimmedName.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase) ||
                trimmedName.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase);
     }
 

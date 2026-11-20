@@ -50,6 +50,9 @@ public enum PrintPreviewPaintKind
     /// <see cref="PrintPreviewInstructionBuilder.PicturePlaceholderFill"/> box it used before.
     /// </summary>
     Image,
+
+    /// <summary>Worksheet shape geometry, clipped to the printed grid.</summary>
+    Shape,
 }
 
 /// <summary>
@@ -73,6 +76,8 @@ public readonly record struct PrintPreviewPaintInstruction(
     byte[]? ImageBytes = null,
     string ImageContentType = "")
 {
+    public PageShapeBlock? ShapeBlock { get; init; }
+    public LayoutRect ShapeClip { get; init; }
     /// <summary>
     /// R168-presentation-preview-headerfooter-picture-1: an encoded raster image painted into
     /// <paramref name="bounds"/>. The bytes are passed through untouched (no platform image type
@@ -247,15 +252,19 @@ public static class PrintPreviewInstructionBuilder
     /// <summary>
     /// Flattens one page's <see cref="PageContentLayout"/> into an ordered list of paint primitives.
     /// Paint order mirrors the source print renderer: page background, heading band fills, cell fills,
-    /// gridlines, cell border edges, cell text, charts, text boxes, then header/footer bands on top.
+    /// gridlines, cell border edges, cell text, charts, text boxes, header/footer bands, and comments.
     /// </summary>
     public static PrintPreviewPagePainting Build(WorksheetPrintPageContentPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return Build(plan.PortableLayout) with { PageBounds = plan.Transform.PageClip };
+        return Build(plan.PortableLayout, plan.Comments.PreviewInstructions) with { PageBounds = plan.Transform.PageClip };
     }
 
-    public static PrintPreviewPagePainting Build(PageContentLayout layout)
+    public static PrintPreviewPagePainting Build(PageContentLayout layout) => Build(layout, []);
+
+    private static PrintPreviewPagePainting Build(
+        PageContentLayout layout,
+        IReadOnlyList<PrintPreviewPaintInstruction> commentInstructions)
     {
         ArgumentNullException.ThrowIfNull(layout);
 
@@ -329,66 +338,35 @@ public static class PrintPreviewInstructionBuilder
                 ValidationCircleLayoutPlanner.StrokeThickness));
         }
 
-        // 8. Charts over the grid/cell text.
-        foreach (var chart in layout.Charts)
+        var shapes = layout.Shapes.ToDictionary(item => item.Id);
+        var charts = layout.Charts.ToDictionary(item => item.Id);
+        var pictures = layout.Pictures.ToDictionary(item => item.Id);
+        var textBoxes = layout.TextBoxes.ToDictionary(item => item.Id);
+        foreach (var entry in layout.GetDrawingOrder())
         {
-            instructions.Add(PrintPreviewPaintInstruction.Rectangle(
-                chart.Bounds,
-                chart.Fill,
-                chart.Outline,
-                chart.OutlineThickness));
-        }
-
-        foreach (var chart in layout.Charts)
-        {
-            foreach (var overlay in chart.TextOverlays)
+            switch (entry.Kind)
             {
-                if (!string.IsNullOrEmpty(overlay.Text))
-                    instructions.Add(PrintPreviewPaintInstruction.TextRun(
-                        new LayoutPoint(overlay.X, overlay.Y),
-                        chart.Bounds.Width,
-                        overlay.Text,
-                        new PageTextFont(
-                            PrintChartTextOverlayPlanner.FontFamily,
-                            overlay.FontSize,
-                            Bold: false,
-                            Italic: false,
-                            overlay.Color),
-                        PageTextAlignment.Left));
+                case SelectionPaneObjectKind.Shape when shapes.TryGetValue(entry.Id, out var shape):
+                    instructions.Add(new PrintPreviewPaintInstruction(PrintPreviewPaintKind.Shape, 0, 0, 0, 0,
+                        null, null, 0, "", default, PageTextAlignment.Left) { ShapeBlock = shape, ShapeClip = shape.BodyClip });
+                    break;
+                case SelectionPaneObjectKind.Chart when charts.TryGetValue(entry.Id, out var chart):
+                    instructions.Add(PrintPreviewPaintInstruction.Rectangle(chart.Bounds, chart.Fill, chart.Outline, chart.OutlineThickness));
+                    foreach (var overlay in chart.TextOverlays)
+                        if (!string.IsNullOrEmpty(overlay.Text))
+                            instructions.Add(PrintPreviewPaintInstruction.TextRun(new LayoutPoint(overlay.X, overlay.Y), chart.Bounds.Width,
+                                overlay.Text, new PageTextFont(PrintChartTextOverlayPlanner.FontFamily, overlay.FontSize, false, false, overlay.Color), PageTextAlignment.Left));
+                    break;
+                case SelectionPaneObjectKind.Picture when pictures.TryGetValue(entry.Id, out var picture):
+                    instructions.Add(PrintPreviewPaintInstruction.Rectangle(picture.Bounds, PicturePlaceholderFill));
+                    break;
+                case SelectionPaneObjectKind.TextBox when textBoxes.TryGetValue(entry.Id, out var textBox):
+                    instructions.Add(PrintPreviewPaintInstruction.Rectangle(textBox.Bounds, textBox.Fill, textBox.Outline, textBox.OutlineThickness));
+                    if (!string.IsNullOrEmpty(textBox.Text))
+                        instructions.Add(PrintPreviewPaintInstruction.TextRun(new LayoutPoint(textBox.TextBounds.Left, textBox.TextBounds.Top),
+                            textBox.TextBounds.Width, textBox.Text, textBox.Font, PageTextAlignment.Left));
+                    break;
             }
-        }
-
-        // 9. Pictures over the grid/cell text and chart layer, below text-box annotations.
-        // R92-consumer-wiring-sweep-1: this preview canvas has no image paint primitive (only
-        // rectangle/line/text -- the same reason a chart above only ever gets a placeholder box, never
-        // an actual rendered chart), so a picture is drawn the same bounded-placeholder way rather than
-        // being silently absent as it was before this pass.
-        foreach (var picture in layout.Pictures)
-        {
-            instructions.Add(PrintPreviewPaintInstruction.Rectangle(
-                picture.Bounds,
-                PicturePlaceholderFill));
-        }
-
-        // 10. Text boxes over the grid/cell text and chart layer.
-        foreach (var textBox in layout.TextBoxes)
-        {
-            instructions.Add(PrintPreviewPaintInstruction.Rectangle(
-                textBox.Bounds,
-                textBox.Fill,
-                textBox.Outline,
-                textBox.OutlineThickness));
-        }
-
-        foreach (var textBox in layout.TextBoxes)
-        {
-            if (!string.IsNullOrEmpty(textBox.Text))
-                instructions.Add(PrintPreviewPaintInstruction.TextRun(
-                    new LayoutPoint(textBox.TextBounds.Left, textBox.TextBounds.Top),
-                    textBox.TextBounds.Width,
-                    textBox.Text,
-                    textBox.Font,
-                    PageTextAlignment.Left));
         }
 
         // 11. Header / footer bands -- pictures first, then the band text beside them.
@@ -407,6 +385,8 @@ public static class PrintPreviewInstructionBuilder
             instructions.Add(PrintPreviewPaintInstruction.TextRun(
                 run.TextOrigin, run.Bounds.Width, run.Text, BandFont, run.Alignment));
 
+        // Comments are painted over the worksheet and its other drawing layers.
+        instructions.AddRange(commentInstructions);
         return new PrintPreviewPagePainting(layout.PageNumber, layout.PageBounds, instructions);
     }
 

@@ -117,7 +117,7 @@ public sealed partial class ViewportService
             ShapeTextGradientEndColor: shape.ResolveShapeTextGradientEndColor(theme),
             ShapeTextOutlineColor: shape.ResolveShapeTextOutlineColor(theme),
             ShapeTextOutlineWidthPoints: shape.ShapeTextOutlineWidthPoints,
-            ShapeTextHasNoFill: shape.ShapeTextHasNoFill));
+            ShapeTextHasNoFill: shape.ShapeTextHasNoFill) { ShapeTextInsets = shape.ShapeTextInsets });
     }
 
     // Projects the authored shape effect preset into the render plan using the same parameter

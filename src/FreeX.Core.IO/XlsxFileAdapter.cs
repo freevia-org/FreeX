@@ -1227,7 +1227,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             if (customViewStatesById.TryGetValue(customView.Id, out var states) && states.Count > 0)
                 workbook.CustomViews.Add(new WorkbookCustomView(
                     customView.Name,
-                    states,
+                    customView.IncludePrintSettings
+                        ? states.Select(state => state with
+                        {
+                            PrintAreas = state.PrintAreas ?? [],
+                            // Excel omits printOptions when both settings are false. Once
+                            // the workbook view says print settings were included, absence
+                            // represents those defaults rather than an uncaptured setting.
+                            PrintGridlines = state.PrintGridlines ?? false,
+                            PrintHeadings = state.PrintHeadings ?? false,
+                            PrintSettings = state.PrintSettings ?? new WorksheetCustomViewPrintSettings()
+                        }).ToList()
+                        : states,
                     customView.Id,
                     customView.IncludePrintSettings,
                     customView.IncludeHiddenRowsColumnsAndFilterSettings,
@@ -1235,6 +1246,13 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
                         ? customView.ActiveSheetIndex
                         : null));
         }
+
+        try
+        {
+            packageStream.Position = 0;
+            XlsxCustomViewMapper.ReadCustomViewPrintNames(packageStream, workbook);
+        }
+        catch (Exception ex) { warnings.Add($"[custom-view-print-names]: {ex.Message}"); }
 
         SourcePackages.Remove(workbook);
         materializationStopwatch.Stop();

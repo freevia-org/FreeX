@@ -76,7 +76,17 @@ public sealed class WorksheetPrintPageContentPlannerTests
         // height; it grows to 48 here because the picture is taller than that.
         avalonia.HeaderFooter.HeaderPictures.Right.Should().NotBeNull();
         avalonia.HeaderFooter.HeaderBand.Left.Height.Should().Be(48);
-        avalonia.Comments.DisplayedComments.Should().BeEmpty();
+        var previewComment = avalonia.Comments.DisplayedComments.Should().ContainSingle().Which;
+        var nativeComment = wpf.Comments.DisplayedComments[0];
+        var nativeAnchor = wpf.Transform.Anchor;
+        var nativeScale = wpf.Transform.ScaleRatio;
+        previewComment.Text.Should().Be("Pinned note");
+        previewComment.Bounds.Left.Should().BeApproximately(
+            nativeAnchor.X + (nativeComment.Bounds.Left - nativeAnchor.X) * nativeScale, 0.0001);
+        previewComment.Bounds.Top.Should().BeApproximately(
+            nativeAnchor.Y + (nativeComment.Bounds.Top - nativeAnchor.Y) * nativeScale, 0.0001);
+        previewComment.Bounds.Width.Should().BeApproximately(nativeComment.Bounds.Width * nativeScale, 0.0001);
+        previewComment.Bounds.Height.Should().BeApproximately(nativeComment.Bounds.Height * nativeScale, 0.0001);
         avalonia.Hyperlinks.Should().BeEmpty();
         avalonia.CellDestinations.Should().BeEmpty();
         avalonia.PortableLayout.Cells.Should().NotBeEmpty();

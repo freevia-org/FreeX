@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Host.Tests;
 
@@ -23,6 +24,22 @@ public sealed class RibbonKeyTipTabScopeTests
             .KeyTip.Should().Be("PC");
         controls.Single(control => control.CommandId.Value == "100% Stacked Column Chart")
             .KeyTip.Should().Be("PCC");
+    }
+
+    [Fact]
+    public void InsertTable_UsesExcelKeyTipAndResolvesToTableCommand()
+    {
+        var definition = FreeXRibbon.Build();
+        var table = definition.FindTab("InsertTab")!.Groups
+            .SelectMany(group => group.Controls)
+            .Single(control => control.CommandId.Value == "Table");
+
+        table.KeyTip.Should().Be("T");
+
+        var routes = FreeXRibbonKeyTipRoutePlanner.Build(definition);
+        routes.TryResolveExact("NT", out var route).Should().BeTrue();
+        route.Kind.Should().Be(FreeXRibbonKeyTipRouteKind.RibbonCommand);
+        route.CommandId!.Value.Value.Should().Be("Table");
     }
 
     [Fact]

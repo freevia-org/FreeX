@@ -1,7 +1,7 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Services;
+namespace FreeX.App.Presentation.Dialogs;
 
 /// <summary>
 /// Identifies why a manual-translation request could not be planned, so the UI shell can surface a

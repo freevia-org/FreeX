@@ -196,7 +196,10 @@ public sealed record DrawingObjectBounds(
     CellColor? GradientFillEndColor = null,
     DrawingShapeGradientDirection GradientFillDirection = DrawingShapeGradientDirection.DiagonalDown,
     // Explicit <a:rPr><a:noFill/> for WordArt text. Trailing default preserves existing callers.
-    bool ShapeTextHasNoFill = false);
+    bool ShapeTextHasNoFill = false)
+{
+    public DrawingShapeTextInsets? ShapeTextInsets { get; init; }
+}
 
 /// <summary>
 /// Render-plan projection of a drawing object's authored visual effect (shadow / glow /

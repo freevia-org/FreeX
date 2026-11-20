@@ -51,6 +51,8 @@ internal static class DuplicateSheetDrawingCloner
             var cloned = CloneDrawingShape(shape, copyId);
             // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
             cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
+            if (cloned.ShapeTextDocument is { } document)
+                cloned.ShapeTextDocument = document.RewriteHyperlinks(link => RewriteSameSheetHyperlinkTarget(link, source.Name, copy.Name)!);
             copy.DrawingShapes.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, cloned.Id);
@@ -468,6 +470,11 @@ internal static class DuplicateSheetDrawingCloner
             // unchecked) silently reverted to the locked default on every clone, re-locking it against
             // move/resize under sheet protection even though the source stayed unlocked.
             Locked = textBox.Locked,
+            PrintObject = textBox.PrintObject,
+            DrawingNoMove = textBox.DrawingNoMove,
+            DrawingNoResize = textBox.DrawingNoResize,
+            DrawingLockAttributes = textBox.DrawingLockAttributes is null ? null : new Dictionary<string, string>(textBox.DrawingLockAttributes),
+            DrawingLockChildrenXml = textBox.DrawingLockChildrenXml,
             HasFill = textBox.HasFill,
             FillColor = textBox.FillColor,
             OutlineColor = textBox.OutlineColor,
@@ -530,6 +537,12 @@ internal static class DuplicateSheetDrawingCloner
             IsVisible = shape.IsVisible,
             HasFill = shape.HasFill,
             Locked = shape.Locked,
+            PrintObject = shape.PrintObject,
+            DrawingNoMove = shape.DrawingNoMove,
+            DrawingNoResize = shape.DrawingNoResize,
+            DrawingLockAttributes = shape.DrawingLockAttributes is null ? null : new Dictionary<string, string>(shape.DrawingLockAttributes),
+            DrawingLockChildrenXml = shape.DrawingLockChildrenXml,
+            SourceConnectorKind = shape.SourceConnectorKind,
             Title = shape.Title,
             AltText = shape.AltText,
             // R91-print-twin-two-tier-synthetic-sweep-2 precedent (see ClonePicture.IsDecorative
@@ -584,6 +597,8 @@ internal static class DuplicateSheetDrawingCloner
             ShapeTextOutlineThemeColor = shape.ShapeTextOutlineThemeColor,
             ShapeTextOutlineWidthPoints = shape.ShapeTextOutlineWidthPoints,
             ShapeText = shape.ShapeText,
+            ShapeTextDocument = shape.ShapeTextDocument,
+            ShapeTextInsets = shape.ShapeTextInsets,
             ShapeTextFontSizePoints = shape.ShapeTextFontSizePoints,
             ShapeTextBold = shape.ShapeTextBold,
             ShapeTextItalic = shape.ShapeTextItalic,
@@ -680,9 +695,14 @@ internal static class DuplicateSheetDrawingCloner
             // silently reverted to the locked default on every clone, re-locking it against move/resize
             // under sheet protection even though the source stayed unlocked.
             Locked = picture.Locked,
+            PrintObject = picture.PrintObject,
             Width = picture.Width,
             Height = picture.Height,
             LockAspectRatio = picture.LockAspectRatio,
+            DrawingNoMove = picture.DrawingNoMove,
+            DrawingNoResize = picture.DrawingNoResize,
+            DrawingLockAttributes = picture.DrawingLockAttributes is null ? null : new Dictionary<string, string>(picture.DrawingLockAttributes),
+            DrawingLockChildrenXml = picture.DrawingLockChildrenXml,
             RotationDegrees = picture.RotationDegrees,
             FlipHorizontal = picture.FlipHorizontal,
             FlipVertical = picture.FlipVertical,
@@ -746,6 +766,9 @@ internal static class DuplicateSheetDrawingCloner
             // silently reverted to the locked default on every clone, re-locking it against move/resize
             // under sheet protection even though the source stayed unlocked.
             Locked = chart.Locked,
+            PrintObject = chart.PrintObject,
+            DrawingLockAttributes = chart.DrawingLockAttributes is null ? null : new Dictionary<string, string>(chart.DrawingLockAttributes),
+            DrawingLockChildrenXml = chart.DrawingLockChildrenXml,
             Type = chart.Type,
             Uses1904DateSystem = chart.Uses1904DateSystem,
             Language = chart.Language,

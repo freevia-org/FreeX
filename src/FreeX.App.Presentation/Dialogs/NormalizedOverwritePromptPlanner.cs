@@ -4,6 +4,7 @@ public enum NormalizedOverwriteTargetKind
 {
     Pdf,
     Workbook,
+    Xps,
 }
 
 public sealed record NormalizedOverwritePromptSpec(
@@ -43,6 +44,17 @@ public static class NormalizedOverwritePromptPlanner
                 "NormalizedOverwrite_CancelPdfHelpText",
                 "PdfExportOverwriteReplaceButton",
                 "PdfExportOverwriteCancelButton"),
+            NormalizedOverwriteTargetKind.Xps => new NormalizedOverwritePromptSpec(
+                fileName,
+                "NormalizedOverwrite_ReplaceXpsTitle",
+                "NormalizedOverwrite_FileAlreadyExistsFormat",
+                "NormalizedOverwrite_XpsDetail",
+                "ShellLoc_ReplaceButton",
+                "Common_Cancel",
+                "NormalizedOverwrite_ReplaceXpsHelpText",
+                "NormalizedOverwrite_CancelXpsHelpText",
+                "XpsExportOverwriteReplaceButton",
+                "XpsExportOverwriteCancelButton"),
             NormalizedOverwriteTargetKind.Workbook => new NormalizedOverwritePromptSpec(
                 fileName,
                 "NormalizedOverwrite_ReplaceWorkbookTitle",

@@ -1265,7 +1265,7 @@ public sealed class Parser
         Advance();
         var start = new CellRefNode(startColumn, 1, isStartAbsolute, false, startSheetName);
         var end = new CellRefNode(endColumn, Model.CellAddress.MaxRow, isEndAbsolute, false);
-        range = new RangeRefNode(start, end, startSheetName, endSheetName);
+        range = new RangeRefNode(start, end, startSheetName, endSheetName, SpanKind: SpanReferenceKind.FullColumn);
         return true;
     }
 
@@ -1301,7 +1301,7 @@ public sealed class Parser
         Advance();
         var start = new CellRefNode("A", startRow, false, isStartAbsolute, startSheetName);
         var end = new CellRefNode(Model.CellAddress.NumberToColumnName(Model.CellAddress.MaxCol), endRow, false, isEndAbsolute);
-        range = new RangeRefNode(start, end, startSheetName, endSheetName);
+        range = new RangeRefNode(start, end, startSheetName, endSheetName, SpanKind: SpanReferenceKind.FullRow);
         return true;
     }
 

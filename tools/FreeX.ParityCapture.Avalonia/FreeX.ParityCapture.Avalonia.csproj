@@ -4,6 +4,7 @@
     <AssemblyName>FreeX.ParityCapture.Avalonia</AssemblyName>
     <ApplicationTitle>FreeX Parity Capture</ApplicationTitle>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OutputType>Exe</OutputType>
     <RootNamespace>FreeX.App.Avalonia</RootNamespace>
     <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
@@ -12,7 +13,7 @@
 
   <ItemGroup>
     <Compile Include="../../src/FreeX.App.Avalonia/**/*.cs"
-             Exclude="../../src/FreeX.App.Avalonia/bin/**;../../src/FreeX.App.Avalonia/obj/**;../../src/FreeX.App.Avalonia/MacOs/**/*.cs;../../src/FreeX.App.Avalonia/Program.cs"
+             Exclude="../../src/FreeX.App.Avalonia/bin/**;../../src/FreeX.App.Avalonia/obj/**;../../src/FreeX.App.Avalonia/Program.cs"
              LinkBase="Renderer" />
     <Compile Include="../FreeX.Validation.Avalonia/RendererHost/MainWindow.RendererValidationAccess.cs"
              Link="Renderer/MainWindow.RendererValidationAccess.cs" />

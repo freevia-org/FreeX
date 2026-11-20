@@ -501,6 +501,9 @@ public sealed partial class NativeJsonAdapter
         public WorksheetAutoFilterDto? AutoFilter { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string[]? PrintAreas { get; set; }
+        public string? OpaquePrintAreaExpression { get; set; }
+        public string? OpaquePrintTitlesExpression { get; set; }
+        public List<CustomViewPrintAreaFormDto>? PrintAreaReferenceForms { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public WorksheetPageOrientation? PageOrientation { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -521,6 +524,59 @@ public sealed partial class NativeJsonAdapter
         public ScaleToFitDto? ScaleToFit { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? FitToPage { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public CustomViewPrintSettingsDto? PrintSettings { get; set; }
+    }
+
+    private class CustomViewPrintAreaFormDto
+    {
+        public string Range { get; set; } = "";
+        public WorksheetCustomViewPrintAreaKind Kind { get; set; }
+    }
+
+    private class CustomViewPrintSettingsDto
+    {
+        public HeaderFooterDto? PageHeader { get; set; }
+        public HeaderFooterDto? PageFooter { get; set; }
+        public HeaderFooterDto? FirstPageHeader { get; set; }
+        public HeaderFooterDto? FirstPageFooter { get; set; }
+        public HeaderFooterDto? EvenPageHeader { get; set; }
+        public HeaderFooterDto? EvenPageFooter { get; set; }
+        public bool DifferentFirstPageHeaderFooter { get; set; }
+        public bool DifferentOddEvenHeaderFooter { get; set; }
+        public bool HeaderFooterScaleWithDocument { get; set; } = true;
+        public bool HeaderFooterAlignWithMargins { get; set; } = true;
+        public bool CenterHorizontallyOnPage { get; set; }
+        public bool CenterVerticallyOnPage { get; set; }
+        public WorksheetPageOrder PageOrder { get; set; } = WorksheetPageOrder.DownThenOver;
+        public int? FirstPageNumber { get; set; }
+        public bool? UsePrinterDefaults { get; set; }
+        public int? PrintCopies { get; set; }
+        public bool PrintBlackAndWhite { get; set; }
+        public bool PrintDraftQuality { get; set; }
+        public int? PrintQualityDpi { get; set; }
+        public int? PrintQualityVerticalDpi { get; set; }
+        public WorksheetPrintErrorValue PrintErrorValue { get; set; } = WorksheetPrintErrorValue.Displayed;
+        public WorksheetPrintComments PrintComments { get; set; } = WorksheetPrintComments.None;
+        public bool? AutoPageBreaksCaptured { get; set; }
+        public bool? AutoPageBreaks { get; set; }
+        public RepeatRangeDto? PrintTitleRows { get; set; }
+        public RepeatRangeDto? PrintTitleColumns { get; set; }
+        public List<uint>? RowPageBreaks { get; set; }
+        public WorksheetPageBreaksMetadataDto? RowPageBreaksMetadata { get; set; }
+        public List<uint>? ColumnPageBreaks { get; set; }
+        public WorksheetPageBreaksMetadataDto? ColumnPageBreaksMetadata { get; set; }
+        public bool? FitToPage { get; set; }
+        public bool? LegacyPrintSizeCaptured { get; set; }
+        public int? LegacyPrintSize { get; set; }
+        public bool? PageSetupMetadataCaptured { get; set; }
+        public WorksheetPageSetupMetadataDto? PageSetupMetadata { get; set; }
+        public bool? HeaderFooterMetadataCaptured { get; set; }
+        public WorksheetHeaderFooterMetadataDto? HeaderFooterMetadata { get; set; }
+        public bool? PageMarginsMetadataCaptured { get; set; }
+        public WorksheetPageMarginsMetadataDto? PageMarginsMetadata { get; set; }
+        public bool? PrintOptionsMetadataCaptured { get; set; }
+        public WorksheetPrintOptionsMetadataDto? PrintOptionsMetadata { get; set; }
     }
 
     private class SheetDto

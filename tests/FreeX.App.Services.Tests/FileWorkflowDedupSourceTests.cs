@@ -442,7 +442,7 @@ public sealed class FileWorkflowDedupSourceTests
             "MainWindow.cs"));
 
         avaloniaSource.Should().Contain("new AtomicExportExecutor()")
-            .And.Contain(".ExecuteAsync<Pdf.AvaloniaPdfDocumentExportOutcome>(")
+            .And.Contain(".ExecutePathAsync<string>(")
             .And.Contain("Pdf.AvaloniaPdfDocumentExporter.Save(");
         avaloniaSource.Should().NotContain("pdfBuffer.ToArray()");
         avaloniaSource.Should().NotContain("AtomicFileWriter.WriteAllBytesAsync(");

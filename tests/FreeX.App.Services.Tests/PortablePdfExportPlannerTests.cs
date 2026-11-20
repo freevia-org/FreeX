@@ -152,7 +152,7 @@ public sealed class PortablePdfExportPlannerTests
         exportPrintPlan.IsReady.Should().BeTrue();
         plan.IsReady.Should().BeFalse();
         plan.Status.Should().Be(PortablePdfExportPlanStatus.OutputKindUnavailable);
-        plan.StatusText.Should().Be("Portable PDF export only accepts PDF export print plans; XPS remains Windows-only.");
+        plan.StatusText.Should().Be("Portable PDF export only accepts PDF export print plans.");
         plan.PageRequests.Should().BeEmpty();
     }
 

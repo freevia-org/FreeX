@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using FluentAssertions;
 using Free.Shared.Pdf;
@@ -6,9 +7,8 @@ using Free.Shared.Xps;
 namespace Free.Shared.Pdf.Tests;
 
 /// <summary>
-/// XPS expresses an <c>a:srcRect</c> crop as an ImageBrush <c>Viewbox</c> over the source bounding
-/// box; negative insets outset instead, which shrinks the destination rectangle. Both halves come
-/// from the same plan the PDF adapters use.
+/// XPS expresses a picture crop as an absolute ImageBrush <c>Viewbox</c>. A negative inset
+/// instead shrinks the destination rectangle, preserving the shared PDF crop plan.
 /// </summary>
 public sealed class PortableXpsWriterImageCropTests
 {
@@ -32,7 +32,7 @@ public sealed class PortableXpsWriterImageCropTests
         // 16x16 source, crop l=.25 t=.125 r=.25 b=.375 -> source pixels (4,2,8,8).
         var xml = WritePageXml(new PdfImageSourceCrop(0.25, 0.125, 0.25, 0.375));
 
-        xml.Should().Contain("Viewbox=\"0.25,0.125,0.5,0.5\"");
+        xml.Should().Contain("Viewbox=\"4,2,8,8\"").And.Contain("ViewboxUnits=\"Absolute\"");
         xml.Should().Contain("Viewport=\"100,552,80,40\"", "a positive crop still fills the frame");
         xml.Should().Contain("Data=\"M 100,552 L 180,552 L 180,592 L 100,592 Z\"");
     }
@@ -44,7 +44,7 @@ public sealed class PortableXpsWriterImageCropTests
         // the right 80% of the 80pt-wide frame (64pt starting 16pt in) and the left 20% stays empty.
         var xml = WritePageXml(new PdfImageSourceCrop(-0.25, 0, 0, 0));
 
-        xml.Should().Contain("Viewbox=\"0,0,1,1\"", "an outset crops nothing off the bitmap");
+        xml.Should().Contain("Viewbox=\"0,0,16,16\"", "an outset crops nothing off the bitmap");
         xml.Should().Contain("Viewport=\"116,552,64,40\"");
         xml.Should().Contain(
             "Data=\"M 116,552 L 180,552 L 180,592 L 116,592 Z\"",
@@ -56,8 +56,65 @@ public sealed class PortableXpsWriterImageCropTests
     {
         var xml = WritePageXml(default);
 
-        xml.Should().Contain("Viewbox=\"0,0,1,1\"");
+        xml.Should().Contain("Viewbox=\"0,0,16,16\"");
         xml.Should().Contain("Viewport=\"100,552,80,40\"");
+    }
+
+    [Fact]
+    public void WriteToBytes_JpegDensityScalesEachAxisOfTheAbsoluteViewbox()
+    {
+        var jpeg = MinimalJpegBytes();
+        jpeg[13] = 1; // JFIF stores densities in dots per inch when this unit byte is 1.
+        BinaryPrimitives.WriteUInt16BigEndian(jpeg.AsSpan(14), 192);
+        BinaryPrimitives.WriteUInt16BigEndian(jpeg.AsSpan(16), 96);
+
+        var xml = WritePageXml(new PdfImageSourceCrop(0.25, 0.125, 0.25, 0.375), jpeg);
+
+        xml.Should().Contain("Viewbox=\"2,2,4,8\"");
+        xml.Should().Contain("Viewport=\"100,552,80,40\"");
+    }
+
+    [Fact]
+    public void WriteToBytes_UsesExifDensityWhenJpegHasNoAbsoluteJfifDensity()
+    {
+        var jpeg = MinimalJpegBytes();
+        jpeg[13] = 0; // Use the JFIF fields as pixel aspect ratio, so EXIF supplies density.
+        byte[] exifSegment =
+        [
+            0xFF, 0xE1, 0, 74, (byte)'E', (byte)'x', (byte)'i', (byte)'f', 0, 0,
+            (byte)'I', (byte)'I', 42, 0, 8, 0, 0, 0, // Little-endian TIFF, first IFD at byte 8.
+            3, 0,
+            0x1A, 1, 5, 0, 1, 0, 0, 0, 50, 0, 0, 0, // XResolution at byte 50.
+            0x1B, 1, 5, 0, 1, 0, 0, 0, 58, 0, 0, 0, // YResolution at byte 58.
+            0x28, 1, 3, 0, 1, 0, 0, 0, 2, 0, 0, 0, // ResolutionUnit = inch.
+            0, 0, 0, 0,
+            192, 0, 0, 0, 1, 0, 0, 0,
+            96, 0, 0, 0, 1, 0, 0, 0,
+        ];
+        byte[] jpegWithExif = [.. jpeg.AsSpan(0, 20), .. exifSegment, .. jpeg.AsSpan(20)];
+
+        var xml = WritePageXml(default, jpegWithExif);
+
+        xml.Should().Contain("Viewbox=\"0,0,8,16\"");
+    }
+
+    [Fact]
+    public void WriteToBytes_PngDensityScalesTheAbsoluteViewbox()
+    {
+        // Add IHDR's remaining payload/CRC and an absolute pHYs chunk. The writer
+        // preserves the encoded PNG and only inspects its header for these assertions.
+        var png = new byte[54];
+        PngWithSize(16, 16).CopyTo(png, 0);
+        BinaryPrimitives.WriteUInt32BigEndian(png.AsSpan(33), 9);
+        "pHYs"u8.CopyTo(png.AsSpan(37));
+        BinaryPrimitives.WriteUInt32BigEndian(png.AsSpan(41), 15000);
+        BinaryPrimitives.WriteUInt32BigEndian(png.AsSpan(45), 15000);
+        png[49] = 1;
+
+        var xml = WritePageXml(default, png, "image/png");
+
+        // 15000 px/m is 381 dpi, so 16 pixels occupy about 4.0315 units.
+        xml.Should().Contain("Viewbox=\"0,0,4.031496062992,4.031496062992\"");
     }
 
     [Fact]
@@ -100,7 +157,8 @@ public sealed class PortableXpsWriterImageCropTests
         PdfImageDimensions.TryReadSize(MinimalJpegBytes(), "image/gif", out _, out _).Should().BeFalse();
     }
 
-    private static PdfContentDocument DocumentWith(PdfImageSourceCrop crop) =>
+    private static PdfContentDocument DocumentWith(
+        PdfImageSourceCrop crop, byte[]? bytes = null, string contentType = "image/jpeg") =>
         new([
             new PdfContentPage(PageWidth, PageHeight, [
                 new PdfImage(
@@ -108,15 +166,16 @@ public sealed class PortableXpsWriterImageCropTests
                     200,
                     80,
                     40,
-                    MinimalJpegBytes(),
-                    "image/jpeg",
+                    bytes ?? MinimalJpegBytes(),
+                    contentType,
                     SourceCrop: crop),
             ])]);
 
-    private static string WritePageXml(PdfImageSourceCrop crop)
+    private static string WritePageXml(
+        PdfImageSourceCrop crop, byte[]? bytes = null, string contentType = "image/jpeg")
     {
-        var bytes = PortableXpsWriter.WriteToBytes(DocumentWith(crop));
-        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        var xpsBytes = PortableXpsWriter.WriteToBytes(DocumentWith(crop, bytes, contentType));
+        using var archive = new ZipArchive(new MemoryStream(xpsBytes), ZipArchiveMode.Read);
         var page = archive.GetEntry("Documents/1/Pages/1.fpage");
         page.Should().NotBeNull();
         using var reader = new StreamReader(page!.Open());

@@ -56,7 +56,7 @@ public static class PageTextBoxLayoutPlanner
         var blocks = new List<PageTextBoxBlock>();
         foreach (var textBox in textBoxes)
         {
-            if (!textBox.IsVisible ||
+            if (!textBox.IsVisible || !textBox.PrintObject ||
                 !rowIndexes.TryGetValue(textBox.Anchor.Row, out var rowIndex) ||
                 !columnIndexes.TryGetValue(textBox.Anchor.Col, out var columnIndex))
             {

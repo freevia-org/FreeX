@@ -5,11 +5,180 @@ using Free.Shared.Pdf.Skia;
 using FreeX.App.Avalonia.Pdf;
 using FreeX.App.Services;
 using FreeX.Core.Model;
+using SkiaSharp;
+using UglyToad.PdfPig;
+using UglyToad.PdfPig.Outline;
+using UglyToad.PdfPig.Tokens;
 
 namespace FreeX.App.Avalonia.Tests;
 
 public sealed class SkiaPdfDocumentExporterTests
 {
+    [Theory]
+    [InlineData(ExportQuality.Standard, false, 816, 1056)]
+    [InlineData(ExportQuality.Standard, true, 816, 1056)]
+    [InlineData(ExportQuality.MinimumSize, false, 612, 792)]
+    [InlineData(ExportQuality.MinimumSize, true, 612, 792)]
+    public void Publish_UsesSelectedRasterResolutionAndKeepsVisibleText(
+        ExportQuality quality,
+        bool bitmapText,
+        int expectedWidth,
+        int expectedHeight)
+    {
+        const string cellText = "Publish text";
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Data");
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageOrientation = WorksheetPageOrientation.Portrait;
+        sheet.PrintGridlines = false;
+        sheet.ColumnWidths[1] = 24;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue(cellText));
+        var plan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            Quality = quality,
+            BitmapTextWhenFontsMayNotBeEmbedded = bitmapText,
+        };
+        PortablePdfExportPlanner.TryApplyOptions(plan, options, out var effectivePlan, out var error)
+            .Should().BeTrue(error);
+
+        using var stream = new MemoryStream();
+        AvaloniaPdfDocumentExporter.Save(workbook, effectivePlan, stream).Backend.Should().Be(PdfExportBackend.Skia);
+
+        using var pdf = PdfDocument.Open(stream.ToArray());
+        pdf.NumberOfPages.Should().Be(1);
+        var page = pdf.GetPage(1);
+        page.Width.Should().Be(612);
+        page.Height.Should().Be(792);
+        var image = page.GetImages().Should().ContainSingle().Which;
+        image.WidthInSamples.Should().Be(expectedWidth);
+        image.HeightInSamples.Should().Be(expectedHeight);
+        image.TryGetPng(out var png).Should().BeTrue();
+        using var bitmap = SKBitmap.Decode(png);
+        bitmap.Pixels.Should().Contain(pixel => pixel.Red < 128 && pixel.Green < 128 && pixel.Blue < 128,
+            "the page raster contains the visible cell text");
+
+        if (bitmapText)
+            page.Letters.Should().BeEmpty();
+        else
+            page.Text.Should().Be(cellText);
+    }
+
+    [Theory]
+    [InlineData("  pt_br  ", "pt-BR", false)]
+    [InlineData("", "en-US", true)]
+    public void ExportOptions_StampNormalizedCatalogLanguageOnBothPdfBackends(
+        string requestedLanguage,
+        string expectedLanguage,
+        bool writeOnly)
+    {
+        var workbook = new Workbook("Workbook");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Sample text"));
+        var exportPlan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            PdfLanguage = requestedLanguage,
+            PageRange = new ExportPageRange(1, 1),
+        };
+        PortablePdfExportPlanner.TryApplyOptions(exportPlan, options, out var effectivePlan, out var error)
+            .Should().BeTrue(error);
+
+        using var skia = writeOnly ? new WriteOnlyMemoryStream() : new MemoryStream();
+        AvaloniaPdfDocumentExporter.Save(workbook, effectivePlan, skia).Backend.Should().Be(PdfExportBackend.Skia);
+        AssertCatalogLanguage(skia, expectedLanguage);
+
+        using var portable = new MemoryStream();
+        PortablePdfDocumentExporter.Save(workbook, effectivePlan, portable);
+        AssertCatalogLanguage(portable, expectedLanguage);
+    }
+
+    private static void AssertCatalogLanguage(MemoryStream stream, string expectedLanguage)
+    {
+        using var pdf = PdfDocument.Open(stream.ToArray());
+        pdf.NumberOfPages.Should().Be(1);
+        pdf.GetPage(1).Text.Should().Contain("Sample text");
+        var catalog = pdf.Structure.Catalog.CatalogDictionary;
+        catalog.Data["Lang"].Should().BeAssignableTo<IDataToken<string>>().Which.Data.Should().Be(expectedLanguage);
+    }
+
+    [Theory]
+    [InlineData(true, PdfOpenMode.FullScreen, "FullScreen")]
+    [InlineData(false, PdfOpenMode.Normal, "UseOutlines")]
+    public void ExportOptions_KeepDocumentPropertiesViewerSettingsAndRangeBookmarksOnBothPdfBackends(
+        bool includeProperties,
+        PdfOpenMode openMode,
+        string expectedPageMode)
+    {
+        var workbook = new Workbook("Quarterly report")
+        {
+            FileSharing = new WorkbookFileSharingModel { UserName = "Mira" }
+        };
+        var data = workbook.AddSheet("Details");
+        data.SetPrintAreas([GridRange.Parse("A1:A1", data.Id), GridRange.Parse("B2:B2", data.Id)]);
+        data.SetCell(new CellAddress(data.Id, 2, 2), new TextValue("Retained details"));
+        var summary = workbook.AddSheet("Résumé");
+        summary.SetCell(new CellAddress(summary.Id, 1, 1), new TextValue("Summary"));
+        summary.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
+
+        var printPlan = WorkbookExportPrintPlanner.CreatePlanFromPageSetup(
+            workbook,
+            new WorkbookExportPrintIntent(WorkbookExportPrintScope.VisibleWorkbook, WorkbookExportPrintOutputKind.Pdf),
+            WorkbookExportPrintSurface.MacOs);
+        var exportPlan = PortablePdfExportPlanner.CreatePlan(printPlan, workbook);
+        var options = ExportOptions.ExcelLikeDefault with
+        {
+            Scope = ExportContentScope.EntireWorkbook,
+            IncludeDocumentProperties = includeProperties,
+            PageRange = new ExportPageRange(2, 3),
+            InitialView = PdfInitialView.TwoColumnRight,
+            OpenMode = openMode,
+            BookmarkMode = PdfBookmarkMode.PrintTitles
+        };
+        PortablePdfExportPlanner.TryApplyOptions(exportPlan, options, out var effectivePlan, out var error)
+            .Should().BeTrue(error);
+
+        using var skia = new MemoryStream();
+        AvaloniaPdfDocumentExporter.Save(workbook, effectivePlan, skia).Backend.Should().Be(PdfExportBackend.Skia);
+        using var portable = new MemoryStream();
+        PortablePdfDocumentExporter.Save(workbook, effectivePlan, portable);
+
+        foreach (var output in new[] { skia, portable })
+        {
+            using var pdf = PdfDocument.Open(output.ToArray());
+            pdf.NumberOfPages.Should().Be(2);
+            pdf.GetPage(2).Text.Should().Contain("Summary");
+            pdf.Information.Title.Should().Be(includeProperties ? "Quarterly report" : null);
+            pdf.Information.Author.Should().Be(includeProperties ? "Mira" : null);
+            pdf.Information.Creator.Should().Be("FreeX");
+            if (includeProperties)
+            {
+                pdf.Information.Subject.Should().Be("FreeX workbook export");
+                pdf.Information.Keywords.Should().Be("FreeX, spreadsheet");
+            }
+
+            var catalog = pdf.Structure.Catalog.CatalogDictionary.Data;
+            catalog["PageLayout"].Should().BeOfType<NameToken>().Which.Data.Should().Be("TwoColumnRight");
+            catalog["PageMode"].Should().BeOfType<NameToken>().Which.Data.Should().Be(expectedPageMode);
+            var preferences = catalog["ViewerPreferences"].Should().BeOfType<DictionaryToken>().Which.Data;
+            preferences["PrintScaling"].Should().BeOfType<NameToken>().Which.Data.Should().Be("None");
+            preferences["PickTrayByPDFSize"].Should().BeOfType<BooleanToken>().Which.Data.Should().BeTrue();
+            preferences.ContainsKey("DisplayDocTitle").Should().Be(includeProperties);
+            if (includeProperties)
+                preferences["DisplayDocTitle"].Should().BeOfType<BooleanToken>().Which.Data.Should().BeTrue();
+
+            pdf.TryGetBookmarks(out var bookmarks).Should().BeTrue();
+            var bookmark = bookmarks!.Roots.Should().ContainSingle().Which.Should().BeOfType<DocumentBookmarkNode>().Which;
+            bookmark.Title.Should().Be("Résumé (Columns 1)");
+            bookmark.PageNumber.Should().Be(2);
+        }
+    }
+
+    private sealed class WriteOnlyMemoryStream : MemoryStream
+    {
+        public override bool CanRead => false;
+    }
+
     [Fact]
     public void Save_EmbedsFontsAndRendersNonWinAnsiUnicodeText()
     {

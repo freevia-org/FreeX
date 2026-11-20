@@ -187,15 +187,15 @@ internal static class FreeWAvaloniaRibbonCommands
                 PrepareExecution: () => editor.Focus(),
                 ApplyRunFormatting: editor.ApplyTextEffectFormatting));
 
-        // Developer > Controls > Legacy Tools — insert and reset are shared; the Options dialog and
-        // form-field shading are WPF-only for now, so those entries do nothing here.
+        // Developer > Controls > Legacy Tools — options use the host dialog over the shared options model.
+        // Form-field shading remains a view-only follow-up; insert/reset already route through the model.
         LegacyFormFieldRibbonWorkflow.Register(
             r,
             new LegacyFormFieldRibbonPorts(
                 PrepareExecution: () => editor.Focus(),
                 InsertFormField: editor.InsertLegacyFormField,
-                ShowFormFieldOptions: () => { },
-                ToggleFormFieldShading: () => { },
+                ShowFormFieldOptions: callbacks.OpenLegacyFormFieldOptions ?? (() => { }),
+                ToggleFormFieldShading: editor.ToggleLegacyFormFieldShading,
                 ResetFormFields: editor.ResetLegacyFormFields));
 
         // Clear style — revert the paragraph to the document default (Word's paragraph-level reset).

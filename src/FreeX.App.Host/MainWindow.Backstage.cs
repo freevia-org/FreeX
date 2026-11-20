@@ -1211,6 +1211,12 @@ public partial class MainWindow
         return true;
     }
 
+    internal void OpenWorkbookBackstageForKeyboard()
+    {
+        ShowStartScreen();
+        _backstageFrame?.Show(FreeXBackstageFramePlanner.GetPaneStableId(FreeXBackstagePaneId.Open));
+    }
+
     private void SsRecentItem_Click(object sender, RoutedEventArgs e)
     {
         if ((sender as System.Windows.FrameworkElement)?.DataContext is RecentFileViewModel vm)

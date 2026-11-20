@@ -295,7 +295,7 @@ public sealed class FreeXCleanupMED1Tests
             window.InvokeShowEditIssueForTest("This value violates the data validation rule.");
 
             // macOS deliberately skips the live region (Avalonia 12.0.4 native raiseLiveRegionChanged
-            // abort, see MainWindow.StatusBar.EnsureStatusTextLiveRegion).
+            // abort. macOS uses AppKit announcements and leaves the Avalonia live setting off.
             global::Avalonia.Automation.AutomationProperties.GetLiveSetting(window.StatusTextForTest)
                 .Should().Be(OperatingSystem.IsMacOS()
                     ? global::Avalonia.Automation.AutomationLiveSetting.Off

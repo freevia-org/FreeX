@@ -52,6 +52,10 @@ public sealed class OneVariableDataTableCommand : IWorkbookCommand
                 return protectionCheck;
         }
 
+        var body = new GridRange(new CellAddress(sheet.Id, _tableRange.Start.Row + 1, _tableRange.Start.Col + 1), _tableRange.End);
+        if (TableHeaderRenameTransaction.CaptureRange(ctx, sheet, body).HasCandidates)
+            return new CommandOutcome(false, "A Data Table cannot write formulas into structured-table headers.");
+
         _snapshot = [];
         var snapshot = _snapshot;
         var affected = DataTableBodyWriter.ComputeAndApplyOneVariableBody(
@@ -142,6 +146,10 @@ public sealed class TwoVariableDataTableCommand : IWorkbookCommand
             if (protectionCheck is not null)
                 return protectionCheck;
         }
+
+        var body = new GridRange(new CellAddress(sheet.Id, _tableRange.Start.Row + 1, _tableRange.Start.Col + 1), _tableRange.End);
+        if (TableHeaderRenameTransaction.CaptureRange(ctx, sheet, body).HasCandidates)
+            return new CommandOutcome(false, "A Data Table cannot write formulas into structured-table headers.");
 
         _snapshot = [];
         var snapshot = _snapshot;
@@ -751,6 +759,11 @@ internal sealed class DataTableBodyRefreshCommand : IWorkbookCommand
             // untouched rather than blanking out an otherwise-working table.
             return new CommandOutcome(false, "Data Table formula cell no longer contains a formula.");
         }
+
+        var range = _registration.TableRange;
+        var body = new GridRange(new CellAddress(sheet.Id, range.Start.Row + 1, range.Start.Col + 1), range.End);
+        if (TableHeaderRenameTransaction.CaptureRange(ctx, sheet, body).HasCandidates)
+            return new CommandOutcome(false, "A Data Table cannot write formulas into structured-table headers.");
 
         _snapshot = [];
         var snapshot = _snapshot;

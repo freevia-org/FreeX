@@ -43,7 +43,7 @@ public sealed class R88_InlineCellAutoCompleteSuggestionSourceTests
         // formula box / formula-reference-entry state and never called into the AutoComplete
         // suggestion path at all.
         handlerSource.Should().Contain(
-            "ApplyInlineCellValueAutoCompleteSuggestion(address, editor)",
+            "ApplyCellValueAutoCompleteSuggestion(address, editor)",
             "typing a plain text entry in the inline cell editor must offer a column AutoComplete " +
             "suggestion the same way the WPF host's inline/formula-bar editor already does");
     }
@@ -68,7 +68,7 @@ public sealed class R88_InlineCellAutoCompleteSuggestionSourceTests
         var source = ReadMainWindowSource();
         var sessionSource = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
             "src", "FreeX.App.Presentation", "FormulaBar", "FormulaRangeEditingSession.cs");
-        var methodStart = source.IndexOf("private void ApplyInlineCellValueAutoCompleteSuggestion(", StringComparison.Ordinal);
+        var methodStart = source.IndexOf("private void ApplyCellValueAutoCompleteSuggestion(", StringComparison.Ordinal);
         methodStart.Should().BeGreaterThanOrEqualTo(0, "the ported AutoComplete method must exist");
 
         var methodEnd = source.IndexOf("private void BeginInlineCellEdit(", methodStart, StringComparison.Ordinal);

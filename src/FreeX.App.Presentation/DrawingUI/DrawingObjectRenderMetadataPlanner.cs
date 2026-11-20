@@ -174,6 +174,7 @@ public static class DrawingObjectRenderMetadataPlanner
             hash.Add(shape.ShapeTextHAlign);
             hash.Add(shape.ShapeTextVAnchor);
             hash.Add(shape.ShapeTextWrap);
+            hash.Add(shape.ShapeTextInsets);
             hash.Add(shape.IsWordArt);
             hash.Add(shape.ShapeTextHasNoFill);
             hash.Add(shape.ShapeTextGradientEndColor);

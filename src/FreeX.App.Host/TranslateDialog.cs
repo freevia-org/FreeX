@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using Free.Shared.Shell.Wpf;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 

@@ -31,8 +31,9 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
 
     // Snapshot of every in-range cell before Apply, used by Revert.
     private List<CellSnapshot>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
 
-    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? _range.CellCount) * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min((long)(_snapshot?.Count ?? _range.CellCount) * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
     private Dictionary<CellAddress, string>? _commentSnapshot;
     // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
     // author + pinned/"Show Comment" state) and must be captured/compacted/restored in lockstep
@@ -155,6 +156,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         }
 
         // ── 2. Snapshot the entire in-range area ───────────────────────────
+        _headerRename = TableHeaderRenameTransaction.CaptureRange(ctx, sheet, _range);
         var allInRangeAddresses = _range.AllCells().ToList();
         _snapshot = CaptureCellSnapshots(sheet, allInRangeAddresses);
         _commentSnapshot = CaptureDictionary(sheet.Comments, allInRangeAddresses);
@@ -341,7 +343,9 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
             break;
         }
 
-        var affectedCells = allInRangeAddresses;
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        var affectedCells = allInRangeAddresses.Concat(_headerRename.Affected).Distinct().ToList();
         return new CommandOutcome(true, AffectedCells: affectedCells);
     }
 
@@ -350,6 +354,7 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand, IEstimatesMem
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_sheetId);
 
         // Clear everything that Apply may have written in-range.

@@ -31,6 +31,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
     // gets.
     private readonly IReadOnlyDictionary<CellAddress, CellStyle>? _sourceStyles;
     private List<CellEditCompanionSnapshot>? _snapshot;
+    private TableHeaderRenameTransaction? _headerRename;
 
     // R119-commands-undo-byte-budget-1: the undo snapshot holds a full Cell clone plus style,
     // hyperlink/metadata, rich-text runs and phonetic guide PER PASTED CELL (see Apply below), so
@@ -43,7 +44,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
     public string Label => _cells.Count == 1 ? "Paste Cell" : $"Paste {_cells.Count} Cells";
 
     /// <inheritdoc/>
-    public int EstimatedBytes => (int)Math.Min((long)_cells.Count * BytesPerCell, int.MaxValue);
+    public int EstimatedBytes => (int)Math.Min((long)_cells.Count * BytesPerCell + (_headerRename?.EstimatedBytes ?? 0), int.MaxValue);
 
     public PasteCellsCommand(
         SheetId sheetId,
@@ -89,6 +90,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
         if (CommandGuards.RejectIfSplitsArray(sheet, _cells.Select(c => c.Address), allowDynamicSpillMemberWrite: true) is { } splitsArrayRejection)
             return splitsArrayRejection;
 
+        _headerRename = TableHeaderRenameTransaction.Capture(ctx, _cells.Select(c => c.Address));
         _snapshot = [];
         var affected = new List<CellAddress>(_cells.Count);
 
@@ -143,7 +145,10 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
         // what was already there". r234 built the missing half -- MatchesCurrent re-checks each
         // undo snapshot against the live sheet -- so the limit is now closed and pasting a range
         // over an identical one is reported for what it is.
-        if (affected.Count == 0 || _snapshot.TrueForAll(entry => entry.MatchesCurrent(sheet)))
+        try { _headerRename.Apply(ctx); }
+        catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        affected.AddRange(_headerRename.Affected);
+        if (_headerRename.Affected.Count == 0 && (affected.Count == 0 || _snapshot.TrueForAll(entry => entry.MatchesCurrent(sheet))))
             return new CommandOutcome(true, IsNoOp: true);
 
         return new CommandOutcome(true, AffectedCells: affected);
@@ -154,6 +159,7 @@ public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
         if (_snapshot is null)
             return;
 
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var snapshot in _snapshot)
             snapshot.Restore(sheet);

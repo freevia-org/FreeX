@@ -140,6 +140,7 @@ public sealed partial class KeyboardShortcutMatcherTests
         route switch
         {
             WorkbookShortcutRoute.NewWorkbook => KeyboardCommandShortcut.NewWorkbook,
+            WorkbookShortcutRoute.OpenBackstage => KeyboardCommandShortcut.OpenBackstage,
             WorkbookShortcutRoute.OpenWorkbook => KeyboardCommandShortcut.OpenWorkbook,
             WorkbookShortcutRoute.SaveWorkbook => KeyboardCommandShortcut.SaveWorkbook,
             WorkbookShortcutRoute.PrintWorkbook => KeyboardCommandShortcut.OpenPrintPreview,

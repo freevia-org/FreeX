@@ -19,6 +19,8 @@ namespace Free.Shared.Pdf.Skia;
 /// </summary>
 public static class SkiaPdfWriter
 {
+    private const int LosslessEncodingQuality = 101;
+
     /// <summary>Serializes the shared content document to an embedded-font PDF.</summary>
     /// <param name="imageDiagnostics">
     /// Optional sink for non-fatal image warnings. An embedded image this backend cannot decode
@@ -90,8 +92,7 @@ public static class SkiaPdfWriter
         ArgumentNullException.ThrowIfNull(document);
         if (document.Pages.Count == 0)
             throw new InvalidOperationException("Raster rendering requires at least one page.");
-        if (dpi is < 36 or > 600)
-            throw new ArgumentOutOfRangeException(nameof(dpi));
+        ValidateRasterDpi(dpi);
 
         using var typefaces = PdfTypefaceSet.Create();
         using var textRenderer = new FallbackTextRenderer();
@@ -120,7 +121,29 @@ public static class SkiaPdfWriter
     /// top-left, y-down canvas, matching the portable writer's geometry.
     /// </summary>
     /// <param name="imageDiagnostics">See <see cref="WriteToBytes"/>.</param>
-    public static int Write(PdfContentDocument document, Stream stream, ICollection<string>? imageDiagnostics = null)
+    public static int Write(PdfContentDocument document, Stream stream, ICollection<string>? imageDiagnostics = null) =>
+        WriteCore(document, stream, rasterization: null, imageDiagnostics);
+
+    /// <summary>Writes raster pages at the requested DPI, with optional selectable text and live PDF annotations.</summary>
+    /// <param name="imageDiagnostics">See <see cref="WriteToBytes"/>.</param>
+    public static int WriteRasterized(
+        PdfContentDocument document,
+        Stream stream,
+        int dpi,
+        bool includeSelectableText,
+        ICollection<string>? imageDiagnostics = null)
+    {
+        ValidateRasterDpi(dpi);
+        return WriteCore(document, stream, new Rasterization(dpi, includeSelectableText), imageDiagnostics);
+    }
+
+    private readonly record struct Rasterization(int Dpi, bool IncludeSelectableText);
+
+    private static int WriteCore(
+        PdfContentDocument document,
+        Stream stream,
+        Rasterization? rasterization,
+        ICollection<string>? imageDiagnostics)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(stream);
@@ -135,18 +158,59 @@ public static class SkiaPdfWriter
             stream.SetLength(0);
         }
 
+        if (document.Properties is not { } properties ||
+            (string.IsNullOrWhiteSpace(properties.Language) && properties.ViewerSettings is null && properties.Outlines.Count == 0))
+            return WriteDocument(document, stream, rasterization, imageDiagnostics);
+
+        if (stream.CanRead && stream.CanSeek)
+        {
+            var pageCount = WriteDocument(document, stream, rasterization, imageDiagnostics);
+            SkiaPdfCatalog.AppendUpdate(stream, properties, pageCount);
+            return pageCount;
+        }
+
+        // The catalog update must read the generated PDF. Stage only for destinations that
+        // cannot be read and repositioned, such as write-only and non-seekable output streams.
+        using var buffer = new MemoryStream();
+        var bufferedPageCount = WriteDocument(document, buffer, rasterization, imageDiagnostics);
+        SkiaPdfCatalog.AppendUpdate(buffer, properties, bufferedPageCount);
+        buffer.Position = 0;
+        buffer.CopyTo(stream);
+        return bufferedPageCount;
+    }
+
+    private static int WriteDocument(
+        PdfContentDocument document,
+        Stream stream,
+        Rasterization? rasterization,
+        ICollection<string>? imageDiagnostics)
+    {
         using var typefaces = PdfTypefaceSet.Create();
 
         var pageCount = 0;
         using var textRenderer = new FallbackTextRenderer();
         var metadata = BuildMetadata(document.Properties);
+        // Match the lossless page PNGs used by Windows. The quality setting controls the raster DPI.
+        if (rasterization.HasValue)
+            metadata.EncodingQuality = LosslessEncodingQuality;
         using (var pdf = SKDocument.CreatePdf(stream, metadata))
         {
             foreach (var page in document.Pages)
             {
                 var canvas = pdf.BeginPage((float)page.WidthPoints, (float)page.HeightPoints);
                 canvas.Clear(SKColors.White);
-                RenderPage(canvas, page, typefaces, textRenderer, imageDiagnostics);
+                if (rasterization is { } settings)
+                {
+                    using var image = RasterizePage(page, settings.Dpi, typefaces, textRenderer, imageDiagnostics);
+                    canvas.DrawImage(image, new SKRect(0, 0, (float)page.WidthPoints, (float)page.HeightPoints));
+                    if (settings.IncludeSelectableText)
+                        RenderPage(canvas, page, typefaces, textRenderer, selectableTextOnly: true);
+                }
+                else
+                {
+                    RenderPage(canvas, page, typefaces, textRenderer, imageDiagnostics);
+                }
+
                 AddNamedDestinations(canvas, page);
                 AddLinkAnnotations(canvas, page);
                 pdf.EndPage();
@@ -157,6 +221,34 @@ public static class SkiaPdfWriter
         }
 
         return pageCount;
+    }
+
+    internal static void ValidateRasterDpi(int dpi)
+    {
+        if (dpi is < 36 or > 600)
+            throw new ArgumentOutOfRangeException(nameof(dpi));
+    }
+
+    internal static SKImage RasterizePage(
+        PdfContentPage page,
+        int dpi,
+        PdfTypefaceSet typefaces,
+        FallbackTextRenderer textRenderer,
+        ICollection<string>? imageDiagnostics = null,
+        bool transparentBackground = false)
+    {
+        var width = Math.Max(1, checked((int)Math.Ceiling(page.WidthPoints * dpi / 72d)));
+        var height = Math.Max(1, checked((int)Math.Ceiling(page.HeightPoints * dpi / 72d)));
+        var alphaType = transparentBackground ? SKAlphaType.Premul : SKAlphaType.Opaque;
+        var imageInfo = new SKImageInfo(width, height, SKColorType.Rgba8888, alphaType);
+        using var surface = SKSurface.Create(imageInfo)
+            ?? throw new InvalidOperationException("Could not allocate the PDF page raster.");
+        var canvas = surface.Canvas;
+        canvas.Clear(transparentBackground ? SKColors.Transparent : SKColors.White);
+        canvas.Scale(dpi / 72f);
+        RenderPage(canvas, page, typefaces, textRenderer, imageDiagnostics);
+        canvas.Flush();
+        return surface.Snapshot();
     }
 
     private static void AddNamedDestinations(SKCanvas canvas, PdfContentPage page)
@@ -205,7 +297,8 @@ public static class SkiaPdfWriter
         PdfContentPage page,
         PdfTypefaceSet typefaces,
         FallbackTextRenderer textRenderer,
-        ICollection<string>? imageDiagnostics = null)
+        ICollection<string>? imageDiagnostics = null,
+        bool selectableTextOnly = false)
     {
         var pageHeight = (float)page.HeightPoints;
         using var fillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
@@ -213,7 +306,8 @@ public static class SkiaPdfWriter
         using var textPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
         foreach (var op in page.Ops)
-            RenderDrawOp(canvas, op, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride: null, imageDiagnostics: imageDiagnostics);
+            RenderDrawOp(canvas, op, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer,
+                imageDiagnostics: imageDiagnostics, selectableTextOnly: selectableTextOnly);
     }
 
     private static void RenderDrawOp(
@@ -226,8 +320,12 @@ public static class SkiaPdfWriter
         SKPaint textPaint,
         FallbackTextRenderer textRenderer,
         PdfColor? colorOverride = null,
-        ICollection<string>? imageDiagnostics = null)
+        ICollection<string>? imageDiagnostics = null,
+        bool selectableTextOnly = false)
     {
+        if (selectableTextOnly && op is not (PdfText or PdfRotationGroup or PdfClipGroup or PdfOpacityGroup))
+            return;
+
         switch (op)
         {
             case PdfFillRect fill:
@@ -389,6 +487,8 @@ public static class SkiaPdfWriter
                 // PDF text origin is the baseline (y-up). Skia DrawText baseline is y-down.
                 var baseline = (float)PdfRenderGeometry.ToCanvasY(pageHeight, text.Y);
                 textPaint.Color = ToSkColor(colorOverride ?? text.Color);
+                if (selectableTextOnly)
+                    textPaint.Color = textPaint.Color.WithAlpha(SkiaRasterPdfWriter.SelectableTextOverlayAlpha);
                 var typeface = typefaces.For(text.FontFamily, text.Face);
                 textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
                 break;
@@ -492,12 +592,12 @@ public static class SkiaPdfWriter
                         canvas.DrawPath(skPath, fillPaint);
                     }
                 }
-                else if (pdfPath.FillFallbackColor is { } fillFallback)
+                else if (pdfPath.FillGradient is not null || pdfPath.FillFallbackColor is not null)
                 {
                     if (pdfPath.FillGradient is { } fillGradient)
-                        ApplyLinearGradient(fillPaint, fillGradient, pageHeight, fillFallback);
+                        ApplyLinearGradient(fillPaint, fillGradient, pageHeight, pdfPath.FillFallbackColor);
                     else
-                        fillPaint.Color = ToSkColor(fillFallback);
+                        fillPaint.Color = ToSkColor(pdfPath.FillFallbackColor!.Value);
                     canvas.DrawPath(skPath, fillPaint);
                     fillPaint.Shader = null;
                 }
@@ -515,12 +615,12 @@ public static class SkiaPdfWriter
                         strokePaint.PathEffect = null;
                     }
                 }
-                else if (pdfPath.StrokeFallbackColor is { } strokeFallback)
+                else if (pdfPath.StrokeGradient is not null || pdfPath.StrokeFallbackColor is not null)
                 {
                     if (pdfPath.StrokeGradient is { } strokeGradient)
-                        ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, strokeFallback);
+                        ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, pdfPath.StrokeFallbackColor);
                     else
-                        strokePaint.Color = ToSkColor(strokeFallback);
+                        strokePaint.Color = ToSkColor(pdfPath.StrokeFallbackColor!.Value);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
                     using var gradientPathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
                     strokePaint.PathEffect = gradientPathStrokeDash;
@@ -545,7 +645,8 @@ public static class SkiaPdfWriter
                 canvas.RotateDegrees((float)group.RotationDegrees);
                 canvas.Translate(-centerX, -centerY);
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride, imageDiagnostics);
+                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer,
+                        colorOverride, imageDiagnostics, selectableTextOnly);
                 canvas.Restore();
                 break;
             }
@@ -563,24 +664,30 @@ public static class SkiaPdfWriter
                     (float)(group.X + group.Width),
                     top + (float)group.Height));
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride, imageDiagnostics);
+                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer,
+                        colorOverride, imageDiagnostics, selectableTextOnly);
                 canvas.Restore();
                 break;
             }
 
             case PdfOpacityGroup group:
             {
-                if (group.Ops.Count == 0)
+                var alpha = ToAlphaByte(group.Opacity);
+                if (group.Ops.Count == 0 || (selectableTextOnly && alpha == 0))
                     break;
 
-                using var layerPaint = new SKPaint
+                using var layerPaint = selectableTextOnly ? null : new SKPaint
                 {
-                    Color = new SKColor(255, 255, 255, ToAlphaByte(group.Opacity)),
+                    Color = new SKColor(255, 255, 255, alpha),
                 };
-                canvas.SaveLayer(layerPaint);
+                // Keep overlay glyphs as PDF text even where the visible group was composited.
+                if (layerPaint is not null)
+                    canvas.SaveLayer(layerPaint);
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride, imageDiagnostics);
-                canvas.Restore();
+                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer,
+                        colorOverride, imageDiagnostics, selectableTextOnly);
+                if (layerPaint is not null)
+                    canvas.Restore();
                 break;
             }
 
@@ -603,7 +710,7 @@ public static class SkiaPdfWriter
                     // instead of leaving a silent hole, matching PortablePdfWriter's policy.
                     imageDiagnostics?.Add(
                         $"Image at ({FormatNumber(image.X)}, {FormatNumber(image.Y)}) [{image.ContentType}] could " +
-                        $"not be decoded and was omitted from the exported PDF.");
+                        $"not be decoded and was omitted from the exported document.");
                     break;
                 }
 
@@ -955,12 +1062,17 @@ public static class SkiaPdfWriter
         SKPaint paint,
         PdfLinearGradient gradient,
         float pageHeight,
-        PdfColor fallbackColor)
+        PdfColor? fallbackColor)
     {
-        paint.Color = ToSkColor(fallbackColor);
+        paint.Color = ToSkColor(fallbackColor ?? PdfColor.Black);
         paint.Shader = null;
-        if (!PdfRenderGeometry.TryNormalizeGradient(gradient, out var stops))
+        if (!PdfRenderGeometry.TryNormalizeGradient(gradient, out var stops) ||
+            Math.Abs(gradient.StartX) > float.MaxValue || Math.Abs(gradient.StartY) > float.MaxValue ||
+            Math.Abs(gradient.EndX) > float.MaxValue || Math.Abs(gradient.EndY) > float.MaxValue)
+        {
+            if (fallbackColor is null) throw new InvalidOperationException("A path gradient must be representable or provide a solid fallback.");
             return;
+        }
 
         var colors = stops.Select(stop => ToSkColor(stop.Color)).ToArray();
         var positions = stops.Select(stop => (float)stop.Position).ToArray();
@@ -970,6 +1082,8 @@ public static class SkiaPdfWriter
             colors,
             positions,
             SKShaderTileMode.Clamp);
+        if (paint.Shader is null && fallbackColor is null)
+            throw new InvalidOperationException("A path gradient must be representable or provide a solid fallback.");
     }
 
     private static void DrawPattern(SKCanvas canvas, SKPaint paint, PdfPatternFill pattern, Action draw)
@@ -1041,13 +1155,12 @@ public static class SkiaPdfWriter
         if (dash is null)
             return null;
 
-        var segments = dash.Segments
-            .Where(segment => double.IsFinite(segment) && segment > 0)
-            .Select(segment => (float)segment)
-            .ToArray();
-        return segments.Length == 0
-            ? null
-            : SKPathEffect.CreateDash(segments, (float)(double.IsFinite(dash.Phase) ? dash.Phase : 0));
+        if (dash.Segments.Count == 0 || dash.Segments.Any(segment => !double.IsFinite(segment) || segment < 0 || segment > float.MaxValue) ||
+            !dash.Segments.Any(segment => segment > 0)) return null;
+        // Skia requires an even count; PDF repeats an odd pattern in its entirety.
+        var values = dash.Segments.Count % 2 == 0 ? dash.Segments : dash.Segments.Concat(dash.Segments);
+        var segments = values.Select(segment => (float)segment).ToArray();
+        return SKPathEffect.CreateDash(segments, (float)(double.IsFinite(dash.Phase) && Math.Abs(dash.Phase) <= float.MaxValue ? dash.Phase : 0));
     }
 
     private static SKPaint CreateImagePaint(double opacity) =>
@@ -1110,7 +1223,7 @@ public static class SkiaPdfWriter
 
     private static SKColor ToSkColor(PdfColor color) => new(color.R, color.G, color.B);
 
-    private static byte ToAlphaByte(double opacity) =>
+    internal static byte ToAlphaByte(double opacity) =>
         (byte)Math.Clamp(Math.Round((double.IsFinite(opacity) ? opacity : 1.0) * 255.0), 0, 255);
 
     private static string FormatNumber(double value) =>
@@ -1198,20 +1311,22 @@ public static class SkiaPdfWriter
             var index = 0;
             while (index < text.Length)
             {
-                var runTypeface = Resolve(baseTypeface, CodepointAt(text, index));
-                var runStart = index;
-                index += AdvanceLength(text, index);
-                while (index < text.Length &&
-                       ReferenceEquals(Resolve(baseTypeface, CodepointAt(text, index)), runTypeface))
-                {
-                    index += AdvanceLength(text, index);
-                }
-
-                var run = text.Substring(runStart, index - runStart);
+                var runTypeface = ResolveRun(text, index, baseTypeface, out var runEnd);
+                var run = text[index..runEnd];
                 using var font = new SKFont(runTypeface, sizePoints);
                 canvas.DrawText(run, cursorX, baseline, font, paint);
                 cursorX += font.MeasureText(run);
+                index = runEnd;
             }
+        }
+
+        internal SKTypeface ResolveRun(string text, int start, SKTypeface baseTypeface, out int end)
+        {
+            var typeface = Resolve(baseTypeface, CodepointAt(text, start));
+            end = start + AdvanceLength(text, start);
+            while (end < text.Length && ReferenceEquals(Resolve(baseTypeface, CodepointAt(text, end)), typeface))
+                end += AdvanceLength(text, end);
+            return typeface;
         }
 
         private SKTypeface Resolve(SKTypeface baseTypeface, int codepoint)

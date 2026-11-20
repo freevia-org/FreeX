@@ -1,4 +1,16 @@
+using System.Globalization;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.Filtering;
+
+public sealed record AutoFilterSavedCondition(string CriteriaPrefix, string Value);
+
+public sealed record AutoFilterSavedCriteria(
+    AutoFilterSavedCondition? First,
+    string Connector,
+    AutoFilterSavedCondition? Second,
+    string CriteriaText);
 
 /// <summary>
 /// Portable, UI-free planning for the AutoFilter dialog's value checklist and custom-criteria text: search
@@ -171,9 +183,9 @@ public static class AutoFilterDialogCriteriaPlanner
         var date = today.Date;
         return preset switch
         {
-            "Today" => $"date={date:yyyy-MM-dd}",
-            "Yesterday" => $"date={date.AddDays(-1):yyyy-MM-dd}",
-            "Tomorrow" => $"date={date.AddDays(1):yyyy-MM-dd}",
+            "Today" => $"date={FormatIsoDate(date)}",
+            "Yesterday" => $"date={FormatIsoDate(date.AddDays(-1))}",
+            "Tomorrow" => $"date={FormatIsoDate(date.AddDays(1))}",
             "This Week" => BuildDateBetweenCriteria(StartOfWeek(date)),
             "Last Week" => BuildDateBetweenCriteria(StartOfWeek(date).AddDays(-7), days: 7),
             "Next Week" => BuildDateBetweenCriteria(StartOfWeek(date).AddDays(7), days: 7),
@@ -246,6 +258,97 @@ public static class AutoFilterDialogCriteriaPlanner
         return filtered;
     }
 
+    /// <summary>
+    /// Reads the active column's custom conditions from worksheet or table metadata. A saved filter
+    /// without an editable representation still returns a draft so an untouched dialog preserves it.
+    /// </summary>
+    public static AutoFilterSavedCriteria? GetSavedCriteria(
+        Sheet sheet,
+        AutoFilterDropdownPlan plan,
+        AutoFilterMenuFilterKind filterKind)
+    {
+        if (AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var range) &&
+            range == plan.Range)
+        {
+            var column = sheet.AutoFilter?.FilterColumns.FirstOrDefault(
+                column => column.ColumnId == plan.FilterColumnOffset);
+            return column is null
+                ? null
+                : ProjectSavedCriteria(column.CustomFilters, column.CustomFiltersAnd, filterKind);
+        }
+
+        var table = sheet.StructuredTables.FirstOrDefault(table => table.HasAutoFilter && table.Range == plan.Range);
+        var tableColumn = table?.FilterColumns.FirstOrDefault(column => column.ColumnId == plan.FilterColumnOffset);
+        return tableColumn is null
+            ? null
+            : ProjectSavedCriteria(
+                tableColumn.CustomFilters.Select(filter =>
+                    new WorksheetAutoFilterCustomFilterModel(filter.Operator, filter.Value)).ToArray(),
+                tableColumn.CustomFiltersAnd,
+                filterKind);
+    }
+
+    private static AutoFilterSavedCriteria? ProjectSavedCriteria(
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> filters,
+        bool useAnd,
+        AutoFilterMenuFilterKind filterKind)
+    {
+        if (filters.Count == 0)
+            return null;
+
+        var connector = useAnd ? "And" : "Or";
+        var first = filters.Count <= 2 ? ProjectSavedCondition(filters[0], filterKind) : null;
+        var second = filters.Count == 2 ? ProjectSavedCondition(filters[1], filterKind) : null;
+        if (first is null ||
+            (filters.Count == 2 && (second is null || first.Value.Contains('|') || second.Value.Contains('|'))))
+            return new AutoFilterSavedCriteria(null, connector, null, string.Empty);
+
+        var criteriaText = BuildCompositeCriteriaText(
+            first.CriteriaPrefix + first.Value,
+            connector,
+            second is null ? null : second.CriteriaPrefix + second.Value);
+        return new AutoFilterSavedCriteria(first, connector, second, criteriaText);
+    }
+
+    private static AutoFilterSavedCondition? ProjectSavedCondition(
+        WorksheetAutoFilterCustomFilterModel filter,
+        AutoFilterMenuFilterKind filterKind)
+    {
+        var comparison = filter.Operator switch
+        {
+            null or "equal" => "=",
+            "notEqual" => "<>",
+            "greaterThan" => ">",
+            "greaterThanOrEqual" => ">=",
+            "lessThan" => "<",
+            "lessThanOrEqual" => "<=",
+            _ => null
+        };
+        if (comparison is null || filter.Value is not { Length: > 0 } value)
+            return null;
+
+        var isNumber = double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number) &&
+            double.IsFinite(number);
+        if (filterKind == AutoFilterMenuFilterKind.Date && isNumber)
+        {
+            if (!new DateTimeValue(number).TryToDateTime(out var date) ||
+                DateTimeValue.FromDateTime(date.Date).Value != number)
+                return null;
+
+            return new AutoFilterSavedCondition("date" + comparison, FormatIsoDate(date));
+        }
+
+        if (isNumber && (filterKind == AutoFilterMenuFilterKind.Number || comparison is not ("=" or "<>")))
+            return new AutoFilterSavedCondition(comparison, number.ToString(CultureInfo.CurrentCulture));
+
+        // Equality with Excel wildcards is the exact editable form of the saved pattern.
+        // Keep the wildcards and escapes, since the metadata has no original text operator.
+        if (comparison is "=" or "<>" && value == value.Trim())
+            return new AutoFilterSavedCondition("text" + comparison, value);
+
+        return null;
+    }
+
     private static string BuildMonthCriteria(DateTime firstDayOfMonth)
     {
         var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
@@ -259,7 +362,10 @@ public static class AutoFilterDialogCriteriaPlanner
         BuildDateBetweenCriteria(firstDay, firstDay.AddDays(days - 1));
 
     private static string BuildDateBetweenCriteria(DateTime firstDay, DateTime lastDay) =>
-        $"datebetween:{firstDay:yyyy-MM-dd}:{lastDay:yyyy-MM-dd}";
+        $"datebetween:{FormatIsoDate(firstDay)}:{FormatIsoDate(lastDay)}";
+
+    private static string FormatIsoDate(DateTime date) =>
+        date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static DateTime StartOfWeek(DateTime date) =>
         date.AddDays(-(int)date.DayOfWeek);

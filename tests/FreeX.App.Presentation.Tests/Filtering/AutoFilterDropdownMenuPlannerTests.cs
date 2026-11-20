@@ -426,6 +426,46 @@ public sealed class AutoFilterDropdownMenuPlannerTests
     }
 
     [Fact]
+    public void CreateMenuPlan_UnfilteredChecklistAndActionsHaveDefaultStates()
+    {
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Apple"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("Banana"));
+
+        var range = new GridRange(
+            new CellAddress(SheetId, 1, 1),
+            new CellAddress(SheetId, 4, 1));
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(
+            sheet,
+            new AutoFilterDropdownPlan(range, FilterColumnOffset: 0),
+            Text,
+            "(Blanks)");
+
+        menu.Entries
+            .Where(entry => entry.Kind is AutoFilterMenuEntryKind.SortAscending
+                or AutoFilterMenuEntryKind.SortDescending
+                or AutoFilterMenuEntryKind.FilterFamily
+                or AutoFilterMenuEntryKind.Search)
+            .Should()
+            .OnlyContain(entry => entry.IsEnabled);
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.ClearFilter)
+            .IsEnabled.Should().BeFalse();
+        menu.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.Separator)
+            .Should()
+            .OnlyContain(entry => !entry.IsEnabled);
+        menu.Entries.Single(entry => entry.Kind == AutoFilterMenuEntryKind.SelectAll)
+            .IsChecked.Should().BeTrue();
+        menu.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .Select(entry => (entry.Value, entry.IsChecked))
+            .Should()
+            .Equal(("Apple", (bool?)true), ("Banana", true));
+    }
+
+    [Fact]
     public void R108_ChecklistItem_ReflectsActiveValueFilter_CaseInsensitively()
     {
         // R108: the checklist's own distinct-value dedup (AutoFilterChecklistPlanner.CreateItems)

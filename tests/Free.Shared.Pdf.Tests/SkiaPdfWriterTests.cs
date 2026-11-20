@@ -1,7 +1,10 @@
+using System.IO.Compression;
+using System.Text;
+using System.Text.RegularExpressions;
+
 using FluentAssertions;
 using Free.Shared.Pdf.Skia;
 using SkiaSharp;
-using System.Text;
 
 namespace Free.Shared.Pdf.Tests;
 
@@ -86,6 +89,65 @@ public sealed class SkiaPdfWriterTests
         pdf.Should().Contain("/Subtype /Link");
         pdf.Should().Contain("Target1");
         pdf.Should().NotContain("/URI (Target1)");
+    }
+
+    [Fact]
+    public void WriteRasterized_KeepsAnInternalLinkToTheActualDestinationPage()
+    {
+        var document = new PdfContentDocument([
+            new PdfContentPage(
+                100, 80, [new PdfFillRect(10, 10, 40, 20, PdfColor.Black)],
+                [new PdfLinkOverlay(10, 10, 40, 20, Uri: null, DestinationName: "RasterTarget")]),
+            new PdfContentPage(
+                110, 85, [new PdfFillRect(12, 20, 20, 10, PdfColor.Black)],
+                NamedDestinations: [new PdfNamedDestination("RasterTarget", 12, 20)]),
+        ]);
+        using var stream = new MemoryStream();
+
+        SkiaPdfWriter.WriteRasterized(document, stream, dpi: 72, includeSelectableText: false)
+            .Should().Be(2);
+
+        var objects = ReadPdfObjects(stream);
+        var source = objects.Values.Single(value => value.Contains("/MediaBox [0 0 100 80]", StringComparison.Ordinal));
+        var annotation = objects[ReadPdfMatch(source, @"/Annots\s*\[(\d+ 0) R\]")];
+        annotation.Should().Contain("/Subtype /Link").And.Contain("/Dest /RasterTarget")
+            .And.Contain("/Rect [10 50 50 70]");
+        var catalog = objects.Values.Single(value => value.Contains("/Type /Catalog", StringComparison.Ordinal));
+        var destinations = objects[ReadPdfReference(catalog, "Dests")];
+        var destinationPage = objects[ReadPdfMatch(destinations, @"/RasterTarget\s*\[(\d+ 0) R /XYZ 12 65 0\]")];
+        destinationPage.Should().Contain("/MediaBox [0 0 110 85]");
+    }
+
+    [Fact]
+    public void WriteRasterized_PlaysOneClippedRotatedTextOverlayAfterThePageImage()
+    {
+        var text = new PdfText(28, 35, 14, PdfFontFace.Regular, PdfColor.Black, "A");
+        var rotated = new PdfRotationGroup(28, 35, 90, [text]);
+        var page = new PdfContentPage(64, 48, [
+            new PdfEffectGroup(PdfEffectKind.Shadow, 20, 22, 16, 20,
+                new PdfEffectParameters(PdfColor.Black, 0.75, 3, 2, -2), [rotated]),
+            new PdfClipGroup(20, 22, 16, 20, [rotated]),
+        ]);
+        using var stream = new MemoryStream();
+
+        SkiaPdfWriter.WriteRasterized(new PdfContentDocument([page]), stream, dpi: 72, includeSelectableText: true)
+            .Should().Be(1);
+
+        var objects = ReadPdfObjects(stream);
+        objects.Values.Should().Contain(value => value.Contains("/Subtype /Image", StringComparison.Ordinal) &&
+            value.Contains("/Width 64", StringComparison.Ordinal) && value.Contains("/Height 48", StringComparison.Ordinal));
+        var pageObject = objects.Values.Single(value => value.Contains("/MediaBox [0 0 64 48]", StringComparison.Ordinal));
+        var content = ReadPdfStream(objects[ReadPdfReference(pageObject, "Contents")]);
+        var imageDraw = Regex.Match(content, @"\sDo(?=\s|$)");
+        var clipping = Regex.Match(content, @"\sW\*?\s+n(?=\s|$)");
+        var rotation = Regex.Match(content, @"(?<!\S)0\s+(?:1\s+-1|-1\s+1)\s+0\s+[\d.+-]+\s+[\d.+-]+\s+(?:cm|Tm)(?=\s|$)");
+        var textDraw = Regex.Matches(content, @"\sT[Jj](?=\s|$)").Cast<Match>().Should().ContainSingle().Which;
+        imageDraw.Success.Should().BeTrue();
+        clipping.Success.Should().BeTrue();
+        rotation.Success.Should().BeTrue();
+        textDraw.Index.Should().BeGreaterThan(imageDraw.Index)
+            .And.BeGreaterThan(clipping.Index)
+            .And.BeGreaterThan(rotation.Index);
     }
 
     [Theory]
@@ -651,6 +713,35 @@ public sealed class SkiaPdfWriterTests
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.Red);
         return bitmap;
+    }
+
+    private static Dictionary<string, string> ReadPdfObjects(MemoryStream stream) =>
+        Regex.Matches(Encoding.Latin1.GetString(stream.ToArray()), @"(?m)^(\d+ 0) obj\r?\n([\s\S]*?)\r?\nendobj\b")
+            .Cast<Match>()
+            .ToDictionary(match => match.Groups[1].Value, match => match.Groups[2].Value);
+
+    private static string ReadPdfReference(string dictionary, string key) =>
+        ReadPdfMatch(dictionary, $@"/{key}\s+(\d+ 0) R\b");
+
+    private static string ReadPdfMatch(string input, string pattern)
+    {
+        var match = Regex.Match(input, pattern);
+        match.Success.Should().BeTrue("the PDF must contain {0}", pattern);
+        return match.Groups[1].Value;
+    }
+
+    private static string ReadPdfStream(string streamObject)
+    {
+        var match = Regex.Match(streamObject, @"\A(?<header>.*?)stream\r?\n(?<content>.*)\r?\nendstream\z", RegexOptions.Singleline);
+        match.Success.Should().BeTrue();
+        var content = match.Groups["content"].Value;
+        if (!match.Groups["header"].Value.Contains("/FlateDecode", StringComparison.Ordinal))
+            return content;
+
+        using var input = new MemoryStream(Encoding.Latin1.GetBytes(content));
+        using var inflater = new ZLibStream(input, CompressionMode.Decompress);
+        using var reader = new StreamReader(inflater, Encoding.Latin1);
+        return reader.ReadToEnd();
     }
 
     private static byte[] EncodePng(SKBitmap bitmap)

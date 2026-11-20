@@ -1,8 +1,10 @@
 using System.Reflection;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using FluentAssertions;
+using Free.Shared.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -143,15 +145,59 @@ public sealed class GoToDialogsTests
     }
 
     [Fact]
-    public void GoToDialogOpenedFromKeyboard_FocusesReferenceBox()
+    public void GoToDialog_ConsumesSharedVisualMetricsAndAutomationIds()
     {
         var source = DialogSourceTestSupport.ReadHostSources("GoToDialog.cs");
 
-        source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
-        source.Should().Contain("private void FocusInitialKeyboardTarget()");
-        source.Should().Contain("_addressBox.Focus();");
-        source.Should().Contain("_addressBox.SelectAll();");
-        source.Should().Contain("Keyboard.Focus(_addressBox);");
+        source.Should().Contain("Width = GoToDialogVisualMetrics.WindowWidth;");
+        source.Should().Contain("Height = GoToDialogVisualMetrics.WindowHeight;");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryColumnWidth");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryListMinHeight");
+        source.Should().Contain("GoToDialogVisualMetrics.HistoryListAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.ReferenceInputAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.SpecialButtonAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.AcceptButtonAutomationId");
+        source.Should().Contain("GoToDialogVisualMetrics.CancelButtonAutomationId");
+    }
+
+    [Fact]
+    public void GoToDialogOpenedFromKeyboard_FocusesReferenceBox()
+    {
+        var sheetId = SheetId.New();
+        StaTestRunner.Run(() =>
+        {
+            var worksheetCell = new TextBox { Text = "worksheet sentinel" };
+            var owner = new Window { Content = worksheetCell, ShowInTaskbar = false };
+            owner.Show();
+            GoToDialog? dialog = null;
+            try
+            {
+                dialog = new GoToDialog(sheetId, defaultAddress: "A1") { Owner = owner };
+                var addressBox = DialogSourceTestSupport.GetPrivateField<TextBox>(dialog, "_addressBox");
+                dialog.Dispatcher.BeginInvoke(() =>
+                {
+                    Keyboard.FocusedElement.Should().BeSameAs(addressBox);
+
+                    var composition = new TextComposition(InputManager.Current, addressBox, "B2");
+                    var textInput = new TextCompositionEventArgs(Keyboard.PrimaryDevice, composition)
+                    {
+                        RoutedEvent = TextCompositionManager.TextInputEvent
+                    };
+                    ((UIElement)Keyboard.FocusedElement!).RaiseEvent(textInput);
+
+                    addressBox.Text.Should().Be("B2");
+                    worksheetCell.Text.Should().Be("worksheet sentinel");
+                    dialog.Close();
+                }, DispatcherPriority.ApplicationIdle);
+
+                dialog.ShowDialog();
+            }
+            finally
+            {
+                dialog?.Close();
+                owner.Close();
+            }
+        });
     }
 
     [Fact]

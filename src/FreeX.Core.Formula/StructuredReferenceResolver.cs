@@ -94,7 +94,8 @@ public static class StructuredReferenceResolver
                             table,
                             currentAddress,
                             rangeStartColumn,
-                            rangeEndColumn);
+                            rangeEndColumn,
+                            !string.IsNullOrWhiteSpace(tableName));
                     }
 
                     return ResolveSectionColumnRange(sheet, table, rangeSection, rangeStartColumn, rangeEndColumn);
@@ -103,7 +104,7 @@ public static class StructuredReferenceResolver
                 if (TryParseCombinedSelector(selector, out var section, out var columnName))
                 {
                     if (IsThisRowSection(section))
-                        return ResolveThisRowColumnRange(sheet, table, currentAddress, columnName, columnName);
+                        return ResolveThisRowColumnRange(sheet, table, currentAddress, columnName, columnName, !string.IsNullOrWhiteSpace(tableName));
 
                     return ResolveSectionColumn(sheet, table, section, columnName);
                 }
@@ -127,7 +128,8 @@ public static class StructuredReferenceResolver
                         table,
                         currentAddress,
                         FirstColumnNameOrEmpty(sheet, table),
-                        LastColumnNameOrEmpty(sheet, table));
+                        LastColumnNameOrEmpty(sheet, table),
+                        !string.IsNullOrWhiteSpace(tableName));
 
                 var columnIndex = FindColumnIndex(sheet, table, selector);
                 if (columnIndex < 0)
@@ -157,7 +159,7 @@ public static class StructuredReferenceResolver
 
         foreach (var sheet in sheets)
         {
-            if (!sheet.Id.Equals(currentAddress.Value.Sheet))
+            if (string.IsNullOrWhiteSpace(tableName) && !sheet.Id.Equals(currentAddress.Value.Sheet))
                 continue;
 
             foreach (var table in sheet.StructuredTables)
@@ -166,7 +168,7 @@ public static class StructuredReferenceResolver
                     continue;
                 if (!IsDataBodyRow(table, currentAddress.Value.Row))
                     continue;
-                if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+                if (string.IsNullOrWhiteSpace(tableName) && (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col))
                     continue;
 
                 var columnIndex = FindColumnIndex(sheet, table, UnwrapCurrentRowSingleColumnBracket(columnName));
@@ -230,7 +232,7 @@ public static class StructuredReferenceResolver
 
         foreach (var sheet in sheets)
         {
-            if (!sheet.Id.Equals(currentAddress.Value.Sheet))
+            if (string.IsNullOrWhiteSpace(tableName) && !sheet.Id.Equals(currentAddress.Value.Sheet))
                 continue;
 
             foreach (var table in sheet.StructuredTables)
@@ -239,10 +241,10 @@ public static class StructuredReferenceResolver
                     continue;
                 if (!IsDataBodyRow(table, currentAddress.Value.Row))
                     continue;
-                if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+                if (string.IsNullOrWhiteSpace(tableName) && (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col))
                     continue;
 
-                return ResolveThisRowColumnRange(sheet, table, currentAddress, startColumnName, endColumnName);
+                return ResolveThisRowColumnRange(sheet, table, currentAddress, startColumnName, endColumnName, !string.IsNullOrWhiteSpace(tableName));
             }
         }
 
@@ -332,13 +334,14 @@ public static class StructuredReferenceResolver
         StructuredTableModel table,
         CellAddress? currentAddress,
         string startColumnName,
-        string endColumnName)
+        string endColumnName,
+        bool qualified)
     {
-        if (currentAddress is null || !sheet.Id.Equals(currentAddress.Value.Sheet))
+        if (currentAddress is null || (!qualified && !sheet.Id.Equals(currentAddress.Value.Sheet)))
             return null;
         if (!IsDataBodyRow(table, currentAddress.Value.Row))
             return null;
-        if (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col)
+        if (!qualified && (currentAddress.Value.Col < table.Range.Start.Col || currentAddress.Value.Col > table.Range.End.Col))
             return null;
 
         var startColumnIndex = FindColumnIndex(sheet, table, startColumnName);
@@ -621,6 +624,16 @@ public static class StructuredReferenceResolver
             ? table.Range.End.Row - 1
             : table.Range.End.Row;
         return startRow <= endRow && row >= startRow && row <= endRow;
+    }
+
+    internal static bool IsQualifiedCurrentRowOutsideDataBody(Workbook? workbook, Sheet? currentSheet, CellAddress? address, string? tableName)
+    {
+        if (address is null || string.IsNullOrWhiteSpace(tableName)) return false;
+        var sheets = workbook is not null ? workbook.Sheets : currentSheet is not null ? [currentSheet] : [];
+        foreach (var sheet in sheets)
+            foreach (var table in sheet.StructuredTables)
+                if (StructuredTableNameMatches(table, tableName)) return !IsDataBodyRow(table, address.Value.Row);
+        return false;
     }
 
     // Excel tables normally have a single header row, but headerRowCount="0" (a headerless table)

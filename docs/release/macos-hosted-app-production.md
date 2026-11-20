@@ -67,7 +67,7 @@ If either runtime fails, inspect the runtime diagnostics artifact from that same
 
 When `validate_macos_tfm=true` is enabled in `.github/workflows/macos-app.yml`, a maintainer may run it manually as a companion check for the future `net10.0-macos` compile path.
 
-This validation is not the app artifact lane. It is useful for answering whether hosted macOS 26 arm64 and Intel runners can install the pinned macOS workload set and compile the macOS-specific target, including the host-only native source under `src/FreeX.App.Avalonia/MacOs/`. It does not replace the current `net10.0` publish that produces the `osx-arm64` and `osx-x64` bundles.
+This validation is not the app artifact lane. It is useful for answering whether hosted macOS 26 arm64 and Intel runners can install the pinned macOS workload set and compile the macOS-specific target, including the same macOS adapter source used by the shipping build. It does not replace the current `net10.0` publish that produces the `osx-arm64` and `osx-x64` bundles.
 
 From the GitHub UI:
 
@@ -86,11 +86,11 @@ gh run list --workflow macos-app.yml --branch main --limit 5
 
 Interpret the result separately from production artifact readiness:
 
-- Passing workload install/restore and `net10.0-macos` compile evidence means the hosted runner can compile the opt-in macOS TFM path and include the `MacOs/` native source boundary.
+- Passing workload install/restore and `net10.0-macos` compile evidence means the hosted runner can compile the opt-in macOS TFM path with the shared macOS adapter source.
 - A workload install/restore failure is an opt-in lane readiness issue, not a regression in the current hosted `net10.0` app bundle.
 - A `net10.0-macos` compile failure belongs to the macOS TFM lane or host-only source boundary; do not block the current app artifact lane unless its normal `osx-arm64` or `osx-x64` jobs also fail.
 - Uploaded TFM validation logs are evidence only. They are not app zips, release assets, signing evidence, notarization evidence, or human validation evidence.
-- Hosted compile evidence cannot prove native AppKit share-sheet runtime behavior. Real macOS human validation is still required before any release note claims native share-sheet support.
+- The shipping `net10.0` app opens the native AppKit Share sheet. Use the public-preview checklist on a Mac to verify it for the candidate.
 
 ## Artifact And Evidence Map
 

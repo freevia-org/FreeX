@@ -220,7 +220,10 @@ public static class PortablePdfWriter
                 break;
             case PdfPathLinearGradient path:
                 if (colorOverride is { } pathGradientColor)
-                    AppendPath(content, new PdfPath(path.Contours, path.FillFallbackColor is not null ? pathGradientColor : null, path.StrokeFallbackColor is not null ? pathGradientColor : null, path.StrokeWidth, path.StrokeDash));
+                    AppendPath(content, new PdfPath(path.Contours,
+                        path.FillGradient is not null || path.FillFallbackColor is not null ? pathGradientColor : null,
+                        path.StrokeGradient is not null || path.StrokeFallbackColor is not null ? pathGradientColor : null,
+                        path.StrokeWidth, path.StrokeDash));
                 else
                     AppendPathLinearGradient(content, path, patternResources);
                 break;
@@ -262,7 +265,8 @@ public static class PortablePdfWriter
         string headerComment,
         PdfDocumentProperties? properties)
     {
-        var objects = new List<PdfObject>();
+        // Reserve object 1 for the catalog, whose outline reference is allocated after the page objects.
+        var objects = new List<PdfObject> { PdfObject.Ascii(string.Empty) };
         var firstPageObjectId = 3 + fontResources.Count + imageResources.Count + opacityResources.Count + patternResources.Count;
         var pageObjectIds = Enumerable.Range(0, pages.Count)
             .Select(index => firstPageObjectId + (index * 2))
@@ -297,7 +301,6 @@ public static class PortablePdfWriter
             })
             .ToArray();
 
-        objects.Add(PdfObject.Ascii("<< /Type /Catalog /Pages 2 0 R >>"));
         objects.Add(PdfObject.Ascii($"<< /Type /Pages /Kids [{string.Join(" ", pageObjectIds.Select(id => $"{id} 0 R"))}] /Count {pages.Count} >>"));
         foreach (var font in fontResources)
             objects.Add(PdfObject.Ascii($"<< /Type /Font /Subtype /Type1 /BaseFont /{font.BaseFont} /Encoding /WinAnsiEncoding >>"));
@@ -366,11 +369,16 @@ public static class PortablePdfWriter
         // r189: the Info dictionary. PdfContentDocument has carried Properties all along and the
         // Skia and WPF writers both stamp them, but this fallback -- the one used whenever Skia is
         // unavailable -- dropped them, so a PDF exported on that path had no Title, Author, Subject
-        // or Keywords at all. Appended last so it does not shift any object number the pages,
-        // annotations and destinations already reference.
+        // or Keywords at all. Append metadata and outlines after the existing page and annotation objects.
         var infoObjectId = TryBuildInfoObject(properties) is { } infoObject
             ? AppendObject(objects, infoObject)
             : (int?)null;
+        var outlineRootId = AppendOutlines(objects, properties?.Outlines, pageObjectIds);
+        var outlineEntry = outlineRootId is { } outlineId ? $" /Outlines {outlineId} 0 R" : string.Empty;
+        var viewerEntries = PdfCatalogViewerEntries.Build(properties?.ViewerSettings, outlineRootId.HasValue);
+        var language = properties?.Language;
+        var languageEntry = string.IsNullOrWhiteSpace(language) ? string.Empty : $" /Lang {EncodeTextOperand(language)}";
+        objects[0] = PdfObject.Ascii($"<< /Type /Catalog /Pages 2 0 R{languageEntry}{viewerEntries}{outlineEntry} >>");
 
         WriteAscii(stream, $"%PDF-1.7\n% {headerComment}\n");
         var offsets = new List<long> { 0 };
@@ -397,6 +405,43 @@ public static class PortablePdfWriter
     {
         objects.Add(value);
         return objects.Count; // object numbers are 1-based
+    }
+
+    private static int? AppendOutlines(
+        List<PdfObject> objects,
+        IReadOnlyList<PdfOutlineEntry>? outlines,
+        IReadOnlyList<int> pageObjectIds)
+    {
+        if (outlines is not { Count: > 0 })
+            return null;
+
+        var entries = outlines
+            .Where(entry => entry is { PageIndex: >= 0 } &&
+                entry.PageIndex < pageObjectIds.Count &&
+                !string.IsNullOrWhiteSpace(entry.Title))
+            .ToArray();
+        if (entries.Length == 0)
+            return null;
+
+        var rootId = objects.Count + 1;
+        var firstId = rootId + 1;
+        var lastId = rootId + entries.Length;
+        objects.Add(PdfObject.Ascii(
+            $"<< /Type /Outlines /First {firstId} 0 R /Last {lastId} 0 R /Count {entries.Length} >>"));
+        for (var index = 0; index < entries.Length; index++)
+        {
+            var entry = entries[index];
+            var objectId = firstId + index;
+            var previous = objectId == firstId ? string.Empty : $" /Prev {objectId - 1} 0 R";
+            var next = objectId == lastId ? string.Empty : $" /Next {objectId + 1} 0 R";
+            // Outline titles are PDF text strings, so UTF-16BE can represent any worksheet name.
+            var title = $"<FEFF{Convert.ToHexString(Encoding.BigEndianUnicode.GetBytes(entry.Title))}>";
+            objects.Add(PdfObject.Ascii(
+                $"<< /Title {title} /Parent {rootId} 0 R{previous}{next} " +
+                $"/Dest [{pageObjectIds[entry.PageIndex]} 0 R /XYZ null null null] >>"));
+        }
+
+        return rootId;
     }
 
     /// <summary>
@@ -1996,16 +2041,24 @@ public static class PortablePdfWriter
         PdfPathLinearGradient path,
         PatternResourceSet patternResources)
     {
-        if (path.Contours.Count == 0 || (path.FillGradient is null && path.StrokeGradient is null))
+        if (path.Contours.Count == 0)
             return;
 
-        content.AppendLine("q");
         PdfPatternResource? fillPattern = null;
         var hasFillPattern = path.FillGradient is { } fillGradient &&
             patternResources.ByGradient.TryGetValue(fillGradient, out fillPattern);
         PdfPatternResource? strokePattern = null;
         var hasStrokePattern = path.StrokeGradient is { } strokeGradient &&
             patternResources.ByGradient.TryGetValue(strokeGradient, out strokePattern);
+
+        if ((path.FillGradient is not null && !hasFillPattern && path.FillFallbackColor is null) ||
+            (path.StrokeGradient is not null && !hasStrokePattern && path.StrokeFallbackColor is null))
+            throw new InvalidOperationException("A path gradient must be representable or provide a solid fallback.");
+
+        var hasFill = hasFillPattern || path.FillFallbackColor is not null;
+        var hasStroke = hasStrokePattern || path.StrokeFallbackColor is not null;
+        if (!hasFill && !hasStroke) return;
+        content.AppendLine("q");
 
         if (hasFillPattern)
             AppendFillPattern(content, fillPattern!.ResourceName);
@@ -2027,8 +2080,6 @@ public static class PortablePdfWriter
 
         AppendPathContours(content, path.Contours);
 
-        var hasFill = hasFillPattern || path.FillFallbackColor is not null;
-        var hasStroke = hasStrokePattern || path.StrokeFallbackColor is not null;
         content.AppendLine(hasFill && hasStroke ? "B" : hasFill ? "f" : "S");
         content.AppendLine("Q");
     }
@@ -2091,12 +2142,11 @@ public static class PortablePdfWriter
         if (dash is null || dash.Segments.Count == 0)
             return;
 
-        var segments = dash.Segments
-            .Where(segment => double.IsFinite(segment) && segment > 0)
-            .Select(FormatNumber)
-            .ToArray();
-        if (segments.Length == 0)
+        // Zero-length dashes/gaps are valid and affect alternating paint/gap parity.
+        if (dash.Segments.Any(segment => !double.IsFinite(segment) || segment < 0) ||
+            !dash.Segments.Any(segment => segment > 0))
             return;
+        var segments = dash.Segments.Select(FormatNumber).ToArray();
 
         var phase = double.IsFinite(dash.Phase) ? dash.Phase : 0;
         content.AppendLine($"[{string.Join(" ", segments)}] {FormatNumber(phase)} d");

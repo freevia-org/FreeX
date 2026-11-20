@@ -52,7 +52,7 @@ public static class PagePictureLayoutPlanner
         var blocks = new List<PagePictureBlock>();
         foreach (var picture in pictures)
         {
-            if (!picture.IsVisible ||
+            if (!picture.IsVisible || !picture.PrintObject ||
                 picture.Kind != PictureKind.Image ||
                 picture.ImageBytes is not { Length: > 0 } imageBytes ||
                 string.IsNullOrEmpty(picture.ContentType) ||

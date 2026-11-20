@@ -90,6 +90,13 @@ public sealed class R91_TableScopedSelectWholeColumnsRowsTests
     private static GridRange? SelectedRange(MainWindow window) =>
         ((SheetGridView)window.FindName("SheetGrid")).SelectedRange;
 
+    private static CellAddress? ActiveCell(MainWindow window) =>
+        ((SheetGridView)window.FindName("SheetGrid")).ActiveCell;
+
+    private static string NameBoxText(MainWindow window) =>
+        (string)window.FindName("CellAddressBox")!.GetType().GetProperty("Text")!.GetValue(
+            window.FindName("CellAddressBox"))!;
+
     private static void InvokeSelectWholeColumns(MainWindow window)
     {
         var method = typeof(MainWindow).GetMethod("SelectWholeColumnsFromSelection", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -193,6 +200,58 @@ public sealed class R91_TableScopedSelectWholeColumnsRowsTests
         }
     });
 
+    [Fact]
+    public void ShiftSpace_PreservesActiveCellAndNameBoxAcrossExpandedRowSelection() =>
+        StaTestRunner.Run(() =>
+    {
+        var (window, workbook, sheet) = CreateAdoptedWindow();
+        try
+        {
+            CreateTable(workbook, sheet);
+            var b5 = new CellAddress(sheet.Id, 5, 2);
+            SelectRange(window, new GridRange(b5, b5));
+
+            InvokeSelectWholeRows(window);
+            ActiveCell(window).Should().Be(b5);
+            NameBoxText(window).Should().Be("B5");
+
+            InvokeSelectWholeRows(window);
+            ActiveCell(window).Should().Be(b5);
+            NameBoxText(window).Should().Be("B5");
+        }
+        finally
+        {
+            MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+            PumpDispatcher();
+        }
+    });
+
+    [Fact]
+    public void CtrlSpace_PreservesActiveCellAndNameBoxAcrossExpandedColumnSelection() =>
+        StaTestRunner.Run(() =>
+    {
+        var (window, workbook, sheet) = CreateAdoptedWindow();
+        try
+        {
+            CreateTable(workbook, sheet);
+            var b5 = new CellAddress(sheet.Id, 5, 2);
+            SelectRange(window, new GridRange(b5, b5));
+
+            InvokeSelectWholeColumns(window);
+            ActiveCell(window).Should().Be(b5);
+            NameBoxText(window).Should().Be("B5");
+
+            InvokeSelectWholeColumns(window);
+            ActiveCell(window).Should().Be(b5);
+            NameBoxText(window).Should().Be("B5");
+        }
+        finally
+        {
+            MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+            PumpDispatcher();
+        }
+    });
+
     /// <summary>No-regression sibling: outside any table, Ctrl+Space/Shift+Space must still jump
     /// straight to the whole sheet column/row on the very first press, exactly as before this fix.</summary>
     [Fact]
@@ -212,6 +271,8 @@ public sealed class R91_TableScopedSelectWholeColumnsRowsTests
             wholeColumn.End.Row.Should().Be(CellAddress.MaxRow);
             wholeColumn.Start.Col.Should().Be(2);
             wholeColumn.End.Col.Should().Be(2);
+            ActiveCell(window).Should().Be(b5);
+            NameBoxText(window).Should().Be("B5");
 
             SelectRange(window, new GridRange(b5, b5));
             InvokeSelectWholeRows(window);
@@ -220,6 +281,8 @@ public sealed class R91_TableScopedSelectWholeColumnsRowsTests
             wholeRow.End.Col.Should().Be(CellAddress.MaxCol);
             wholeRow.Start.Row.Should().Be(5);
             wholeRow.End.Row.Should().Be(5);
+            ActiveCell(window).Should().Be(b5);
+            NameBoxText(window).Should().Be("B5");
         }
         finally
         {

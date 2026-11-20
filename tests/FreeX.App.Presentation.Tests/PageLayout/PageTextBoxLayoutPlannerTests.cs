@@ -65,9 +65,15 @@ public sealed class PageTextBoxLayoutPlannerTests
             Anchor = new CellAddress(TestSheetId, 9, 9),
             Text = "Off page"
         };
+        var nonPrinting = new TextBoxModel
+        {
+            Anchor = new CellAddress(TestSheetId, 1, 1),
+            Text = "Visible but not printed",
+            PrintObject = false
+        };
 
         var blocks = PageTextBoxLayoutPlanner.Build(
-            [hidden, visible, offPage],
+            [hidden, visible, nonPrinting, offPage],
             Theme,
             pageRows: [1, 2],
             pageColumns: [1, 2],
@@ -76,6 +82,7 @@ public sealed class PageTextBoxLayoutPlannerTests
             measurement: UniformMeasurement(colWidth: 50, rowHeight: 20));
 
         blocks.Should().ContainSingle().Which.Text.Should().Be("Visible");
+        nonPrinting.IsVisible.Should().BeTrue();
     }
 
     [Fact]

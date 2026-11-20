@@ -876,6 +876,61 @@ public sealed partial class ViewportService : IViewportService
         return false;
     }
 
+    /// <summary>
+    /// Reads only the cells requested by a chart renderer, using the same formatting as its viewport
+    /// data. A full-size chart can use this reader without depending on the capped viewport sample.
+    /// </summary>
+    public static Func<uint, uint, (ScalarValue Value, string DisplayText)> CreateChartDataCellReader(
+        Workbook workbook,
+        ChartModel chart)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var sourceSheet = workbook.GetSheet(chart.DataRange.Start.Sheet);
+        var showHiddenData = chart.ShowDataInHiddenRowsAndColumns;
+        var styleCache = new ViewportStyleCache();
+        return (row, col) =>
+        {
+            if (sourceSheet is null || (!showHiddenData &&
+                (sourceSheet.IsRowEffectivelyHidden(row) || sourceSheet.IsColEffectivelyHidden(col))))
+            {
+                return (BlankValue.Instance, "");
+            }
+
+            var cell = sourceSheet.GetCell(row, col);
+            if (cell is null)
+            {
+                // The effective value can come from a spilled formula without a stored cell.
+                var value = sourceSheet.GetValue(row, col);
+                if (value is BlankValue)
+                    return (value, "");
+
+                cell = new Cell
+                {
+                    Value = value,
+                    StyleId = sourceSheet.GetStyleOnly(row, col) ?? StyleId.Default,
+                };
+            }
+
+            return (cell.Value, FormatChartDataCell(workbook, sourceSheet, row, col, cell, ref styleCache));
+        };
+    }
+
+    private static string FormatChartDataCell(
+        Workbook workbook,
+        Sheet sourceSheet,
+        uint row,
+        uint col,
+        Cell cell,
+        ref ViewportStyleCache styleCache)
+    {
+        var style = styleCache.Get(workbook, cell.StyleId);
+        var columnWidth = sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth);
+        return GetDisplayText(workbook, sourceSheet, cell, row, col, ref style,
+            EstimateCharacterWidth(ColumnWidthToPixels(columnWidth)));
+    }
+
     private static IReadOnlyList<ChartDataCell> BuildChartDataCells(
         Workbook workbook,
         Sheet sheet,
@@ -942,20 +997,11 @@ public sealed partial class ViewportService : IViewportService
                         continue;
                     }
 
-                    var style = styleCache.Get(workbook, cell.StyleId);
                     chartCells.Add(new ChartDataCell(
                         sourceSheet.Id,
                         row,
                         col,
-                        GetDisplayText(
-                            workbook,
-                            sourceSheet,
-                            cell,
-                            row,
-                            col,
-                            ref style,
-                            EstimateCharacterWidth(ColumnWidthToPixels(
-                                sourceSheet.ColumnWidths.GetValueOrDefault(col, sourceSheet.DefaultColumnWidth)))),
+                        FormatChartDataCell(workbook, sourceSheet, row, col, cell, ref styleCache),
                         cell.Value));
                 }
             }

@@ -321,6 +321,33 @@ public class FormulaRewriteCommandTests
     }
 
     [Fact]
+    public void RemoveSheet_ShrinksThreeDimensionalReferences_AndUndoRestoresThem()
+    {
+        var wb = new Workbook("test");
+        var first = wb.AddSheet("First");
+        wb.AddSheet("Middle");
+        wb.AddSheet("Last");
+        var host = wb.AddSheet("Host");
+        var ctx = new TestCommandContext(wb);
+        var address = new CellAddress(host.Id, 1, 1);
+        host.SetFormula(address, "SUM(First:Last!A1)");
+        wb.NamedFormulas["Span"] = "First:Last!$A$1";
+        wb.DefineNamedFormula("LocalSpan", "First:Last!$A$1", host.Id);
+        var command = new RemoveSheetCommand(first.Id);
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        host.GetCell(1, 1)!.FormulaText.Should().Be("SUM(Middle:Last!A1)");
+        wb.NamedFormulas["Span"].Should().Be("Middle:Last!$A$1");
+        wb.ScopedNamedFormulas[("LocalSpan", host.Id)].Should().Be("Middle:Last!$A$1");
+        command.Revert(ctx);
+        host.GetCell(1, 1)!.FormulaText.Should().Be("SUM(First:Last!A1)");
+        wb.NamedFormulas["Span"].Should().Be("First:Last!$A$1");
+        wb.ScopedNamedFormulas[("LocalSpan", host.Id)].Should().Be("First:Last!$A$1");
+        command.Apply(ctx).Success.Should().BeTrue();
+        host.GetCell(1, 1)!.FormulaText.Should().Be("SUM(Middle:Last!A1)");
+    }
+
+    [Fact]
     public void RemoveSheet_RewritesNamedFormulasReferencingDeletedSheetAndUndoRestores()
     {
         var wb = new Workbook("test");

@@ -16,7 +16,10 @@ public enum PortablePdfTextRunSource
     WorkbookName,
     PageHeader,
     Cell,
-    PageFooter
+    PageFooter,
+    CommentSummary,
+    DisplayedComment,
+    Shape
 }
 
 public sealed record PortablePdfUnsupportedUnicodeTextDiagnostic(
@@ -68,6 +71,19 @@ public static class PortablePdfTextCapabilityPlanner
                     diagnostics);
             }
 
+            if (request.IsCommentSummaryPage)
+            {
+                textRunCount++; // The "Comments" heading is always ASCII.
+                foreach (var entry in request.CommentSummaryEntries)
+                {
+                    AddTextRun(
+                        PortablePdfTextRunSource.CommentSummary, request, entry.Address.Row, entry.Address.Col,
+                        entry.Text, diagnostics, ref textRunCount);
+                }
+
+                continue;
+            }
+
             AddTextRun(
                 PortablePdfTextRunSource.WorkbookName,
                 request,
@@ -98,6 +114,18 @@ public static class PortablePdfTextCapabilityPlanner
                     PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength),
                     diagnostics,
                     ref textRunCount);
+            }
+
+            var sheet = workbook.GetSheet(request.PrintRange.Start.Sheet) ?? workbook.GetSheetAt(request.SheetIndex);
+            foreach (var shape in WorkbookPdfContentBuilder.BuildLegacyShapeBlocks(workbook, sheet, contentPlan, options))
+                if (!string.IsNullOrEmpty(shape.Text))
+                    AddTextRun(PortablePdfTextRunSource.Shape, request, null, null, shape.Text, diagnostics, ref textRunCount);
+
+            foreach (var comment in request.DisplayedComments)
+            {
+                AddTextRun(
+                    PortablePdfTextRunSource.DisplayedComment, request, comment.Address.Row, comment.Address.Col,
+                    comment.Text, diagnostics, ref textRunCount);
             }
 
             AddTextRun(
@@ -172,6 +200,8 @@ public static class PortablePdfTextCapabilityPlanner
             PortablePdfTextRunSource.PageHeader => $"page header on export page {diagnostic.ExportPageNumber}",
             PortablePdfTextRunSource.Cell => $"cell {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
             PortablePdfTextRunSource.PageFooter => $"page footer on export page {diagnostic.ExportPageNumber}",
+            PortablePdfTextRunSource.CommentSummary or PortablePdfTextRunSource.DisplayedComment
+                => $"comment at {FormatCellReference(diagnostic.Row, diagnostic.Column)} on export page {diagnostic.ExportPageNumber}",
             _ => $"text run on export page {diagnostic.ExportPageNumber}"
         };
 

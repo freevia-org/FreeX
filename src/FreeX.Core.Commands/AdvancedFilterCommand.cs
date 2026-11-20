@@ -2,7 +2,7 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-public sealed class AdvancedFilterCommand : IWorkbookCommand
+public sealed class AdvancedFilterCommand : IWorkbookCommand, IEstimatesMemory
 {
     public const uint MaxListRows = 100_000;
     public const uint MaxListColumns = 256;
@@ -28,6 +28,9 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
     private readonly bool _uniqueRecordsOnly;
     private HashSet<uint>? _previousFilterHiddenRows;
     private List<(CellAddress Address, Cell? OldCell)>? _copySnapshot;
+    private TableHeaderRenameTransaction? _headerRename;
+    public int EstimatedBytes => (int)Math.Min(int.MaxValue,
+        300L * (_copySnapshot?.Count ?? 0) + 8L * (_previousFilterHiddenRows?.Count ?? 0) + (_headerRename?.EstimatedBytes ?? 0));
 
     public string Label => "Advanced Filter";
 
@@ -94,6 +97,10 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         if (GetLockedCopyDestination(ctx.Workbook, sheet, copyPlan) is { } lockedDestination)
             return lockedDestination;
 
+        var copyEnd = new CellAddress(sheet.Id,
+            checked(_copyTo.Value.Row + copyPlan.RowsToReplace - 1),
+            checked(_copyTo.Value.Col + copyPlan.ClearWidth - 1));
+        _headerRename = TableHeaderRenameTransaction.CaptureRange(ctx, sheet, new GridRange(_copyTo.Value, copyEnd));
         CopyMatches(sheet, matches, copyPlan);
         // Report both corners of the copy-to range, not just its top-left. Undo/Redo re-select the
         // BOUNDING range of AffectedCells, so a single cell collapsed the restored selection to the
@@ -101,9 +108,15 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
         // undo visibly shrank the selection. Reporting the range the user nominated keeps both
         // directions on the same selection.
         var isNoOp = NothingChanged(sheet);
+        if (!isNoOp)
+        {
+            try { _headerRename.Apply(ctx); }
+            catch (InvalidOperationException ex) { Revert(ctx); return new CommandOutcome(false, ex.Message); }
+        }
+        var headerAffected = _headerRename.Affected;
         return _copyToRange is { } copyToRange
-            ? new CommandOutcome(true, AffectedCells: [copyToRange.Start, copyToRange.End], IsNoOp: isNoOp)
-            : new CommandOutcome(true, AffectedCells: [_copyTo.Value], IsNoOp: isNoOp);
+            ? new CommandOutcome(true, AffectedCells: new[] { copyToRange.Start, copyToRange.End }.Concat(headerAffected).Distinct().ToArray(), IsNoOp: isNoOp)
+            : new CommandOutcome(true, AffectedCells: new[] { _copyTo.Value }.Concat(headerAffected).Distinct().ToArray(), IsNoOp: isNoOp);
     }
 
     public static bool IsListRangeWithinSupportedBounds(GridRange range) =>
@@ -210,6 +223,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
+        _headerRename?.Revert();
         var sheet = ctx.GetSheet(_listRange.Start.Sheet);
         if (_previousFilterHiddenRows is not null)
         {

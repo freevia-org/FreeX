@@ -5,6 +5,7 @@ namespace FreeX.App.Presentation.Shell;
 public enum WorkbookShortcutRoute
 {
     NewWorkbook,
+    OpenBackstage,
     OpenWorkbook,
     SaveWorkbook,
     PrintWorkbook,
@@ -48,6 +49,7 @@ public enum WorkbookShortcutRoute
 public enum KeyboardCommandShortcut
 {
     NewWorkbook,
+    OpenBackstage,
     OpenWorkbook,
     SaveWorkbook,
     Copy,
@@ -106,6 +108,7 @@ public enum KeyboardCommandShortcut
     SaveAs,
     OpenHelp,
     ShowKeyTips,
+    ToggleRibbonVisibility,
     CycleShellFocus,
     SwitchToNextWorkbookWindow,
     SwitchToPreviousWorkbookWindow,
@@ -281,7 +284,7 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Meta)),
         new(
-            WorkbookShortcutRoute.OpenWorkbook,
+            WorkbookShortcutRoute.OpenBackstage,
             new WorkbookShortcutChord(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Meta)),
         new(WorkbookShortcutRoute.OpenWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control)),
@@ -348,11 +351,11 @@ public static class WorkbookKeyboardShortcutCatalog
         new(
             WorkbookShortcutRoute.FillDown,
             new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Meta)),
         new(
             WorkbookShortcutRoute.FillRight,
             new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Meta)),
         new(
             WorkbookShortcutRoute.FlashFill,
             new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control),

@@ -894,7 +894,9 @@ public sealed partial class FormulaEvaluator
     {
         var range = TryResolveStructuredReferenceRange(node, context);
         return range is null
-            ? ErrorValue.Name
+            ? node.ColumnName.Contains("#This Row", StringComparison.OrdinalIgnoreCase) &&
+              StructuredReferenceResolver.IsQualifiedCurrentRowOutsideDataBody(context.CurrentWorkbook, context.CurrentSheet, context.CurrentCellAddress, node.TableName)
+                ? ErrorValue.Value : ErrorValue.Name
             : BuildRangeValueOrError(range.Value, context);
     }
 
@@ -918,7 +920,8 @@ public sealed partial class FormulaEvaluator
                 "#This Row",
                 context.CurrentCellAddress);
             return wholeRow is null
-                ? ErrorValue.Name
+                ? StructuredReferenceResolver.IsQualifiedCurrentRowOutsideDataBody(context.CurrentWorkbook, context.CurrentSheet, context.CurrentCellAddress, node.TableName)
+                    ? ErrorValue.Value : ErrorValue.Name
                 : BuildRangeValueOrError(wholeRow.Value, context);
         }
 
@@ -929,7 +932,11 @@ public sealed partial class FormulaEvaluator
             node.TableName,
             node.ColumnName);
         if (address is not null)
-            return context.GetCellValue(address.Value.Row, address.Value.Col);
+        {
+            var sheetName = context.TryGetSheetName(address.Value.Sheet);
+            return sheetName is null ? context.GetCellValue(address.Value.Row, address.Value.Col)
+                : context.GetCellValue(sheetName, address.Value.Row, address.Value.Col);
+        }
 
         // ResolveCurrentRowColumn only ever matches a single literal column name; a '@' shorthand
         // column-RANGE (Table1[@[Q1]:[Q2]]) falls through here with ColumnName holding the literal
@@ -943,7 +950,8 @@ public sealed partial class FormulaEvaluator
             node.TableName,
             node.ColumnName);
         return range is null
-            ? ErrorValue.Name
+            ? StructuredReferenceResolver.IsQualifiedCurrentRowOutsideDataBody(context.CurrentWorkbook, context.CurrentSheet, context.CurrentCellAddress, node.TableName)
+                ? ErrorValue.Value : ErrorValue.Name
             : BuildRangeValueOrError(range.Value, context);
     }
 

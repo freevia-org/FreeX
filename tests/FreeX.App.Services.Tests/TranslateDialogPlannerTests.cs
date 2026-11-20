@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;

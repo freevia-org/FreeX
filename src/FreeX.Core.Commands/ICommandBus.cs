@@ -210,4 +210,8 @@ public sealed record CommandOutcome(
     IReadOnlyList<CellAddress>? AffectedCells = null,
     bool IsNoOp = false,
     bool RequiresFullRecalc = false,
-    DrawingObjectSelectionHint? DrawingObjectSelection = null);
+    DrawingObjectSelectionHint? DrawingObjectSelection = null)
+{
+    /// <summary>Worksheet view state restored by showing, undoing, or redoing a Custom View.</summary>
+    public IReadOnlyList<SheetId>? RestoredCustomViewSheetIds { get; init; }
+}

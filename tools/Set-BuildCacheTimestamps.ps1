@@ -18,9 +18,9 @@ Set-StrictMode -Version Latest
 # So instead of trusting checkout timestamps, this rewrites them into three tiers that encode what
 # actually changed, according to git:
 #
-#   OLD (2001)  every tracked file                  -> older than the cache, so it is skipped
-#   MID (2011)  every restored obj/ file            -> the cache itself
-#   NEW (now)   every file differing from the cached commit -> newer, so it is rebuilt
+#   OLD      unchanged tracked files                     -> older than the cache
+#   CACHED   restored obj/ files                         -> older than the changed inputs
+#   CHANGED  tracked files changed since the cached commit -> newer than the cache
 #
 # The crucial property is that the NEW tier comes from `git diff` against the commit the cache was
 # built from, so it is exact: it does not care WHICH project consumes a file. That matters here
@@ -36,16 +36,15 @@ Set-StrictMode -Version Latest
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
-    # The cache deliberately holds obj/ only: bin/ is ~2 GB against obj/'s ~0.1 GB, and 22 jobs of
-    # bin would blow GitHub's 10 GB cache budget. The consequence is that bin/ is rebuilt by copying
-    # out of obj/ during the build, so those copies carry the CURRENT time. If the cached obj/ were
-    # backdated, every dependent would see a reference newer than its own output and recompile --
-    # measured: a full 30-assembly rebuild, i.e. a correct cache that saved nothing. So the cache
-    # tier is placed in the near future, ahead of the copies the build is about to make, and the
-    # changed-file tier ahead of that. Only the ORDER matters: old < build-time copies < cache < changed.
-    $oldTime = [datetime]::UtcNow.AddDays(-2)
-    $midTime = [datetime]::UtcNow.AddHours(1)
-    $newTime = [datetime]::UtcNow.AddHours(2)
+    # Keep all three tiers in the past. A reference assembly rebuilt at the current time must be
+    # newer than a cached consumer's outputs so MSBuild recompiles that consumer. Future timestamps
+    # hid changed references and let tests compiled against an older API run with newly built DLLs.
+    # The cache holds obj/ only. Build products copied into bin/ and other regenerated inputs can
+    # also receive current timestamps, so some otherwise unchanged consumers may recompile.
+    $stampTime = [datetime]::UtcNow
+    $oldTime = $stampTime.AddDays(-2)
+    $midTime = $stampTime.AddDays(-1)
+    $newTime = $stampTime.AddHours(-1)
 
     function Get-ObjectDirectories {
         return @(Get-ChildItem -Path $repoRoot -Recurse -Directory -Force -ErrorAction SilentlyContinue |
@@ -105,16 +104,9 @@ try {
         if ($status -like "D*") { $deletedPaths.Add($path) } else { $changedPaths.Add($path) }
     }
 
-    # The cache tier sits in the future (see above), so anything MSBuild REGENERATES during this build
-    # carries the current time and therefore looks OLDER than the cached outputs it feeds. Source
-    # files are safe because they are stamped into the changed tier, but some inputs only reach the
-    # compiler through such an intermediate: project files feed the generated AssemblyInfo
-    # (InternalsVisibleTo, versions) via an inputs-cache file, and .resx files feed .resources that
-    # are embedded at compile time. MSBuild regenerates those intermediates correctly and then skips
-    # the compile because the cached assembly is "newer" -- a build of the previous commit's
-    # attributes and resources (seen as CS1501 on a newly InternalsVisibleTo-exposed overload and
-    # as missing resource keys). Changes to build definitions or embedded resources therefore take
-    # the clean-build fallback: slower, never wrong.
+    # Build definitions and resources can change the generated inputs, references, or output paths
+    # of a project. Start from a clean build for those changes so MSBuild regenerates the complete
+    # set, including assembly attributes and embedded resources.
     $regeneratedInputPattern = '(?i)(\.(csproj|props|targets|resx|slnx)$)|(^|/)global\.json$'
     $regeneratedInputs = @($changedPaths + $deletedPaths | Where-Object { $_ -match $regeneratedInputPattern })
     if ($regeneratedInputs.Count -gt 0) {

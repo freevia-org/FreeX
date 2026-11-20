@@ -434,12 +434,12 @@ internal static class DialogWindowDefaults
     };
 
     // The Go To dialog style fixes its buttons at 24 px; the WPF Go To buttons are default buttons.
-    private const double GoToDialogButtonHeight = 24;
+    private const double GoToDialogButtonHeight = global::Free.Shared.Shell.GoToDialogVisualMetrics.AvaloniaRouteButtonHeight;
     private static readonly HashSet<string> GoToDialogButtonIds = new(StringComparer.Ordinal)
     {
-        "GoToSpecialButton",
-        "GoToReferenceBoxAcceptButton",
-        "GoToReferenceBoxCancelButton",
+        global::Free.Shared.Shell.GoToDialogVisualMetrics.SpecialButtonAutomationId,
+        global::Free.Shared.Shell.GoToDialogVisualMetrics.AcceptButtonAutomationId,
+        global::Free.Shared.Shell.GoToDialogVisualMetrics.CancelButtonAutomationId,
     };
 
     // Dialogs whose WPF push buttons are default WPF buttons (no Height in the WPF dialog: ZoomDialog,

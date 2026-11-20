@@ -385,7 +385,7 @@ public sealed class NativeMenuCatalogTests
 
     [Theory]
     [InlineData(WorkbookShortcutRoute.NewWorkbook, NativeFileMenuItemId.NewWorkbook)]
-    [InlineData(WorkbookShortcutRoute.OpenWorkbook, NativeFileMenuItemId.Open)]
+    [InlineData(WorkbookShortcutRoute.OpenBackstage, NativeFileMenuItemId.Open)]
     [InlineData(WorkbookShortcutRoute.SaveWorkbook, NativeFileMenuItemId.Save)]
     [InlineData(WorkbookShortcutRoute.PrintWorkbook, NativeFileMenuItemId.Print)]
     [InlineData(WorkbookShortcutRoute.WorkbookStatistics, NativeFileMenuItemId.WorkbookStatistics)]

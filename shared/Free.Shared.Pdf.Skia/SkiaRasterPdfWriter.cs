@@ -70,7 +70,7 @@ public static class SkiaRasterPdfWriter
     // draw that is imperceptible to a reader but still present, embedded, and ToUnicode-mapped for
     // search/select/screen-reader tools. See PdfTextOverlay's doc comment for the coordinate space
     // (top-left, y-down points) -- Skia's PDF canvas already uses that same space, so X/Y need no flip.
-    private const byte OverlayAlpha = 1;
+    internal const byte SelectableTextOverlayAlpha = 1;
 
     private static void DrawTextOverlays(
         SKCanvas canvas,
@@ -93,7 +93,7 @@ public static class SkiaRasterPdfWriter
             };
             var typeface = typefaces.For(overlay.FontFamily, face);
             var baseline = (float)(overlay.Y + overlay.FontSize);
-            overlayPaint.Color = new SKColor(overlay.Color.R, overlay.Color.G, overlay.Color.B, OverlayAlpha);
+            overlayPaint.Color = new SKColor(overlay.Color.R, overlay.Color.G, overlay.Color.B, SelectableTextOverlayAlpha);
 
             if (Math.Abs(overlay.RotationDegrees) < 0.0001)
             {

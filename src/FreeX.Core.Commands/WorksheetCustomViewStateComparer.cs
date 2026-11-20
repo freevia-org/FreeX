@@ -42,6 +42,9 @@ internal static class WorksheetCustomViewStateComparer
         && SameList(left.FilterHiddenRows, right.FilterHiddenRows)
         && Equals(left.AutoFilter, right.AutoFilter)
         && SameList(left.PrintAreas, right.PrintAreas)
+        && SameList(left.PrintAreaReferenceForms, right.PrintAreaReferenceForms)
+        && string.Equals(left.OpaquePrintAreaExpression, right.OpaquePrintAreaExpression, StringComparison.Ordinal)
+        && string.Equals(left.OpaquePrintTitlesExpression, right.OpaquePrintTitlesExpression, StringComparison.Ordinal)
         && left.PageOrientation == right.PageOrientation
         && left.PaperSize == right.PaperSize
         && left.PaperSizeCode == right.PaperSizeCode
@@ -51,7 +54,48 @@ internal static class WorksheetCustomViewStateComparer
         && left.PrintGridlines == right.PrintGridlines
         && left.PrintHeadings == right.PrintHeadings
         && Equals(left.FitToPage, right.FitToPage)
-        && Equals(left.ScaleToFit, right.ScaleToFit);
+        && Equals(left.ScaleToFit, right.ScaleToFit)
+        && SamePrintSettings(left.PrintSettings, right.PrintSettings);
+
+    private static bool SamePrintSettings(WorksheetCustomViewPrintSettings? left, WorksheetCustomViewPrintSettings? right)
+    {
+        if (left is null || right is null)
+            return left is null && right is null;
+        return left with
+        {
+            RowPageBreaks = Array.Empty<uint>(), ColumnPageBreaks = Array.Empty<uint>(),
+            RowPageBreaksMetadata = null, ColumnPageBreaksMetadata = null,
+            PageSetupMetadata = null, HeaderFooterMetadata = null, PageMarginsMetadata = null, PrintOptionsMetadata = null,
+        } == right with
+        {
+            RowPageBreaks = Array.Empty<uint>(), ColumnPageBreaks = Array.Empty<uint>(),
+            RowPageBreaksMetadata = null, ColumnPageBreaksMetadata = null,
+            PageSetupMetadata = null, HeaderFooterMetadata = null, PageMarginsMetadata = null, PrintOptionsMetadata = null,
+        }
+        && SameBag(left.PageSetupMetadata, right.PageSetupMetadata)
+        && SameBag(left.HeaderFooterMetadata, right.HeaderFooterMetadata)
+        && SameBag(left.PageMarginsMetadata, right.PageMarginsMetadata)
+        && SameBag(left.PrintOptionsMetadata, right.PrintOptionsMetadata)
+        && SameBreakMetadata(left.RowPageBreaksMetadata, right.RowPageBreaksMetadata)
+        && SameBreakMetadata(left.ColumnPageBreaksMetadata, right.ColumnPageBreaksMetadata)
+        && SameList(left.RowPageBreaks, right.RowPageBreaks)
+        && SameList(left.ColumnPageBreaks, right.ColumnPageBreaks);
+    }
+
+    private static bool SameBag(NativeXmlPreserveBag? left, NativeXmlPreserveBag? right) =>
+        left is null || right is null ? left is null && right is null : SameAttributes(left.All, right.All);
+
+    private static bool SameBreakMetadata(WorksheetPageBreaksMetadataModel? left, WorksheetPageBreaksMetadataModel? right)
+    {
+        if (left is null || right is null) return left is null && right is null;
+        return SameAttributes(left.NativeAttributes, right.NativeAttributes)
+            && left.BreakNativeAttributes.Count == right.BreakNativeAttributes.Count
+            && left.BreakNativeAttributes.All(pair => right.BreakNativeAttributes.TryGetValue(pair.Key, out var attrs)
+                && SameAttributes(pair.Value, attrs));
+    }
+
+    private static bool SameAttributes(IReadOnlyDictionary<string, string> left, IReadOnlyDictionary<string, string> right) =>
+        left.Count == right.Count && left.All(pair => right.TryGetValue(pair.Key, out var value) && value == pair.Value);
 
     private static bool SameList<T>(IReadOnlyList<T>? left, IReadOnlyList<T>? right)
     {

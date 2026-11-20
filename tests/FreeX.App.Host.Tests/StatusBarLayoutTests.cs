@@ -19,7 +19,7 @@ namespace FreeX.App.Host.Tests;
 public sealed class StatusBarLayoutTests
 {
     [Fact]
-    public void NumericSelection_RendersExcelLikeAggregateStatusLabels()
+    public void MultiCellSelection_ShowsExcelDefaultAggregateStatusLabels()
     {
         StaTestRunner.Run(() =>
         {
@@ -39,10 +39,51 @@ public sealed class StatusBarLayoutTests
             harness.StatusStatsVisibility.Should().Be(Visibility.Visible);
             harness.StatusText("StatusAvgText").Should().Be("Average: 4");
             harness.StatusText("StatusCountText").Should().Be("Count: 4");
-            harness.StatusText("StatusNumericalCountText").Should().Be("Numerical Count: 3");
             harness.StatusText("StatusSumText").Should().Be("Sum: 12");
-            harness.StatusText("StatusMinText").Should().Be("Min: 2");
-            harness.StatusText("StatusMaxText").Should().Be("Max: 6");
+            harness.StatusTextVisibility("StatusNumericalCountText").Should().Be(Visibility.Collapsed);
+            harness.StatusTextVisibility("StatusMinText").Should().Be(Visibility.Collapsed);
+            harness.StatusTextVisibility("StatusMaxText").Should().Be(Visibility.Collapsed);
+        });
+    }
+
+    [Fact]
+    public void SingleCellSelection_HidesAggregatesAndPreservesCustomizePreferences()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            var sheet = harness.ActiveWorkbook.GetSheet(harness.CurrentSheetId)
+                ?? throw new InvalidOperationException("The active sheet should exist.");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(13)));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(5)));
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMinimumMenuItem", true);
+
+            harness.InvalidateNavigationCaches();
+            harness.SelectRange(1, 1, 1, 1);
+            harness.RefreshStatusBar();
+
+            foreach (var name in new[]
+                     {
+                         "StatusAvgText", "StatusCountText", "StatusNumericalCountText",
+                         "StatusSumText", "StatusMinText", "StatusMaxText"
+                     })
+            {
+                harness.StatusTextVisibility(name).Should().Be(Visibility.Collapsed);
+            }
+
+            harness.OpenStatusBarCustomizeMenu();
+            harness.StatusBarCustomizeMenuItemIsChecked("StatusBarAverageMenuItem").Should().BeTrue();
+            harness.StatusBarCustomizeMenuItemIsChecked("StatusBarCountMenuItem").Should().BeTrue();
+            harness.StatusBarCustomizeMenuItemIsChecked("StatusBarSumMenuItem").Should().BeTrue();
+            harness.StatusBarCustomizeMenuItemIsChecked("StatusBarMinimumMenuItem").Should().BeTrue();
+
+            harness.SelectRange(1, 1, 2, 1);
+            harness.RefreshStatusBar();
+            harness.StatusText("StatusAvgText").Should().Be("Average: 9");
+            harness.StatusText("StatusCountText").Should().Be("Count: 2");
+            harness.StatusTextVisibility("StatusSumText").Should().Be(Visibility.Visible);
+            harness.StatusText("StatusSumText").Should().Be("Sum: 18");
+            harness.StatusText("StatusMinText").Should().Be("Min: 5");
         });
     }
 
@@ -57,6 +98,9 @@ public sealed class StatusBarLayoutTests
             sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(2)));
             sheet.SetCell(new CellAddress(sheet.Id, 1, 2), Cell.FromValue(new NumberValue(4)));
 
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarAverageMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarCountMenuItem", true);
+            harness.SetStatusBarCustomizeMenuItemChecked("StatusBarSumMenuItem", true);
             harness.SetStatusBarCustomizeMenuItemChecked("StatusBarNumericalCountMenuItem", true);
             harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMinimumMenuItem", true);
             harness.SetStatusBarCustomizeMenuItemChecked("StatusBarMaximumMenuItem", true);
@@ -622,6 +666,11 @@ public sealed class StatusBarLayoutTests
             var workbook = new Workbook("Book1");
             workbook.AddSheet("Sheet1");
             var workbookRef = new WorkbookRef { Current = workbook };
+            var options = new AppOptions();
+            var optionsRuntimeSession = new FreeXOptionsRuntimeSession(
+                options,
+                load: options.Clone,
+                save: _ => true);
             var graph = new DependencyGraph();
             var evaluator = new FormulaEvaluator();
             var window = new MainWindow(
@@ -633,7 +682,8 @@ public sealed class StatusBarLayoutTests
                 workbookRef,
                 workbook,
                 NullUserMessageService.Instance,
-                options: new AppOptions())
+                options: options,
+                optionsRuntimeSession: optionsRuntimeSession)
             {
                 WindowState = WindowState.Normal,
                 Width = 1280,

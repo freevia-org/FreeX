@@ -100,8 +100,12 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.SelectedRange.Should().Be(new GridRange(
                 new CellAddress(harness.CurrentSheetId, 5, 1),
                 new CellAddress(harness.CurrentSheetId, 5, CellAddress.MaxCol)));
-            harness.OpenMenuHeaders.Should().Contain("Row _Height...");
-            harness.OpenMenuHeaders.Should().NotContain("Column _Width...");
+            harness.OpenMenuHeaders.Should().ContainInOrder([
+                "Cu_t", "_Copy", "_Paste Options", "_Insert", "_Delete",
+                "Clear C_ontents", "Format _Cells", "Row _Height", "_Hide", "Un_hide"
+            ]);
+            harness.OpenMenuHeaders.Should().NotContain(["_Paste", "AutoFit Row He_ight", "_Group", "_Ungroup", "Column _Width..."]);
+            harness.OpenMenuHeadersRecursive.Should().Contain("Paste _Special");
         });
     }
 
@@ -134,8 +138,9 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.OpenMouseHeaderContextMenu(FreeX.App.UI.GridHeaderContextMenuTarget.Row, 5);
 
             harness.SelectedRange.Should().Be(expectedRange);
-            harness.OpenMenuHeaders.Should().Contain("Row _Height...");
-            harness.OpenMenuHeaders.Should().NotContain("Column _Width...");
+            harness.OpenMenuHeaders.Should().Contain("Row _Height");
+            harness.OpenMenuHeaders.Should().Contain("_Paste Options");
+            harness.OpenMenuHeaders.Should().NotContain(["AutoFit Row He_ight", "_Group", "_Ungroup", "Column _Width..."]);
         });
     }
 
@@ -171,20 +176,39 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             harness.OpenMenuHeaders.Should().ContainInOrder([
                 "Cu_t",
                 "_Copy",
-                "_Paste",
-                "Insert Row _Above",
-                "Delete _Row(s)",
-                "Row _Height...",
-                "AutoFit Row He_ight",
-                "_Hide Rows",
-                "Unhide Ro_ws",
-                "_Group",
-                "_Ungroup",
-                "_Format Cells...",
-                "Clear C_ontents"
+                "_Paste Options",
+                "_Insert",
+                "_Delete",
+                "Clear C_ontents",
+                "Format _Cells",
+                "Row _Height",
+                "_Hide",
+                "Un_hide"
             ]);
             harness.OpenMenuHeaders.Should().NotContain("Column _Width...");
             harness.OpenMenuHeaders.Should().NotContain("Insert Column _Left");
+            harness.OpenMenuHeadersRecursive.Should().Contain("Paste _Special");
+            harness.OpenMenuHeadersRecursive.Should().NotContain(["AutoFit Row He_ight", "_Group", "_Ungroup"]);
+        });
+    }
+
+    [Fact]
+    public void KeyboardShiftSpaceThenShiftF10_UsesExcelRowHeaderMenu()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+            harness.SelectCell(3, 2);
+            harness.SelectWholeRowsFromSelection();
+            harness.OpenKeyboardContextMenu();
+
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 3, 1),
+                new CellAddress(harness.CurrentSheetId, 3, CellAddress.MaxCol)));
+            harness.OpenMenuHeaders.Should().Contain("_Paste Options");
+            harness.OpenMenuHeaders.Should().Contain("_Insert");
+            harness.OpenMenuHeaders.Should().Contain("_Delete");
+            harness.OpenMenuHeaders.Should().NotContain("_Paste");
         });
     }
 
@@ -630,6 +654,14 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
             _window.OpenKeyboardContextMenu();
             PumpDispatcher();
             PumpDispatcher();
+            PumpDispatcher();
+        }
+
+        public void SelectWholeRowsFromSelection()
+        {
+            var method = typeof(MainWindow).GetMethod("SelectWholeRowsFromSelection", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new InvalidOperationException("SelectWholeRowsFromSelection was not found.");
+            method.Invoke(_window, null);
             PumpDispatcher();
         }
 

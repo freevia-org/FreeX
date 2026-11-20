@@ -40,7 +40,7 @@ public sealed class PrintExportHostReadinessPlannerTests
     }
 
     [Fact]
-    public void Create_WindowsSurfacePlansXpsAndAvaloniaSurfaceRejectsXpsHonestly()
+    public void Create_WindowsAndAvaloniaSurfacesPlanXps()
     {
         var workbook = BuildPrintableWorkbook();
         var request = new PrintJobRequest(WorkbookExportPrintScope.ActiveSheet);
@@ -60,11 +60,9 @@ public sealed class PrintExportHostReadinessPlannerTests
         wpfPlan.XpsExportPlan.Surface.Should().Be(WorkbookExportPrintSurface.WindowsDesktop);
         wpfPlan.XpsExportPlan.SupportedOutputKinds.Should().Contain(WorkbookExportPrintOutputKind.Xps);
 
-        avaloniaPlan.XpsExportPlan.IsReady.Should().BeFalse();
-        avaloniaPlan.XpsExportPlan.ValidationStatus.Should().Be(WorkbookExportPrintValidationStatus.OutputKindUnavailable);
-        avaloniaPlan.XpsExportPlan.SupportedOutputKinds.Should().Equal(WorkbookExportPrintOutputKind.Pdf);
-        avaloniaPlan.XpsExportPlan.StatusText.Should().Be(
-            "macOS supports PDF export print planning; XPS is not available on this platform.");
+        avaloniaPlan.XpsExportPlan.IsReady.Should().BeTrue();
+        avaloniaPlan.XpsExportPlan.Surface.Should().Be(WorkbookExportPrintSurface.MacOs);
+        avaloniaPlan.XpsExportPlan.SupportedOutputKinds.Should().Contain(WorkbookExportPrintOutputKind.Xps);
     }
 
     [Fact]

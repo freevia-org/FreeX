@@ -2,8 +2,10 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -19,7 +21,7 @@ public sealed class FormulaBarVisibilityTests
     {
         await Session.Dispatch(() =>
         {
-            var window = new MainWindow([]);
+            var window = CreateWindow(new AppOptions());
             window.Show();
             try
             {
@@ -55,7 +57,7 @@ public sealed class FormulaBarVisibilityTests
     {
         await Session.Dispatch(async () =>
         {
-            var window = new MainWindow([]);
+            var window = CreateWindow(new AppOptions());
             window.Show();
             try
             {
@@ -97,6 +99,103 @@ public sealed class FormulaBarVisibilityTests
             }
             return true;
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public Task View_toggle_persists_visibility_and_updates_independent_workbook_windows() =>
+        Session.Dispatch(() =>
+        {
+            var saved = new AppOptions();
+            var first = CreateWindow(saved);
+            var otherWorkbook = CreateWindow(saved);
+            MainWindow? openedWhileHidden = null;
+            try
+            {
+                first.Show();
+                otherWorkbook.Show();
+                first.Session.Workbook.Should().NotBeSameAs(otherWorkbook.Session.Workbook);
+
+                first.ToggleFormulaBarVisibilityForTest();
+                saved.ShowFormulaBar.Should().BeFalse();
+                first.FormulaBarVisibilityForTest.Should().Be((false, false, false));
+                otherWorkbook.FormulaBarVisibilityForTest.Should().Be((false, false, false));
+
+                openedWhileHidden = CreateWindow(saved);
+                openedWhileHidden.Show();
+                openedWhileHidden.FormulaBarVisibilityForTest.Should().Be((false, false, false));
+
+                otherWorkbook.ToggleFormulaBarVisibilityForTest();
+                saved.ShowFormulaBar.Should().BeTrue();
+                first.FormulaBarVisibilityForTest.Should().Be((true, true, true));
+                otherWorkbook.FormulaBarVisibilityForTest.Should().Be((true, true, true));
+                openedWhileHidden.FormulaBarVisibilityForTest.Should().Be((true, true, true));
+            }
+            finally
+            {
+                if (openedWhileHidden is not null)
+                    Close(openedWhileHidden);
+                Close(otherWorkbook);
+                Close(first);
+            }
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task Chevron_and_shortcut_remember_expansion_for_new_windows_without_resizing_open_siblings() =>
+        Session.Dispatch(async () =>
+        {
+            var saved = new AppOptions();
+            var first = CreateWindow(saved);
+            var sibling = CreateWindow(saved);
+            MainWindow? reopened = null;
+            try
+            {
+                first.Show();
+                sibling.Show();
+                var chevron = first.GetVisualDescendants().OfType<Button>()
+                    .Single(button => AutomationProperties.GetAutomationId(button) == "FormulaBarExpandBtn");
+                chevron.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+                first.FormulaBarExpandedForTest.Should().BeTrue();
+                sibling.FormulaBarExpandedForTest.Should().BeFalse();
+                saved.FormulaBarExpanded.Should().BeTrue();
+                ToolTip.GetTip(chevron).Should().BeOfType<string>().Which
+                    .Should().Contain(UiText.Get("MainWindow_TooltipTitle_CollapseFormulaBar"));
+
+                reopened = CreateWindow(saved);
+                reopened.Show();
+                reopened.FormulaBarExpandedForTest.Should().BeTrue();
+                await reopened.RaiseKeyDownForTest(new KeyEventArgs
+                {
+                    Key = Key.U,
+                    KeyModifiers = KeyModifiers.Control | KeyModifiers.Shift,
+                });
+
+                saved.FormulaBarExpanded.Should().BeFalse();
+                reopened.FormulaBarExpandedForTest.Should().BeFalse();
+                first.FormulaBarExpandedForTest.Should().BeTrue();
+            }
+            finally
+            {
+                if (reopened is not null)
+                    Close(reopened);
+                Close(sibling);
+                Close(first);
+            }
+            return true;
+        }, CancellationToken.None);
+
+    private static MainWindow CreateWindow(AppOptions saved) => new([], null!, new FreeXOptionsRuntimeSession(
+        load: () => saved.Clone(),
+        save: options =>
+        {
+            saved.CopyFrom(options);
+            return true;
+        }));
+
+    private static void Close(MainWindow window)
+    {
+        window.AllowCloseWithoutDirtyPromptForParityCapture();
+        window.Close();
     }
 
     private static async Task DrainInputAsync()

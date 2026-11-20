@@ -213,7 +213,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
 
     [Theory]
     [InlineData(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
-    [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
+    [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenBackstage)]
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
     [InlineData(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.SaveWorkbook)]
     [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SaveWorkbook)]
@@ -277,6 +277,8 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
 
     [Theory]
     [InlineData(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FillDown)]
+    [InlineData(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FillRight)]
     [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
     [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
     [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]

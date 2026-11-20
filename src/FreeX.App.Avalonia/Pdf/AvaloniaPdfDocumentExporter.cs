@@ -9,8 +9,8 @@ namespace FreeX.App.Avalonia.Pdf;
 /// Routes the Avalonia shell's <em>File → Export to PDF</em> through the Unicode-capable
 /// <see cref="SkiaPdfDocumentExporter"/> when Skia can run, and falls back to the dependency-free
 /// WinAnsi <see cref="PortablePdfDocumentExporter"/> when it cannot (headless/no-Skia environments).
-/// Both writers consume the same shared <see cref="PortablePdfExportPlan"/>, so the only difference
-/// is text fidelity (Skia embeds/subsets fonts; portable is WinAnsi-only) — geometry is identical.
+/// Both writers consume the same shared <see cref="PortablePdfExportPlan"/> and page geometry.
+/// The Skia writer also handles export quality and bitmap text for PDF publication.
 /// <para>
 /// This keeps a single decision point so the menu handler and tests exercise the same routing.
 /// </para>

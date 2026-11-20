@@ -12,6 +12,7 @@ public enum FreeXBackstageNavigationEntryKind
 public enum FreeXBackstagePaneId
 {
     Home,
+    Open,
     Info,
     Print
 }
@@ -51,6 +52,7 @@ public sealed record FreeXBackstageNavigationEntry(
 public static class FreeXBackstageNavigationPlanner
 {
     public const string HomePaneAutomationId = "BackstageHomeButton";
+    public const string OpenPaneAutomationId = "BackstageOpenButton";
     public const string InfoPaneAutomationId = "BackstageInfoButton";
     public const string PrintPaneAutomationId = "BackstagePrintButton";
 
@@ -78,13 +80,13 @@ public static class FreeXBackstageNavigationPlanner
             "MainWindow_TooltipDescription_CreateANewWorkbook",
             "MainWindow_TooltipTitle_New"),
 
-        Command(
-            FreeXBackstageCommandId.Open,
+        Pane(
+            FreeXBackstagePaneId.Open,
             "MainWindow_Text_Open",
             BackstageIconKind.GetData,
             "Open",
             "O",
-            "BackstageOpenButton",
+            OpenPaneAutomationId,
             "MainWindow_Text_Open",
             "MainWindow_TooltipDescription_OpenAnExistingWorkbook",
             "MainWindow_TooltipTitle_Open"),

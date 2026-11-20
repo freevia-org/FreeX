@@ -31,6 +31,8 @@ public sealed class FreeXStatusBarRendererPlannerTests
             textProvider: TextProvider);
         var visibility = StatusBarOptionVisibility.ExcelDefaults with
         {
+            Average = true,
+            Count = true,
             NumericalCount = true,
             Sum = false,
         };

@@ -30,7 +30,11 @@ public partial class MainWindow
                 },
                 OpenWorkbookAsync: async invocation =>
                 {
-                    if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
+                    if (invocation.Route.SourceKey == nameof(WorkbookShortcutRoute.OpenBackstage))
+                    {
+                        ShowBackstageOpenPane();
+                    }
+                    else if (invocation.Route.Source == WorkbookApplicationCommandSource.QuickAccessToolbar)
                         await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
                     else
                         await OpenWorkbookAsync();
@@ -100,7 +104,13 @@ public partial class MainWindow
             Zoom100 = Handled<WorkbookApplicationCommandInvocation>(invocation => ZoomTo100Percent()),
             ZoomSelection = Handled<WorkbookApplicationCommandInvocation>(invocation => ZoomToSelection()),
             FreezePanes = Handled<WorkbookApplicationCommandInvocation>(invocation => FreezePanesAtActiveCell()),
-            InsertWorksheet = Handled<WorkbookApplicationCommandInvocation>(invocation => AddNewSheet()),
+            InsertWorksheet = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+            {
+                if (invocation.Route.Source == WorkbookApplicationCommandSource.KeyboardShortcut)
+                    AddNewSheet(_session.ActiveSheet.Id);
+                else
+                    AddNewSheet();
+            }),
             Find = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
                 await ShowFindDialogAsync()),
             Replace = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
