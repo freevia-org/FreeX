@@ -37,10 +37,8 @@ namespace FreeP.App.Avalonia.Tests;
 /// Minimal headless Avalonia application used by all FreeP.App.Avalonia tests.
 /// Mirrors the pattern in FreeW.App.Avalonia.Tests.
 /// </summary>
-public sealed class FreePHeadlessApp : Application
+public sealed class FreePHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
-
     // Real Skia drawing rather than the headless stub: the clipboard interop tests round-trip a PNG
     // through DataFormat.Bitmap, and encoding a Bitmap needs an actual imaging backend -- under the stub
     // the encode silently yields nothing and the PNG comes back empty. Mirrors

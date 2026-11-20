@@ -34,10 +34,8 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 /// and every caret/selection/inline-table assertion downstream of a click unmet.
 /// </para>
 /// </summary>
-public sealed class SlideHeadlessApp : global::Avalonia.Application
+public sealed class SlideHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new global::Avalonia.Themes.Fluent.FluentTheme());
-
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<SlideHeadlessApp>()
             .UseSkia()

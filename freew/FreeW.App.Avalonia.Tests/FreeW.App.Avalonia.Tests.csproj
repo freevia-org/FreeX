@@ -38,6 +38,8 @@
              Link="FreeWDialogEvidenceCatalogContractTests.cs" />
     <Compile Include="../../tests/SharedTestInfrastructure/Avalonia/AvaloniaActionLabelInspector.cs"
              Link="TestSupport/AvaloniaActionLabelInspector.cs" />
+    <Compile Include="../../tests/SharedTestInfrastructure/Avalonia/HeadlessFluentApplication.cs"
+             Link="TestSupport/HeadlessFluentApplication.cs" />
   </ItemGroup>
 
   <Target Name="BuildFreeWNormalShippingAssembly"

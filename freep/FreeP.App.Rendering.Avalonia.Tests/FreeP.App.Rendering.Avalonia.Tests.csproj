@@ -26,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="../../tests/SharedTestInfrastructure/Avalonia/HeadlessFluentApplication.cs"
+             Link="TestSupport/HeadlessFluentApplication.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
   </ItemGroup>
