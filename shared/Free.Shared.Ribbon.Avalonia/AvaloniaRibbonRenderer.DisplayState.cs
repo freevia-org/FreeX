@@ -13,6 +13,15 @@ namespace Free.Shared.Ribbon.Avalonia;
 public static partial class AvaloniaRibbonRenderer
 {
     private static readonly ConditionalWeakTable<TabControl, RibbonDisplayState> DisplayStates = new();
+    private static readonly ConditionalWeakTable<TabControl, MinHeightPin> MinHeightPins = new();
+
+    // While the commands are hidden the tab control's own MinHeight pin is released so the work area
+    // below reflows up (as WPF does); the expanded value is restored when they show again.
+    private sealed class MinHeightPin
+    {
+        public double ExpandedMinHeight;
+        public bool Released;
+    }
 
     /// <summary>
     /// The display state of a ribbon built by <see cref="BuildRibbon"/>. Hosts toggle it for Ctrl+F1
@@ -110,6 +119,23 @@ public static partial class AvaloniaRibbonRenderer
         {
             if (item.Content is Control content)
                 content.IsVisible = state.ShowsCommands;
+        }
+
+        var pin = MinHeightPins.GetOrCreateValue(tabControl);
+        if (!state.ShowsCommands)
+        {
+            if (!pin.Released)
+            {
+                pin.ExpandedMinHeight = tabControl.MinHeight;
+                pin.Released = true;
+            }
+
+            tabControl.MinHeight = 0;
+        }
+        else if (pin.Released)
+        {
+            tabControl.MinHeight = pin.ExpandedMinHeight;
+            pin.Released = false;
         }
     }
 
