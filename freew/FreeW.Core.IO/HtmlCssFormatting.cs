@@ -24,16 +24,8 @@ internal static class HtmlCssFormatting
         if (string.IsNullOrWhiteSpace(style))
             return map;
 
-        foreach (var decl in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var colon = decl.IndexOf(':');
-            if (colon <= 0)
-                continue;
-            var name = decl[..colon].Trim().ToLowerInvariant();
-            var value = decl[(colon + 1)..].Trim();
-            if (name.Length > 0 && value.Length > 0)
-                map[name] = value;
-        }
+        foreach (var (name, value) in Free.Shared.IO.CssInlineDeclarations.Enumerate(style))
+            map[name] = value;
 
         return map;
     }
