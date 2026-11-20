@@ -2,9 +2,11 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.DefinedNames;
@@ -184,7 +186,7 @@ public sealed partial class MainWindow
             RefreshRows();
         });
 
-        deleteButton.Click += (_, _) =>
+        deleteButton.Click += (_, _) => RunGuarded(async () =>
         {
             warningText.IsVisible = false;
             var selection = DefinedNameUiPolicy.PlanManagerSelection(
@@ -195,6 +197,17 @@ public sealed partial class MainWindow
                 return;
 
             var name = row.Name;
+            // WPF NamedRangeDialog.DeleteButton_Click asks "Delete the name '{0}'?" before deleting.
+            var confirmation = await AvaloniaUserMessageDialog.ShowMessageAsync(
+                dialog,
+                new UserMessageRequest(
+                    UiText.Format("NamedRange_DeleteConfirmation", name),
+                    UiText.Get("NamedRange_NameManager"),
+                    UserMessageButtons.YesNo,
+                    UserMessageIcon.Question));
+            if (confirmation != UserMessageResult.Yes)
+                return;
+
             var command = definedNames.BuildDeleteCommand(row);
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
@@ -206,7 +219,7 @@ public sealed partial class MainWindow
 
             RefreshShell(UiText.Format("InsertLoc_DeletedName", name));
             RefreshRows();
-        };
+        });
 
         // WPF: the cancel (close) button is 64px wide.
         var closeButton = new Button { Content = UiText.Get("InsertLoc_CloseButton"), IsCancel = true, Width = 64, MinWidth = 64 };
@@ -214,7 +227,25 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(closeButton, "NameManagerCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
+        // WPF NamedRangeDialog: a double-click on a name opens Edit, and the dialog opens with the
+        // list focused (or New when there are no names).
+        namesList.DoubleTapped += (_, args) =>
+        {
+            if (!editButton.IsEnabled)
+                return;
+
+            args.Handled = true;
+            editButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        };
+
         RefreshRows();
+        dialog.Opened += (_, _) =>
+        {
+            if (rows.Count > 0)
+                namesList.Focus();
+            else
+                newButton.Focus();
+        };
 
         var commandButtons = new StackPanel
         {

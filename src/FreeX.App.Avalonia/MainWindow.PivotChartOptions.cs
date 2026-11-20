@@ -34,7 +34,7 @@ public sealed partial class MainWindow
         if (!TryResolveActivePivotChart(UiText.Get("PivotChart_ChangeTypeInsertFirst"), out var chart))
             return;
 
-        var chosen = await ShowChartTypePickerAsync(chart!.Type);
+        var chosen = await ShowPivotChartTypeDialogAsync(chart!.Type);
         if (chosen is not { } type)
             return;
 
@@ -116,18 +116,7 @@ public sealed partial class MainWindow
             blankChoices.FirstOrDefault(choice => choice.Mode == current.BlankDisplayMode)
             ?? (blankChoices.Count > 0 ? blankChoices[0] : null);
 
-        void SyncSubButtons()
-        {
-            var master = showFieldButtons.IsChecked == true;
-            reportFilterButtons.IsEnabled = master;
-            axisFieldButtons.IsEnabled = master;
-            valueFieldButtons.IsEnabled = master;
-            dataTableLegendKeys.IsEnabled = showDataTable.IsChecked == true;
-        }
-
-        showFieldButtons.IsCheckedChanged += (_, _) => SyncSubButtons();
-        showDataTable.IsCheckedChanged += (_, _) => SyncSubButtons();
-        SyncSubButtons();
+        // WPF PivotChartOptionsDialog has no enable-state coupling: every check box stays enabled.
 
         var dialog = new Window
         {

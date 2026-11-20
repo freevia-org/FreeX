@@ -10,7 +10,7 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog);");
-        source.Should().Contain("var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };");
+        source.Should().Contain("var findBox = new TextBox { Text = string.Empty, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };");
         source.Should().Contain("findFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);");
         source.Should().Contain("findChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);");
         // The compact WPF host (3d5eb06c4a) auto-sizes its tab host: no fixed per-tab height remains,

@@ -71,7 +71,7 @@ public sealed partial class MainWindow
         var overlapBox = CreateChartTextBox(current.BarOverlap.ToString(CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(overlapBox, overlapField.LabelResourceKey, overlapField.AutomationId);
 
-        var dialog = NewChartDialog(UiText.Get(ChartBarFormatPlanner.TitleResourceKey), ChartBarFormatPlanner.DialogAutomationId);
+        var dialog = NewChartDialog(UiText.Get(ChartBarFormatPlanner.TitleResourceKey), ChartBarFormatPlanner.DialogAutomationId, gapWidthBox);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartBarFormat");
         okButton.Click += (_, _) =>
@@ -165,7 +165,7 @@ public sealed partial class MainWindow
             260);
         ApplyTypeFormatDescriptorAutomation(holeBox, holeField.LabelResourceKey, holeField.AutomationId);
 
-        var dialog = NewChartDialog(UiText.Get(ChartPieFormatPlanner.TitleResourceKey), ChartPieFormatPlanner.DialogAutomationId);
+        var dialog = NewChartDialog(UiText.Get(ChartPieFormatPlanner.TitleResourceKey), ChartPieFormatPlanner.DialogAutomationId, angleBox);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartPieFormat");
         okButton.Click += (_, _) =>
@@ -265,7 +265,7 @@ public sealed partial class MainWindow
         ApplyTypeFormatDescriptorAutomation(sizeCombo, sizeField.LabelResourceKey, sizeField.AutomationId);
         sizeCombo.SelectedItem = current.BubbleSizeRepresents;
 
-        var dialog = NewChartDialog(UiText.Get(ChartBubbleFormatPlanner.TitleResourceKey), ChartBubbleFormatPlanner.DialogAutomationId);
+        var dialog = NewChartDialog(UiText.Get(ChartBubbleFormatPlanner.TitleResourceKey), ChartBubbleFormatPlanner.DialogAutomationId, scaleBox);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartBubbleFormat");
         okButton.Click += (_, _) =>
@@ -366,7 +366,7 @@ public sealed partial class MainWindow
         var thicknessBox = CreateChartTextBox(current.HighLowLineThickness.ToString("G", CultureInfo.InvariantCulture), 260);
         ApplyTypeFormatDescriptorAutomation(thicknessBox, thicknessField.LabelResourceKey, thicknessField.AutomationId);
 
-        var dialog = NewChartDialog(UiText.Get(ChartStockFormatPlanner.TitleResourceKey), ChartStockFormatPlanner.DialogAutomationId);
+        var dialog = NewChartDialog(UiText.Get(ChartStockFormatPlanner.TitleResourceKey), ChartStockFormatPlanner.DialogAutomationId, gapWidthBox);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartStockFormat");
         okButton.Click += (_, _) =>

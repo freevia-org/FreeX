@@ -92,7 +92,7 @@ public sealed partial class MainWindow
             ChartDataLabelsDialogFieldId.TextAngle,
             (state.Angle ?? 0).ToString(CultureInfo.InvariantCulture));
 
-        var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartDataLabels_Title"), "ChartDataLabelsDialog", showCheck);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartDataLabels");
         okButton.Click += (_, _) =>
@@ -611,7 +611,7 @@ public sealed partial class MainWindow
             LoadState(ChartSeriesFormatPlanner.Read(chart, index));
         };
 
-        var dialog = NewChartDialog(UiText.Get("ChartSeriesFormat_Title"), "ChartSeriesFormatDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartSeriesFormat_Title"), "ChartSeriesFormatDialog", seriesCombo);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartSeriesFormat");
         okButton.Click += (_, _) =>
@@ -784,7 +784,7 @@ public sealed partial class MainWindow
         ApplyTrendlineDescriptorAutomation(dashCombo, ChartTrendlineDialogFieldId.DashStyle);
         dashCombo.SelectedItem = current.DashStyle ?? ChartLineDashStyle.Solid;
 
-        var dialog = NewChartDialog(UiText.Get("ChartTrendline_Title"), "ChartTrendlineDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartTrendline_Title"), "ChartTrendlineDialog", showCheck);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartTrendline");
         okButton.Click += (_, _) =>
@@ -956,7 +956,7 @@ public sealed partial class MainWindow
 
         var endCapsCheck = MakeErrorBarsDescriptorCheck(ChartErrorBarsDialogFieldId.EndCaps, current.EndCaps);
 
-        var dialog = NewChartDialog(UiText.Get("ChartErrorBars_Title"), "ChartErrorBarsDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartErrorBars_Title"), "ChartErrorBarsDialog", showCheck);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartErrorBars");
         okButton.Click += (_, _) =>

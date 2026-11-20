@@ -84,7 +84,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
 
-        var goToButton = new Button { Content = UiText.Get("ShellLoc_GoToButton"), MinWidth = 84, IsEnabled = false };
+        var goToButton = new Button { Content = UiText.Get("ReviewCommentList_OpenButton"), MinWidth = 84, IsEnabled = false };
         ApplySheetOptionButtonChrome(goToButton, 84);
         AutomationProperties.SetAutomationId(goToButton, "ReviewCommentListOpenButton");
         var closeButton = new Button
