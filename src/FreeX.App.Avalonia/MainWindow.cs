@@ -5328,6 +5328,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AddErrorSmartTagOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddPasteOptionsOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddInsertOptionsOverlay(overlay, viewport, showHeadings, zoomFactor);
+        AddAutofillOptionsOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).UsesPageBreakPreviewOverlay
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)

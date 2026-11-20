@@ -771,6 +771,7 @@ public partial class MainWindow
         RefreshErrorSmartTag();
         RefreshPasteOptionsButton();
         RefreshInsertOptionsButton();
+        RefreshAutofillOptionsButton();
         UpdateChartsheetPresentation(sheet);
     }
 
