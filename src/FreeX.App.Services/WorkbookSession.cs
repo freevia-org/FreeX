@@ -5268,6 +5268,19 @@ public sealed partial class WorkbookSession : IDisposable
         return result;
     }
 
+    /// <summary>Shift+drag of a selection border: inserts the moved cells at the target and shifts the existing ones.</summary>
+    public WorkbookCellEditResult InsertMovedRangeAt(GridRange sourceRange, GridRange targetRange)
+    {
+        if (!sourceRange.Start.Sheet.Equals(ActiveSheet.Id) || !targetRange.Start.Sheet.Equals(ActiveSheet.Id))
+            return new WorkbookCellEditResult(false, "Move source and destination must be on the active sheet.", [], RecalcReport: null);
+
+        var command = FreeX.App.Presentation.Editing.ShiftDragInsertPlanner.CreateCommand(Workbook, ActiveSheet.Id, sourceRange, targetRange);
+        if (command is null)
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null, IsNoOp: true);
+
+        return ExecuteReviewCommand(command, fallbackAddress: targetRange.Start);
+    }
+
     public WorkbookCellEditResult FlashFillSelectedRange()
     {
         var range = SelectedRange;
