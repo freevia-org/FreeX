@@ -7860,10 +7860,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_autofillDragging)
         {
             ClearAutofillPreview();
-            CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
+            CommitAutofillDrag(IsCellDragCopyModifier(args.KeyModifiers));
         }
         else if (_selectionMoveDragging)
-            await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control), args.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            await CommitSelectionMoveDragAsync(IsCellDragCopyModifier(args.KeyModifiers), args.KeyModifiers.HasFlag(KeyModifiers.Shift));
 
         DetachCellSelectionDragHandlers();
         _cellDragSelectionPointer?.Capture(null);
@@ -8554,7 +8554,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // not here — the user may press/release Ctrl mid-drag, exactly like the existing
         // autofill-drag Ctrl handling.
         if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
-            (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Control && args.KeyModifiers != KeyModifiers.Shift) ||
+            (args.KeyModifiers != KeyModifiers.None && !IsCellDragCopyModifier(args.KeyModifiers) && args.KeyModifiers != KeyModifiers.Shift) ||
             !IsPointerOnSelectionMoveBorder(args) ||
             _session.SelectedRanges.Count > 1)
         {
@@ -28945,9 +28945,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.Y);
         var horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.X);
 
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (IsWheelZoomModifier(e.KeyModifiers))
         {
-            // Ctrl+Scroll = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
+            // Ctrl+Scroll (Cmd+Scroll on macOS) = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
             var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
             if (wheelScroll != 0)
                 ApplyZoomPercent(_session.ZoomPercent + wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");

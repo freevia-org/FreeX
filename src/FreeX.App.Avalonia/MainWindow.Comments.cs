@@ -326,7 +326,7 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close();
         replyBox.KeyDown += (_, e) =>
         {
-            if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.Enter)
+            if (IsCommandEnterCommit(e))
             {
                 Submit();
                 e.Handled = true;

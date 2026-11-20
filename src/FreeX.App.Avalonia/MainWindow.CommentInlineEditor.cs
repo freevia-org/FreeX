@@ -534,7 +534,7 @@ public sealed partial class MainWindow
             CancelThreadedCommentInlineEdit();
             e.Handled = true;
         }
-        else if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Control)
+        else if (IsCommandEnterCommit(e))
         {
             SubmitThreadedCommentInlineEdit();
             e.Handled = true;
@@ -548,7 +548,7 @@ public sealed partial class MainWindow
             CancelNoteInlineEdit();
             e.Handled = true;
         }
-        else if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Control)
+        else if (IsCommandEnterCommit(e))
         {
             SubmitNoteInlineEdit();
             e.Handled = true;
@@ -583,7 +583,7 @@ public sealed partial class MainWindow
 
     private void InlineThreadedCommentSelectedReplyKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.Control &&
+        if (IsCommandEnterCommit(e) &&
             _inlineThreadedCommentUpdateReplyButton?.IsEnabled == true)
         {
             SubmitThreadedCommentReplyEdit();
