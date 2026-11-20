@@ -144,6 +144,9 @@ public sealed partial class MainWindow
     /// <see cref="ChartTypeChangePlanner"/> so the surface stays in lock-step with the renderer's
     /// authorable families. Returns the chosen <see cref="ChartType"/> or null on cancel.
     /// </summary>
+    private const double ChartPickerRowHeight = 20;
+    private const int ChartPickerVisibleRows = 10;
+
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
         // The category list, subtype gallery and preview are the shared All Charts body, which the
@@ -156,16 +159,20 @@ public sealed partial class MainWindow
         bodyGrid.Height = double.NaN;
         bodyGrid.MaxHeight = ChartTypeChangePlanner.PickerPanelHeight;
         bodyGrid.VerticalAlignment = AvaloniaVerticalAlignment.Top;
-        categoryList.Height = double.NaN;
-        subtypeGallery.Height = double.NaN;
+        // WPF lists show exactly ten full 20px rows (plus the 2px borders); a fixed height of whole rows
+        // keeps the same rows visible with no half-clipped last row.
+        categoryList.Height = ChartPickerVisibleRows * ChartPickerRowHeight + 4;
+        subtypeGallery.Height = ChartPickerVisibleRows * ChartPickerRowHeight + 4;
 
         var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
         // WPF ChangeChartTypeDialog is a 640x390 outer NoResize window; Avalonia sizes the client
         // area, so the measured Windows frame comes off both. The picker body flexes to the height.
         dialog.Width = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;
-        dialog.Height = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        // The WPF capture shows the category list with ten full 20px rows (about 204px tall), which needs
+        // a client area of the planner's full 390 height rather than the frame-reduced one.
+        dialog.Height = ChartTypeChangePlanner.DialogHeight;
         dialog.MinWidth = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;
-        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
         dialog.SizeToContent = SizeToContent.Manual;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
@@ -223,6 +230,12 @@ public sealed partial class MainWindow
                 Converter = new FuncValueConverter<ChartTypePickerCategoryPlan, string>(c => c is null ? string.Empty : UiText.Get(c.NameKey)),
             },
         };
+        // WPF list rows are 20px tall.
+        var pickerRowStyle = new global::Avalonia.Styling.Style(x => x.OfType<ListBoxItem>());
+        pickerRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
+        categoryList.Styles.Add(pickerRowStyle);
+        var pickerGalleryRowStyle = new global::Avalonia.Styling.Style(x => x.OfType<ListBoxItem>());
+        pickerGalleryRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
         AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
         AutomationProperties.SetAutomationId(categoryList, $"{automationIdPrefix}CategoryList");
 
@@ -237,6 +250,7 @@ public sealed partial class MainWindow
                 Converter = new FuncValueConverter<ChartTypePickerOptionPlan, string>(o => o is null ? string.Empty : UiText.Get(o.DisplayNameKey)),
             },
         };
+        subtypeGallery.Styles.Add(pickerGalleryRowStyle);
         AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(subtypeGallery, $"{automationIdPrefix}SubtypeGallery");
 

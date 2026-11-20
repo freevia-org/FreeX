@@ -197,6 +197,13 @@ public sealed partial class MainWindow
         AttachDialogRangePicker(dialog, selectDataRangeButton, dataRangeBox, "range.sparklines.data-range");
         AttachDialogRangePicker(dialog, selectLocationRangeButton, locationBox, "range.sparklines.location-range");
 
+        // WPF opens with the Data range field focused and its text selected.
+        dialog.Opened += (_, _) => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            dataRangeBox.Focus();
+            dataRangeBox.SelectAll();
+        });
+
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
             return;

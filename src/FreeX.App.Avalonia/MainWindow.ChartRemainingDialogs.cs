@@ -395,7 +395,11 @@ public sealed partial class MainWindow
         dialog.SizeToContent = SizeToContent.Manual;
         // WPF ChartAreaLegendDialog's 420x590 is the outer window; the client loses the Windows frame.
         dialog.Width = ChartAreaFormatPlanner.DialogWidth - WpfNoResizeFrameWidth;
-        dialog.Height = ChartAreaFormatPlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        // The WPF window renders the whole Legend section (through "Legend font size" and the OK row) without
+        // scrolling; the planner's nominal 590 is too short for that content, so use the rendered WPF height.
+        // The ScrollViewer below stays only as a fallback for small screens.
+        const double ChartAreaDialogRenderedHeight = 767;
+        dialog.Height = Math.Max(ChartAreaFormatPlanner.DialogHeight, ChartAreaDialogRenderedHeight) - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
