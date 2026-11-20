@@ -31,7 +31,9 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
     private static readonly Pen HandleBorder;
     private static readonly Brush RotateHandleFill;
     private static readonly Pen   RotateHandleBorder;
+    private static readonly Pen RotateHandleStem;
     private static readonly Pen MarqueePen;
+    private static readonly Brush MarqueeFill;
     private static readonly Pen SnapGuidePen;    // Wave 12B — snap guide lines
     private static readonly Brush EditPointFill;
     private static readonly Pen EditPointBorder;
@@ -39,48 +41,38 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
 
     static SelectionAdorner()
     {
-        SelectionPen = new Pen(new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
-        SelectionPen.Freeze();
+        SelectionPen = ToPen(SelectionAdornerStyle.Selection);
+        PreviewPen = ToPen(SelectionAdornerStyle.Preview);
+        HandleFill = ToFrozenBrush(SelectionAdornerStyle.HandleFillArgb);
+        HandleBorder = ToPen(SelectionAdornerStyle.HandleBorder);
+        RotateHandleStem = ToPen(SelectionAdornerStyle.RotateHandleStem);
+        RotateHandleFill = ToFrozenBrush(SelectionAdornerStyle.RotateHandleFillArgb);
+        RotateHandleBorder = ToPen(SelectionAdornerStyle.RotateHandleBorder);
+        MarqueePen = ToPen(SelectionAdornerStyle.Marquee);
+        MarqueeFill = ToFrozenBrush(SelectionAdornerStyle.MarqueeFillArgb);
+        SnapGuidePen = ToPen(SelectionAdornerStyle.SnapGuide);
+        EditPointFill = ToFrozenBrush(SelectionAdornerStyle.EditPointFillArgb);
+        EditPointBorder = ToPen(SelectionAdornerStyle.EditPointBorder);
+        EditPointPreviewPen = ToPen(SelectionAdornerStyle.EditPointPreview);
+    }
 
-        PreviewPen = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, 0x21, 0x96, 0xF3)), 1.5)
-        {
-            DashStyle = new DashStyle(new[] { 4.0, 2.0 }, 0)
-        };
-        PreviewPen.Freeze();
+    private static Brush ToFrozenBrush(uint argb)
+    {
+        var brush = new SolidColorBrush(ToColor(argb));
+        brush.Freeze();
+        return brush;
+    }
 
-        HandleFill = new SolidColorBrush(Colors.White);
-        HandleFill.Freeze();
+    private static Color ToColor(uint argb) => Color.FromArgb(
+        (byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
 
-        HandleBorder = new Pen(new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
-        HandleBorder.Freeze();
-
-        RotateHandleFill = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3));
-        RotateHandleFill.Freeze();
-
-        RotateHandleBorder = new Pen(Brushes.White, 1.0);
-        RotateHandleBorder.Freeze();
-
-        MarqueePen = new Pen(new SolidColorBrush(Color.FromArgb(0xBB, 0x21, 0x96, 0xF3)), 1.0)
-        {
-            DashStyle = DashStyles.Dash
-        };
-        MarqueePen.Freeze();
-
-        // Wave 12B: snap guide lines — thin magenta lines, PowerPoint-style.
-        SnapGuidePen = new Pen(new SolidColorBrush(Color.FromArgb(0xCC, 0xE9, 0x1E, 0x63)), 1.0);
-        SnapGuidePen.Freeze();
-
-        EditPointFill = new SolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
-        EditPointFill.Freeze();
-
-        EditPointBorder = new Pen(Brushes.White, 1.0);
-        EditPointBorder.Freeze();
-
-        EditPointPreviewPen = new Pen(new SolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)), 1.5)
-        {
-            DashStyle = DashStyles.Dash
-        };
-        EditPointPreviewPen.Freeze();
+    private static Pen ToPen(SelectionAdornerStroke stroke)
+    {
+        var pen = new Pen(ToFrozenBrush(stroke.Argb), stroke.Width);
+        if (stroke.Dashes is { } dashes)
+            pen.DashStyle = new DashStyle(dashes, 0);
+        pen.Freeze();
+        return pen;
     }
 
     // ── State owned by CanvasGestureHandler ───────────────────────────────────────────────────
@@ -108,42 +100,28 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
     {
         base.OnRender(dc);
 
-        // Wave 12B: Draw snap guide lines (drawn first so they're behind selection rects).
-        if (State.SnapGuides is { Count: > 0 } snapGuides)
-            DrawSnapGuides(dc, snapGuides, State.SnapTransform);
-
-        // Draw marquee
-        if (State.MarqueeRect is { } marqueeRect)
+        // The draw order (snap guides, marquee, selection boxes, geometry handles, previews) is the
+        // shared SelectionAdornerDrawPlanner's; this adorner only maps each step onto WPF drawing.
+        foreach (var op in SelectionAdornerDrawPlanner.Plan(State))
         {
-            var marqueeFill = new SolidColorBrush(Color.FromArgb(0x22, 0x21, 0x96, 0xF3));
-            marqueeFill.Freeze();
-            dc.DrawRectangle(marqueeFill, MarqueePen, ToWpfRect(marqueeRect));
-        }
-
-        // Multi-selection uses one group box for handles; individual boxes remain visible
-        // without handles so the selected members are still discoverable.
-        if (State.Selections.Count == 1)
-        {
-            DrawSelectionRect(dc, ToWpfRect(State.Selections[0].ScreenRect), drawHandles: true);
-        }
-        else
-        {
-            foreach (var selection in State.Selections)
-                DrawSelectionRect(dc, ToWpfRect(selection.ScreenRect), drawHandles: false);
-
-            if (SelectionBounds is { } groupBounds)
-                DrawSelectionRect(dc, groupBounds, drawHandles: true);
-        }
-
-        DrawGeometryHandles(dc);
-
-        foreach (var preview in State.TransformPreview)
-            DrawPreviewRect(dc, ToWpfRect(preview.ScreenBounds), preview.RotationDeg);
-
-        // Draw preview
-        if (State.PreviewRect is { } previewRect)
-        {
-            DrawPreviewRect(dc, ToWpfRect(previewRect), State.PreviewRotationDeg);
+            switch (op.Kind)
+            {
+                case SelectionAdornerDrawOpKind.SnapGuides:
+                    DrawSnapGuides(dc, State.SnapGuides!, State.SnapTransform);
+                    break;
+                case SelectionAdornerDrawOpKind.Marquee:
+                    dc.DrawRectangle(MarqueeFill, MarqueePen, ToWpfRect(op.Rect));
+                    break;
+                case SelectionAdornerDrawOpKind.SelectionRect:
+                    DrawSelectionRect(dc, ToWpfRect(op.Rect), op.DrawHandles);
+                    break;
+                case SelectionAdornerDrawOpKind.GeometryHandles:
+                    DrawGeometryHandles(dc);
+                    break;
+                case SelectionAdornerDrawOpKind.PreviewRect:
+                    DrawPreviewRect(dc, ToWpfRect(op.Rect), op.RotationDeg);
+                    break;
+            }
         }
     }
 
@@ -218,7 +196,7 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
         var topCenter = new Point(rect.Left + rect.Width / 2, rect.Top);
         var rotateCenter = GetRotateHandleCenter(rect);
         double rotY = rotateCenter.Y;
-        dc.DrawLine(new Pen(HandleBorder.Brush, 1.0),
+        dc.DrawLine(RotateHandleStem,
             new Point(topCenter.X, topCenter.Y),
             new Point(topCenter.X, rotY));
         dc.DrawEllipse(RotateHandleFill, RotateHandleBorder,
@@ -227,7 +205,7 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
 
     private void DrawGeometryHandles(DrawingContext dc)
     {
-        const double radius = 5.0;
+        const double radius = SelectionAdornerStyle.EditPointRadius;
         foreach (var handle in State.GeometryHandles)
         {
             dc.DrawEllipse(
@@ -244,8 +222,8 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
                 null,
                 EditPointPreviewPen,
                 ToWpfPoint(preview.ScreenPosition),
-                radius + 2,
-                radius + 2);
+                radius + SelectionAdornerStyle.EditPointPreviewRadiusExtra,
+                radius + SelectionAdornerStyle.EditPointPreviewRadiusExtra);
         }
     }
 
