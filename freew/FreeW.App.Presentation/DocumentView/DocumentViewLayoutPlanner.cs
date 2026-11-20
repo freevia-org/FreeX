@@ -3225,10 +3225,32 @@ public static class DocumentViewLayoutPlanner
         // estimate undercounts wrapped lines -- and diverges further still for a larger font -- on
         // virtually every real table. Use the authored grid width so the pagination plan agrees with both
         // hosts when a narrow cell wraps before a page boundary.
-        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt);
+        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt * ScriptCharWidthFactor(text));
         var charsPerLine = Math.Max(1, (int)Math.Floor(Math.Max(12, contentWidthDip) / charWidthDip));
         var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
         return Math.Max(explicitLines, wrappedLines);
+    }
+
+    /// <summary>
+    /// Arabic-script and Hebrew text runs roughly 0.6x as wide per character as the Latin text the
+    /// per-character table estimate is calibrated for (joined letterforms, no wide capitals). Without this a
+    /// one-line Persian/Arabic cell was estimated as two lines, so a table page piece looked ~2x too tall
+    /// and was split early, stranding its last row alone on the next page.
+    /// </summary>
+    private static double ScriptCharWidthFactor(string text)
+    {
+        var rightToLeft = 0;
+        var letters = 0;
+        foreach (var ch in text)
+        {
+            if (!char.IsLetter(ch))
+                continue;
+            letters++;
+            if (ch is >= '֐' and <= 'ࣿ' or >= 'יִ' and <= '﷿' or >= 'ﹰ' and <= '﻿')
+                rightToLeft++;
+        }
+
+        return letters > 0 && rightToLeft * 2 > letters ? 0.65 : 1.0;
     }
 
     private static int CountVerticalMergeSpan(Table table, int restartRow, int gridColumn)

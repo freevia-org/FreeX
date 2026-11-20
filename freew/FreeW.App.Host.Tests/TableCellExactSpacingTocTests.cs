@@ -123,4 +123,22 @@ public sealed class TableCellExactSpacingTocTests
         // 17pt exact line + 6pt space-after = 23pt = 30.67 DIP -- not the 18 DIP/line + 8 DIP gutter guess (26).
         plan.Rows.Single().EstimatedHeightDip.Should().BeApproximately(23 * 96.0 / 72.0, 0.02);
     }
+
+    [Fact]
+    public void OneLinePersianCell_IsNotEstimatedAsTwoLines()
+    {
+        // 35 characters at 15pt in a ~300pt cell: Latin text of that length wraps, Arabic-script text does not.
+        var table = Table.Create(1, 1);
+        var cell = table.Rows[0].Cells[0];
+        cell.WidthPt = 300;
+        cell.Paragraphs.Clear();
+        var paragraph = new Paragraph("کلیدهای تدبر قرآن و پیروزی در زندگی");
+        paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 15 };
+        cell.Paragraphs.Add(paragraph);
+        table.ColumnWidthsPt.Add(300);
+
+        var plan = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, new PageSettings());
+
+        plan.Rows.Single().EstimatedHeightDip.Should().Be(26, "one 18 DIP line plus the 8 DIP gutter");
+    }
 }
