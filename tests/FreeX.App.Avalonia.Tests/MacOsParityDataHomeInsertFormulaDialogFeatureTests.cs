@@ -304,6 +304,10 @@ public sealed class MacOsParityDataHomeInsertFormulaDialogFeatureTests
 
                 var context = Find<ListBox>(dialog, "HyperlinkCurrentFolderContext");
                 context.Items.Cast<object?>().Last()
+                    .Should().Be(UiText.Get("Hyperlink_UseBrowseToChooseAFile"));
+                // Same English text as the WPF dialog's literal hint, but still localizable.
+                UiText.Get("Hyperlink_UseBrowseToChooseAFile").Should().Be("Use Browse... to choose a file");
+                AutomationProperties.GetHelpText(browse)
                     .Should().Be(UiText.Get("Hyperlink_ChooseALocalFileForThisHyperlink"));
 
                 var targetBox = Find<TextBox>(dialog, "HyperlinkTargetTextBox");

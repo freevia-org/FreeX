@@ -579,7 +579,12 @@ public sealed partial class MainWindow
             CreateDocumentToolbarSeparator(chrome),
             marginsButton, pageSetupButton,
         ]);
-        overflowToolbar.IsVisible = false;
+        // The page navigation, page box, zoom combo, Margins and Page Setup live in this second row.
+        // It starts EXPANDED: a collapsed row is never templated, so its controls would be absent from
+        // the visual/automation tree (page range, find and zoom flows could not reach them). The chevron
+        // still collapses it for the compact, icon-only WPF look.
+        overflowToggle.IsChecked = true;
+        overflowToolbar.IsVisible = true;
         overflowToggle.IsCheckedChanged += (_, _) => overflowToolbar.IsVisible = overflowToggle.IsChecked == true;
         var documentToolbar = new StackPanel { Children = { primaryToolbar, overflowToolbar } };
         var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost, findBar);

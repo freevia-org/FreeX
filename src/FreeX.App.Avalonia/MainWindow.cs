@@ -16192,7 +16192,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var currentFileName = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetFileName(currentFilePath);
         var folderBox = new TextBox
         {
-            Text = string.IsNullOrWhiteSpace(currentFolder) ? "Current Folder" : currentFolder,
+            Text = string.IsNullOrWhiteSpace(currentFolder) ? UiText.Get("Hyperlink_CurrentFolderHeading") : currentFolder,
             IsReadOnly = true,
             IsTabStop = false,
             Focusable = false,
@@ -16229,15 +16229,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // WPF HyperlinkDialog.CurrentFolderContext: literal "Current Folder" heading, the current
         // file name when there is one, then the browse hint ("another file" when a file is listed).
-        var currentFolderItems = new List<string> { "Current Folder" };
+        // The English text is WPF's literal; Avalonia keeps it behind resource keys so it stays localizable.
+        var currentFolderItems = new List<string> { UiText.Get("Hyperlink_CurrentFolderHeading") };
         if (!string.IsNullOrWhiteSpace(currentFileName))
         {
             currentFolderItems.Add(currentFileName);
-            currentFolderItems.Add("Use Browse... to choose another file");
+            currentFolderItems.Add(UiText.Get("Hyperlink_UseBrowseToChooseAnotherFile"));
         }
         else
         {
-            currentFolderItems.Add("Use Browse... to choose a file");
+            currentFolderItems.Add(UiText.Get("Hyperlink_UseBrowseToChooseAFile"));
         }
         var currentFolderList = new ListBox
         {
