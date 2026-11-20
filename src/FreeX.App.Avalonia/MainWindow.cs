@@ -16152,7 +16152,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var currentFileName = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetFileName(currentFilePath);
         var folderBox = new TextBox
         {
-            Text = string.IsNullOrWhiteSpace(currentFolder) ? UiText.Get("Hyperlink_CurrentFolder") : currentFolder,
+            Text = string.IsNullOrWhiteSpace(currentFolder) ? "Current Folder" : currentFolder,
             IsReadOnly = true,
             IsTabStop = false,
             Focusable = false,
@@ -16187,12 +16187,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             browseButton,
             new Thickness(0, 0, 0, 4));
 
-        // The WPF list ends with a browse hint line whose text is not a localized resource there;
-        // the browse button's localized help text carries the same guidance here.
-        var currentFolderItems = new List<string> { UiText.Get("Hyperlink_CurrentFolder") };
+        // WPF HyperlinkDialog.CurrentFolderContext: literal "Current Folder" heading, the current
+        // file name when there is one, then the browse hint ("another file" when a file is listed).
+        var currentFolderItems = new List<string> { "Current Folder" };
         if (!string.IsNullOrWhiteSpace(currentFileName))
+        {
             currentFolderItems.Add(currentFileName);
-        currentFolderItems.Add(UiText.Get("Hyperlink_ChooseALocalFileForThisHyperlink"));
+            currentFolderItems.Add("Use Browse... to choose another file");
+        }
+        else
+        {
+            currentFolderItems.Add("Use Browse... to choose a file");
+        }
         var currentFolderList = new ListBox
         {
             ItemsSource = currentFolderItems,
@@ -17139,8 +17145,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 numberNegativeBox.SelectedIndex);
         }
 
+        // WPF FormatCellsDialog.UpdateNumberPreview: with the General category the sample is the
+        // active cell's own displayed text (empty for a blank cell), not a canned "1234.56".
+        var generalPreviewText = _session.ActiveSheet.GetCell(_session.ActiveCell) is { } previewCell
+            ? FreeX.Core.Formula.NumberFormatter.Format(
+                previewCell.Value,
+                _session.Workbook.GetStyle(previewCell.StyleId).NumberFormat,
+                _session.Workbook.Uses1904DateSystem)
+            : string.Empty;
+
         void RefreshNumberPreview()
         {
+            if (numberCategoryList.SelectedItem is "General")
+            {
+                numberPreview.Text = generalPreviewText;
+                return;
+            }
+
             var typeText = numberFormatBox.SelectedItem as string ?? string.Empty;
             var resolved = ResolveSelectedNumberFormatCode();
             numberPreview.Text = FormatCellsNumberFormatPlanner.PreviewForFormat(
@@ -17287,7 +17308,58 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
         ApplyDialogTextBoxChrome(textRotationBox);
 
-        var boldBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
+        // WPF DlgTextRotationSlider: -90..90 in 15-degree ticks, mirrored with the rotation text box
+        // (255 = vertical text parks the slider at 0).
+        var textRotationSlider = new Slider
+        {
+            Minimum = -90,
+            Maximum = 90,
+            TickFrequency = 15,
+            IsSnapToTickEnabled = false,
+            Value = currentTextRotation == 255 ? 0 : Math.Clamp(currentTextRotation, -90, 90),
+            Height = 20,
+            MinHeight = 0,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+        };
+        AutomationProperties.SetName(textRotationSlider, "Text orientation");
+        AutomationProperties.SetAutomationId(textRotationSlider, "FormatCellsTextRotationSlider");
+        var syncingTextRotation = false;
+        textRotationSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != RangeBase.ValueProperty || syncingTextRotation)
+                return;
+
+            syncingTextRotation = true;
+            textRotationBox.Text = ((int)Math.Round(textRotationSlider.Value)).ToString(CultureInfo.InvariantCulture);
+            syncingTextRotation = false;
+        };
+        textRotationBox.TextChanged += (_, _) =>
+        {
+            if (syncingTextRotation
+                || !int.TryParse(textRotationBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation)
+                || rotation is < -90 or > 90)
+            {
+                return;
+            }
+
+            syncingTextRotation = true;
+            textRotationSlider.Value = rotation;
+            syncingTextRotation = false;
+        };
+
+        // WPF DlgReadingOrderBox: "Text direction" lists the CellReadingOrder names.
+        var currentReadingOrder = _session.SelectedRangeStartStyle.ReadingOrder;
+        var readingOrderBox = new ComboBox
+        {
+            ItemsSource = Enum.GetNames<CellReadingOrder>(),
+            SelectedItem = currentReadingOrder.ToString(),
+            MinWidth = 180,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+        };
+        AutomationProperties.SetAutomationId(readingOrderBox, "FormatCellsReadingOrderBox");
+        ApplyFormatCellsComboBoxChrome(readingOrderBox);
+
+        var boldBox =CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
         var italicBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Italic"), "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
         var underlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Underline"), "FormatCellsUnderlineBox", currentUnderline);
         var doubleUnderlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_DoubleUnderline"), "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
@@ -18172,7 +18244,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 BorderTop: borderTopSide,
                 BorderRight: borderRightSide,
                 BorderBottom: borderBottomSide,
-                BorderLeft: borderLeftSide);
+                BorderLeft: borderLeftSide,
+                ReadingOrder: Enum.TryParse<CellReadingOrder>(readingOrderBox.SelectedItem as string, out var selectedReadingOrder)
+                    ? selectedReadingOrder
+                    : null);
             if (!FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput, out var plan, out var validation))
             {
                 Control? target = validation!.Target switch
@@ -18329,6 +18404,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 CreateFormatCellsField(
                     UiText.Get("FormatCells_TextRotation90To90Or255"),
                     textRotationBox,
+                    new Thickness(
+                        0,
+                        FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
+                textRotationSlider,
+                CreateFormatCellsField(
+                    "Text direction",
+                    readingOrderBox,
                     new Thickness(
                         0,
                         FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
@@ -20808,6 +20892,60 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
 
+        // Selected-row text cell (white on the selection blue) that hands over to its combo box as
+        // the cell editor. The combo stays in the cell so its automation id and selection state
+        // remain reachable; it is only hidden while the cell is not being edited.
+        static Panel CreateSortEditableCell(ComboBox editor, Func<string> getText)
+        {
+            var text = CreateCellText(getText(), selected: true);
+            var host = new Panel
+            {
+                Focusable = true,
+                IsTabStop = true,
+                Background = Brushes.Transparent,
+            };
+            editor.IsVisible = false;
+            host.Children.Add(text);
+            host.Children.Add(editor);
+
+            void BeginEdit()
+            {
+                text.IsVisible = false;
+                editor.IsVisible = true;
+                editor.Focus();
+            }
+
+            void EndEdit()
+            {
+                if (editor.IsDropDownOpen || editor.IsKeyboardFocusWithin)
+                    return;
+
+                text.Text = getText();
+                editor.IsVisible = false;
+                text.IsVisible = true;
+            }
+
+            host.PointerPressed += (_, _) =>
+            {
+                if (!editor.IsVisible)
+                    BeginEdit();
+            };
+            host.KeyDown += (_, e) =>
+            {
+                if (editor.IsVisible || e.Handled)
+                    return;
+                if (e.Key is Key.F2 or Key.Space or Key.Down)
+                {
+                    e.Handled = true;
+                    BeginEdit();
+                }
+            };
+            editor.SelectionChanged += (_, _) => text.Text = getText();
+            editor.LostFocus += (_, _) => EndEdit();
+            editor.DropDownClosed += (_, _) => EndEdit();
+            return host;
+        }
+
         // WPF SortDialog DataGrid rows are 24px: the cell combo boxes keep the 22px WPF default.
         static void ApplySortComboChrome(ComboBox comboBox)
         {
@@ -20982,12 +21120,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         RefreshSortOnDependentControls();
                 };
 
+                // WPF SortDialog: Sort by / Sort On are plain text cells (only Order / Color / Icon
+                // are always combo boxes). The combo is kept in the tree and swapped in as the cell
+                // editor on click / F2 / Space / Down, like the DataGrid's begin-edit.
                 var columnCell = CreateSortCell(
-                    selected ? columnBox : CreateCellText(columnChoices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset)?.Label ?? "", selected),
+                    selected
+                        ? CreateSortEditableCell(
+                            columnBox,
+                            () => (columnBox.SelectedItem as SortDialogComboItem<SortColumnChoice>)?.Label ?? "")
+                        : CreateCellText(columnChoices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset)?.Label ?? "", selected),
                     gridRow,
                     0,
                     selected);
-                var sortOnCell = CreateSortCell(selected ? sortOnBox : CreateCellText(level.SortOn, selected), gridRow, 1, selected);
+                var sortOnCell = CreateSortCell(
+                    selected
+                        ? CreateSortEditableCell(
+                            sortOnBox,
+                            () => (sortOnBox.SelectedItem as SortDialogComboItem<SortOnChoice>)?.Label ?? "")
+                        : CreateCellText(level.SortOn, selected),
+                    gridRow,
+                    1,
+                    selected);
                 var orderLabel = CreateOrderItems(level).FirstOrDefault(choice => choice.Value.Ascending == level.Ascending)?.Label ?? "";
                 var orderCell = CreateSortCell(selected ? orderBox : CreateCellText(orderLabel, selected), gridRow, 2, selected);
                 var colorLabel = string.IsNullOrWhiteSpace(level.TargetColor) ? "" : level.TargetColor;
@@ -20998,6 +21151,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     cell.PointerPressed += (_, _) =>
                     {
+                        // The selected row keeps its controls (and any open cell editor); only a
+                        // click on another row moves the selection.
+                        if (levelIndex == selectedLevelIndex)
+                            return;
+
                         selectedLevelIndex = levelIndex;
                         RebuildLevels();
                     };
@@ -21104,6 +21262,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var levelsFrame = new Border
         {
+            // WPF DataGrid body below the rows is the control-face grey (240,240,240).
+            Background = Brush(240, 240, 240),
             BorderBrush = Brush(80, 130, 190),
             BorderThickness = new Thickness(1),
             Child = levelsGrid,
@@ -21768,9 +21928,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 GoalSeekStatusDialogPlanner.SummaryBottomMargin),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            // Space the status lines out vertically to match the Windows dialog,
-            // which renders each line with a blank-line gap between them.
-            LineHeight = GoalSeekStatusDialogPlanner.SummaryLineHeight,
         };
         AutomationProperties.SetName(summaryBlock, UiText.CreateAutomationName(UiText.Get("GoalSeekStatus_GoalSeekStatus")));
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
