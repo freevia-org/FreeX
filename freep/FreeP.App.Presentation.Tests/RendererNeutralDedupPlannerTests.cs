@@ -1360,8 +1360,9 @@ public sealed class RendererNeutralDedupPlannerTests
     [Fact]
     public void SlideShowRenderers_KeepGeometryPlanningPortableAndNativeFilesBounded()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
+        var rendererContracts = ReadWorkspaceFile("freep", "RendererShared", "SlideShowWindow.RendererContracts.cs");
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs") + rendererContracts;
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs") + rendererContracts;
         var morphPlanner = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Presentation",
