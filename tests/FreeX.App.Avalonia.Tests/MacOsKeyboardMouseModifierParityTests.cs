@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -20,17 +21,17 @@ public sealed class MacOsKeyboardMouseModifierParityTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Theory]
-    [InlineData(KeyModifiers.Control, true, FormulaEditorModifiers.Control)]
-    [InlineData(KeyModifiers.Meta, true, FormulaEditorModifiers.Control)]
-    [InlineData(KeyModifiers.Meta | KeyModifiers.Shift, true, FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift)]
-    [InlineData(KeyModifiers.Meta, false, FormulaEditorModifiers.Meta)]
-    [InlineData(KeyModifiers.Control, false, FormulaEditorModifiers.Control)]
-    public void FormulaEditorModifiers_ProjectCommandModifierOnlyOnMac(
+    [InlineData(KeyModifiers.Control, true, FreeKeyModifiers.Control)]
+    [InlineData(KeyModifiers.Meta, true, FreeKeyModifiers.Control)]
+    [InlineData(KeyModifiers.Meta | KeyModifiers.Shift, true, FreeKeyModifiers.Control | FreeKeyModifiers.Shift)]
+    [InlineData(KeyModifiers.Meta, false, FreeKeyModifiers.Meta)]
+    [InlineData(KeyModifiers.Control, false, FreeKeyModifiers.Control)]
+    public void FreeKeyModifiers_ProjectCommandModifierOnlyOnMac(
         KeyModifiers modifiers,
         bool metaIsCommand,
-        FormulaEditorModifiers expected)
+        FreeKeyModifiers expected)
     {
-        FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(modifiers, metaIsCommand).Should().Be(expected);
+        FormulaBarAvaloniaInputAdapter.ToFreeKeyModifiers(modifiers, metaIsCommand).Should().Be(expected);
     }
 
     [Fact]

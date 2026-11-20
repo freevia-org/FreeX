@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
@@ -14,10 +15,10 @@ namespace FreeX.App.Presentation.Tests;
 /// </summary>
 public sealed class ExcelWorksheetNavigationResolveTargetTests
 {
-    private const ExcelWorksheetNavigationModifiers None = ExcelWorksheetNavigationModifiers.None;
-    private const ExcelWorksheetNavigationModifiers Shift = ExcelWorksheetNavigationModifiers.Shift;
-    private const ExcelWorksheetNavigationModifiers Ctrl = ExcelWorksheetNavigationModifiers.Control;
-    private const ExcelWorksheetNavigationModifiers Alt = ExcelWorksheetNavigationModifiers.Alt;
+    private const FreeKeyModifiers None = FreeKeyModifiers.None;
+    private const FreeKeyModifiers Shift = FreeKeyModifiers.Shift;
+    private const FreeKeyModifiers Ctrl = FreeKeyModifiers.Control;
+    private const FreeKeyModifiers Alt = FreeKeyModifiers.Alt;
 
     private static (Workbook Workbook, Sheet Sheet) NewSheet()
     {
@@ -33,7 +34,7 @@ public sealed class ExcelWorksheetNavigationResolveTargetTests
         SheetId sheetId,
         CellAddress current,
         ExcelWorksheetNavigationKey key,
-        ExcelWorksheetNavigationModifiers modifiers = None,
+        FreeKeyModifiers modifiers = None,
         bool endMode = false,
         int pageRows = 10,
         int pageColumns = 4,
@@ -58,7 +59,7 @@ public sealed class ExcelWorksheetNavigationResolveTargetTests
         Sheet sheet,
         CellAddress current,
         ExcelWorksheetNavigationKey key,
-        ExcelWorksheetNavigationModifiers modifiers = None,
+        FreeKeyModifiers modifiers = None,
         bool endMode = false,
         int pageRows = 10,
         int pageColumns = 4,
@@ -382,15 +383,15 @@ public sealed class ExcelWorksheetNavigationResolveTargetTests
     // ── keys / modifiers that are not worksheet navigation ──────────────────
 
     [Theory]
-    [InlineData(ExcelWorksheetNavigationKey.Enter, ExcelWorksheetNavigationModifiers.Control)]
-    [InlineData(ExcelWorksheetNavigationKey.Tab, ExcelWorksheetNavigationModifiers.Control)]
-    [InlineData(ExcelWorksheetNavigationKey.Enter, ExcelWorksheetNavigationModifiers.Alt)]
-    [InlineData(ExcelWorksheetNavigationKey.Up, ExcelWorksheetNavigationModifiers.Alt)]
-    [InlineData(ExcelWorksheetNavigationKey.PageDown, ExcelWorksheetNavigationModifiers.Control)]
-    [InlineData(ExcelWorksheetNavigationKey.Home, ExcelWorksheetNavigationModifiers.Alt)]
-    [InlineData(ExcelWorksheetNavigationKey.Other, ExcelWorksheetNavigationModifiers.None)]
-    [InlineData(ExcelWorksheetNavigationKey.None, ExcelWorksheetNavigationModifiers.None)]
-    public void NonNavigationKeyCombinations_ResolveNoTarget(ExcelWorksheetNavigationKey key, ExcelWorksheetNavigationModifiers modifiers)
+    [InlineData(ExcelWorksheetNavigationKey.Enter, FreeKeyModifiers.Control)]
+    [InlineData(ExcelWorksheetNavigationKey.Tab, FreeKeyModifiers.Control)]
+    [InlineData(ExcelWorksheetNavigationKey.Enter, FreeKeyModifiers.Alt)]
+    [InlineData(ExcelWorksheetNavigationKey.Up, FreeKeyModifiers.Alt)]
+    [InlineData(ExcelWorksheetNavigationKey.PageDown, FreeKeyModifiers.Control)]
+    [InlineData(ExcelWorksheetNavigationKey.Home, FreeKeyModifiers.Alt)]
+    [InlineData(ExcelWorksheetNavigationKey.Other, FreeKeyModifiers.None)]
+    [InlineData(ExcelWorksheetNavigationKey.None, FreeKeyModifiers.None)]
+    public void NonNavigationKeyCombinations_ResolveNoTarget(ExcelWorksheetNavigationKey key, FreeKeyModifiers modifiers)
     {
         var (_, sheet) = NewSheet();
 

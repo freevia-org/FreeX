@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.IO;
 using System.Text;
 using FluentAssertions;
@@ -3667,7 +3668,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     "public static IReadOnlyList<NativeMenuEntryPlan> WhatIfAnalysisMenuEntries",
                     "public static IReadOnlyList<NativeMenuEntryPlan> FormulasMenuEntries",
                     "public static IReadOnlyList<NativeMenuEntryPlan> AutoSumMenuEntries",
-                    "new(NativeMenuItemId.SelectAll, "Select All", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.SelectAll, "Select All", new NativeMenuGesturePlan(NativeMenuGestureKey.A, FreeKeyModifiers.Meta))",
                     "new(NativeMenuItemId.Find, "Find...", NativeMenuGesture(WorkbookShortcutRoute.Find))",
                     "new(NativeMenuItemId.FillCells, "Fill", RequiresGestureInSmoke: false)",
                     "new(NativeMenuItemId.FillDown, "Down", NativeMenuGesture(WorkbookShortcutRoute.FillDown))",
@@ -3681,9 +3682,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     "new(NativeMenuItemId.Subtotal, "Subtotal...", RequiresGestureInSmoke: false)",
                     "new(NativeMenuItemId.ReviewSummary, "Review Summary...", RequiresGestureInSmoke: false)",
                     "new(NativeMenuItemId.ShowGridlines, "Gridlines", RequiresGestureInSmoke: false)",
-                    "new(NativeMenuItemId.ZoomIn, "Zoom In", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.ZoomIn, "Zoom In", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, FreeKeyModifiers.Meta))",
                     "new(NativeMenuItemId.FreezePanes, "Freeze Panes", RequiresGestureInSmoke: false)",
-                    "new(NativeMenuItemId.MinimizeWindow, "Minimize", new NativeMenuGesturePlan(NativeMenuGestureKey.M, NativeMenuGestureModifiers.Meta))",
+                    "new(NativeMenuItemId.MinimizeWindow, "Minimize", new NativeMenuGesturePlan(NativeMenuGestureKey.M, FreeKeyModifiers.Meta))",
                     "new(NativeMenuItemId.HelpOnline, "Help Online", new NativeMenuGesturePlan(NativeMenuGestureKey.F1))",
                     "Item(NativeMenuItemId.FormatPainter)",
                     "Item(NativeMenuItemId.FormatCells)",

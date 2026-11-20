@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Free.Shared.AppServices;
 
 namespace FreeX.App.Presentation;
@@ -19,7 +20,7 @@ public static class ExcelSelectionModePlanner
 {
     public static bool TryToggle(
         ExcelSelectionKey key,
-        ExcelWorksheetNavigationModifiers modifiers,
+        FreeKeyModifiers modifiers,
         ExcelSelectionMode current,
         out ExcelSelectionMode next)
     {
@@ -27,13 +28,13 @@ public static class ExcelSelectionModePlanner
         if (key != ExcelSelectionKey.F8)
             return false;
 
-        if (modifiers == ExcelWorksheetNavigationModifiers.None)
+        if (modifiers == FreeKeyModifiers.None)
         {
             next = current == ExcelSelectionMode.Extend ? ExcelSelectionMode.Normal : ExcelSelectionMode.Extend;
             return true;
         }
 
-        if (modifiers == ExcelWorksheetNavigationModifiers.Shift)
+        if (modifiers == FreeKeyModifiers.Shift)
         {
             next = current == ExcelSelectionMode.Add ? ExcelSelectionMode.Normal : ExcelSelectionMode.Add;
             return true;
@@ -42,10 +43,10 @@ public static class ExcelSelectionModePlanner
         return false;
     }
 
-    public static bool ShouldExtendSelection(ExcelSelectionMode mode, ExcelWorksheetNavigationModifiers modifiers) =>
+    public static bool ShouldExtendSelection(ExcelSelectionMode mode, FreeKeyModifiers modifiers) =>
         mode == ExcelSelectionMode.Extend ||
-        modifiers is ExcelWorksheetNavigationModifiers.Shift or
-            (ExcelWorksheetNavigationModifiers.Control | ExcelWorksheetNavigationModifiers.Shift);
+        modifiers is FreeKeyModifiers.Shift or
+            (FreeKeyModifiers.Control | FreeKeyModifiers.Shift);
 
     public static string StatusBarModeResourceKey(ExcelSelectionMode mode) =>
         mode switch

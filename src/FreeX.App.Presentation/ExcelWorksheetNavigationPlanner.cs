@@ -1,19 +1,10 @@
+using Free.Shared.Shell;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation;
-
-[Flags]
-public enum ExcelWorksheetNavigationModifiers
-{
-    None = 0,
-    Shift = 1,
-    Control = 2,
-    Alt = 4,
-    Windows = 8
-}
 
 public enum ExcelWorksheetNavigationKey
 {
@@ -46,7 +37,7 @@ public enum ExcelWorksheetNavigationKey
 /// <param name="EnterDirection">The configured Enter direction; Shift+Enter moves the opposite way.</param>
 /// <param name="SystemKey">WPF's <c>e.SystemKey</c> (the real key when Alt is held and the key is reported as System).</param>
 public readonly record struct ExcelWorksheetNavigationRequest(
-    ExcelWorksheetNavigationModifiers Modifiers,
+    FreeKeyModifiers Modifiers,
     bool EndMode,
     int PageRows,
     int PageColumns,
@@ -97,8 +88,8 @@ public static class ExcelWorksheetNavigationPlanner
         var effectiveKey = key is ExcelWorksheetNavigationKey.None or ExcelWorksheetNavigationKey.System
             ? request.SystemKey
             : key;
-        var shiftHeld = (modifiers & ExcelWorksheetNavigationModifiers.Shift) != 0;
-        var ctrlHeld = (modifiers & ExcelWorksheetNavigationModifiers.Control) != 0;
+        var shiftHeld = (modifiers & FreeKeyModifiers.Shift) != 0;
+        var ctrlHeld = (modifiers & FreeKeyModifiers.Control) != 0;
         var useDataBoundary = ShouldUseDataBoundary(effectiveKey, modifiers, request.EndMode);
         var pageRows = Math.Max(1, request.PageRows);
 
@@ -157,12 +148,12 @@ public static class ExcelWorksheetNavigationPlanner
 
     public static bool TryToggleEndMode(
         ExcelWorksheetNavigationKey key,
-        ExcelWorksheetNavigationModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool current,
         out bool next)
     {
         next = current;
-        if (key != ExcelWorksheetNavigationKey.End || modifiers != ExcelWorksheetNavigationModifiers.None)
+        if (key != ExcelWorksheetNavigationKey.End || modifiers != FreeKeyModifiers.None)
             return false;
 
         next = !current;
@@ -171,19 +162,19 @@ public static class ExcelWorksheetNavigationPlanner
 
     public static bool ShouldUseDataBoundary(
         ExcelWorksheetNavigationKey key,
-        ExcelWorksheetNavigationModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool endMode) =>
         (key is ExcelWorksheetNavigationKey.Up or ExcelWorksheetNavigationKey.Down or
             ExcelWorksheetNavigationKey.Left or ExcelWorksheetNavigationKey.Right) &&
         (endMode
-            ? modifiers is ExcelWorksheetNavigationModifiers.None or ExcelWorksheetNavigationModifiers.Shift
-            : modifiers is ExcelWorksheetNavigationModifiers.Control or
-                (ExcelWorksheetNavigationModifiers.Control | ExcelWorksheetNavigationModifiers.Shift));
+            ? modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift
+            : modifiers is FreeKeyModifiers.Control or
+                (FreeKeyModifiers.Control | FreeKeyModifiers.Shift));
 
     public static bool ShouldHandleWorksheetNavigationKey(
         ExcelWorksheetNavigationKey key,
         ExcelWorksheetNavigationKey systemKey,
-        ExcelWorksheetNavigationModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool endMode)
     {
         var effectiveKey = key is ExcelWorksheetNavigationKey.None or ExcelWorksheetNavigationKey.System ? systemKey : key;
@@ -192,23 +183,23 @@ public static class ExcelWorksheetNavigationPlanner
             ExcelWorksheetNavigationKey.Up or ExcelWorksheetNavigationKey.Down or
                 ExcelWorksheetNavigationKey.Left or ExcelWorksheetNavigationKey.Right =>
                 endMode
-                    ? modifiers is ExcelWorksheetNavigationModifiers.None or ExcelWorksheetNavigationModifiers.Shift
-                    : modifiers is ExcelWorksheetNavigationModifiers.None or ExcelWorksheetNavigationModifiers.Shift or
-                        ExcelWorksheetNavigationModifiers.Control or
-                        (ExcelWorksheetNavigationModifiers.Control | ExcelWorksheetNavigationModifiers.Shift),
+                    ? modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift
+                    : modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift or
+                        FreeKeyModifiers.Control or
+                        (FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
             ExcelWorksheetNavigationKey.Home =>
-                modifiers is ExcelWorksheetNavigationModifiers.None or ExcelWorksheetNavigationModifiers.Shift or
-                    ExcelWorksheetNavigationModifiers.Control or
-                    (ExcelWorksheetNavigationModifiers.Control | ExcelWorksheetNavigationModifiers.Shift),
+                modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift or
+                    FreeKeyModifiers.Control or
+                    (FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
             ExcelWorksheetNavigationKey.End =>
-                modifiers is ExcelWorksheetNavigationModifiers.Control or
-                    (ExcelWorksheetNavigationModifiers.Control | ExcelWorksheetNavigationModifiers.Shift),
+                modifiers is FreeKeyModifiers.Control or
+                    (FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
             ExcelWorksheetNavigationKey.PageUp or ExcelWorksheetNavigationKey.PageDown =>
-                modifiers is ExcelWorksheetNavigationModifiers.None or ExcelWorksheetNavigationModifiers.Shift or
-                    ExcelWorksheetNavigationModifiers.Alt or
-                    (ExcelWorksheetNavigationModifiers.Alt | ExcelWorksheetNavigationModifiers.Shift),
+                modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift or
+                    FreeKeyModifiers.Alt or
+                    (FreeKeyModifiers.Alt | FreeKeyModifiers.Shift),
             ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab =>
-                modifiers is ExcelWorksheetNavigationModifiers.None or ExcelWorksheetNavigationModifiers.Shift,
+                modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift,
             _ => false
         };
     }
@@ -216,12 +207,12 @@ public static class ExcelWorksheetNavigationPlanner
     public static CellAddress? GetHorizontalPageTarget(
         ExcelWorksheetNavigationKey key,
         ExcelWorksheetNavigationKey systemKey,
-        ExcelWorksheetNavigationModifiers modifiers,
+        FreeKeyModifiers modifiers,
         CellAddress current,
         int pageSize)
     {
-        if (modifiers is not ExcelWorksheetNavigationModifiers.Alt and not
-            (ExcelWorksheetNavigationModifiers.Alt | ExcelWorksheetNavigationModifiers.Shift))
+        if (modifiers is not FreeKeyModifiers.Alt and not
+            (FreeKeyModifiers.Alt | FreeKeyModifiers.Shift))
         {
             return null;
         }

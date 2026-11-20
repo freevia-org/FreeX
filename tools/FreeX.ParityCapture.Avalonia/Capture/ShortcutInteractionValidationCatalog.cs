@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.App.Presentation.Shell;
@@ -22,11 +23,7 @@ internal static class ShortcutInteractionValidationCatalog
             return false;
         }
 
-        var sourceModifiers = interaction.Steps[0].Modifiers;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= KeyModifiers.Control;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= KeyModifiers.Shift;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= KeyModifiers.Alt;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= KeyModifiers.Meta;
+        modifiers = Free.Shared.Shell.Avalonia.AvaloniaKeyModifiersMapper.ToAvalonia(interaction.Steps[0].Modifiers);
         return MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out shortcut);
     }
 
@@ -39,10 +36,7 @@ internal static class ShortcutInteractionValidationCatalog
         if (!TryMapAvaloniaKey(step.Key, out key))
             return false;
 
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= KeyModifiers.Control;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= KeyModifiers.Shift;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= KeyModifiers.Alt;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= KeyModifiers.Meta;
+        modifiers = Free.Shared.Shell.Avalonia.AvaloniaKeyModifiersMapper.ToAvalonia(step.Modifiers);
         return true;
     }
 

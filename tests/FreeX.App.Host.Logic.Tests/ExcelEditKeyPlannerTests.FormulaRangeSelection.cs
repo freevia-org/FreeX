@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -20,7 +21,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize: 9,
             allowFormulaBarNavigationKeys: false,
@@ -42,7 +43,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize,
             allowFormulaBarNavigationKeys: false,
@@ -68,7 +69,7 @@ public sealed partial class ExcelEditKeyPlannerTests
 
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             edgeCell,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -79,11 +80,11 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorKey.Enter, FormulaEditorModifiers.None, 11, 5)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.None, 10, 6)]
+    [InlineData(FormulaEditorKey.Enter, FreeKeyModifiers.None, 11, 5)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.None, 10, 6)]
     public void GetIntent_StillCommitsEnterAndTabWhenFormulaRangeEntryIsActive(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         uint expectedRow,
         uint expectedCol)
     {

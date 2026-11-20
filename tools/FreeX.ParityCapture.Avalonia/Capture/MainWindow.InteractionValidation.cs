@@ -1,4 +1,5 @@
-﻿using Avalonia.Input;
+﻿using Free.Shared.Shell;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
@@ -407,7 +408,7 @@ public sealed partial class MainWindow
             "shortcut.data.filter-toggle-reapply:2",
             StringComparison.Ordinal) ||
         interaction.Steps.Count == 3 &&
-        interaction.Steps[0] == new ShortcutGestureStep("D", ShortcutModifierKeys.Alt) &&
+        interaction.Steps[0] == new ShortcutGestureStep("D", FreeKeyModifiers.Alt) &&
         interaction.Steps[1] == new ShortcutGestureStep("F") &&
         interaction.Steps[2] == new ShortcutGestureStep("F");
 
@@ -657,14 +658,14 @@ public sealed partial class MainWindow
             !TryMapWorkbookShortcutKey(interaction.Steps[0].Key, out var key))
             return false;
 
-        var modifiers = WorkbookShortcutModifiers.None;
+        var modifiers = FreeKeyModifiers.None;
         var sourceModifiers = interaction.Steps[0].Modifiers;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Control))
-            modifiers |= WorkbookShortcutModifiers.Control;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Shift))
-            modifiers |= WorkbookShortcutModifiers.Shift;
-        if (sourceModifiers.HasFlag(ShortcutModifierKeys.Alt))
-            modifiers |= WorkbookShortcutModifiers.Alt;
+        if (sourceModifiers.HasFlag(FreeKeyModifiers.Control))
+            modifiers |= FreeKeyModifiers.Control;
+        if (sourceModifiers.HasFlag(FreeKeyModifiers.Shift))
+            modifiers |= FreeKeyModifiers.Shift;
+        if (sourceModifiers.HasFlag(FreeKeyModifiers.Alt))
+            modifiers |= FreeKeyModifiers.Alt;
 
         return WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route) ||
             WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route);

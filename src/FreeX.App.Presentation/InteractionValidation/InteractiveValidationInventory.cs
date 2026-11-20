@@ -1,16 +1,7 @@
+using Free.Shared.Shell;
 using FreeX.App.Presentation.Shell;
 
 namespace FreeX.App.Presentation.InteractionValidation;
-
-[Flags]
-public enum ShortcutModifierKeys
-{
-    None = 0,
-    Control = 1,
-    Shift = 2,
-    Alt = 4,
-    Meta = 8,
-}
 
 public enum ShortcutInteractionKind
 {
@@ -40,7 +31,7 @@ public enum ShortcutInteractionContext
 
 public sealed record ShortcutGestureStep(
     string Key,
-    ShortcutModifierKeys Modifiers = ShortcutModifierKeys.None);
+    FreeKeyModifiers Modifiers = FreeKeyModifiers.None);
 
 public sealed record ShortcutInteractionDescriptor(
     string DisplayText,
@@ -48,7 +39,7 @@ public sealed record ShortcutInteractionDescriptor(
     ShortcutInteractionContext Context,
     IReadOnlyList<ShortcutGestureStep> Steps,
     string Input = "Keyboard",
-    ShortcutModifierKeys InputModifiers = ShortcutModifierKeys.None);
+    FreeKeyModifiers InputModifiers = FreeKeyModifiers.None);
 
 public sealed record KeyboardShortcutValidationScenario(
     string Id,
@@ -440,7 +431,7 @@ public static class InteractiveValidationInventory
 
     private static IReadOnlyList<ShortcutInteractionDescriptor> ArrowInteractions(
         ShortcutInteractionContext context,
-        ShortcutModifierKeys modifiers) =>
+        FreeKeyModifiers modifiers) =>
     [
         K(Display(modifiers, "Up"), context, "ArrowUp", modifiers),
         K(Display(modifiers, "Down"), context, "ArrowDown", modifiers),
@@ -481,7 +472,7 @@ public static class InteractiveValidationInventory
                 Display(chord),
                 source.Context,
                 KeyName(chord.Key),
-                Modifiers(chord.Modifiers)));
+                chord.Modifiers));
         }
 
         return native
@@ -498,7 +489,7 @@ public static class InteractiveValidationInventory
             TryWorkbookKey(interaction.Steps[0].Key, out var key) &&
             WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
                 key,
-                WorkbookModifiers(interaction.Steps[0].Modifiers),
+                interaction.Steps[0].Modifiers,
                 out route);
     }
 
@@ -575,26 +566,6 @@ public static class InteractiveValidationInventory
         return normalized is not null && Enum.TryParse(normalized, ignoreCase: true, out workbookKey);
     }
 
-    private static WorkbookShortcutModifiers WorkbookModifiers(ShortcutModifierKeys modifiers)
-    {
-        var result = WorkbookShortcutModifiers.None;
-        if (modifiers.HasFlag(ShortcutModifierKeys.Control)) result |= WorkbookShortcutModifiers.Control;
-        if (modifiers.HasFlag(ShortcutModifierKeys.Shift)) result |= WorkbookShortcutModifiers.Shift;
-        if (modifiers.HasFlag(ShortcutModifierKeys.Alt)) result |= WorkbookShortcutModifiers.Alt;
-        if (modifiers.HasFlag(ShortcutModifierKeys.Meta)) result |= WorkbookShortcutModifiers.Meta;
-        return result;
-    }
-
-    private static ShortcutModifierKeys Modifiers(WorkbookShortcutModifiers modifiers)
-    {
-        var result = ShortcutModifierKeys.None;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control)) result |= ShortcutModifierKeys.Control;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) result |= ShortcutModifierKeys.Shift;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) result |= ShortcutModifierKeys.Alt;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) result |= ShortcutModifierKeys.Meta;
-        return result;
-    }
-
     private static string KeyName(WorkbookShortcutKey key) => key switch
     {
         WorkbookShortcutKey.Back => "Backspace",
@@ -616,10 +587,10 @@ public static class InteractiveValidationInventory
     private static string Display(WorkbookShortcutChord chord)
     {
         var parts = new List<string>();
-        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) parts.Add("Cmd");
-        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Control)) parts.Add("Ctrl");
-        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) parts.Add("Alt");
-        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) parts.Add("Shift");
+        if (chord.Modifiers.HasFlag(FreeKeyModifiers.Meta)) parts.Add("Cmd");
+        if (chord.Modifiers.HasFlag(FreeKeyModifiers.Control)) parts.Add("Ctrl");
+        if (chord.Modifiers.HasFlag(FreeKeyModifiers.Alt)) parts.Add("Alt");
+        if (chord.Modifiers.HasFlag(FreeKeyModifiers.Shift)) parts.Add("Shift");
         parts.Add(KeyName(chord.Key));
         return string.Join('+', parts);
     }
@@ -628,7 +599,7 @@ public static class InteractiveValidationInventory
         string displayText,
         ShortcutInteractionContext context,
         string key,
-        ShortcutModifierKeys modifiers = None,
+        FreeKeyModifiers modifiers = None,
         ShortcutInteractionKind kind = ShortcutInteractionKind.KeyGesture) =>
         new(displayText, kind, context, [G(key, modifiers)]);
 
@@ -643,31 +614,31 @@ public static class InteractiveValidationInventory
         string displayText,
         ShortcutInteractionContext context,
         string input,
-        ShortcutModifierKeys modifiers) =>
+        FreeKeyModifiers modifiers) =>
         new(displayText, ShortcutInteractionKind.MouseWheel, context, [], input, modifiers);
 
     private static ShortcutGestureStep G(
         string key,
-        ShortcutModifierKeys modifiers = None) =>
+        FreeKeyModifiers modifiers = None) =>
         new(key, modifiers);
 
-    private static string Display(ShortcutModifierKeys modifiers, string key) =>
+    private static string Display(FreeKeyModifiers modifiers, string key) =>
         modifiers switch
         {
-            ShortcutModifierKeys.None => key,
-            ShortcutModifierKeys.Control => $"Ctrl+{key}",
-            ShortcutModifierKeys.Shift => $"Shift+{key}",
+            FreeKeyModifiers.None => key,
+            FreeKeyModifiers.Control => $"Ctrl+{key}",
+            FreeKeyModifiers.Shift => $"Shift+{key}",
             _ => $"{modifiers}+{key}",
         };
 
-    private const ShortcutModifierKeys None = ShortcutModifierKeys.None;
-    private const ShortcutModifierKeys Ctrl = ShortcutModifierKeys.Control;
-    private const ShortcutModifierKeys Shift = ShortcutModifierKeys.Shift;
-    private const ShortcutModifierKeys Alt = ShortcutModifierKeys.Alt;
-    private const ShortcutModifierKeys CtrlShift = ShortcutModifierKeys.Control | ShortcutModifierKeys.Shift;
-    private const ShortcutModifierKeys CtrlAlt = ShortcutModifierKeys.Control | ShortcutModifierKeys.Alt;
-    private const ShortcutModifierKeys AltShift = ShortcutModifierKeys.Alt | ShortcutModifierKeys.Shift;
-    private const ShortcutModifierKeys CtrlAltShift = ShortcutModifierKeys.Control | ShortcutModifierKeys.Alt | ShortcutModifierKeys.Shift;
+    private const FreeKeyModifiers None = FreeKeyModifiers.None;
+    private const FreeKeyModifiers Ctrl = FreeKeyModifiers.Control;
+    private const FreeKeyModifiers Shift = FreeKeyModifiers.Shift;
+    private const FreeKeyModifiers Alt = FreeKeyModifiers.Alt;
+    private const FreeKeyModifiers CtrlShift = FreeKeyModifiers.Control | FreeKeyModifiers.Shift;
+    private const FreeKeyModifiers CtrlAlt = FreeKeyModifiers.Control | FreeKeyModifiers.Alt;
+    private const FreeKeyModifiers AltShift = FreeKeyModifiers.Alt | FreeKeyModifiers.Shift;
+    private const FreeKeyModifiers CtrlAltShift = FreeKeyModifiers.Control | FreeKeyModifiers.Alt | FreeKeyModifiers.Shift;
 
     private const ShortcutInteractionContext Application = ShortcutInteractionContext.Application;
     private const ShortcutInteractionContext Workbook = ShortcutInteractionContext.Workbook;

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 
@@ -8,7 +9,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     [Fact]
     public void GetIntent_MapsAltEnterToLineBreakInsertion()
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Enter, FormulaEditorModifiers.Alt, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Enter, FreeKeyModifiers.Alt, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
         intent.Action.Should().Be(ExcelEditKeyAction.InsertLineBreak);
         intent.Target.Should().BeNull();
@@ -19,7 +20,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.System,
-            FormulaEditorModifiers.Alt,
+            FreeKeyModifiers.Alt,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -32,7 +33,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     [Fact]
     public void GetIntent_MapsCtrlEnterToCommitSelection()
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Enter, FormulaEditorModifiers.Control, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Enter, FreeKeyModifiers.Control, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
         intent.Action.Should().Be(ExcelEditKeyAction.CommitSelection);
         intent.Target.Should().BeNull();
@@ -43,7 +44,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.System,
-            FormulaEditorModifiers.Control,
+            FreeKeyModifiers.Control,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -54,10 +55,10 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift)]
-    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Alt)]
-    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift | FormulaEditorModifiers.Alt)]
-    public void GetIntent_DoesNotTreatExtraModifiedEnterAsCommitSelection(FormulaEditorModifiers modifiers)
+    [InlineData(FreeKeyModifiers.Control | FreeKeyModifiers.Shift)]
+    [InlineData(FreeKeyModifiers.Control | FreeKeyModifiers.Alt)]
+    [InlineData(FreeKeyModifiers.Control | FreeKeyModifiers.Shift | FreeKeyModifiers.Alt)]
+    public void GetIntent_DoesNotTreatExtraModifiedEnterAsCommitSelection(FreeKeyModifiers modifiers)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.Enter,
@@ -71,10 +72,10 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorModifiers.Shift | FormulaEditorModifiers.Alt)]
-    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Alt)]
-    [InlineData(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift | FormulaEditorModifiers.Alt)]
-    public void GetIntent_DoesNotTreatExtraModifiedEnterAsLineBreakInsertion(FormulaEditorModifiers modifiers)
+    [InlineData(FreeKeyModifiers.Shift | FreeKeyModifiers.Alt)]
+    [InlineData(FreeKeyModifiers.Control | FreeKeyModifiers.Alt)]
+    [InlineData(FreeKeyModifiers.Control | FreeKeyModifiers.Shift | FreeKeyModifiers.Alt)]
+    public void GetIntent_DoesNotTreatExtraModifiedEnterAsLineBreakInsertion(FreeKeyModifiers modifiers)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.System,
@@ -93,7 +94,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.Enter,
-            FormulaEditorModifiers.Alt | FormulaEditorModifiers.Shift,
+            FreeKeyModifiers.Alt | FreeKeyModifiers.Shift,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false);

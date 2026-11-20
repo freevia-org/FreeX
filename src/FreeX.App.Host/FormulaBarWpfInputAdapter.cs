@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows;
 using System.Windows.Input;
 using FreeX.App.Presentation.FormulaBar;
@@ -28,19 +29,8 @@ internal static class FormulaBarWpfInputAdapter
             _ => FormulaEditorKey.None
         };
 
-    public static FormulaEditorModifiers ToFormulaEditorModifiers(ModifierKeys modifiers)
-    {
-        var result = FormulaEditorModifiers.None;
-        if (modifiers.HasFlag(ModifierKeys.Shift))
-            result |= FormulaEditorModifiers.Shift;
-        if (modifiers.HasFlag(ModifierKeys.Control))
-            result |= FormulaEditorModifiers.Control;
-        if (modifiers.HasFlag(ModifierKeys.Alt))
-            result |= FormulaEditorModifiers.Alt;
-        if (modifiers.HasFlag(ModifierKeys.Windows))
-            result |= FormulaEditorModifiers.Meta;
-        return result;
-    }
+    public static FreeKeyModifiers ToFormulaEditorModifiers(ModifierKeys modifiers) =>
+        Free.Shared.Shell.Wpf.WpfKeyModifiersMapper.FromWpf(modifiers);
 
     public static Thickness ToWpfThickness(FormulaEditorThickness thickness) =>
         new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
