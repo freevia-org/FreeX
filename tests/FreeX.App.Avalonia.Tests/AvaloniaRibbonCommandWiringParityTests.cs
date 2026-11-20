@@ -51,6 +51,7 @@ public sealed class AvaloniaRibbonCommandWiringParityTests
     public async Task EveryWpfWiredRibbonCommand_IsRegisteredInAvaloniaRibbon()
     {
         string[] missing = [];
+        WpfWiredCommandIds().Count.Should().BeGreaterThan(500, "the WPF handler map must parse");
         await Session.Dispatch(() =>
         {
             var window = new MainWindow([]);
@@ -69,7 +70,6 @@ public sealed class AvaloniaRibbonCommandWiringParityTests
             }
         }, CancellationToken.None);
 
-        File.WriteAllLines(Path.Combine(Environment.GetEnvironmentVariable("TMPDIR") ?? Path.GetTempPath(), "ribbon-missing.txt"), missing);
         missing.Should().BeEmpty("WPF wires these ribbon commands but the Avalonia ribbon leaves them disabled");
     }
 }
