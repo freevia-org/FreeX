@@ -512,14 +512,6 @@ public sealed partial class MainWindow
                 Children = { chevron, headerPresenter },
             };
             Grid.SetColumn(headerPresenter, 1);
-            header.Bind(
-                Layoutable.MarginProperty,
-                new Binding(nameof(TreeViewItem.Level))
-                {
-                    Source = item,
-                    Converter = new FuncValueConverter<int, Thickness>(level =>
-                        new Thickness(level * AccessibilityCheckerTreeIndent, 0, 0, 0)),
-                });
             scope.Register("PART_Header", header);
 
             var layoutRoot = new Border
@@ -530,7 +522,15 @@ public sealed partial class MainWindow
             };
             scope.Register("PART_LayoutRoot", layoutRoot);
 
-            var itemsPresenter = new ItemsPresenter { Name = "PART_ItemsPresenter" };
+            // Children sit inside their parent's template, so a fixed per-level left margin on the
+            // items presenter indents every level under its parent (header, then indented children)
+            // without depending on TreeViewItem.Level, which is not reliably maintained for
+            // directly-added containers.
+            var itemsPresenter = new ItemsPresenter
+            {
+                Name = "PART_ItemsPresenter",
+                Margin = new Thickness(AccessibilityCheckerTreeIndent, 0, 0, 0),
+            };
             itemsPresenter.Bind(
                 Visual.IsVisibleProperty,
                 new Binding(nameof(TreeViewItem.IsExpanded)) { Source = item });
