@@ -71,6 +71,66 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         }
     }
 
+    /// <summary>
+    /// Opt-in (<c>FREEW_PAGED_PERF_VARIANTS=1</c>): the same progressive re-flow on break-heavy documents with a
+    /// table, footnotes, or two columns mixed in.
+    /// </summary>
+    [StaFact]
+    public void MeasurePagedEditOnBreakHeavyVariants()
+    {
+        if (Environment.GetEnvironmentVariable("FREEW_PAGED_PERF_VARIANTS") != "1")
+            return;
+        PagedEditDiagnostics.Enabled = true;
+        try
+        {
+            foreach (var variant in new[] { "tables", "footnotes", "columns" })
+            {
+                var editor = new DocumentView();
+                editor.LoadModel(InlineBreakVariantDocument(variant, paragraphs: 720, breakEvery: 4));
+                editor.CommitToModel();
+                output.WriteLine($"variant {variant}: blocks={editor.Model.Blocks.Count}");
+                MeasureProgressive(editor);
+            }
+        }
+        finally
+        {
+            PagedEditDiagnostics.Enabled = false;
+        }
+    }
+
+    internal static FreeW.Core.Model.TextDocument InlineBreakVariantDocument(string variant, int paragraphs, int breakEvery)
+    {
+        var doc = InlineBreakDocument(paragraphs, breakEvery);
+        switch (variant)
+        {
+            case "tables":
+                for (var i = doc.Blocks.Count - 1; i >= 6; i -= 9)
+                {
+                    var table = FreeW.Core.Model.Table.Create(3, 2);
+                    for (var r = 0; r < 3; r++)
+                        for (var c = 0; c < 2; c++)
+                            table.Rows[r].Cells[c] = new FreeW.Core.Model.TableCell($"cell {i}.{r}.{c} some text to fill the cell");
+                    doc.Blocks.Insert(i, table);
+                }
+                break;
+            case "footnotes":
+                var note = 1;
+                for (var i = 1; i < doc.Blocks.Count; i += 2)
+                {
+                    if (doc.Blocks[i] is not FreeW.Core.Model.Paragraph paragraph)
+                        continue;
+                    doc.Footnotes[note] = new FreeW.Core.Model.Footnote(note, "Footnote text " + note + " with a few words in it.");
+                    paragraph.Runs.Insert(0, FreeW.Core.Model.Run.FootnoteReference(note));
+                    note++;
+                }
+                break;
+            case "columns":
+                doc.Page.ColumnCount = 2;
+                break;
+        }
+        return doc;
+    }
+
     /// <summary>A long document in which every fourth paragraph holds a manual page break mid-text.</summary>
     internal static FreeW.Core.Model.TextDocument InlineBreakDocument(int paragraphs, int breakEvery = 4)
     {
@@ -252,6 +312,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
                 break;
         }
         var background = total.Elapsed;
+        output.WriteLine($"  background layout: {panel.LayoutSession.LastStatistics}");
         Layout(panel);
 
         // Scroll to the middle of the document, as a user would, and edit the page shown there.
@@ -281,6 +342,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
         var wordStats = panel.LayoutSession.LastStatistics;
         var wordComplete = panel.IsLayoutComplete;
         panel.FinishLayoutNow();
+        output.WriteLine($"  in-line burst, run completed: {panel.LayoutSession.LastStatistics}");
 
         var growBox = panel.PageBoxes[panel.PageBoxes.Count / 2];
         panel.ScrollToPage(growBox.PageNumber);
@@ -309,6 +371,7 @@ public sealed class PagedEditW7PerformanceProbe(ITestOutputHelper output)
                 break;
         }
         var growBackground = total.Elapsed;
+        output.WriteLine($"  line-adding burst, run completed: {panel.LayoutSession.LastStatistics}");
 
         output.WriteLine($"W10 progressive: first page shown {firstPage.TotalMilliseconds:F0} ms ({shownAtOpen} pages built at open); "
             + $"background to complete {background.TotalMilliseconds:F0} ms; realised pages near a mid-document viewport {realized}/{panel.PageBoxes.Count}");
