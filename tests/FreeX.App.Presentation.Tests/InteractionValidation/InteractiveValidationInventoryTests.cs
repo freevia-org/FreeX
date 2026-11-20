@@ -11,7 +11,7 @@ public sealed class InteractiveValidationInventoryTests
     {
         InteractiveValidationInventory.KeyboardShortcuts.Should().HaveCount(94);
         InteractiveValidationInventory.KeyboardShortcuts.Sum(scenario => scenario.Interactions.Count)
-            .Should().Be(280);
+            .Should().Be(281);
         InteractiveValidationInventory.KeyboardShortcuts
             .SelectMany(scenario => scenario.Interactions)
             .Count(interaction => interaction.Steps.Any(step => step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)))
