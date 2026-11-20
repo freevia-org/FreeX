@@ -166,6 +166,27 @@ public sealed partial class MainWindow
             {
                 _isDialogRangeInteractionProbe = false;
                 _session.SelectRange(previousSelection);
+                // The probe drives pickers programmatically, including pickers whose text box sits on a wizard
+                // step or a collapsed section that is not currently visible. Restoring the dialog cannot focus
+                // such a box, which leaves keyboard focus on the worksheet grid and the keyboard contract that
+                // follows (Enter/Escape) is then sent to the owner window. Hand focus back inside the dialog.
+                if (dialog.IsVisible)
+                {
+                    dialog.Activate();
+                    var candidates = target is null
+                        ? controls
+                        : controls.Prepend(target).ToArray();
+                    foreach (var candidate in candidates)
+                    {
+                        if (candidate.Focusable &&
+                            candidate.IsEffectivelyVisible &&
+                            candidate.IsEffectivelyEnabled &&
+                            candidate.Focus())
+                        {
+                            break;
+                        }
+                    }
+                }
             }
         }
 

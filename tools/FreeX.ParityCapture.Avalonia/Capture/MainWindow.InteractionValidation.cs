@@ -29,6 +29,11 @@ public sealed partial class MainWindow
         int contextMenuDispatchCount = int.MaxValue)
     {
         var results = new List<InteractionValidationResult>();
+        // Any shortcut or Quick Access key tip that reaches Save on an untitled workbook (for example Alt+1)
+        // would otherwise open the real native save panel, which never completes under validation and leaves
+        // the window's save guard set, so every later dialog silently refuses to open. Cancel it by default;
+        // the Save-specific probes below install their own picker and restore this one.
+        _workbookSaveAsPickerOverride ??= static _ => Task.FromResult<WorkbookSaveAsPickerSelection?>(null);
         if (includeCoreResults)
         {
             bool Includes(string section) => coreSection is null ||
