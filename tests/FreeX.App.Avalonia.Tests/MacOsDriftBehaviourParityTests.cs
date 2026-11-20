@@ -40,6 +40,7 @@ public sealed class MacOsDriftBehaviourParityTests
             editor.Should().NotBeNull();
             editor!.Text.Should().Be("Second");
             editor.Name.Should().Be("SheetTabRenameEditor");
+            global::Avalonia.Automation.AutomationProperties.GetName(editor).Should().Be("Rename sheet tab");
 
             editor.Text = "Renamed";
             var enter = new KeyEventArgs { Key = Key.Enter };

@@ -647,6 +647,47 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTablePaginationPlan_LeadingContentOfSeveralPages_IsNotTreatedAsFillingTheTablePage()
+    {
+        // Page body is 864dip tall (612x792pt page, 1" margins all round).
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 792,
+            MarginLeftPt = 72,
+            MarginRightPt = 72,
+            MarginTopPt = 72,
+            MarginBottomPt = 72,
+        };
+
+        var table = new Table();
+        for (var i = 0; i < 3; i++)
+        {
+            var row = new TableRow { HeightPt = 150, HeightRule = TableRowHeightRule.Exact }; // 200dip
+            row.Cells.Add(new TableCell());
+            row.Cells[0].Paragraphs.Add(new Paragraph(string.Empty));
+            table.Rows.Add(row);
+        }
+
+        // Three whole pages of preceding text: the estimate (2692dip) used to leave no room, planning row 0
+        // alone and forcing every later row onto a page of its own although 600dip fit the page.
+        var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(
+            table,
+            page,
+            firstPageLeadingContentHeightDip: 3 * 864 + 100);
+
+        pagination.EstimatedPageCount.Should().Be(1);
+        pagination.Rows.Select(row => row.AssignedPageNumber).Should().Equal(1, 1, 1);
+
+        // Less than a page of leading content still takes its share of the first page.
+        var lower = DocumentViewLayoutPlanner.BuildTablePaginationPlan(
+            table,
+            page,
+            firstPageLeadingContentHeightDip: 300);
+        lower.Rows.Select(row => row.AssignedPageNumber).Should().Equal(1, 1, 2);
+    }
+
+    [Fact]
     public void BuildTablePaginationPlan_RowWithoutNestedTable_EstimatesFromParagraphTextOnly()
     {
         var page = new PageSettings
