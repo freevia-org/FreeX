@@ -2778,8 +2778,9 @@ public sealed class AvaloniaShellSourceTests
         hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.LinkTypeColumnWidth");
         hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.LabelColumnWidth");
         hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
-        hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\"), HyperlinkTargetKind.CreateNewDocument)");
-        hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\"), HyperlinkTargetKind.PlaceInThisDocument)");
+        hyperlinkSource.Should().Contain("HyperlinkTargetKind.CreateNewDocument => UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\")");
+        hyperlinkSource.Should().Contain("HyperlinkTargetKind.PlaceInThisDocument => UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\")");
+        hyperlinkSource.Should().Contain("HyperlinkDialogPanePlanner.LinkTypeOrder");
         parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
         parityCaptureSource.Should().Contain("EvaluateFormulaParityFixture.CreateSummary(_session.ActiveSheet.Id)");

@@ -30,6 +30,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
         KeyboardCommandShortcut.ReapplyFilter,
         KeyboardCommandShortcut.QuickAnalysis,
         KeyboardCommandShortcut.InsertEmbeddedChart,
+        KeyboardCommandShortcut.ToggleRibbonVisibility,
         KeyboardCommandShortcut.InsertChartSheet,
         KeyboardCommandShortcut.GroupSelection,
         KeyboardCommandShortcut.UngroupSelection,
@@ -125,7 +126,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [Fact]
     public void ApplicationCommandCatalog_OwnsAllFortyTwoCrossRendererRoutes()
     {
-        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts.Should().HaveCount(46);
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts.Should().HaveCount(47);
         WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
             .Select(shortcut => shortcut.Command)
             .Distinct()

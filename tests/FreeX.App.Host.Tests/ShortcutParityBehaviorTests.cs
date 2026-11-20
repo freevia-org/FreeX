@@ -23,9 +23,10 @@ public sealed class ShortcutParityBehaviorTests
 
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
         source.Should().Contain("ExecuteCommandShortcut(ribbonShortcut, sender, e);");
-        source.Should().Contain("private void ToggleRibbonVisibility()");
-        source.Should().Contain("PART_SelectedContentHost");
-        source.Should().Contain("Visibility.Collapsed : Visibility.Visible");
+        source.Should().Contain("private void ToggleRibbonVisibility() => ToggleRibbonCollapsed();");
+        var display = DialogSourceTestSupport.ReadHostSources("MainWindow.RibbonDisplay.cs");
+        display.Should().Contain("PART_SelectedContentHost");
+        display.Should().Contain("Visibility.Visible : Visibility.Collapsed");
         DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs")
             .Should().Contain("Register(KeyboardCommandShortcut.ToggleRibbonVisibility");
     }

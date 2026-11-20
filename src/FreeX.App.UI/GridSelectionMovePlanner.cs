@@ -30,6 +30,21 @@ public static class GridSelectionMovePlanner
             columnHeaderHeight,
             borderHitThickness);
 
+    public static FreeX.App.Presentation.GridInteraction.GridSelectionBorderEdge HitBorderEdge(
+        ViewportModel? viewport,
+        GridRange? selectedRange,
+        IReadOnlyList<GridRange>? selectedRanges,
+        Point pointer,
+        double rowHeaderWidth,
+        double columnHeaderHeight) =>
+        PresentationPlanner.HitBorderEdge(
+            viewport,
+            selectedRange,
+            selectedRanges,
+            new GridPoint(pointer.X, pointer.Y),
+            rowHeaderWidth,
+            columnHeaderHeight);
+
     public static CellAddress ClampDragStartCell(GridRange source, CellAddress dragStartCell) =>
         PresentationPlanner.ClampDragStartCell(source, dragStartCell);
 
