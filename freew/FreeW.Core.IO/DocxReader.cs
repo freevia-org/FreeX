@@ -1613,7 +1613,8 @@ public static partial class DocxReader
                 .ToList();
             foreach (var run in watermarkRuns)
                 run.Remove();
-            if (!preservedParagraph.Descendants(W + "r").Any())
+            var authoredEmpty = !p.Descendants(W + "r").Any();
+            if (!preservedParagraph.Descendants(W + "r").Any() && !authoredEmpty)
                 continue;
 
             var storyParagraph = ReadParagraph(
@@ -1628,6 +1629,12 @@ public static partial class DocxReader
             storyParagraph.LegacyTextBoxFrame = legacyFrame;
             result.Paragraphs.Add(storyParagraph);
         }
+
+        // A run-less paragraph is a real line in Word (a trailing empty Footer-style paragraph under a
+        // page-number shape sets how far the footer pushes the body up), so it is kept -- but only
+        // beside real content: a part that is nothing but empty paragraphs stays empty, as before.
+        if (result.Paragraphs.All(paragraph => paragraph.Runs.Count == 0))
+            result.Paragraphs.Clear();
         return result;
     }
 

@@ -68,6 +68,28 @@ public class HeaderFooterFieldAndFrameReadTests
             .Should().Equal(" - Footer text");
     }
 
+    [Fact]
+    public void TrailingEmptyFooterParagraph_BesideContent_IsKept()
+    {
+        // Word counts the empty paragraph that follows a page-number shape when it sizes the footer.
+        var doc = ReadWithFooter(
+            "<w:p><w:r><w:t>Footer text</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val=\"Footer\"/></w:pPr></w:p>");
+
+        var footer = doc.FinalSectionHeadersFooters.Footer;
+        footer.Should().NotBeNull();
+        footer!.Paragraphs.Should().HaveCount(2);
+        footer.Paragraphs[1].Runs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FooterOfOnlyEmptyParagraphs_StaysEmpty()
+    {
+        var doc = ReadWithFooter("<w:p/><w:p/>");
+
+        var footer = doc.FinalSectionHeadersFooters.Footer;
+        (footer is null || footer.Paragraphs.Count == 0).Should().BeTrue();
+    }
+
     internal const string MarginCirclePageNumberFooter =
         "<w:p><w:r><w:pict><v:oval id=\"_x0000_s2049\" style=\"position:absolute;margin-left:0;margin-top:0;width:49.35pt;height:49.35pt;" +
         "z-index:251658240;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;" +
