@@ -469,7 +469,8 @@ public static class InteractionSurfaceCatalog
         new("context-menu.worksheet.state.auto-filter-header", "HasAutoFilterHeaderTarget"),
         new("context-menu.worksheet.state.dropdown", "HasDropdownTarget"),
         new("context-menu.worksheet.state.pivot-table", "HasPivotTableTarget"),
-        new("context-menu.worksheet.state.note-shown", "NoteIsShown")
+        new("context-menu.worksheet.state.note-shown", "NoteIsShown"),
+        new("context-menu.worksheet.state.table", "HasTableTarget")
     ];
 
     private sealed record DialogDefinition(string Name, DialogSurfaceFamily Family);
