@@ -30,7 +30,7 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
         KeyboardCommandShortcut.ReapplyFilter,
         KeyboardCommandShortcut.QuickAnalysis,
         KeyboardCommandShortcut.InsertEmbeddedChart,
-        KeyboardCommandShortcut.ToggleRibbon,
+        KeyboardCommandShortcut.ToggleRibbonVisibility,
         KeyboardCommandShortcut.InsertChartSheet,
         KeyboardCommandShortcut.GroupSelection,
         KeyboardCommandShortcut.UngroupSelection,
