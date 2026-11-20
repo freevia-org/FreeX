@@ -342,7 +342,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
 
             if (y < maxY)
             {
-                var pen = new Pen(Brushes.Black, 0.5);
+                var pen = new Pen(Brushes.Black, 0.75);
                 var ruleY = wordStack ? y + plan.SeparatorHeightDip / 2 : y;
                 dc.DrawLine(
                     pen,
@@ -395,7 +395,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         var y = bodyBottom - band.AvailableHeightDip;
         using (var dc = rules.RenderOpen())
         {
-            var pen = new Pen(Brushes.Black, 0.5);
+            var pen = new Pen(Brushes.Black, 0.75);
             var ruleWidth = band.SeparatorKind == DocumentFootnoteSeparatorKind.Continuation
                 ? contentWidth
                 : metricsPlan.SeparatorWidthDip;
