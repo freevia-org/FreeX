@@ -209,8 +209,8 @@ public sealed partial class ObjectDialogTests
 
     [Theory]
     [InlineData(0, "Hyperlink_Address", "Hyperlink_AddressAutomationName", "Hyperlink_AddressHelpText")]
-    [InlineData(1, "Hyperlink_NewDocumentLabel", "Hyperlink_NewDocumentAutomationName", "Hyperlink_NewDocumentHelpText")]
-    [InlineData(2, "Hyperlink_CellReferenceLabel", "Hyperlink_CellReferenceAutomationName", "Hyperlink_CellReferenceHelpText")]
+    [InlineData(1, "Hyperlink_CellReferenceLabel", "Hyperlink_CellReferenceAutomationName", "Hyperlink_CellReferenceHelpText")]
+    [InlineData(2, "Hyperlink_NewDocumentLabel", "Hyperlink_NewDocumentAutomationName", "Hyperlink_NewDocumentHelpText")]
     [InlineData(3, "Hyperlink_EmailAddressLabel", "Hyperlink_EmailAddressAutomationName", "Hyperlink_EmailAddressHelpText")]
     public void HyperlinkDialog_TargetFieldTracksSelectedLinkType(
         int selectedIndex,
@@ -287,7 +287,7 @@ public sealed partial class ObjectDialogTests
 
         source.Should().Contain("DialogButtonRowFactory.Create(");
         source.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
-        source.Should().Contain("if (!TryCreateResult(_targetBox.Text, _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
+        source.Should().Contain("if (!TryCreateResult(ComposeTarget(), _displayBox.Text, SelectedLinkType, _screenTip, _bookmark, out var result, out var error))");
         source.Should().Contain("ShowInvalidInputWarning(error ?? UiText.Get(\"Hyperlink_EnterHyperlinkDetails\"));");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, _targetBox);");
     }

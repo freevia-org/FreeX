@@ -97,6 +97,12 @@ public partial class GridView
     /// </summary>
     public event Action<GridRange>? AutofillHandleDoubleClicked;
 
+    /// <summary>
+    /// Excel: double-clicking an edge of the selection's border jumps to the edge of the data that
+    /// way (Ctrl+Arrow); with Shift it extends the selection there. The bool is "Shift held".
+    /// </summary>
+    public event Action<FreeX.App.Presentation.GridInteraction.GridSelectionBorderEdge, bool>? SelectionBorderDoubleClicked;
+
     /// <summary>Fired when the user drags a selected range border and releases on a new range.</summary>
     public event Action<GridRange, GridRange>? SelectionMoveRequested;
 

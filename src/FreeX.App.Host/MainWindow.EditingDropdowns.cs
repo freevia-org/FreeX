@@ -116,6 +116,7 @@ public partial class MainWindow
     /// </summary>
     private void RefreshDvInputMessage()
     {
+        RefreshErrorSmartTag();
         if (_workbook.GetSheet(_currentSheetId) is not { } sheet ||
             SheetGrid.SelectedRange is not { } range)
         {

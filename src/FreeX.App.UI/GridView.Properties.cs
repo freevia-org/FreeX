@@ -111,6 +111,17 @@ public partial class GridView
         set => SetValue(SheetIsColHiddenPredicateProperty, value);
     }
 
+    // Excel's green error indicator (background error checking). The host answers per visible cell
+    // from its cached per-sheet indicator set (FreeX.App.Services.BackgroundErrorIndicatorCache).
+    public static readonly DependencyProperty ErrorIndicatorPredicateProperty =
+        DependencyProperty.Register(nameof(ErrorIndicatorPredicate), typeof(Func<uint, uint, bool>), typeof(GridView),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
+    public Func<uint, uint, bool>? ErrorIndicatorPredicate
+    {
+        get => (Func<uint, uint, bool>?)GetValue(ErrorIndicatorPredicateProperty);
+        set => SetValue(ErrorIndicatorPredicateProperty, value);
+    }
+
     public static readonly DependencyProperty IsLiveResizingProperty =
         DependencyProperty.Register(nameof(IsLiveResizing), typeof(bool), typeof(GridView),
             new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsRender));

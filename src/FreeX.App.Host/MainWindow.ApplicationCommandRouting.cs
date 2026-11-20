@@ -87,6 +87,7 @@ public partial class MainWindow
             ToggleFilter = Handled<WorkbookApplicationCommandInvocation>(invocation =>
                 FilterButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
             ClearFilter = Handled(() => ClearFilterButton_Click(this, new RoutedEventArgs())),
+            FilterBySelectedCellValue = Handled(FilterBySelectedCellValue),
             ReapplyFilter = Handled<WorkbookApplicationCommandVariant>(variant =>
             {
                 if (variant == WorkbookApplicationCommandVariant.KeyboardShortcut)

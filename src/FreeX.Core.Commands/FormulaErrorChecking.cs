@@ -77,6 +77,8 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
 
         _previousIgnored = cell.IgnoreFormulaError;
         cell.IgnoreFormulaError = _ignored;
+        // Error indicators are cached per sheet content version; ignoring one must repaint it.
+        ctx.GetSheet(_sheetId).NotifyContentRecalculated();
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -84,7 +86,10 @@ public sealed class SetFormulaErrorIgnoredCommand : IWorkbookCommand
     {
         var cell = ctx.GetSheet(_sheetId).GetCell(_address);
         if (cell is not null)
+        {
             cell.IgnoreFormulaError = _previousIgnored;
+            ctx.GetSheet(_sheetId).NotifyContentRecalculated();
+        }
     }
 }
 

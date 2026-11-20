@@ -2,6 +2,7 @@ using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
 
+[Collection(ToolsTestCollections.RepositoryScans)]
 public sealed class CrossPlatformPortabilityPreflightTests
 {
     [Fact]

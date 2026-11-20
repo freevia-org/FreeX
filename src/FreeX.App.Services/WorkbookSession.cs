@@ -14,7 +14,7 @@ using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Services;
 
-public sealed class WorkbookSession : IDisposable
+public sealed partial class WorkbookSession : IDisposable
 {
     private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
     {
@@ -835,8 +835,34 @@ public sealed class WorkbookSession : IDisposable
 
     public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
 
+    private long _lastPasteUndoVersion = -1;
+
+    /// <summary>
+    /// The undo-stack version right after the most recent successful paste of cells, so the shells
+    /// can show Excel's Paste Options button for exactly that paste (external text pastes are
+    /// recorded as plain cell edits, so the undo label alone cannot tell).
+    /// </summary>
+    public long LastPasteUndoVersion => _lastPasteUndoVersion;
+
+    private WorkbookCellEditResult RecordPaste(WorkbookCellEditResult result)
+    {
+        if (result.Success && !result.IsNoOp)
+            _lastPasteUndoVersion = UndoStackVersion;
+
+        return result;
+    }
+
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(int maxCount) =>
         _cellEditService.GetUndoHistory(Workbook.Id, maxCount);
+
+    /// <summary>The command the next Undo would revert, or null.</summary>
+    public IWorkbookCommand? PeekUndoCommand() => _cellEditService.PeekUndoCommand(Workbook.Id);
+
+    /// <summary>Entries on the undo stack; grows when a command runs or is redone.</summary>
+    public int UndoStackDepth => _cellEditService.GetUndoStackDepth(Workbook.Id);
+
+    /// <summary>Changes whenever the undo stack changes.</summary>
+    public long UndoStackVersion => _cellEditService.GetUndoStackVersion(Workbook.Id);
 
     public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(int maxCount) =>
         _cellEditService.GetRedoHistory(Workbook.Id, maxCount);
@@ -4025,6 +4051,14 @@ public sealed class WorkbookSession : IDisposable
         bool preserveText = false,
         bool clipboardReadFailed = false,
         string? html = null,
+        string? clipboardMarker = null) =>
+        RecordPaste(PasteClipboardTextAtActiveCellCore(text: text, preserveText: preserveText, clipboardReadFailed: clipboardReadFailed, html: html, clipboardMarker: clipboardMarker));
+
+    private WorkbookCellEditResult PasteClipboardTextAtActiveCellCore(
+        string? text,
+        bool preserveText = false,
+        bool clipboardReadFailed = false,
+        string? html = null,
         string? clipboardMarker = null)
     {
         // Paste Special > Text / Unicode Text (preserveText: true — Excel semantics: paste the
@@ -4072,6 +4106,15 @@ public sealed class WorkbookSession : IDisposable
     }
 
     public WorkbookCellEditResult PasteSpecialClipboardAtActiveCell(
+        string? text,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths = false,
+        bool clipboardReadFailed = false,
+        string? html = null) =>
+        RecordPaste(PasteSpecialClipboardAtActiveCellCore(text: text, mode: mode, options: options, keepSourceColumnWidths: keepSourceColumnWidths, clipboardReadFailed: clipboardReadFailed, html: html));
+
+    private WorkbookCellEditResult PasteSpecialClipboardAtActiveCellCore(
         string? text,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -4156,7 +4199,10 @@ public sealed class WorkbookSession : IDisposable
         return PasteInternalClipboardAtActiveCell(internalClipboard, mode, options, keepSourceColumnWidths);
     }
 
-    public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
+    public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text) =>
+        RecordPaste(PasteColumnWidthsFromClipboardAtActiveCellCore(text: text));
+
+    private WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCellCore(string? text)
     {
         if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -4192,7 +4238,10 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
+    public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false) =>
+        RecordPaste(PasteCommentsFromClipboardAtActiveCellCore(text: text, transpose: transpose));
+
+    private WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCellCore(string? text, bool transpose = false)
     {
         if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -4246,7 +4295,10 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false)
+    public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false) =>
+        RecordPaste(PasteDataValidationFromClipboardAtActiveCellCore(text: text, transpose: transpose));
+
+    private WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCellCore(string? text, bool transpose = false)
     {
         if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -4383,6 +4435,12 @@ public sealed class WorkbookSession : IDisposable
     }
 
     public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
+        string? text,
+        bool transpose = false,
+        bool keepSourceColumnWidths = false) =>
+        RecordPaste(PasteLinkFromClipboardAtActiveCellCore(text: text, transpose: transpose, keepSourceColumnWidths: keepSourceColumnWidths));
+
+    private WorkbookCellEditResult PasteLinkFromClipboardAtActiveCellCore(
         string? text,
         bool transpose = false,
         bool keepSourceColumnWidths = false)
@@ -4559,6 +4617,10 @@ public sealed class WorkbookSession : IDisposable
     /// preserve identical table and cell-text semantics.
     /// </summary>
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(
+        string text, bool preserveText, PasteSpecialOptions options, string? html) =>
+        RecordPaste(PasteExternalTextAtActiveCellCore(text: text, preserveText: preserveText, options: options, html: html));
+
+    private WorkbookCellEditResult PasteExternalTextAtActiveCellCore(
         string text, bool preserveText, PasteSpecialOptions options, string? html)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -4923,6 +4985,20 @@ public sealed class WorkbookSession : IDisposable
         var range = AutoFilterToggleRangePlanner.Create(ActiveSheet, SelectedRange);
         // Toggling the filter buttons preserves the exact selection in WPF; unlike apply/clear/
         // reapply it does not expand a lone header cell to the full filter range.
+        return ExecuteRepeatableCommandPreservingSelection(
+            () => new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, range));
+    }
+
+    /// <summary>
+    /// Turns the AutoFilter on over the current region around the active cell, whatever the
+    /// selection, for Excel's "Filter by Selected Cell's Value" on a sheet with no AutoFilter yet.
+    /// </summary>
+    public WorkbookCellEditResult EnableAutoFilterAroundActiveCell()
+    {
+        if (ActiveSheetHasAutoFilter)
+            return SuccessfulNoOpEditResult();
+
+        var range = AutoFilterToggleRangePlanner.Create(ActiveSheet, new GridRange(ActiveCell, ActiveCell));
         return ExecuteRepeatableCommandPreservingSelection(
             () => new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, range));
     }

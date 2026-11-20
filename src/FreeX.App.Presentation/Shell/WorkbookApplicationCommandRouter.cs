@@ -128,7 +128,8 @@ public enum WorkbookApplicationCommandIntent
     NumberFormatScientific,
     ApplyOutlineBorder,
     ClearOutlineBorder,
-    WorkbookStatistics
+    WorkbookStatistics,
+    FilterBySelectedCellValue
 }
 
 public readonly record struct WorkbookApplicationCommandContext(
@@ -464,6 +465,7 @@ public static class WorkbookApplicationCommandRouter
         yield return Route(source, "Filter", WorkbookApplicationCommandIntent.ToggleFilter, selection);
         yield return Route(source, "ClearFilter", WorkbookApplicationCommandIntent.ClearFilter, selection);
         yield return Route(source, "ReapplyFilter", WorkbookApplicationCommandIntent.ReapplyFilter, selection);
+        yield return Route(source, "FilterBySelectedCellValue", WorkbookApplicationCommandIntent.FilterBySelectedCellValue, selection);
         yield return Route(source, "PickFromDropDown", WorkbookApplicationCommandIntent.PickFromDropDown, selection);
         yield return Route(source, "QuickAnalysis", WorkbookApplicationCommandIntent.QuickAnalysis, selection);
         yield return Route(source, "DefineName", WorkbookApplicationCommandIntent.DefineName, selection);

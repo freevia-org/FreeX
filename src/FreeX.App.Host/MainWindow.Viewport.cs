@@ -621,6 +621,7 @@ public partial class MainWindow
         // above, so its pagination matches the real print output (R15-print-preview-interaction-2).
         SheetGrid.SheetIsRowHiddenPredicate = sheet is null ? null : sheet.IsRowEffectivelyHidden;
         SheetGrid.SheetIsColHiddenPredicate = sheet is null ? null : sheet.IsColEffectivelyHidden;
+        SheetGrid.ErrorIndicatorPredicate ??= HasErrorIndicatorAt;
         SheetGrid.AutoFilterRange = adornments.AutoFilterRange;
         // R72-commands-sort-filter-4-1: without this, the AutoFilter dropdown arrow never shows the
         // filtered-state (funnel) icon for a filtered column -- GridView.Rendering.AutoFilter.cs reads
@@ -767,6 +768,9 @@ public partial class MainWindow
         // its cell across scrolls, the same way RefreshTextBoxInlineEditorPosition just above does
         // for the shape/textbox inline editor.
         RefreshInlineEditorPosition();
+        RefreshErrorSmartTag();
+        RefreshPasteOptionsButton();
+        RefreshInsertOptionsButton();
         UpdateChartsheetPresentation(sheet);
     }
 
