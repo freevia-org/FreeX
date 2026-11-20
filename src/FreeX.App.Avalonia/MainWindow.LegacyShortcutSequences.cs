@@ -6,6 +6,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.KeyTips;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Avalonia;
@@ -69,7 +70,9 @@ public sealed partial class MainWindow
 
         if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
         {
-            var closeBackstage = _backstageOverlay.IsVisible;
+            // WPF e58f21844e: Escape on an active key tip session only clears the key tips; a
+            // Backstage opened by Alt+F stays open until the next Escape.
+            var closeBackstage = _backstageOverlay.IsVisible && !_ribbonKeyTipSession.IsActive;
             _ribbonKeyTipSession.HandleEscape();
             ResetRibbonKeyTipSequence();
             if (closeBackstage)
@@ -196,7 +199,14 @@ public sealed partial class MainWindow
                 break;
             case FreeXRibbonKeyTipRouteKind.BackstageCommand:
                 if (route.BackstageCommand is { } command)
-                    TryActivateBackstageCommand(command);
+                {
+                    // WPF e3949d9fff: the Save As key tip focuses the existing rail action instead
+                    // of launching the picker; Enter then runs it.
+                    if (command == FreeXBackstageCommandId.SaveAs)
+                        TryFocusBackstageCommandEntry(command);
+                    else
+                        TryActivateBackstageCommand(command);
+                }
                 break;
             case FreeXRibbonKeyTipRouteKind.QuickAccessToolbar:
                 ExecuteQuickAccessKeyTip(route.QuickAccessIndex);

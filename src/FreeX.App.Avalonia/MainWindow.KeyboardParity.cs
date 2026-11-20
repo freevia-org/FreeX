@@ -117,6 +117,15 @@ public sealed partial class MainWindow
 
     private async Task<bool> TryHandleApplicationOrLocalShortcutAsync(KeyEventArgs args)
     {
+        // WPF handles the Ctrl+F1 ribbon toggle before its text-box focus check, so it also works
+        // while a cell/formula editor has focus.
+        if (IsToggleRibbonVisibilityShortcut(args.Key, args.KeyModifiers))
+        {
+            args.Handled = true;
+            ToggleRibbonVisibility();
+            return true;
+        }
+
         if (TryHandleFocusedEditorShortcut(args))
             return true;
 

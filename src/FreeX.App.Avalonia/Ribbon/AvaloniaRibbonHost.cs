@@ -7,6 +7,7 @@ using FreeX.App.Services.Ribbon;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.Protection;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
@@ -353,7 +354,7 @@ internal static class AvaloniaRibbonComposition
                 {
                     return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
                         ? CreateShapeGallerySplitButton(control)
-                        : control;
+                        : ApplyHostTooltip(control);
                 }).ToArray(),
             }).ToArray(),
         }).ToArray();
@@ -361,6 +362,25 @@ internal static class AvaloniaRibbonComposition
         {
             Tabs = tabs,
         };
+    }
+
+    // WPF sets a description on the Protect Sheet/Workbook ribbon buttons from the protection chrome plan
+    // (MainWindow.WorkbookUiState); the declarative definition carries none, so supply the same resources.
+    private static RibbonControl ApplyHostTooltip(RibbonControl control)
+    {
+        var plan = control.CommandId.Value switch
+        {
+            FreeXRibbonCommandIds.ReviewProtectSheet => ProtectionWorkflowSession.CreateSheetChromePlan(isProtected: false),
+            "Protect Workbook" => ProtectionWorkflowSession.CreateWorkbookChromePlan(isProtected: false),
+            _ => null,
+        };
+        return plan is null || !string.IsNullOrEmpty(control.TooltipDescription)
+            ? control
+            : control with
+            {
+                TooltipTitle = UiText.Get(plan.TooltipTitleResourceKey),
+                TooltipDescription = UiText.Get(plan.TooltipDescriptionResourceKey),
+            };
     }
 
     public static IRibbonCommandRegistry BuildRegistry(Func<WorkbookSession?> session, Action<string> setStatus)

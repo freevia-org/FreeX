@@ -2349,7 +2349,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));
 
         ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);
-        _openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));
+        // WPF 3b3ad143af: Open (Cmd+O on macOS arrives here as the native menu key equivalent)
+        // lands on the Backstage Open pane instead of launching the picker.
+        _openMenuItem.Click += (_, _) => RunGuarded(() =>
+        {
+            ShowBackstageOpenPane();
+            return Task.CompletedTask;
+        });
 
         ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
@@ -4829,6 +4835,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
             content.Children.Add(label);
+            if (CreateInlineSheetTabRenameEditor(tab) is { } renameEditor)
+            {
+                // WPF f7abb1094f: the inline editor replaces the tab label while renaming.
+                label.IsVisible = false;
+                content.Children.Add(renameEditor);
+            }
 
             // WPF RenderInactiveSheetTab: a short #B8BEC4 rule (14px of the strip height, 0.68
             // opacity) closes every inactive tab except the one just left of the active tab, whose
@@ -7668,9 +7680,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     // While a plain mouse-drag selection was in progress, the Name Box showed a live dimension
     // readout instead of the range address (see SelectRangeFromAnchor); now that the drag has
-    // ended (release or an interrupted capture loss), revert it to the plain range address,
-    // matching Excel and the WPF host's CompleteDragSelectionStatusRefresh
-    // (R69-render-active-cell-selection-6-2).
+    // ended (release or an interrupted capture loss), restore Excel's active-cell Name Box text,
+    // matching the WPF host's CompleteDragSelectionStatusRefresh
+    // (R69-render-active-cell-selection-6-2, 56ac52f5c3).
     private void RevertNameBoxAfterCellSelectionDragEnd()
     {
         if (!_cellSelectionDragShowedDimensionText)
@@ -7678,7 +7690,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _cellSelectionDragShowedDimensionText = false;
         if (!_cellAddressBoxHasPendingEdit)
-            _cellAddressText.Text = FormatRangeReference(_session.SelectedRange);
+            _cellAddressText.Text = FormatSelectionNameBoxText();
     }
 
     private void DetachCellSelectionDragHandlers()
@@ -13128,6 +13140,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)
     {
+        // The in-place rename editor owns the keyboard while it is open.
+        if (IsInlineSheetTabRenameActiveFor(sheetId))
+            return;
+
         OpenSheetTabContextMenuFromKeyboard(sheetId, button, args);
         if (args.Handled)
             return;
@@ -14238,12 +14254,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = FindReplaceText(FindReplaceDialogText.Title),
-            // WPF FindReplaceDialog.xaml: Width/Height/MinWidth/MinHeight are *outer* sizes of a
-            // resizable window; Avalonia sizes the client area, so take the Windows caption/frame off.
-            Width = FindReplaceDialogPlanner.Width - WpfResizableFrameWidth,
-            Height = FindReplaceDialogPlanner.Height - WpfResizableFrameHeight,
-            MinWidth = FindReplaceDialogPlanner.MinWidth - WpfResizableFrameWidth,
-            MinHeight = FindReplaceDialogPlanner.MinHeight - WpfResizableFrameHeight,
+            // WPF FindReplaceDialog.xaml (3d5eb06c4a): a compact, non-resizable Excel-style surface -
+            // Width=WpfCompactWidth, MaxHeight=WpfCompactMaximumHeight, SizeToContent=Height. The WPF values
+            // are *outer* sizes; Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = FindReplaceDialogPlanner.WpfCompactWidth - WpfResizableFrameWidth,
+            MaxHeight = FindReplaceDialogPlanner.WpfCompactMaximumHeight - WpfResizableFrameHeight,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -14299,7 +14316,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var findTabGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto"),
-            Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
+            Margin = new Thickness(4, 6, 4, 4),
         };
         var findLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(findLabel, 0);
@@ -14329,7 +14346,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabPanel = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto"),
-            Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
+            Margin = new Thickness(4, 6, 4, 4),
         };
         var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto") };
         var replaceFindLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
@@ -14357,8 +14374,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         replaceWithRow.Children.Add(replaceWithChooseFormatButton);
         Grid.SetRow(replaceFindRow, 0);
         Grid.SetRow(replaceWithRow, 1);
-        // WPF FindReplaceDialog.xaml gives ReplaceRow an 8px top margin.
-        replaceWithRow.Margin = new Thickness(0, 8, 0, 0);
+        // WPF FindReplaceDialog.xaml gives ReplaceRow a 4px top margin.
+        replaceWithRow.Margin = new Thickness(0, 4, 0, 0);
         replaceTabPanel.Children.Add(replaceFindRow);
         replaceTabPanel.Children.Add(replaceWithRow);
 
@@ -14367,16 +14384,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Replace), Content = replaceTabPanel };
         AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
 
-        var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)
-            ? FindReplaceDialogPlanner.ReplaceTabHeight
-            : FindReplaceDialogPlanner.FindTabHeight;
+        // The compact WPF host auto-sizes its tab host (no fixed per-tab height any more).
         var tabs = new TabControl
         {
             Items = { findTabItem, replaceTabItem },
             SelectedIndex = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode) ? 1 : 0,
-            Height = openTabHeight,
-            MinHeight = openTabHeight,
-            MaxHeight = openTabHeight,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
@@ -14391,8 +14403,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         StyleDiff? findFormat = null;
         StyleDiff? replacementFormat = null;
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
-        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
+        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, IsVisible = false };
+        statusLabel.PropertyChanged += (_, e) =>
+        {
+            // WPF SetStatusText: the label is collapsed until it has text.
+            if (e.Property == TextBlock.TextProperty)
+                statusLabel.IsVisible = !string.IsNullOrEmpty(statusLabel.Text);
+        };
         AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
+        // WPF UpdateFormatSurfaceVisibility: the Format / Choose Format From Cell / Clear buttons only
+        // exist while the Options expander is open (collapsed Ctrl+H is just the text fields).
+        var formatSurfaceVisible = false;
+        void RefreshFormatSurfaceVisibility()
+        {
+            foreach (var button in new[]
+                     {
+                         findFormatButton, replaceFindFormatButton, replaceWithFormatButton,
+                         findChooseFormatButton, replaceFindChooseFormatButton, replaceWithChooseFormatButton,
+                     })
+            {
+                button.IsVisible = formatSurfaceVisible;
+            }
+
+            findFormatClearButton.IsVisible = formatSurfaceVisible && findFormat is not null;
+            replaceFindFormatClearButton.IsVisible = formatSurfaceVisible && findFormat is not null;
+            replaceWithFormatClearButton.IsVisible = formatSurfaceVisible && replacementFormat is not null;
+        }
         void UpdateFormatButtons(
             StyleDiff? format,
             Button formatButton,
@@ -14404,6 +14440,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 clearButton,
                 Fr(FindReplaceDialogText.Format),
                 Fr(FindReplaceDialogText.FormatSetButton));
+            RefreshFormatSurfaceVisibility();
         }
 
         UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
@@ -14522,6 +14559,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         resultsPanel.Children.Add(resultsList);
         var resultsBorder = new Border
         {
+            IsVisible = false,
             BorderBrush = Brush(68, 114, 196),
             BorderThickness = new Thickness(1),
             Background = Brush(242, 242, 242),
@@ -14529,23 +14567,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
         // ── Buttons ─────────────────────────────────────────────────────────────
-        var findAllButton = new Button { Content = Fr(FindReplaceDialogText.FindAll), Width = FindReplaceDialogPlanner.FindAllButtonWidth, MinWidth = FindReplaceDialogPlanner.FindAllButtonWidth, Padding = new Thickness(4, 1) };
+        var findAllButton = new Button { Content = Fr(FindReplaceDialogText.FindAll), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
         ApplyDialogButtonChrome(findAllButton);
 
-        var findNextButton = new Button { Content = Fr(FindReplaceDialogText.FindNext), Width = FindReplaceDialogPlanner.FindNextButtonWidth, MinWidth = FindReplaceDialogPlanner.FindNextButtonWidth, Padding = new Thickness(4, 1) };
+        var findNextButton = new Button { Content = Fr(FindReplaceDialogText.FindNext), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
         ApplyDialogButtonChrome(findNextButton, isDefault: true);
 
-        var replaceButton = new Button { Content = Fr(FindReplaceDialogText.Replace), Width = FindReplaceDialogPlanner.ReplaceButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceButton = new Button { Content = Fr(FindReplaceDialogText.Replace), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
         ApplyDialogButtonChrome(replaceButton);
 
-        var replaceAllButton = new Button { Content = Fr(FindReplaceDialogText.ReplaceAll), Width = FindReplaceDialogPlanner.ReplaceAllButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceAllButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceAllButton = new Button { Content = Fr(FindReplaceDialogText.ReplaceAll), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
         ApplyDialogButtonChrome(replaceAllButton);
 
-        var closeButton = new Button { Content = Fr(FindReplaceDialogText.Close), Width = FindReplaceDialogPlanner.CloseButtonWidth, MinWidth = FindReplaceDialogPlanner.CloseButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
+        var closeButton = new Button { Content = Fr(FindReplaceDialogText.Close), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
         ApplyDialogButtonChrome(closeButton);
 
@@ -14574,10 +14612,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var textBox in new[] { findBox, replaceFindBox, replaceWithBox })
         {
             textBox.CornerRadius = new CornerRadius(0);
-            // The search boxes share the 26px WPF field row with their format buttons (34px pitch).
-            textBox.Height = 26;
-            textBox.MinHeight = 26;
-            textBox.MaxHeight = 26;
+            // Collapsed (default) the search boxes keep the stock dialog field height; the 26px
+            // WPF field row only applies while the Options expander shows the format buttons.
         }
 
         // The selected TabItem is this renderer's rendering of the cross-app FindReplaceOpenMode;
@@ -14603,12 +14639,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         tabs.SelectionChanged += (_, _) =>
         {
-            var tabHeight = OnReplaceTab()
-                ? FindReplaceDialogPlanner.ReplaceTabHeight
-                : FindReplaceDialogPlanner.FindTabHeight;
-            tabs.Height = tabHeight;
-            tabs.MinHeight = tabHeight;
-            tabs.MaxHeight = tabHeight;
             UpdateButtonVisibility();
             if (dialog.IsVisible)
                 Dispatcher.UIThread.Post(FocusSearchBox, DispatcherPriority.Input);
@@ -14624,6 +14654,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         void DoFindNext()
         {
             if (!TryCommitPendingFormulaEdit()) return;
+            // WPF HideFindAllResults: Find Next collapses the Find All list.
+            resultsList.ItemsSource = null;
+            resultsBorder.IsVisible = false;
             var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
             if (!r.Success)
             {
@@ -14649,6 +14682,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
             resultsList.ItemsSource = result.Matches;
+            resultsBorder.IsVisible = true;
             statusLabel.Text = result.MatchCount == 0
                 ? Fr(FindReplaceDialogText.NoMatchesFound)
                 : Fr(FindReplaceDialogText.CellsFoundStatus, result.MatchCount);
@@ -14719,9 +14753,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = FindReplaceDialogPlanner.ActionButtonSpacing,
+            Spacing = FindReplaceDialogPlanner.WpfCompactActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
+            // WPF compact order (Excel's): Replace All, Replace, Find All, Find Next, Close.
+            Children = { replaceAllButton, replaceButton, findAllButton, findNextButton, closeButton },
         };
 
         var optionsGlyph = new Border
@@ -14799,9 +14834,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Grid.SetRow(optionsContent, 1);
         optionsExpander.Children.Add(optionsHeader);
         optionsExpander.Children.Add(optionsContent);
+        var collapsedFieldHeights = new Dictionary<TextBox, (double Height, double MinHeight, double MaxHeight)>();
         optionsHeader.Click += (_, _) =>
         {
             optionsContent.IsVisible = !optionsContent.IsVisible;
+            formatSurfaceVisible = optionsContent.IsVisible;
+            RefreshFormatSurfaceVisibility();
+            foreach (var box in new[] { findBox, replaceFindBox, replaceWithBox })
+            {
+                // WPF: the 26px field row (textbox stretched beside the 26px buttons) only while they show.
+                if (!collapsedFieldHeights.ContainsKey(box))
+                    collapsedFieldHeights[box] = (box.Height, box.MinHeight, box.MaxHeight);
+                var (height, minHeight, maxHeight) = collapsedFieldHeights[box];
+                box.Height = formatSurfaceVisible ? 26 : height;
+                box.MinHeight = formatSurfaceVisible ? 26 : minHeight;
+                box.MaxHeight = formatSurfaceVisible ? 26 : maxHeight;
+            }
             optionsHeaderText.Text = optionsContent.IsVisible
                 ? Fr(FindReplaceDialogText.OptionsExpanded)
                 : Fr(FindReplaceDialogText.Options);
@@ -14817,34 +14865,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
         };
 
-        // WPF: <Grid Margin="12">. The planner's Avalonia right/bottom margins were measured against a
-        // client area as large as the WPF *outer* window, so they carry the Windows frame on top of
-        // that 12px margin; the window is now sized to the client area, so the frame share comes off.
-        const double findReplaceFrameShareOfRightMargin =
-            FindReplaceDialogPlanner.AvaloniaRootRightMargin - FindReplaceDialogPlanner.RootMargin;
-        const double findReplaceFrameShareOfBottomMargin =
-            FindReplaceDialogPlanner.AvaloniaRootBottomMargin - FindReplaceDialogPlanner.RootMargin;
+        // WPF compact host (3d5eb06c4a): <Grid Margin="10"> inside a size-to-content window, so the
+        // right/bottom frame share no longer applies.
         var root = new Grid
         {
-            Margin = new Thickness(
-                FindReplaceDialogPlanner.RootMargin,
-                FindReplaceDialogPlanner.RootMargin,
-                FindReplaceDialogPlanner.AvaloniaRootRightMargin - findReplaceFrameShareOfRightMargin,
-                FindReplaceDialogPlanner.AvaloniaRootBottomMargin - findReplaceFrameShareOfBottomMargin),
+            Margin = new Thickness(10),
             RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
         };
         ConfigureDialogTabCycle(dialog, root);
 
-        tabs.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.TabContentMargin);
-        optionsExpander.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.AvaloniaOptionsBottomMargin);
+        tabs.Margin = new Thickness(0, 0, 0, 6);
+        optionsExpander.Margin = new Thickness(0, 0, 0, 6);
         resultsBorder.MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight;
-        resultsBorder.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.ResultsBottomMargin);
+        resultsBorder.Margin = new Thickness(0, 0, 0, 8);
         resultsHeader.Height = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsHeader.MinHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsHeader.MaxHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsPanel.Background = Brush(242, 242, 242);
-        statusLabel.MinHeight = FindReplaceDialogPlanner.StatusMinimumHeight;
-        statusLabel.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.StatusBottomMargin);
+        statusLabel.Margin = new Thickness(0, 0, 0, 4);
         buttonRow.Margin = new Thickness(0);
 
         Grid.SetRow(tabs, 0);
@@ -17559,6 +17597,51 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
         ApplyDialogTextBoxChrome(textRotationBox);
 
+        // WPF FormatCellsDialog.xaml (82c59df057): a -90..90 Slider under the rotation box and a
+        // "Text direction" ComboBox (CellReadingOrder names) below it, kept in sync both ways.
+        var textRotationSlider = new Slider
+        {
+            Minimum = -90,
+            Maximum = 90,
+            TickFrequency = 15,
+            IsSnapToTickEnabled = false,
+            Value = currentTextRotation == 255 ? 0 : Math.Clamp(currentTextRotation, -90, 90),
+            Height = 22,
+            MinHeight = 22,
+        };
+        AutomationProperties.SetName(textRotationSlider, UiText.Get("FormatCells_TextOrientation"));
+        AutomationProperties.SetAutomationId(textRotationSlider, "FormatCellsTextRotationSlider");
+        var syncingTextRotation = false;
+        textRotationSlider.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != RangeBase.ValueProperty || syncingTextRotation)
+                return;
+            syncingTextRotation = true;
+            textRotationBox.Text = ((int)Math.Round(textRotationSlider.Value)).ToString(CultureInfo.InvariantCulture);
+            syncingTextRotation = false;
+        };
+        textRotationBox.TextChanged += (_, _) =>
+        {
+            if (syncingTextRotation
+                || !int.TryParse(textRotationBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation)
+                || rotation is < -90 or > 90)
+                return;
+            syncingTextRotation = true;
+            textRotationSlider.Value = rotation;
+            syncingTextRotation = false;
+        };
+        var currentReadingOrder = currentFillStyle.ReadingOrder;
+        var readingOrderBox = new ComboBox
+        {
+            ItemsSource = Enum.GetNames(typeof(CellReadingOrder)),
+            SelectedItem = currentReadingOrder.ToString(),
+            MinWidth = 180,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+        };
+        AutomationProperties.SetName(readingOrderBox, UiText.Get("FormatCells_TextDirection"));
+        AutomationProperties.SetAutomationId(readingOrderBox, "FormatCellsReadingOrderBox");
+        ApplyFormatCellsComboBoxChrome(readingOrderBox);
+
         var boldBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
         var italicBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Italic"), "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
         var underlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Underline"), "FormatCellsUnderlineBox", currentUnderline);
@@ -18420,6 +18503,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 MergeCells: mergeCellsBox.IsChecked == true,
                 IndentLevelText: indentLevelBox.Text,
                 TextRotationText: textRotationBox.Text,
+                ReadingOrder: Enum.TryParse<CellReadingOrder>(readingOrderBox.SelectedItem as string, out var selectedReadingOrder)
+                    && Enum.IsDefined(selectedReadingOrder)
+                        ? selectedReadingOrder
+                        : currentReadingOrder,
                 UseNormalFont: normalFont,
                 Bold: boldBox.IsChecked == true,
                 Italic: italicBox.IsChecked == true,
@@ -18601,6 +18688,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 CreateFormatCellsField(
                     UiText.Get("FormatCells_TextRotation90To90Or255"),
                     textRotationBox,
+                    new Thickness(
+                        0,
+                        FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
+                textRotationSlider,
+                CreateFormatCellsField(
+                    UiText.Get("FormatCells_TextDirection"),
+                    readingOrderBox,
                     new Thickness(
                         0,
                         FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
@@ -25971,7 +26067,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.ActiveSheet,
                 _session.SelectedRange)
             .Range;
-        _session.SelectRange(range);
+        // WPF 4b00dec437: the expanded selection keeps the active cell when it is still inside it.
+        _session.SelectRanges(range, [range], _session.ActiveCell);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
@@ -25992,7 +26089,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.ActiveSheet,
                 _session.SelectedRange)
             .Range;
-        _session.SelectRange(range);
+        // WPF 4b00dec437: the expanded selection keeps the active cell when it is still inside it.
+        _session.SelectRanges(range, [range], _session.ActiveCell);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
@@ -30661,8 +30759,38 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // notation instead of exposing that implementation geometry.
     // Excel's Name Box shows the active cell for an unnamed selection, including a whole row
     // ("A5" after clicking row header 5, not "5:5").
-    private string FormatSelectionNameBoxText() =>
-        FormatCellReference(_session.ActiveCell);
+    // A selection that is exactly a defined name shows that name (sheet-scoped names on the active
+    // sheet win over workbook-global ones, then the alphabetically first), as WPF's
+    // FormatNameBoxSelectionText does.
+    private string FormatSelectionNameBoxText()
+    {
+        var range = _session.SelectedRange;
+        var workbook = _session.Workbook;
+        string? best = null;
+        foreach (var (key, namedRange) in workbook.ScopedNamedRanges)
+        {
+            if (key.Sheet.Equals(_session.ActiveSheet.Id) &&
+                namedRange.Equals(range) &&
+                (best is null || string.Compare(key.Name, best, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                best = key.Name;
+            }
+        }
+
+        if (best is not null)
+            return best;
+
+        foreach (var (name, namedRange) in workbook.NamedRanges)
+        {
+            if (namedRange.Equals(range) &&
+                (best is null || string.Compare(name, best, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                best = name;
+            }
+        }
+
+        return best ?? FormatCellReference(_session.ActiveCell);
+    }
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(
