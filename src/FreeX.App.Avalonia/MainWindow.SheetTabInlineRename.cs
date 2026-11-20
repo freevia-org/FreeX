@@ -163,7 +163,7 @@ public sealed partial class MainWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(editor, UiText.Get("SheetName_RenameSheet"));
+        AutomationProperties.SetName(editor, UiText.Get("MainWindow_AutomationName_RenameSheetTab"));
         AutomationProperties.SetAutomationId(editor, "SheetTabRenameEditor");
         editor.TextChanged += (_, _) => _inlineSheetTabRenameText = editor.Text ?? string.Empty;
         editor.AddHandler(
