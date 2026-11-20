@@ -117,8 +117,8 @@
                     <Label Content="{local:Loc Key=FormatCells_TextRotation90To90Or255}" Target="{Binding ElementName=DlgTextRotationBox}" Padding="0" Margin="0,8,0,2"/>
                     <TextBox x:Name="DlgTextRotationBox" Height="24" TextChanged="DlgTextRotationBox_TextChanged"/>
                     <Slider x:Name="DlgTextRotationSlider" Minimum="-90" Maximum="90" TickFrequency="15" IsSnapToTickEnabled="False"
-                            ValueChanged="DlgTextRotationSlider_ValueChanged" AutomationProperties.Name="Text orientation"/>
-                    <Label Content="Text direction" Target="{Binding ElementName=DlgReadingOrderBox}" Padding="0" Margin="0,8,0,2"/>
+                            ValueChanged="DlgTextRotationSlider_ValueChanged" AutomationProperties.Name="{local:Loc Key=FormatCells_TextOrientation}"/>
+                    <Label Content="{local:Loc Key=FormatCells_TextDirection}" Target="{Binding ElementName=DlgReadingOrderBox}" Padding="0" Margin="0,8,0,2"/>
                     <ComboBox x:Name="DlgReadingOrderBox" Height="24"/>
                 </StackPanel>
             </TabItem>

@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FluentAssertions;
@@ -22,34 +21,6 @@ public sealed class R60_HostPrintFindFreezeSplitTests
 {
     private const double ColumnWidth = 120.0;
     private const double RowHeight = 40.0;
-
-    /// <summary>
-    /// SourceTextTestSupport.GetPrivateField&lt;T&gt; requires a reference-typed T and an exact
-    /// runtime-type match, which doesn't fit FindReplaceDialog's private `int _currentIndex` (a
-    /// value type) or `IReadOnlyList&lt;FindResult&gt; _results` (whose runtime type is some
-    /// concrete list, not the interface). Read both directly instead.
-    /// </summary>
-    private static object? GetPrivateFieldValue(object instance, string name)
-    {
-        var type = instance.GetType();
-        FieldInfo? field = null;
-        while (type is not null && field is null)
-        {
-            field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-            type = type.BaseType;
-        }
-
-        field.Should().NotBeNull();
-        return field!.GetValue(instance);
-    }
-
-    private static int GetCurrentFindIndex(FindReplaceDialog dialog) =>
-        (int)GetPrivateFieldValue(dialog, "_currentIndex")!;
-
-    private static List<FindResult> GetFindResults(FindReplaceDialog dialog) =>
-        ((System.Collections.IEnumerable)GetPrivateFieldValue(dialog, "_results")!)
-            .Cast<FindResult>()
-            .ToList();
 
     // ── R60-services-print-preview-6-1 ──────────────────────────────────────────────────────
 
@@ -171,11 +142,12 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var activeCell = new CellAddress(sheet.Id, 50, 26); // Z50 -- just before the 2nd match
                 window.SheetGrid.SelectedRange = new GridRange(activeCell, activeCell);
 
+                var navigated = new List<CellAddress>();
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
                     command => commandBus.Execute(workbook.Id, command),
-                    _ => { },
+                    navigated.Add,
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
                 {
@@ -188,13 +160,10 @@ public sealed class R60_HostPrintFindFreezeSplitTests
 
                     DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
 
-                    var currentIndex = GetCurrentFindIndex(dialog);
-                    var results = GetFindResults(dialog);
-
                     // Pre-fix, FindNext always jumped to index 0 (sheet-order first match, A1) on the
                     // very first click regardless of the active cell. Post-fix, it must land on the
                     // match strictly after the active cell (Z100), matching Excel and the Avalonia shell.
-                    results[currentIndex].Address.Should().Be(secondMatch,
+                    navigated.Last().Should().Be(secondMatch,
                         "Excel's Find Next always searches forward from the active cell, wrapping at the end");
                 }
                 finally
@@ -223,11 +192,12 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 var onlyMatch = new CellAddress(sheet.Id, 5, 1);
                 sheet.SetCell(onlyMatch, new TextValue("Apple"));
 
+                var navigated = new List<CellAddress>();
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
                     command => commandBus.Execute(workbook.Id, command),
-                    _ => { },
+                    navigated.Add,
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => null)
                 {
@@ -240,10 +210,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
 
                     DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
 
-                    var currentIndex = GetCurrentFindIndex(dialog);
-                    var results = GetFindResults(dialog);
-
-                    results[currentIndex].Address.Should().Be(onlyMatch);
+                    navigated.Last().Should().Be(onlyMatch);
                 }
                 finally
                 {
@@ -282,11 +249,12 @@ public sealed class R60_HostPrintFindFreezeSplitTests
 
                 window.SheetGrid.SelectedRange = new GridRange(activeCell, activeCell);
 
+                var navigated = new List<CellAddress>();
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
                     command => commandBus.Execute(workbook.Id, command),
-                    _ => { },
+                    navigated.Add,
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
                 {
@@ -309,16 +277,13 @@ public sealed class R60_HostPrintFindFreezeSplitTests
 
                     DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
 
-                    var currentIndex = GetCurrentFindIndex(dialog);
-                    var results = GetFindResults(dialog);
-
                     // Pre-fix, the stale index (0, from the earlier 3-result search) was reused
                     // unchanged against this differently-filtered 2-result set, computing
                     // (0+1)%2 = 1 -> B4 -- silently skipping B2 even though the active cell never
                     // moved. Post-fix, the option change must be treated like a new search and
                     // restart forward from the active cell (A1), landing back on B2 (the first exact
                     // match after A1).
-                    results[currentIndex].Address.Should().Be(b2,
+                    navigated.Last().Should().Be(b2,
                         "toggling Match Entire Cell Contents must restart the search from the active cell, not reuse an index computed against the previous (differently-filtered) result set");
                 }
                 finally
@@ -353,11 +318,12 @@ public sealed class R60_HostPrintFindFreezeSplitTests
 
                 window.SheetGrid.SelectedRange = new GridRange(activeCell, activeCell);
 
+                var navigated = new List<CellAddress>();
                 var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
                 var dialog = new FindReplaceDialog(
                     () => workbook,
                     command => commandBus.Execute(workbook.Id, command),
-                    _ => { },
+                    navigated.Add,
                     getCurrentSheetId: () => sheet.Id,
                     getActiveSelectionCell: () => window.SheetGrid.SelectedRange?.Start)
                 {
@@ -369,15 +335,13 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                     DialogSourceTestSupport.GetPrivateField<System.Windows.Controls.TextBox>(dialog, "FindBox").Text = "cat";
 
                     DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
-                    var firstIndex = GetCurrentFindIndex(dialog);
+                    var firstNavigation = navigated.Last();
 
                     DialogSourceTestSupport.InvokePrivateHandler(dialog, "FindNext_Click");
-                    var secondIndex = GetCurrentFindIndex(dialog);
+                    var secondNavigation = navigated.Last();
 
-                    var results = GetFindResults(dialog);
-
-                    results[firstIndex].Address.Should().Be(b2);
-                    results[secondIndex].Address.Should().Be(b3);
+                    firstNavigation.Should().Be(b2);
+                    secondNavigation.Should().Be(b3);
                 }
                 finally
                 {
