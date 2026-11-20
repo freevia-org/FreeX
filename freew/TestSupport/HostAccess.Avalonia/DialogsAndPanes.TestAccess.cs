@@ -112,6 +112,8 @@ internal sealed partial class SymbolPickerDialog
 {
     internal IReadOnlyList<Button> GlyphButtonsForTest => _glyphButtons;
 
+    internal void SelectSubsetForTest(string subset) => _subsetChoice.SelectedItem = subset;
+
     internal string? SelectGlyphForTest(string glyph)
     {
         SelectGlyph(glyph, close: false);
