@@ -40,6 +40,20 @@ public sealed class InsertOptionsTests
     }
 
     [Fact]
+    public void ChoosingTheFormatTheBandAlreadyHas_IsANoOpAndPushesNoUndoStep()
+    {
+        var (session, sheet) = CreateSession();
+        session.ExecuteCommandPreservingSelection(new InsertRowsCommand(sheet.Id, 2, 1)).Success.Should().BeTrue();
+        var depth = session.UndoStackDepth;
+
+        var result = session.FormatInsertedBand(new InsertedBand(sheet.Id, true, 2, 1), InsertedBandFormat.Clear);
+
+        result.Success.Should().BeTrue();
+        result.IsNoOp.Should().BeTrue("an unformatted band cleared again changes nothing");
+        session.UndoStackDepth.Should().Be(depth);
+    }
+
+    [Fact]
     public void OtherEdits_HideTheButton()
     {
         var (session, sheet) = CreateSession();

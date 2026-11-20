@@ -92,6 +92,25 @@ public sealed class InsertedBandFormatCommand : IWorkbookCommand
                 CopyNeighbourFormats(sheet, neighbour, end, touched);
         }
 
+        // Asking for the format the band already has changes nothing: report a no-op so the bus does
+        // not push an undo step (and discard the user's pending redo) for it.
+        var changed = false;
+        foreach (var (row, col, cellStyle, styleOnly) in _snapshot)
+        {
+            var nowCellStyle = sheet.GetCell(row, col)?.StyleId;
+            if (nowCellStyle != cellStyle || sheet.GetStyleOnly(row, col) != styleOnly)
+            {
+                changed = true;
+                break;
+            }
+        }
+
+        if (!changed)
+        {
+            _snapshot = null;
+            return new CommandOutcome(true, IsNoOp: true);
+        }
+
         sheet.NotifyContentRecalculated();
         return new CommandOutcome(true);
     }
