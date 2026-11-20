@@ -92,7 +92,7 @@ internal sealed class FormatCellsFillEditor
             FormatCellsFillPalettePlanner.PatternEntries,
             "FormatCellsFillPatternPalette",
             columns: 8,
-            cellWidth: 24,
+            cellWidth: 20,
             cellHeight: 19);
 
         ClearFillCheckBox = new CheckBox
