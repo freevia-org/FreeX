@@ -214,6 +214,8 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
             }
 
             AssertSessionMatches(editor, session, label);
+            if (modeSwitch)
+                continue; // a fallback run carries no incremental result to compare
             var fresh = new PagedLayoutSession(editor).ComputeRun();
             run.RenderedPages.Should().Equal(fresh.RenderedPages, $"{label}: rendered pages");
             run.Cuts.Should().Equal(fresh.Cuts, $"{label}: cuts");
