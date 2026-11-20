@@ -5243,6 +5243,8 @@ public sealed partial class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulRangeEditResult(result, completedSelection);
+        if (!result.IsNoOp)
+            NoteAutofill(sourceRange, fillRange, ctrlHeld);
         return result;
     }
 

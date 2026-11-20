@@ -11,5 +11,7 @@ public sealed partial class MainWindow
 
     internal Button? InsertOptionsButtonForTest => _insertOptionsButton;
 
+    internal Button? AutofillOptionsButtonForTest => _autofillOptionsButton;
+
     internal void RefreshShellForTest() => RefreshShell(UiText.Get("MainLoc_Ready"));
 }
