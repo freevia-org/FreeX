@@ -342,7 +342,6 @@ public sealed partial class MainWindow : Window,
         var chromeOptions = BuildChromeOptions();
         ShellChrome.ConfigureWindow(this, chromeOptions);
 
-        _animationPaneSession = new(() => Editor);
         _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
         _proofingPaneNativeView = new(
             new PresentationProofingPaneNativeViewBindings<UIElement>(
@@ -411,38 +410,33 @@ public sealed partial class MainWindow : Window,
             _reviewWorkflowSession,
             _workareaSession.Panes,
             this);
-        _smartArtTextPaneSession = new(
-            () => Editor,
-            new PresentationSmartArtTextPaneSessionCallbacks(
-                MarkDirty: () => _fileSession.MarkDirty(),
-                RefreshCanvas: RefreshCanvas,
-                UpdateHost: UpdateTitle,
-                RenderPane: RenderSmartArtTextPane));
-        _zoomAuthoringSession = new(
-            () => Editor,
-            new PresentationZoomAuthoringSessionCallbacks(
-                MarkDirty: () => _fileSession.MarkDirty(),
-                RefreshCanvas: RefreshCanvas,
-                UpdateHost: UpdateTitle,
-                RenderSlidePreview: (presentation, slideIndex, widthPx, heightPx) =>
-                    WpfPresentationSlideImageRenderer.RenderSlideToPng(
-                        presentation,
-                        slideIndex,
-                        widthPx,
-                        heightPx)));
-        _domainContextMenuSession = new(
-            () => Editor,
-            new PresentationDomainContextMenuSessionCallbacks(
+        var hostSessions = PresentationHostSessionFactory.Create(new PresentationHostSessionPorts(
+            GetEditor: () => Editor,
+            MarkDirty: () => _fileSession.MarkDirty(),
+            RefreshCanvas: RefreshCanvas,
+            UpdateHost: UpdateTitle,
+            RenderSlidePreview: (presentation, slideIndex, widthPx, heightPx) =>
+                WpfPresentationSlideImageRenderer.RenderSlideToPng(
+                    presentation,
+                    slideIndex,
+                    widthPx,
+                    heightPx),
+            DomainContextMenu: new PresentationDomainContextMenuSessionCallbacks(
                 OpenChartPointOptions: (seriesIndex, pointIndex) =>
                     OpenChartPointOptionsDialog(seriesIndex, pointIndex),
                 OpenChartSeriesOptions: seriesIndex => OpenChartSeriesOptionsDialog(seriesIndex),
                 OpenChartAxisOptions: axisKind => OpenChartAxisOptionsDialog(axisKind),
                 OpenChartTextOptions: textTarget => OpenChartTextOptionsDialog(textTarget),
                 OpenChartAreaOptions: areaTarget => OpenChartAreaOptionsDialog(areaTarget),
-                OpenChartOptions: OpenChartDisplayOptionsDialog));
-        _notesPaneSession = new(() => Editor);
-        _hyperlinkWorkflowSession = new(() => Editor);
-        _customShowSession = new(() => Editor);
+                OpenChartOptions: OpenChartDisplayOptionsDialog),
+            RenderSmartArtTextPane: RenderSmartArtTextPane));
+        _smartArtTextPaneSession = hostSessions.SmartArtTextPane;
+        _zoomAuthoringSession = hostSessions.ZoomAuthoring;
+        _domainContextMenuSession = hostSessions.DomainContextMenu;
+        _notesPaneSession = hostSessions.NotesPane;
+        _hyperlinkWorkflowSession = hostSessions.HyperlinkWorkflow;
+        _customShowSession = hostSessions.CustomShow;
+        _animationPaneSession = hostSessions.AnimationPane;
 
         // File commands.
         _fileSession = WpfPresentationFileCommandSessionFactory.Create(
@@ -708,10 +702,9 @@ public sealed partial class MainWindow : Window,
     {
         _viewShowState = state;
         if (_notesBox is not null)
-            _notesBox.Visibility = _viewModeState.Mode is PresentationViewMode.SlideSorter or PresentationViewMode.SlideMaster ||
-                                   (_viewModeState.Mode != PresentationViewMode.NotesPage && !state.ShowNotesPane)
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+            _notesBox.Visibility = PresentationViewModeLayoutPlanner.IsNotesPaneVisible(_viewModeState, state.ShowNotesPane)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         if (SlideCanvas is not null)
             SlideCanvas.ApplyViewShowState(state);
     }
@@ -726,25 +719,20 @@ public sealed partial class MainWindow : Window,
     internal void ApplyPresentationViewModeState(PresentationViewModeState state)
     {
         _viewModeState = state;
-        var isOutline = state.Mode == PresentationViewMode.Outline;
-        var isSlideSorter = state.Mode == PresentationViewMode.SlideSorter;
-        var isNotesPage = state.Mode == PresentationViewMode.NotesPage;
-        var isSlideMaster = state.Mode == PresentationViewMode.SlideMaster;
+        var layout = PresentationViewModeLayoutPlanner.Plan(state, _viewShowState.ShowNotesPane);
+        var isOutline = layout.IsOutline;
+        var isSlideSorter = layout.IsSlideSorter;
+        var isNotesPage = layout.IsNotesPage;
+        var isSlideMaster = layout.IsSlideMaster;
         if (SlidePaneHost is null || _canvasHost is null || _bodySplitter is null)
             return;
 
         SetNotesPageSurface(isNotesPage);
-        SlidePaneHost.Width = isSlideSorter || isNotesPage ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
-        _bodySplitter.ColumnDefinitions[0].Width = isSlideSorter
-            ? new GridLength(1, GridUnitType.Star)
-            : isNotesPage ? new GridLength(0) : GridLength.Auto;
-        _bodySplitter.ColumnDefinitions[1].Width = isSlideSorter
-            ? new GridLength(0)
-            : new GridLength(1, GridUnitType.Star);
-        _canvasHost.Visibility = isSlideSorter ? Visibility.Collapsed : Visibility.Visible;
-        _notesBox.Visibility = !isSlideSorter && !isSlideMaster && (isNotesPage || _viewShowState.ShowNotesPane)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        SlidePaneHost.Width = layout.SlidePaneFillsWidth ? double.NaN : FreePShellVisualMetrics.SlidePaneWidth;
+        _bodySplitter.ColumnDefinitions[0].Width = ToGridLength(layout.PaneColumn);
+        _bodySplitter.ColumnDefinitions[1].Width = ToGridLength(layout.CanvasColumn);
+        _canvasHost.Visibility = layout.CanvasHostVisible ? Visibility.Visible : Visibility.Collapsed;
+        _notesBox.Visibility = layout.NotesPaneVisible ? Visibility.Visible : Visibility.Collapsed;
         _canvasHost.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.PlaceholderSurface;
         _notesBox.MaxHeight = isNotesPage ? double.PositiveInfinity : 120;
         _notesBox.Background = isNotesPage ? FreePBrushes.White : FreePBrushes.NotesHintSurface;
@@ -761,6 +749,13 @@ public sealed partial class MainWindow : Window,
         }
         SyncRibbonCommandStates();
     }
+
+    private static GridLength ToGridLength(PresentationViewModeColumnSize size) => size switch
+    {
+        PresentationViewModeColumnSize.Fill => new GridLength(1, GridUnitType.Star),
+        PresentationViewModeColumnSize.Hidden => new GridLength(0),
+        _ => GridLength.Auto,
+    };
 
     private MasterEditingSession EnsureMasterEditingSession()
     {
@@ -2625,18 +2620,6 @@ public sealed partial class MainWindow : Window,
         return LastPrintBackstagePlan;
     }
 
-    internal void RefreshReviewWorkflowPlans()
-    {
-        _reviewWorkflowSession.RefreshReviewWorkflowPlans();
-        RefreshPaneAccessibilityMetadata();
-    }
-
-    internal PresentationCommentPanePlan ShowReviewCommentsPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.ReviewComments);
-        return _reviewWorkflowSession.ShowReviewCommentsPane();
-    }
-
     internal void HideReviewCommentsPane()
     {
         _workareaSession.Panes.Hide(PresentationWorkareaPane.ReviewComments);
@@ -2645,36 +2628,6 @@ public sealed partial class MainWindow : Window,
         RefreshPaneAccessibilityMetadata();
     }
 
-
-    private void SelectReviewComment(int commentIndex) => _reviewWorkflowSession.SelectReviewComment(commentIndex);
-    internal PresentationCommentNavigationPlan NavigateReviewComment(PresentationReviewWorkflowIntentKind intent) => _reviewWorkflowSession.NavigateReviewComment(intent);
-    internal PresentationCommentMutationPlan DeleteSelectedComment() => _reviewWorkflowSession.DeleteSelectedComment();
-    internal PresentationCommentMutationPlan AddComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null, long xemu = 0, long yemu = 0) => _reviewWorkflowSession.AddComment(text, timestamp, author, initials, xemu, yemu);
-    internal PresentationCommentMutationPlan EditSelectedComment(string? text, string? author = null, string? initials = null) => _reviewWorkflowSession.EditSelectedComment(text, author, initials);
-    internal PresentationCommentMutationPlan ResolveSelectedComment(DateTime? resolvedAt = null, string? resolvedBy = null) => _reviewWorkflowSession.ResolveSelectedComment(resolvedAt, resolvedBy);
-    internal PresentationCommentMutationPlan ReopenSelectedComment() => _reviewWorkflowSession.ReopenSelectedComment();
-    internal PresentationCommentMutationPlan ReplyToSelectedComment(string? text, DateTime? timestamp = null, string? author = null, string? initials = null) => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
-
-    /// <summary>
-    /// Resolves the real author identity to stamp on a new comment, reply, or resolution.
-    /// Delegates to the shared session so WPF and Avalonia resolve identity through the one
-    /// place instead of each host carrying its own copy of the resolution chain (document
-    /// author, then OS account name, mirroring FreeW's ReviewAuthorIdentityPlanner.ResolveAuthor
-    /// minus the revision-author override FreeW has and FreeP does not).
-    /// </summary>
-    internal string? ResolveCommentAuthor() => _reviewWorkflowSession.ResolveCommentAuthor();
-
-    private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
-
-    private string? GetCommentText(int commentIndex) => _reviewWorkflowSession.GetCommentText(commentIndex);
-
-    internal PresentationAccessibilityCheckerPanePlan ShowAccessibilityCheckerPane() { var plan = _reviewWorkflowSession.ShowAccessibilityCheckerPane(); RefreshPaneAccessibilityMetadata(); return plan; }
-
-    internal PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
-        => _reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex);
-
-    internal PresentationAccessibilityCheckerPanePlan ApplyAccessibilityCheckerRowAction(int rowIndex)
-        => _reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex);
 
     private void RenderAccessibilityCheckerPane(PresentationAccessibilityCheckerPanePlan plan)
     {
@@ -2844,9 +2797,6 @@ public sealed partial class MainWindow : Window,
         };
     }
 
-    private void RefreshAltTextRequestPlan()
-        => _altTextPaneHostCoordinator.RefreshSelection();
-
     internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane() =>
         SmartArtTextPaneHostCoordinator.Show();
 
@@ -2995,10 +2945,6 @@ public sealed partial class MainWindow : Window,
         return true;
     }
 
-    internal void ShowAltTextPane() => _altTextPaneHostCoordinator.Show();
-
-    internal void HideAltTextPane() => _altTextPaneHostCoordinator.Hide();
-
     private PresentationMediaCaptionHostSnapshot CaptureMediaCaptionHostSnapshot() =>
         _wpfMediaPaneHostView.CaptureCaption();
     private PresentationMediaVolumeHostSnapshot CaptureMediaVolumeHostSnapshot() =>
@@ -3139,9 +3085,6 @@ public sealed partial class MainWindow : Window,
         button.ToolTip = action.DisabledReason;
     }
 
-    internal PresentationReadingOrderPlan ShowReadingOrderPane()
-        => _reviewWorkflowSession.ShowReadingOrderPane();
-
     internal PresentationSelectionPanePlan ShowSelectionPane() => SelectionPaneHostCoordinator.Show();
 
     private PresentationWorkareaPaneHostCoordinator<PresentationSelectionPanePlan>?
@@ -3157,30 +3100,6 @@ public sealed partial class MainWindow : Window,
                 ? Visibility.Visible
                 : Visibility.Collapsed,
             RefreshPaneAccessibilityMetadata);
-
-    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveEarlier()
-        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderEarlier);
-
-    internal PresentationReadingOrderMutationPlan ApplyReadingOrderMoveLater()
-        => ApplyReadingOrderMove(PresentationReviewWorkflowIntentKind.MoveReadingOrderLater);
-
-    internal PresentationReadingOrderSelectionPlan ApplyReadingOrderSelectItem(uint shapeId)
-        => _reviewWorkflowSession.SelectReadingOrderItem(shapeId);
-
-    private PresentationReadingOrderMutationPlan ApplyReadingOrderMove(
-        PresentationReviewWorkflowIntentKind intent)
-        => _reviewWorkflowSession.ApplyReadingOrderMove(intent);
-
-    internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
-        => _altTextPaneHostCoordinator.SetInput(new(title, description, isDecorative));
-
-    internal PresentationAltTextMutationPlan ApplyAltTextPane() =>
-        _altTextPaneHostCoordinator.Apply();
-
-    private void RefreshVisibleAltTextPaneFromFields() => _altTextPaneHostCoordinator.Refresh();
-
-    private void RenderAltTextPaneIfVisible(PresentationAltTextPanePlan plan) =>
-        _altTextPaneHostCoordinator.RenderIfVisible(plan);
 
     bool IPresentationAltTextPaneHostView.IsPaneVisible =>
         _altTextPaneHost?.Visibility == Visibility.Visible;
@@ -3357,16 +3276,6 @@ public sealed partial class MainWindow : Window,
         if (textBox.Text != value)
             textBox.Text = value;
     }
-
-    internal PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(string? description, string? title = null, bool isDecorative = false) => _reviewWorkflowSession.ApplySelectedShapeAlternativeText(description, title, isDecorative);
-    internal PresentationProofingCorrectionMutationPlan ApplyProofingCorrection(PresentationProofingScopeDescriptor scope, int start, int length, string? replacement) => _reviewWorkflowSession.ApplyProofingCorrection(scope, start, length, replacement);
-    private void RefreshProofingRequestPlan() => _reviewWorkflowSession.RefreshProofingRequestPlan();
-    internal PresentationProofingPanePlan ShowProofingPane() => _reviewPaneHostCoordinator.ShowProofingPane();
-    internal PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex) => _reviewWorkflowSession.SelectProofingIssueRow(rowIndex);
-    internal PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection() => _reviewWorkflowSession.ApplySelectedProofingCorrection();
-    internal PresentationProofingPanePlan IgnoreSelectedProofingIssue() => _reviewWorkflowSession.IgnoreSelectedProofingIssue();
-    internal PresentationProofingPanePlan IgnoreAllSelectedProofingIssues() => _reviewWorkflowSession.IgnoreAllSelectedProofingIssues();
-    internal PresentationProofingPanePlan AddSelectedProofingWordToDictionary() => _reviewWorkflowSession.AddSelectedProofingWordToDictionary();
 
     private void RenderProofingPane(PresentationProofingPanePlan plan)
         => _proofingPaneNativeView.Render(plan);

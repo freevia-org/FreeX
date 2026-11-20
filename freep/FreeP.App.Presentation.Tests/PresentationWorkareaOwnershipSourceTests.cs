@@ -111,7 +111,7 @@ public sealed class PresentationWorkareaOwnershipSourceTests
         }
 
         wpfMain.Should().Contain("private readonly AnimationPaneSession _animationPaneSession;")
-            .And.Contain("_animationPaneSession = new(() => Editor);")
+            .And.Contain("_animationPaneSession = hostSessions.AnimationPane;")
             .And.Contain("new AnimationPane(")
             .And.Contain("_animationPaneSession,");
         wpfPane.Should().Contain("AnimationPaneSession session")

@@ -80,7 +80,7 @@ public sealed class TableCellPointerPlannerTests
         source.Should().Contain("TableCellPointerPlanner.Plan(");
         source.Should().Contain("TableCellPointerPlanner.PlanHighlight(");
         source.Should().NotContain("TableCellHitTester.HitTest(");
-        source.Should().NotContain("0x21, 0x96, 0xF3");
+        source.Should().NotContain("TableCellEditPlanner.PlanCellEditorPlacement(\n            shape,\n            cellRect.Value,\n            _canvas.CurrentTransform");
     }
 
     private static (Presentation Presentation, Slide Slide) TablePresentation()

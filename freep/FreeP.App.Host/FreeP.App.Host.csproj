@@ -73,6 +73,10 @@
              Link="MainWindow.RibbonActionProfile.cs" />
     <Compile Include="../RendererShared/MainWindow.ChartDialogEndpoints.cs"
              Link="MainWindow.ChartDialogEndpoints.cs" />
+    <Compile Include="../RendererShared/MainWindow.ReviewFacade.cs"
+             Link="MainWindow.ReviewFacade.cs" />
+    <Compile Include="../RendererShared/SlideShowWindow.RendererContracts.cs"
+             Link="SlideShowWindow.RendererContracts.cs" />
     <Resource Include="$(BrandWindowsIconPath)" Link="Resources/$(BrandWindowsIconFileName)" />
   </ItemGroup>
 
