@@ -385,7 +385,7 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
     }
 
     [Fact]
-    public async Task BackstageSaveAsAndAccountKeytipsInvokeIndependentRenderedCommands()
+    public async Task BackstageSaveAsKeytipFocusesRailActionAndAccountKeytipInvokesCommand()
     {
         await Run(async (window, _) =>
         {
@@ -397,10 +397,18 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
             var saveAsButton = window.BackstageCommandButtonForTest(FreeXBackstageCommandId.SaveAs);
             saveAsButton.Should().NotBeNull();
             saveAsButton!.IsVisible.Should().BeTrue();
+            window.UpdateLayout();
 
             await PressHandled(window, Key.A);
 
-            activated.Should().ContainSingle().Which.Should().Be(FreeXBackstageCommandId.SaveAs);
+            // WPF e3949d9fff: the Save As key tip focuses the rail action without launching the
+            // picker and keeps the Backstage open; Enter then runs it.
+            activated.Should().BeEmpty();
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+            saveAsButton.IsFocused.Should().BeTrue();
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+
+            window.HideBackstageOverlayForTest();
             window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
 
             await PressHandled(window, Key.F, KeyModifiers.Alt);
@@ -410,24 +418,26 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
 
             await PressHandled(window, Key.D);
 
-            activated.Should().Equal(
-                FreeXBackstageCommandId.SaveAs,
-                FreeXBackstageCommandId.Account);
+            activated.Should().ContainSingle().Which.Should().Be(FreeXBackstageCommandId.Account);
             window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
         });
     }
 
     [Fact]
-    public async Task BackstageKeytipEscapeAndUnmatchedContinuationCloseLiveOverlay()
+    public async Task BackstageKeytipEscapeKeepsOverlayAndUnmatchedContinuationClosesIt()
     {
         await Run(async (window, _) =>
         {
             window.Show();
 
+            // WPF e58f21844e: Escape on the active key tips clears them but keeps the Backstage
+            // open; the next Escape (no key tips left) closes it.
             await PressHandled(window, Key.F, KeyModifiers.Alt);
             await PressHandled(window, Key.Escape);
-            window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
             window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            await PressHandled(window, Key.Escape);
+            window.IsBackstageOverlayVisibleForTest.Should().BeFalse();
 
             await PressHandled(window, Key.F, KeyModifiers.Alt);
             await PressHandled(window, Key.X);

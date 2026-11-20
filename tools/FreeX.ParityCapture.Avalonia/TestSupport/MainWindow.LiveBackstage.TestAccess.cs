@@ -19,6 +19,8 @@ public sealed partial class MainWindow
 {
     internal bool IsBackstageOverlayVisibleForTest => _backstageOverlay.IsOpen;
 
+    internal void HideBackstageOverlayForTest() => HideBackstageOverlay();
+
     internal FreeXBackstagePaneId ActiveBackstagePaneForTest =>
         LiveBackstageFramePlan.Entries.FirstOrDefault(entry =>
             string.Equals(entry.StableId, _backstageOverlay.CurrentEntryId, StringComparison.Ordinal))

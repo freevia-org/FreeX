@@ -291,6 +291,12 @@ public sealed partial class MainWindow
     private bool TryActivateBackstageCommand(FreeXBackstageCommandId command) =>
         _backstageOverlay.TryActivateEntry(FreeXBackstageFramePlanner.GetCommandStableId(command));
 
+    internal bool TryFocusBackstageCommandEntry(FreeXBackstageCommandId command)
+    {
+        return _backstageOverlay.IsVisible &&
+            _backstageOverlay.TryFocusEntry(FreeXBackstageFramePlanner.GetCommandStableId(command));
+    }
+
     private Control BuildLiveBackstageHomePane()
     {
         // A rebuild triggered while the user is typing in the search box (a deferred existence probe

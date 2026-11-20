@@ -776,7 +776,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_Open\"");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenBackstage)");
-        source.Should().Contain("_openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));");
+        source.Should().Contain("_openMenuItem.Click += (_, _) => RunGuarded(() =>");
+        source.Should().Contain("ShowBackstageOpenPane();");
         source.Should().Contain("ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_OpenRecent\"");
         source.Should().Contain("_openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);");
@@ -5094,8 +5095,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("internal bool SelectSheetForContextCommand(SheetId sheetId)");
         pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
         pointerSource.Should().Contain("if (args.ClickCount >= 2)");
-        pointerSource.Should().Contain("if (SelectSheetForContextCommand(sheetId))");
-        pointerSource.Should().Contain("RunGuarded(RenameActiveSheetAsync);");
+        pointerSource.Should().Contain("HandleSheetTabRightPress(sheetId)");
+        pointerSource.Should().Contain("BeginInlineSheetTabRename(sheetId);");
         source.Should().Contain("private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)");
         source.Should().Contain("NavigateSheetTabFromKeyboard(sheetId, args);");
         source.Should().Contain("private void OpenSheetTabContextMenuFromKeyboard(SheetId sheetId, Button button, KeyEventArgs args)");

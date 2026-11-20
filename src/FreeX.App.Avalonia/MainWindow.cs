@@ -2349,7 +2349,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));
 
         ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);
-        _openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));
+        // WPF 3b3ad143af: Open (Cmd+O on macOS arrives here as the native menu key equivalent)
+        // lands on the Backstage Open pane instead of launching the picker.
+        _openMenuItem.Click += (_, _) => RunGuarded(() =>
+        {
+            ShowBackstageOpenPane();
+            return Task.CompletedTask;
+        });
 
         ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
@@ -4829,6 +4835,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
             content.Children.Add(label);
+            if (CreateInlineSheetTabRenameEditor(tab) is { } renameEditor)
+            {
+                // WPF f7abb1094f: the inline editor replaces the tab label while renaming.
+                label.IsVisible = false;
+                content.Children.Add(renameEditor);
+            }
 
             // WPF RenderInactiveSheetTab: a short #B8BEC4 rule (14px of the strip height, 0.68
             // opacity) closes every inactive tab except the one just left of the active tab, whose
@@ -7665,9 +7677,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     // While a plain mouse-drag selection was in progress, the Name Box showed a live dimension
     // readout instead of the range address (see SelectRangeFromAnchor); now that the drag has
-    // ended (release or an interrupted capture loss), revert it to the plain range address,
-    // matching Excel and the WPF host's CompleteDragSelectionStatusRefresh
-    // (R69-render-active-cell-selection-6-2).
+    // ended (release or an interrupted capture loss), restore Excel's active-cell Name Box text,
+    // matching the WPF host's CompleteDragSelectionStatusRefresh
+    // (R69-render-active-cell-selection-6-2, 56ac52f5c3).
     private void RevertNameBoxAfterCellSelectionDragEnd()
     {
         if (!_cellSelectionDragShowedDimensionText)
@@ -7675,7 +7687,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _cellSelectionDragShowedDimensionText = false;
         if (!_cellAddressBoxHasPendingEdit)
-            _cellAddressText.Text = FormatRangeReference(_session.SelectedRange);
+            _cellAddressText.Text = FormatSelectionNameBoxText();
     }
 
     private void DetachCellSelectionDragHandlers()
@@ -13040,6 +13052,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)
     {
+        // The in-place rename editor owns the keyboard while it is open.
+        if (IsInlineSheetTabRenameActiveFor(sheetId))
+            return;
+
         OpenSheetTabContextMenuFromKeyboard(sheetId, button, args);
         if (args.Handled)
             return;
@@ -25768,7 +25784,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.ActiveSheet,
                 _session.SelectedRange)
             .Range;
-        _session.SelectRange(range);
+        // WPF 4b00dec437: the expanded selection keeps the active cell when it is still inside it.
+        _session.SelectRanges(range, [range], _session.ActiveCell);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
@@ -25789,7 +25806,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.ActiveSheet,
                 _session.SelectedRange)
             .Range;
-        _session.SelectRange(range);
+        // WPF 4b00dec437: the expanded selection keeps the active cell when it is still inside it.
+        _session.SelectRanges(range, [range], _session.ActiveCell);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
@@ -30458,8 +30476,38 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // notation instead of exposing that implementation geometry.
     // Excel's Name Box shows the active cell for an unnamed selection, including a whole row
     // ("A5" after clicking row header 5, not "5:5").
-    private string FormatSelectionNameBoxText() =>
-        FormatCellReference(_session.ActiveCell);
+    // A selection that is exactly a defined name shows that name (sheet-scoped names on the active
+    // sheet win over workbook-global ones, then the alphabetically first), as WPF's
+    // FormatNameBoxSelectionText does.
+    private string FormatSelectionNameBoxText()
+    {
+        var range = _session.SelectedRange;
+        var workbook = _session.Workbook;
+        string? best = null;
+        foreach (var (key, namedRange) in workbook.ScopedNamedRanges)
+        {
+            if (key.Sheet.Equals(_session.ActiveSheet.Id) &&
+                namedRange.Equals(range) &&
+                (best is null || string.Compare(key.Name, best, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                best = key.Name;
+            }
+        }
+
+        if (best is not null)
+            return best;
+
+        foreach (var (name, namedRange) in workbook.NamedRanges)
+        {
+            if (namedRange.Equals(range) &&
+                (best is null || string.Compare(name, best, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                best = name;
+            }
+        }
+
+        return best ?? FormatCellReference(_session.ActiveCell);
+    }
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(
