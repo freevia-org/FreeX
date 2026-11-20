@@ -1599,6 +1599,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
+                    // WPF RefreshPivotChartInsertCommandState: enabled only while the selection is inside a PivotTable.
+                    [FreeXRibbonCommandIds.PivotChartInsert] = () => new RibbonCommandState(
+                        IsEnabled: PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null),
+                    ["Switch Windows"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.VisibleCount > 1),
+                    // WPF ArrangeAllContextMenu_Opened: the stored arrangement is shown checked.
+                    [FreeXRibbonCommandIds.ViewArrangeTiled] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Tiled),
+                    [FreeXRibbonCommandIds.ViewArrangeHorizontal] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Horizontal),
+                    [FreeXRibbonCommandIds.ViewArrangeVertical] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Vertical),
+                    [FreeXRibbonCommandIds.ViewArrangeCascade] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Cascade),
                     ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
                     ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
                     ["Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("Gridlines"),
@@ -1700,7 +1709,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ribbonCallbacks,
             _ribbonContextSource,
             _ribbonStateStore);
-        _refreshRibbonToggleStates = refreshRibbonToggleStates;
+        _refreshRibbonToggleStates = () =>
+        {
+            refreshRibbonToggleStates();
+            ApplyDynamicRibbonChrome();
+        };
         _ribbonCommandRegistry = ribbonCommandRegistry;
         _ribbonControl = ribbon;
         ConfigureWorksheetRibbonFlyouts(ribbon);

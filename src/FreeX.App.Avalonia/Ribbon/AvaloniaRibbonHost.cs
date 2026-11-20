@@ -352,9 +352,13 @@ internal static class AvaloniaRibbonComposition
             {
                 Controls = group.Controls.Select(control =>
                 {
-                    return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
-                        ? CreateShapeGallerySplitButton(control)
-                        : ApplyHostTooltip(control);
+                    if (string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal))
+                        return CreateShapeGallerySplitButton(control);
+                    // WPF replaces the declarative Home Font placeholder items with every installed font
+                    // family (PopulateAndWireRenderedHomeCombos); mirror that with the platform fonts.
+                    if (control is RibbonComboBox { CommandId.Value: "Font" } fontCombo)
+                        return fontCombo with { Items = MainWindow.BuildFormatCellsFontNameChoices(fontCombo.Items, null) };
+                    return ApplyHostTooltip(control);
                 }).ToArray(),
             }).ToArray(),
         }).ToArray();
