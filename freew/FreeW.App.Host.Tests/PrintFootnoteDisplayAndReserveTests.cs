@@ -47,12 +47,12 @@ public sealed class PrintFootnoteDisplayAndReserveTests
 
         var text = ExtractDrawnText((Visual)page.Visual);
 
-        text.Should().Contain("2. third note body",
+        text.Should().Contain("2third note body",
             "the surviving footnote (raw id 3) is the SECOND note in display order and print/preview " +
             "must show the same computed sequence the on-screen body mark and page-box note region show");
-        text.Should().NotContain("3. third note body",
+        text.Should().NotContain("3third note body",
             "the raw internal dictionary key must never leak into the printed/exported note label");
-        text.Should().Contain("1. first note body");
+        text.Should().Contain("1first note body");
     }
 
     [StaFact]
@@ -79,8 +79,8 @@ public sealed class PrintFootnoteDisplayAndReserveTests
 
         var text = ExtractDrawnText((Visual)page.Visual);
 
-        text.Should().Contain("1. alpha note body");
-        text.Should().Contain("2. beta note body");
+        text.Should().Contain("1alpha note body");
+        text.Should().Contain("2beta note body");
     }
 
     // ── (b) per-page footnote reserve, not whole-document sum ───────────────────────────────────

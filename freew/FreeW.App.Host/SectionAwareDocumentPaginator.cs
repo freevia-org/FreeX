@@ -342,7 +342,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
 
             if (y < maxY)
             {
-                var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
+                var pen = new Pen(Brushes.Black, 0.5);
                 var ruleY = wordStack ? y + plan.SeparatorHeightDip / 2 : y;
                 dc.DrawLine(
                     pen,
@@ -356,9 +356,9 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
                 if (y >= maxY)
                     break;
 
-                var label = string.IsNullOrEmpty(row.Label) ? string.Empty : $"{row.Label}. ";
-                var text = PrintPlainText.Build(
-                    label + row.Text,
+                var text = PrintPlainText.BuildNote(
+                    row.Label,
+                    row.Text,
                     noteFont,
                     PageLayout.PointsToDip(plan.TextFontSizePt),
                     Brushes.Black,
@@ -395,7 +395,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         var y = bodyBottom - band.AvailableHeightDip;
         using (var dc = rules.RenderOpen())
         {
-            var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
+            var pen = new Pen(Brushes.Black, 0.5);
             var ruleWidth = band.SeparatorKind == DocumentFootnoteSeparatorKind.Continuation
                 ? contentWidth
                 : metricsPlan.SeparatorWidthDip;
@@ -406,9 +406,9 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         y += metricsPlan.SeparatorHeightDip;
         foreach (var fragment in band.Fragments)
         {
-            var label = string.IsNullOrEmpty(fragment.Label) ? string.Empty : $"{fragment.Label}. ";
-            var text = PrintPlainText.Build(
-                label + fragment.Text,
+            var text = PrintPlainText.BuildNote(
+                fragment.Label,
+                fragment.Text,
                 noteFont,
                 PageLayout.PointsToDip(metricsPlan.TextFontSizePt),
                 Brushes.Black,
