@@ -10,6 +10,7 @@ using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FreeX.Core.IO;
 using FreeX.App.UI;
+using Free.Shared.Shell.Wpf;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 
@@ -124,7 +125,7 @@ public partial class App : Application
         var diagnostics = Services.GetRequiredService<IAppDiagnostics>();
         var snapshotStore = AutosaveSnapshotStore.CreateDefault(
             Services.GetRequiredService<IApplicationDataPathProvider>());
-        RegisterCrashHandlers(diagnostics, snapshotStore);
+        RegisterCrashHandlers(diagnostics);
 
         // The grid's render pass catches content-driven faults rather than letting them escape
         // OnRender (which WPF treats as fatal, and which would then recur on every repaint). Route
@@ -375,7 +376,7 @@ public partial class App : Application
         });
     }
 
-    private static void RegisterCrashHandlers(IAppDiagnostics diagnostics, AutosaveSnapshotStore snapshotStore)
+    private static void RegisterCrashHandlers(IAppDiagnostics diagnostics)
     {
         Free.Shared.AppServices.AppCrashHandlers.Register(
             recordCrash: (exception, source) => diagnostics.RecordCrash(exception, source),
@@ -384,7 +385,7 @@ public partial class App : Application
                     args.Handled = Free.Shared.AppServices.AppCrashHandlers.HandleDispatcherException(
                         args.Exception,
                         handler),
-            onAfterFault: () => TryEmergencySaveAllWindows(snapshotStore));
+            onAfterFault: TryEmergencySaveAllWindows);
     }
 
     /// <summary>
@@ -394,68 +395,19 @@ public partial class App : Application
     /// <para>
     /// AppDomain.UnhandledException fires on the faulting thread, which may not be the dispatcher
     /// thread. <c>Current.Windows</c> and the autosave service are UI-thread-affine and will throw
-    /// from any other thread. We therefore marshal the work via <c>Dispatcher.Invoke</c> with a
-    /// short bounded timeout. If the UI thread is itself wedged the marshal times out and the save
-    /// silently does not happen — that is the correct best-effort outcome rather than crashing the
-    /// crash handler.
+    /// from any other thread. The shared <see cref="WpfEmergencySnapshotFanOut"/> therefore
+    /// marshals the work via <c>Dispatcher.Invoke</c> with a short bounded timeout. If the UI
+    /// thread is itself wedged the marshal times out and the save silently does not happen - that
+    /// is the correct best-effort outcome rather than crashing the crash handler.
     /// </para>
     /// </summary>
-    private static void TryEmergencySaveAllWindows(AutosaveSnapshotStore snapshotStore)
+    private static void TryEmergencySaveAllWindows()
     {
-        try
+        WpfEmergencySnapshotFanOut.TrySnapshotAllWindows(window =>
         {
-            var dispatcher = Current?.Dispatcher;
-            if (dispatcher is null)
-                return;
-
-            // If we are already on the dispatcher thread, execute inline; otherwise marshal with a
-            // bounded timeout so a wedged UI thread does not block the faulting thread forever.
-            if (dispatcher.CheckAccess())
-            {
-                TryEmergencySaveAllWindowsOnDispatcher(snapshotStore);
-            }
-            else
-            {
-                dispatcher.Invoke(
-                    () => TryEmergencySaveAllWindowsOnDispatcher(snapshotStore),
-                    System.Windows.Threading.DispatcherPriority.Send,
-                    System.Threading.CancellationToken.None,
-                    TimeSpan.FromSeconds(8));
-            }
-        }
-        catch
-        {
-            // Outer guard — crash handlers must never throw.
-        }
-    }
-
-    private static void TryEmergencySaveAllWindowsOnDispatcher(AutosaveSnapshotStore snapshotStore)
-    {
-        try
-        {
-            foreach (Window window in Current.Windows)
-            {
-                if (window is not MainWindow mainWindow)
-                    continue;
-
-                try
-                {
-                    var svc = mainWindow.AutosaveServiceForCrashHandler;
-                    if (svc is null)
-                        continue;
-
-                    svc.TryEmergencySnapshot(mainWindow);
-                }
-                catch
-                {
-                    // A crash handler must never throw.
-                }
-            }
-        }
-        catch
-        {
-            // Outer guard — crash handlers must never throw.
-        }
+            if (window is MainWindow mainWindow)
+                mainWindow.AutosaveServiceForCrashHandler?.TryEmergencySnapshot(mainWindow);
+        });
     }
 
     /// <summary>
