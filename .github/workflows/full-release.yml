@@ -49,6 +49,15 @@ on:
         required: false
         default: false
         type: boolean
+      early_abort:
+        description: >-
+          Stop the whole run as soon as one job fails for a real (non-infrastructure) reason, so a
+          red release does not keep burning runner minutes on work that cannot change the outcome.
+          The run then ends as Cancelled; the failed job and its error stay visible and nothing is
+          published. Turn this off to let every job finish.
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -282,6 +291,28 @@ jobs:
             }
           }
 
+      # The Windows signing script validates this same file, but only after the Windows package has
+      # spent ~15 minutes building the payload it is about to sign. The check needs no secret and no
+      # Windows, so a bad Account URI, a placeholder or a retargeted account fails in seconds here.
+      # Keep it in step with tools/Invoke-WindowsArtifactSigning.ps1 (a source-contract test pins both).
+      - name: Verify the Artifact Signing metadata before any package is built
+        if: ${{ !inputs.dry_run && (inputs.platform == 'all' || inputs.platform == 'windows') }}
+        shell: pwsh
+        run: |
+          $path = "tools/signing/metadata.json"
+          $metadata = Get-Content -LiteralPath $path -Raw -ErrorAction Stop | ConvertFrom-Json
+          foreach ($name in @("Endpoint", "CodeSigningAccountName", "CertificateProfileName")) {
+            if (-not $metadata.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$metadata.$name)) {
+              throw "Artifact Signing metadata is missing '$name': $path"
+            }
+          }
+          if ([string]$metadata.Endpoint -match 'REPLACE-WITH|<|>') { throw "Replace the Endpoint placeholder in '$path' with the exact Account URI from Azure Artifact Signing." }
+          if ([string]$metadata.Endpoint -notmatch '^https://[a-z0-9-]+\.codesigning\.azure\.net/?$') { throw "Artifact Signing Endpoint must be an https://<region>.codesigning.azure.net Account URI." }
+          if ([string]$metadata.CodeSigningAccountName -ne "free-software-signing" -or [string]$metadata.CertificateProfileName -ne "freevia-public-signing") {
+            throw "Artifact Signing metadata must target free-software-signing/freevia-public-signing."
+          }
+          Write-Host "Artifact Signing metadata targets $($metadata.CodeSigningAccountName)/$($metadata.CertificateProfileName)."
+
       # Requiring CI and CodeQL attestations on the EXACT dispatch head is unsatisfiable here: main
       # takes ~a commit a minute from parallel sessions and codeql.yml (cancel-in-progress, ~10min)
       # is usually cancelled by the next push, so the head a release dispatches from is almost never
@@ -317,6 +348,78 @@ jobs:
             -CommitSha $env:GITHUB_SHA `
             -GitHubOutputPath $env:GITHUB_OUTPUT
 
+  early-abort:
+    # A release that is going to fail should fail in minutes, not after the other forty. Packaging
+    # and the release tests run side by side, so a regression found by a five-minute test used to
+    # leave about a hundred runner-minutes of packaging running to no purpose (release 44725827772
+    # kept two Windows and several macOS jobs going after its first render-evidence failure).
+    #
+    # GitHub cannot cancel one job, only the run, so this watcher cancels the run -- but only for a
+    # REAL failure as tools/Get-ReleaseRunFailureClass.ps1 defines it. An infrastructure failure
+    # (lost runner, never-acquired macOS runner) must not abort a healthy release; it is left for
+    # the single automatic re-run in release-auto-retry.yml.
+    #
+    # Failing closed: nothing needs this job, a cancelled run can never publish (publication-gate
+    # requires every upstream job to have succeeded), and a watcher that errors is ignored rather
+    # than turning a healthy release red.
+    name: Watch for a real failure and stop the run early
+    needs: [candidate]
+    if: ${{ inputs.early_abort }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout the classifier
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: tools/Get-ReleaseRunFailureClass.ps1
+          sparse-checkout-cone-mode: false
+      - name: Cancel the run on the first real failure
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $deadline = [datetime]::UtcNow.AddMinutes(235)
+          $lookupFailures = 0
+          while ([datetime]::UtcNow -lt $deadline) {
+            Start-Sleep -Seconds 20
+            try {
+              $json = pwsh -NoProfile -File tools/Get-ReleaseRunFailureClass.ps1 -Repository $env:GITHUB_REPOSITORY -RunId $env:GITHUB_RUN_ID
+              if ($LASTEXITCODE -ne 0) { throw "classifier exited with $LASTEXITCODE" }
+              $state = ($json -join "`n") | ConvertFrom-Json
+              $lookupFailures = 0
+            }
+            catch {
+              $lookupFailures++
+              Write-Warning "Could not read the run state ($lookupFailures): $($_.Exception.Message)"
+              continue
+            }
+
+            if ($state.reachedPublicationGate) {
+              Write-Host "Every test and package job has finished without a real failure; nothing left to watch."
+              return
+            }
+            if (-not $state.hasRealFailure) { continue }
+
+            $first = [string]$state.firstRealFailure
+            Write-Host "::error title=Release stopped early::First real failure -- $first. Cancelling the remaining jobs so they stop burning runner minutes. Nothing is published."
+            "### Release stopped early`nFirst real failure: **$first**`n`nThe other jobs were cancelled because they could not change the outcome. Fix the failure above and re-run; this run publishes nothing." >> $env:GITHUB_STEP_SUMMARY
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              gh run cancel $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY
+              if ($LASTEXITCODE -eq 0) { break }
+              Start-Sleep -Seconds (5 * $attempt)
+            }
+            # The cancellation reaches this job too; waiting keeps the log honest until it does.
+            Start-Sleep -Seconds 120
+            return
+          }
+          Write-Warning "The watcher reached its own time limit without seeing the publication gate; it stops watching."
+
   release-tests:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: [prepare, candidate]
@@ -328,7 +431,9 @@ jobs:
     # gate_evidence_reuse): release-gate below accepts 'skipped' only for one of those two reasons.
     if: ${{ !inputs.dry_run && needs.candidate.outputs.gate_evidence_reuse != 'true' }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    # The slowest leg observed is under ten minutes and Invoke-TestGate already enforces a 30-minute
+    # hang timeout per test project, so an hour is generous; two hours let a wedged runner idle.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.prepare.outputs.release_matrix) }}
@@ -497,10 +602,11 @@ jobs:
         if: matrix.platform == 'windows' && !inputs.dry_run
         shell: pwsh
         run: |
-          dotnet tool install --global vpk --version 1.2.0
-          if ($LASTEXITCODE -ne 0) { throw "Could not install the pinned Velopack signing client bundle." }
-          az account get-access-token --resource https://codesigning.azure.net --output none
-          if ($LASTEXITCODE -ne 0) { throw "GitHub OIDC identity could not obtain an Artifact Signing access token." }
+          . tools/Invoke-WithRetry.ps1
+          # 'update --version' installs the exact pinned version when absent and is safe to repeat,
+          # unlike 'install', which would fail every retry after a half-completed first attempt.
+          Invoke-WithRetry -Description "Installing the pinned Velopack signing client bundle" -Action { dotnet tool update --global vpk --version 1.2.0 }
+          Invoke-WithRetry -Description "Obtaining an Artifact Signing access token for the GitHub OIDC identity" -Action { az account get-access-token --resource https://codesigning.azure.net --output none }
 
       - name: Publish self-contained tester package
         shell: pwsh
@@ -584,8 +690,8 @@ jobs:
           }
           $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
           if (-not (Test-Path -LiteralPath $sbomTool -PathType Leaf)) {
-            dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
-            if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
+            . tools/Invoke-WithRetry.ps1
+            Invoke-WithRetry -Description "Installing Microsoft.Sbom.DotNetTool 4.1.5" -Action { dotnet tool update --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5 }
           }
           tools/New-ReleaseSbom.ps1 `
             -Name $app `
@@ -640,7 +746,9 @@ jobs:
     # Azure, so they run without the approval gate and start immediately. Publication stays behind the
     # publication-gate and the public-preview environment on the publish job.
     environment: ${{ !inputs.dry_run && matrix.platform == 'windows' && 'public-preview' || '' }}
-    timeout-minutes: 120
+    # Suite legs only repackage already-built artifacts (observed 1-4 minutes), so a wedged one must
+    # not hold the run for two hours.
+    timeout-minutes: 30
     permissions:
       # The artifact-download fallback lists this run's artifacts through gh.
       actions: read
@@ -718,10 +826,9 @@ jobs:
         if: matrix.platform == 'windows' && !inputs.dry_run
         shell: pwsh
         run: |
-          dotnet tool install --global vpk --version 1.2.0
-          if ($LASTEXITCODE -ne 0) { throw "Could not install the pinned Artifact Signing client bundle." }
-          az account get-access-token --resource https://codesigning.azure.net --output none
-          if ($LASTEXITCODE -ne 0) { throw "GitHub OIDC identity could not obtain an Artifact Signing access token." }
+          . tools/Invoke-WithRetry.ps1
+          Invoke-WithRetry -Description "Installing the pinned Artifact Signing client bundle" -Action { dotnet tool update --global vpk --version 1.2.0 }
+          Invoke-WithRetry -Description "Obtaining an Artifact Signing access token for the GitHub OIDC identity" -Action { az account get-access-token --resource https://codesigning.azure.net --output none }
 
       - name: Build signed suite installer
         shell: pwsh
@@ -786,8 +893,8 @@ jobs:
             Copy-Item -Destination artifacts/suite
           $sbomTool = if ($IsWindows) { "artifacts/sbom-tool/sbom-tool.exe" } else { "artifacts/sbom-tool/sbom-tool" }
           if (-not (Test-Path -LiteralPath $sbomTool -PathType Leaf)) {
-            dotnet tool install --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5
-            if ($LASTEXITCODE -ne 0) { throw "Could not install Microsoft.Sbom.DotNetTool 4.1.5." }
+            . tools/Invoke-WithRetry.ps1
+            Invoke-WithRetry -Description "Installing Microsoft.Sbom.DotNetTool 4.1.5" -Action { dotnet tool update --tool-path artifacts/sbom-tool Microsoft.Sbom.DotNetTool --version 4.1.5 }
           }
           tools/New-ReleaseSbom.ps1 `
             -Name FreeSuite `
@@ -1030,10 +1137,17 @@ jobs:
             Replace("{{VERSION}}", $version).
             Replace("{{SHA}}", $env:GITHUB_SHA)
 
-          gh release view $tag *> $null
-          $releaseExists = $LASTEXITCODE -eq 0
-          $remoteRefs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
-          if ($LASTEXITCODE -ne 0) { throw "Could not resolve remote tag '$tag'." }
+          . tools/Invoke-WithRetry.ps1
+          # Only a definite "release not found" means the release does not exist. Any other failure
+          # (a service blip) is retried, because misreading it as "absent" would try to CREATE a
+          # release that is already there.
+          $releaseExists = Invoke-WithRetry -Description "Looking up release '$tag'" -Action {
+            $view = gh release view $tag 2>&1
+            if ($LASTEXITCODE -eq 0) { $true }
+            elseif ("$view" -match 'release not found') { $global:LASTEXITCODE = 0; $false }
+            else { throw "gh release view failed: $view" }
+          }
+          $remoteRefs = @(Invoke-WithRetry -Description "Resolving remote tag '$tag'" -Action { git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}" })
           if ($remoteRefs.Count -gt 0) {
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
@@ -1044,7 +1158,9 @@ jobs:
             throw "Existing release '$tag' has no resolvable remote tag."
           }
           if ($releaseExists) {
-            gh release upload $tag @assets --clobber
+            # Resumes a partial publication without silently replacing a published asset: uploads
+            # only what is missing, keeps identical assets, and refuses a same-name different-content one.
+            & tools/Send-ReleaseAssets.ps1 -Repository $env:GITHUB_REPOSITORY -Tag $tag -AssetPaths $assets
             $prerelease = "${{ inputs.prerelease }}".ToLowerInvariant()
             $notes | gh release edit $tag --title $title --notes-file - "--prerelease=$prerelease"
           } else {
@@ -1133,10 +1249,17 @@ jobs:
           Windows uses a Freevia Authenticode-signed .NET bootstrapper containing the three signed Velopack installers; it has no Inno dependency. Linux uses an installer bundle whose `install.sh` defaults to `~/.local`, protected by SHA-256 checksums, manifests, and an SPDX SBOM. macOS uses a `.pkg` containing all three `.app` bundles; it is ${{ inputs.macos_unsigned && 'NOT signed or notarized, so Gatekeeper refuses to open it by double-click' || 'Developer ID Installer-signed, notarized, and stapled' }}.
           '@.Replace("{{VERSION}}", $version)
 
-          gh release view $tag *> $null
-          $releaseExists = $LASTEXITCODE -eq 0
-          $remoteRefs = @(git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}")
-          if ($LASTEXITCODE -ne 0) { throw "Could not resolve remote tag '$tag'." }
+          . tools/Invoke-WithRetry.ps1
+          # Only a definite "release not found" means the release does not exist. Any other failure
+          # (a service blip) is retried, because misreading it as "absent" would try to CREATE a
+          # release that is already there.
+          $releaseExists = Invoke-WithRetry -Description "Looking up release '$tag'" -Action {
+            $view = gh release view $tag 2>&1
+            if ($LASTEXITCODE -eq 0) { $true }
+            elseif ("$view" -match 'release not found') { $global:LASTEXITCODE = 0; $false }
+            else { throw "gh release view failed: $view" }
+          }
+          $remoteRefs = @(Invoke-WithRetry -Description "Resolving remote tag '$tag'" -Action { git ls-remote origin "refs/tags/$tag" "refs/tags/$tag^{}" })
           if ($remoteRefs.Count -gt 0) {
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
@@ -1147,7 +1270,9 @@ jobs:
             throw "Existing release '$tag' has no resolvable remote tag."
           }
           if ($releaseExists) {
-            gh release upload $tag @assets --clobber
+            # Resumes a partial publication without silently replacing a published asset: uploads
+            # only what is missing, keeps identical assets, and refuses a same-name different-content one.
+            & tools/Send-ReleaseAssets.ps1 -Repository $env:GITHUB_REPOSITORY -Tag $tag -AssetPaths $assets
             $prerelease = "${{ inputs.prerelease }}".ToLowerInvariant()
             $notes | gh release edit $tag --title $title --notes-file - "--prerelease=$prerelease"
           } else {
