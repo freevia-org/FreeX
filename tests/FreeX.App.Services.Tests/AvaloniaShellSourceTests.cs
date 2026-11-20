@@ -2751,7 +2751,11 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("results.AddRange(await CaptureModalTabsAsync(");
         parityCaptureSource.Should().Contain("render: !interactionOnly));");
         parityCaptureSource.Should().Contain("private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(");
-        parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () => ShowFormatCellsDialogAsync(),");
+        // Format Cells opens on a blank, default-styled cell so the captured state matches the WPF
+        // capture (an unstyled cell) instead of the bold demo header in A1.
+        parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () =>");
+        parityCaptureSource.Should().Contain("_session.SelectCell(new CellAddress(_session.ActiveSheet.Id, 60, 26));");
+        parityCaptureSource.Should().Contain("return ShowFormatCellsDialogAsync();");
         parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Border\", \"Fill\", \"Protection\"]),");
         parityCaptureSource.Should().Contain("(\"dialog.FindReplace\", () => ShowFindDialogAsync(),");
         // PageSetup is registered per-tab (both shells have Page/Margins/Header-Footer/Sheet in order).
