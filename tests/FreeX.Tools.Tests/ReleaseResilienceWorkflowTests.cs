@@ -141,7 +141,7 @@ public sealed class ReleaseResilienceWorkflowTests
         // The uploader refuses a conflicting published asset and only replaces interrupted debris.
         var uploader = WorkspaceFileLocator.ReadAllText("tools", "Send-ReleaseAssets.ps1");
         uploader.Should().Contain("refusing to overwrite them");
-        uploader.Should().NotContain("--clobber");
+        Regex.IsMatch(uploader, @"gh release upload[^\r\n]*--clobber").Should().BeFalse("the uploader must never replace a published asset blindly");
         uploader.Should().Contain("[string]$asset.state -ne 'uploaded'");
         uploader.Should().Contain("Action = 'conflict'");
 

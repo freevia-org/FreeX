@@ -23,8 +23,8 @@ Set-StrictMode -Version Latest
 
 # Why this exists.
 #
-# The publish jobs used `gh release upload $tag @assets --clobber` for an already-existing release.
-# That is how a re-run resumes a partial publish, but --clobber replaces EVERY asset whether or not it
+# The publish jobs used to upload to an already-existing release with gh's blanket replace-existing
+# flag. That is how a re-run resumes a partial publish, but it replaces EVERY asset whether or not it
 # changed, so a second publication of the same version silently overwrote assets that users may
 # already have downloaded and verified against their .sha256 files.
 #
