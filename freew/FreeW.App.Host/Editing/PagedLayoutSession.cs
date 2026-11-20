@@ -408,7 +408,8 @@ internal sealed class PagedLayoutSession
         IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> preserved,
         IReadOnlyDictionary<int, int> footnoteSequence,
         IReadOnlyDictionary<int, int> endnoteSequence,
-        bool signTableIndex)
+        bool signTableIndex,
+        double[] leadingHeights)
     {
         var builder = new StringBuilder();
         for (var index = start; index < end; index++)
@@ -421,7 +422,7 @@ internal sealed class PagedLayoutSession
                         return null;
                     break;
                 case ModelTable table:
-                    builder.Append("T:").Append(DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(model, index).ToString("R"));
+                    builder.Append("T:").Append(leadingHeights[index].ToString("R"));
                     if (signTableIndex)
                         builder.Append('@').Append(index);
                     foreach (var row in table.Rows)
@@ -496,6 +497,8 @@ internal sealed class PagedLayoutSession
     {
         var blocks = model.Blocks;
         var plans = new List<UnitPlan>();
+        // One pass for every table's leading-content estimate (it was one pass over the prefix per table).
+        var leadingHeights = DocumentViewLayoutPlanner.EstimateLeadingContentHeightsDip(model);
         var inlineFragments = DocumentView.HasRendererInlineFlowBreakFragments(model);
         var sequence = new DocumentListMarkerSequencePlanner(
             model.MultiLevelList.NumberFormats, model.MultiLevelList.LevelTexts);
@@ -580,7 +583,7 @@ internal sealed class PagedLayoutSession
             }
 
             plan.Signature = UnitSignatureContext(
-                model, plan.Start, plan.End, listPlans, preserved, footnoteSequence, endnoteSequence, signTableIndex);
+                model, plan.Start, plan.End, listPlans, preserved, footnoteSequence, endnoteSequence, signTableIndex, leadingHeights);
             if (wrapSignatures is not null)
             {
                 var wraps = new StringBuilder();
@@ -1781,6 +1784,9 @@ internal sealed class PagedLayoutSession
         var carriedNoteDip = 0.0;
         var carryChain = new List<(IReadOnlyList<int> FootnoteIds, double BandHeightDip, int PageNumber)>();
         var localPage = 0;
+        var skipFragmentsOfUnit = -1;
+        var skipFragments = 0;
+        var fragmentIndex = new Dictionary<WpfBlock, int>();
 
         // Restart from the previous run where it is safe: the pass holding the first changed block, one
         // pass back, then back to a pass that starts on a whole block.
@@ -1798,7 +1804,9 @@ internal sealed class PagedLayoutSession
             var restartIndex = -1;
             for (var k = holding - 1; k >= 1; k--)
             {
-                if (!previous.Passes[k].StartsWithRemainder)
+                // A pass that starts on a forced inline-break fragment depends on nothing before it either
+                // (its carry is in the record), so it is as good a restart as a whole-block start.
+                if (!previous.Passes[k].StartsWithRemainder || previous.Passes[k].HardFragment > 0)
                 {
                     restart = previous.Passes[k];
                     restartIndex = k;
@@ -1808,8 +1816,11 @@ internal sealed class PagedLayoutSession
 
             if (restart is not null)
             {
-                for (var r = segment.Start; r < restart.StartRendered; r++)
+                var keepHeadBlock = restart.HardFragment > 0 ? 1 : 0;
+                for (var r = segment.Start; r < restart.StartRendered + keepHeadBlock; r++)
                     result.LocalPage[r - segment.Start] = previous.LocalPage[r - segment.Start];
+                skipFragmentsOfUnit = restart.HardFragment > 0 ? restart.StartRendered : -1;
+                skipFragments = restart.HardFragment;
                 result.Passes.AddRange(previous.Passes.Take(restartIndex));
                 result.Cuts.AddRange(previous.Cuts.Where(cut => cut.Page < restart.LocalPageStart));
                 nextRendered = restart.StartRendered;
@@ -1824,6 +1835,16 @@ internal sealed class PagedLayoutSession
         var oldFreshStarts = previous?.Passes
             .Where(pass => !pass.StartsWithRemainder)
             .ToDictionary(pass => pass.StartRendered, pass => pass);
+
+        var oldHardStarts = new Dictionary<(int Rendered, int Fragment), PassRecord>();
+        if (previous is not null)
+        {
+            foreach (var pass in previous.Passes)
+            {
+                if (pass.StartsWithRemainder && pass.HardFragment > 0)
+                    oldHardStarts.TryAdd((pass.StartRendered, pass.HardFragment), pass);
+            }
+        }
 
         void TopUp(int count)
         {
@@ -1859,8 +1880,9 @@ internal sealed class PagedLayoutSession
                         RenderedBlock(nextRendered + 1).BreakPageBefore = true;
                     }
 
-                    for (var c = 0; c < children.Count; c++)
+                    for (var c = nextRendered == skipFragmentsOfUnit ? skipFragments : 0; c < children.Count; c++)
                     {
+                        fragmentIndex[children[c]] = c;
                         pending.Add((children[c], nextRendered, c > 0, bases[c]));
                         work.Blocks.Add(children[c]);
                     }
@@ -1994,28 +2016,42 @@ internal sealed class PagedLayoutSession
                     head.IsContinuation,
                     carriedNoteDip,
                     carryChain.Select(link => new CarryLink(link.FootnoteIds.ToArray(), link.BandHeightDip, link.PageNumber)).ToArray(),
-                    localPage);
-                if (!head.IsContinuation
-                    && previous is not null
-                    && head.Rendered >= changedEnd
-                    && passesThisRun > 0
-                    && oldFreshStarts!.TryGetValue(head.Rendered - renderedDelta, out var old)
-                    && SameCarry(old, state))
+                    localPage)
+                {
+                    HardFragment = head.IsContinuation
+                        && head.Block is WpfParagraph { BreakPageBefore: true } headParagraph
+                        && DocumentView.IsInlineBreakContinuationFragment(headParagraph)
+                        && fragmentIndex.TryGetValue(headParagraph, out var headFragment)
+                            ? headFragment
+                            : 0
+                };
+                PassRecord? old = null;
+                if (previous is not null && head.Rendered >= changedEnd && passesThisRun > 0)
+                {
+                    if (!head.IsContinuation)
+                        oldFreshStarts!.TryGetValue(head.Rendered - renderedDelta, out old);
+                    else if (state.HardFragment > 0
+                        && oldHardStarts.TryGetValue((head.Rendered - renderedDelta, state.HardFragment), out var hardOld))
+                        old = hardOld;
+                }
+                if (old is not null && SameCarry(old, state))
                 {
                     var pageDelta = localPage - old.LocalPageStart;
-                    for (var k = head.Rendered; k < end; k++)
-                        result.LocalPage[k - segment.Start] = previous.LocalPage[k - renderedDelta - previous.RenderedStart] + pageDelta;
-                    result.Passes.AddRange(previous.Passes
-                        .Skip(previous.Passes.IndexOf(old))
+                    var previousRun = previous!;
+                    // A block whose forced fragment starts this page began on an earlier page of this run.
+                    for (var k = head.IsContinuation ? head.Rendered + 1 : head.Rendered; k < end; k++)
+                        result.LocalPage[k - segment.Start] = previousRun.LocalPage[k - renderedDelta - previousRun.RenderedStart] + pageDelta;
+                    result.Passes.AddRange(previousRun.Passes
+                        .Skip(previousRun.Passes.IndexOf(old))
                         .Select(pass => pass with
                         {
                             StartRendered = pass.StartRendered + renderedDelta,
                             LocalPageStart = pass.LocalPageStart + pageDelta
                         }));
                     result.Cuts.AddRange(ShiftCuts(
-                        previous.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
-                    result.PageCount = previous.PageCount + pageDelta;
-                    _pagesReused += previous.PageCount - old.LocalPageStart;
+                        previousRun.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
+                    result.PageCount = previousRun.PageCount + pageDelta;
+                    _pagesReused += previousRun.PageCount - old.LocalPageStart;
                     yield break;
                 }
                 result.Passes.Add(state);

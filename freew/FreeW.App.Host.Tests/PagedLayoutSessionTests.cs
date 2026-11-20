@@ -142,7 +142,37 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
     [InlineData(40)]
     public void Session_BreakHeavyDocument_ReflowsLocallyAndMatchesFreshLayout(int breakEvery)
     {
-        var document = PagedEditW7PerformanceProbe.InlineBreakDocument(paragraphs: 240, breakEvery);
+        AssertBreakHeavyReflowsLocally(
+            PagedEditW7PerformanceProbe.InlineBreakDocument(paragraphs: 240, breakEvery), $"breakEvery {breakEvery}");
+    }
+
+    /// <summary>
+    /// W15: the same on a document with a footnote on every second paragraph (the per-page footnote layout
+    /// path): an edit restarts at the page holding it, stops where the previous run's page start (footnote
+    /// carry included) repeats, and equals the full computation.
+    /// </summary>
+    [StaTheory]
+    [InlineData(4)]
+    [InlineData(12)]
+    [InlineData(40)]
+    [InlineData(100000)]
+    public void Session_FootnoteHeavyDocument_ReflowsLocallyAndMatchesFreshLayout(int breakEvery)
+    {
+        AssertBreakHeavyReflowsLocally(
+            PagedEditW7PerformanceProbe.InlineBreakVariantDocument("footnotes", paragraphs: 240, breakEvery),
+            $"footnotes, breakEvery {breakEvery}",
+            maxPagesLaidOut: breakEvery > 1000 ? int.MaxValue : 16); // no forced breaks: the page start (carry) may never realign, so only equivalence is asserted
+    }
+
+    /// <summary>W15: a table every ~9 blocks on a break-heavy document re-flows locally and equals the full computation.</summary>
+    [StaFact]
+    public void Session_TableHeavyDocument_ReflowsLocallyAndMatchesFreshLayout() =>
+        AssertBreakHeavyReflowsLocally(
+            PagedEditW7PerformanceProbe.InlineBreakVariantDocument("tables", paragraphs: 240, breakEvery: 4), "tables");
+
+    private void AssertBreakHeavyReflowsLocally(TextDocument document, string documentLabel, int maxPagesLaidOut = 16)
+    {
+        var breakEvery = documentLabel;
         var editor = new DocumentView();
         editor.LoadModel(document);
         var session = new PagedLayoutSession(editor);
@@ -169,13 +199,19 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
         {
             apply();
             editor.LoadModel(editor.Model);
-            var label = $"breakEvery {breakEvery}, {name}";
+            var label = $"{breakEvery}, {name}";
             var run = session.ComputeRun();
             var stats = session.LastStatistics;
             output.WriteLine($"{label}: incremental={stats.Incremental} laidOut={stats.PagesLaidOut} reused={stats.PagesReused} fallback={stats.FallbackReason ?? "-"}");
-            stats.FallbackReason.Should().BeNull(label);
-            stats.Incremental.Should().BeTrue(label);
-            stats.PagesLaidOut.Should().BeLessThan(16, $"{label}: an edit re-lays out only the pages around it");
+            // Without forced breaks the first inline break turns the document's renderer mode on, which changes
+            // every unit split: a full (still exact) recomputation is the expected outcome there.
+            var modeSwitch = maxPagesLaidOut == int.MaxValue && name == "insert break paragraph";
+            if (!modeSwitch)
+            {
+                stats.FallbackReason.Should().BeNull(label);
+                stats.Incremental.Should().BeTrue(label);
+                stats.PagesLaidOut.Should().BeLessThan(maxPagesLaidOut, $"{label}: an edit re-lays out only the pages around it");
+            }
 
             AssertSessionMatches(editor, session, label);
             var fresh = new PagedLayoutSession(editor).ComputeRun();
@@ -186,6 +222,8 @@ public sealed class PagedLayoutSessionTests(ITestOutputHelper output)
 
         static void Replace(IList<Block> blocks, int index, int words, string text)
         {
+            while (blocks[index] is not Paragraph)
+                index++;
             var original = (Paragraph)blocks[index];
             var edited = new Paragraph { Formatting = original.Formatting, StyleId = original.StyleId };
             edited.Runs.AddRange(original.Runs);
