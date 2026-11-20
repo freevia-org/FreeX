@@ -7863,7 +7863,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
         }
         else if (_selectionMoveDragging)
-            await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control));
+            await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control), args.KeyModifiers.HasFlag(KeyModifiers.Shift));
 
         DetachCellSelectionDragHandlers();
         _cellDragSelectionPointer?.Capture(null);
@@ -8554,7 +8554,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // not here — the user may press/release Ctrl mid-drag, exactly like the existing
         // autofill-drag Ctrl handling.
         if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
-            (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Control) ||
+            (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Control && args.KeyModifiers != KeyModifiers.Shift) ||
             !IsPointerOnSelectionMoveBorder(args) ||
             _session.SelectedRanges.Count > 1)
         {
@@ -8674,12 +8674,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShellForGridPreview();
     }
 
-    private async Task CommitSelectionMoveDragAsync(bool ctrlHeld = false)
+    private async Task CommitSelectionMoveDragAsync(bool ctrlHeld = false, bool shiftHeld = false)
     {
         if (_selectionMoveSourceRange is not { } source ||
             _selectionMovePreviewRange is not { } target ||
             source == target)
         {
+            return;
+        }
+
+        if (shiftHeld && !ctrlHeld)
+        {
+            // Excel's Shift+drag: insert the moved cells at the destination, shifting existing cells.
+            ClearSelectedDrawingObject();
+            var insertResult = _session.InsertMovedRangeAt(source, target);
+            var insertStatus = insertResult.Success
+                ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
+                : insertResult.ErrorMessage ?? UiText.Get("MainLoc_MoveCellsFailed");
+            RefreshShell(insertStatus);
+            if (insertResult.Success)
+            {
+                _session.SelectRange(target);
+                RefreshShell(insertStatus);
+            }
             return;
         }
 
