@@ -19,7 +19,7 @@ public sealed partial class CellStyleDiffPlannerTests
         diff.Strikethrough.Should().BeFalse();
         diff.Superscript.Should().BeFalse();
         diff.Subscript.Should().BeFalse();
-        diff.FontName.Should().Be("Calibri");
+        diff.FontName.Should().Be(WorkbookCreationDefaults.FontName);
         diff.FontSize.Should().Be(11);
         diff.ClearFill.Should().BeTrue();
         diff.NumberFormat.Should().Be("General");

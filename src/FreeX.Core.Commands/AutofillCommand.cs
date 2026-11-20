@@ -10,8 +10,33 @@ namespace FreeX.Core.Commands;
 /// the fill handle inward instead of extending it), the cells beyond the shrunk boundary are
 /// cleared instead, matching Excel.
 /// </summary>
+/// <summary>Excel's Auto Fill Options: how a fill-handle drag treats values and formatting.</summary>
+public enum AutofillMode
+{
+    /// <summary>Excel's default: continue a detected series (Ctrl flips it), copying the source formatting.</summary>
+    Default,
+
+    /// <summary>Copy Cells: never continue a series.</summary>
+    CopyCells,
+
+    /// <summary>Fill Series: continue the series even for a single number.</summary>
+    FillSeries,
+
+    /// <summary>Fill Formatting Only: copy the source formatting and leave the destination's values alone.</summary>
+    FormattingOnly,
+
+    /// <summary>Fill Without Formatting: fill values but keep each destination cell's own formatting.</summary>
+    WithoutFormatting,
+}
+
 public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
 {
+    /// <summary>
+    /// What the fill does with values and formatting. Init-only (not a constructor parameter) so
+    /// callers built against the older constructor keep working.
+    /// </summary>
+    public AutofillMode Mode { get; init; } = AutofillMode.Default;
+
     // R120-commands-undo-byte-budget-2: mirrors FillCellsCommand's rationale -- the undo snapshot
     // holds a Cell clone plus style, hyperlink/metadata, rich-text runs and phonetic guide PER FILL
     // TARGET (see Apply below), scaling with _fillRange.CellCount, not a flat per-command constant.
@@ -156,11 +181,16 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         var naturalListSeries = sourceHasFormula || naturalScalarSeries is not null ? null : TryCreateListSeries(sheet, plan);
         // Ctrl flips the natural default for a detected series (a 2+ cell scalar trend, or any
         // text/list series): it becomes a plain copy instead. Ctrl has no effect on formula fills.
-        var forceCopyOnly = !sourceHasFormula && _ctrlHeld && (naturalScalarSeries is not null || naturalListSeries is not null);
+        // Auto Fill Options' Copy Cells / Fill Series override Ctrl and the type-dependent defaults.
+        var ctrlHeld = Mode is AutofillMode.Default && _ctrlHeld;
+        var forceCopyOnly = !sourceHasFormula &&
+            (Mode == AutofillMode.CopyCells ||
+             (ctrlHeld && (naturalScalarSeries is not null || naturalListSeries is not null)));
         // A lone plain number/date cell (no natural multi-cell series above) has a type-dependent
         // default instead of always defaulting to copy -- see WantsSingleCellSeriesDefault.
         var forcedSeries = !sourceHasFormula && naturalScalarSeries is null && naturalListSeries is null
-            && _sourceRange.CellCount == 1 && WantsSingleCellSeriesDefault(sourceCell?.Value, _ctrlHeld)
+            && _sourceRange.CellCount == 1 && Mode != AutofillMode.CopyCells &&
+            (Mode == AutofillMode.FillSeries || WantsSingleCellSeriesDefault(sourceCell?.Value, ctrlHeld))
                 ? TryCreateForcedSingleCellSeries(sourceCell, plan)
                 : null;
         var scalarSeries = forceCopyOnly ? null : naturalScalarSeries ?? forcedSeries;
@@ -189,6 +219,27 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                 _snapshot.Add((addr, oldCell?.Clone(), oldStyleOnly));
                 SnapshotAnnotations(sheet, addr);
                 writtenCells.Add(addr);
+
+                // Fill Formatting Only: copy the source range's formatting pattern and leave every
+                // destination value, formula and annotation exactly as it was.
+                if (Mode == AutofillMode.FormattingOnly)
+                {
+                    var patternStyle = ResolvePatternSourceStyleId(sheet, plan, addr, sourceLength, sourceCell);
+                    if (oldCell is not null)
+                    {
+                        oldCell.StyleId = patternStyle;
+                    }
+                    else if (patternStyle == StyleId.Default)
+                    {
+                        sheet.ClearStyleOnly(row, col);
+                    }
+                    else
+                    {
+                        sheet.SetStyleOnly(row, col, patternStyle);
+                    }
+
+                    continue;
+                }
 
                 // spill-overlay-root-F12: sourceCell is only the fill EDGE cell (GetSourceEdgeAddress),
                 // which is null whenever that specific address is a non-anchor dynamic-array spill
@@ -257,6 +308,10 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
                     newCell.StyleId = patternSourceCell.StyleId;
                     annotationSourceAddr = patternSourceAddr;
                 }
+
+                // Fill Without Formatting: keep the destination cell's own formatting.
+                if (Mode == AutofillMode.WithoutFormatting)
+                    newCell.StyleId = oldCell?.StyleId ?? oldStyleOnly ?? StyleId.Default;
 
                 sheet.SetCell(addr, newCell);
                 tableEffectEdits.Add((addr, newCell));

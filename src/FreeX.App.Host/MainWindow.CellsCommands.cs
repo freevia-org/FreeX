@@ -817,6 +817,8 @@ public partial class MainWindow
         if (!TryExecuteCommand(cmd, "Autofill", out var outcome))
             return;
 
+        if (!outcome.IsNoOp)
+            _session.NoteAutofill(sourceRange, fillRange, ctrlHeld);
         SelectCompletedAutofillRange(sourceRange, fillRange);
         UpdateViewport();
         RefreshStatusBar();
