@@ -453,6 +453,24 @@ catch {
     $errors.Add($_.Exception.Message)
 }
 
+# The release failure classifier decides when a red release is stopped early and when it is retried
+# once, so its fail-closed cases are proven offline on every contract run.
+try {
+    & (Join-Path $PSScriptRoot "Test-ReleaseFailureClassification.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
+# Release publication resumes without ever overwriting a published asset silently, and its network
+# steps retry a bounded number of times; both are proven offline.
+try {
+    & (Join-Path $PSScriptRoot "Test-ReleaseAssetPublishing.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
 # The diff-scoped LOCAL preflight must map every preflight check to its trigger paths, and CI must
 # keep running everything.
 try {
