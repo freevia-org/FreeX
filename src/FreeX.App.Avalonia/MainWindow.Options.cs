@@ -612,6 +612,9 @@ public sealed partial class MainWindow
         var advancedAutoCompleteBox = OptionsCheckBox(
             OptionsText("Options_EnableAutoCompleteForCellValues"),
             isChecked: current.EnableAutoCompleteForCellValues);
+        var editCustomListsButton = OptionsButton(OptionsText("Options_EditCustomListsButton"), width: 150);
+        AutomationProperties.SetAutomationId(editCustomListsButton, "OptionsEditCustomListsButton");
+        editCustomListsButton.Click += (_, _) => RunGuarded(() => ShowCustomListsEditorAsync(dialog, optionsDialogSession));
         var objectsDisplayBox = OptionsComboBox(
             new[]
             {
@@ -649,6 +652,7 @@ public sealed partial class MainWindow
             advancedDirectionRow,
             OptionsToggleRow(advancedFillHandleBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedDisabledFillHandleBottomMargin)),
             OptionsToggleRow(advancedAutoCompleteBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedAutoCompleteBottomMargin)),
+            OptionsToggleRow(editCustomListsButton, new Thickness(0, 0, 0, 6)),
             OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook"), topMargin: OptionsDialogPlanner.AdvancedDisplaySectionTopMargin),
             OptionsToggleRow(showGridlinesBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedGridlinesBottomMargin)),
             OptionsToggleRow(showHeadingsBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedHeadingsBottomMargin)),

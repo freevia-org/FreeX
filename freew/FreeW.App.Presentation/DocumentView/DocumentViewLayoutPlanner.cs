@@ -1246,9 +1246,18 @@ public static class DocumentViewLayoutPlanner
 
         var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
         var availableBodyHeightDip = RoundDip(Math.Max(MinimumTableRowHeightDip, contentHeightDip));
+        // The leading estimate is the height of everything since the last forced page boundary, which may
+        // span many pages. It is a crude character-count guess, so once it reaches a whole page it says
+        // nothing reliable about where on its page the table starts. Subtracting it left no room on page 1,
+        // so the first row was planned alone and every later row forced onto a new page even where Word
+        // (and the real layout) fits the table in the page. Treat such a start as unknown (top of page) and
+        // let the real paginator place the table; only a table taller than a page is planned across pages.
+        var leadingOnTablePageDip = Math.Max(0, firstPageLeadingContentHeightDip);
+        if (availableBodyHeightDip > 0 && leadingOnTablePageDip >= availableBodyHeightDip)
+            leadingOnTablePageDip = 0;
         var firstPageAvailableBodyHeightDip = RoundDip(Math.Max(
             MinimumTableRowHeightDip,
-            availableBodyHeightDip - Math.Max(0, firstPageLeadingContentHeightDip)));
+            availableBodyHeightDip - leadingOnTablePageDip));
         // A repeating header can span any number of leading, contiguous rows (e.g. a title row plus a
         // column-labels row), not just row 0: each row's own IsRepeatingHeader flag drives this, with
         // row 0 also honouring the table-level RepeatHeaderRow convenience flag for callers (ribbon/

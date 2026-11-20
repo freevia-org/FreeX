@@ -406,6 +406,7 @@ public static class OptionsDialogPlanner
         if (edited.QuickAccessToolbarBelowRibbon != openTimeSnapshot.QuickAccessToolbarBelowRibbon) merged.QuickAccessToolbarBelowRibbon = edited.QuickAccessToolbarBelowRibbon;
         if (!edited.QuickAccessToolbarCommands.SequenceEqual(openTimeSnapshot.QuickAccessToolbarCommands)) merged.QuickAccessToolbarCommands = edited.QuickAccessToolbarCommands;
         if (!edited.SpellCheckCustomDictionaryWords.SequenceEqual(openTimeSnapshot.SpellCheckCustomDictionaryWords)) merged.SpellCheckCustomDictionaryWords = edited.SpellCheckCustomDictionaryWords;
+        if (!edited.CustomLists.Select(l => string.Join('', l)).SequenceEqual(openTimeSnapshot.CustomLists.Select(l => string.Join('', l)))) merged.CustomLists = edited.CustomLists;
         if (edited.CrashAnalyticsEnabled != openTimeSnapshot.CrashAnalyticsEnabled) merged.CrashAnalyticsEnabled = edited.CrashAnalyticsEnabled;
         // Monotonic flag (never reverts once true); OR the freshest on-disk value with this dialog
         // session's raw checked state (edited.CrashAnalyticsEnabled always reflects the checkbox as-is --
