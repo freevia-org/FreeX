@@ -9283,6 +9283,9 @@ Do you want to expand the selection to include the adjacent data, or continue wi
   <data name="MainWindow_AutomationName_Minimize" xml:space="preserve">
     <value>Minimize</value>
   </data>
+  <data name="MainWindow_AutomationName_RenameSheetTab" xml:space="preserve">
+    <value>Rename sheet tab</value>
+  </data>
   <data name="PageSetup_PrintRowAndColumnHeadings" xml:space="preserve">
     <value>Print row and column _headings</value>
   </data>
