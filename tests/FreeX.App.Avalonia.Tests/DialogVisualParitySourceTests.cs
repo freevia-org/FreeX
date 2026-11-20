@@ -13,11 +13,17 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };");
         source.Should().Contain("findFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);");
         source.Should().Contain("findChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);");
-        // The open tab height still comes from the WPF-authoritative planner metrics; the mode it
-        // is chosen by now routes through the shared FindReplaceOpenMode projection.
+        // The open tab height is the compact WPF host height; the mode it is chosen by routes through
+        // the shared FindReplaceOpenMode projection.
         source.Should().Contain("var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)");
-        source.Should().Contain("? FindReplaceDialogPlanner.ReplaceTabHeight");
-        source.Should().Contain(": FindReplaceDialogPlanner.FindTabHeight;");
+        source.Should().Contain("? compactReplaceTabHeight");
+        source.Should().Contain(": compactFindTabHeight;");
+        // The dialog opens compact like WPF: Options collapsed, format buttons / results grid / status hidden.
+        source.Should().Contain("SizeToContent = SizeToContent.Height,");
+        source.Should().Contain("var formatSurfaceExpanded = false;");
+        source.Should().Contain("formatSurfaceExpanded = optionsContent.IsVisible;");
+        source.Should().Contain("Children = { replaceAllButton, replaceButton, findAllButton, findNextButton, closeButton },");
+        source.Should().Contain("IsVisible = false,");
         source.Should().Contain("Height = openTabHeight,");
         source.Should().Contain("tabs.Height = tabHeight;");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions($\"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto\")");
@@ -29,7 +35,8 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("FindReplaceDialogPlanner.FieldMinWidth");
         source.Should().Contain("FindReplaceDialogPlanner.ResultBookColumnWidth");
         source.Should().Contain("FindReplaceDialogPlanner.ActionButtonSpacing");
-        source.Should().Contain("FindReplaceDialogPlanner.AvaloniaRootRightMargin");
+        source.Should().Contain("const double findReplaceCompactRootMargin = FindReplaceDialogPlanner.TabContentMargin;");
+        source.Should().Contain("FindReplaceDialogPlanner.WpfCompactActionButtonSpacing");
         source.Should().Contain("button.CornerRadius = new CornerRadius(0);");
         source.Should().Contain("textBox.CornerRadius = new CornerRadius(0);");
         source.Should().Contain("optionsHeader.Width = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;");

@@ -14150,12 +14150,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = FindReplaceText(FindReplaceDialogText.Title),
-            // WPF FindReplaceDialog.xaml: Width/Height/MinWidth/MinHeight are *outer* sizes of a
-            // resizable window; Avalonia sizes the client area, so take the Windows caption/frame off.
-            Width = FindReplaceDialogPlanner.Width - WpfResizableFrameWidth,
-            Height = FindReplaceDialogPlanner.Height - WpfResizableFrameHeight,
+            // WPF FindReplaceDialog.xaml: Width/MaxHeight/MinWidth are *outer* sizes; the window opens
+            // compact (Options collapsed, no results grid) and SizeToContent="Height" follows its content.
+            // Avalonia sizes the client area, so take the Windows caption/frame off.
+            Width = FindReplaceDialogPlanner.WpfCompactWidth - WpfResizableFrameWidth,
             MinWidth = FindReplaceDialogPlanner.MinWidth - WpfResizableFrameWidth,
-            MinHeight = FindReplaceDialogPlanner.MinHeight - WpfResizableFrameHeight,
+            MaxHeight = FindReplaceDialogPlanner.WpfCompactMaximumHeight - WpfResizableFrameHeight,
+            SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -14211,7 +14212,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var findTabGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto"),
-            Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
+            // WPF tab content grid: Margin="4,6,4,4".
+            Margin = new Thickness(4, 6, 4, 4),
         };
         var findLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(findLabel, 0);
@@ -14241,7 +14243,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabPanel = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto"),
-            Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
+            Margin = new Thickness(4, 6, 4, 4),
         };
         var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto") };
         var replaceFindLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
@@ -14269,8 +14271,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         replaceWithRow.Children.Add(replaceWithChooseFormatButton);
         Grid.SetRow(replaceFindRow, 0);
         Grid.SetRow(replaceWithRow, 1);
-        // WPF FindReplaceDialog.xaml gives ReplaceRow an 8px top margin.
-        replaceWithRow.Margin = new Thickness(0, 8, 0, 0);
+        // WPF FindReplaceDialog.xaml gives ReplaceRow a 4px top margin.
+        replaceWithRow.Margin = new Thickness(0, 4, 0, 0);
         replaceTabPanel.Children.Add(replaceFindRow);
         replaceTabPanel.Children.Add(replaceWithRow);
 
@@ -14279,9 +14281,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Replace), Content = replaceTabPanel };
         AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
 
+        // Compact WPF tab host heights measured from the WPF capture (Find 63, Replace 93); the planner's
+        // 74/108 belong to the old expanded 720x430 layout.
+        const double compactFindTabHeight = 63;
+        const double compactReplaceTabHeight = 93;
         var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)
-            ? FindReplaceDialogPlanner.ReplaceTabHeight
-            : FindReplaceDialogPlanner.FindTabHeight;
+            ? compactReplaceTabHeight
+            : compactFindTabHeight;
         var tabs = new TabControl
         {
             Items = { findTabItem, replaceTabItem },
@@ -14305,6 +14311,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
         var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
         AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
+        // WPF UpdateFormatSurfaceVisibility: the Format / Choose From Cell buttons (and the Clear button
+        // of a set format) only exist while the Options expander is expanded.
+        var formatSurfaceExpanded = false;
         void UpdateFormatButtons(
             StyleDiff? format,
             Button formatButton,
@@ -14316,11 +14325,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 clearButton,
                 Fr(FindReplaceDialogText.Format),
                 Fr(FindReplaceDialogText.FormatSetButton));
+            formatButton.IsVisible = formatSurfaceExpanded;
+            clearButton.IsVisible = formatSurfaceExpanded && format is not null;
         }
 
-        UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
-        UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
-        UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
+        void RefreshFormatSurface()
+        {
+            UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
+            UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
+            UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
+            findChooseFormatButton.IsVisible = formatSurfaceExpanded;
+            replaceFindChooseFormatButton.IsVisible = formatSurfaceExpanded;
+            replaceWithChooseFormatButton.IsVisible = formatSurfaceExpanded;
+        }
+
+        RefreshFormatSurface();
         findFormatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var selectedFormat = await PickFindReplaceFormatAsync(findFormat);
@@ -14438,6 +14457,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             BorderThickness = new Thickness(1),
             Background = Brush(242, 242, 242),
             Child = resultsPanel,
+            // WPF FindResultsGrid is Collapsed until a Find All produces results.
+            IsVisible = false,
+        };
+        // WPF StatusLabel is Collapsed until a status text is set.
+        statusLabel.IsVisible = false;
+        statusLabel.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBlock.TextProperty)
+                statusLabel.IsVisible = !string.IsNullOrEmpty(statusLabel.Text);
         };
 
         // ── Buttons ─────────────────────────────────────────────────────────────
@@ -14473,6 +14501,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             button.CornerRadius = new CornerRadius(0);
             button.Background = Brush(221, 221, 221);
             button.BorderBrush = button.IsDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
+        }
+        // WPF compact action row: five 90px buttons, 12px apart (Replace All, Replace, Find All, Find Next, Close).
+        foreach (var button in new[] { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton })
+        {
+            button.Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth;
+            button.MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth;
+            button.MaxWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth;
         }
         // WPF stretches the format buttons to their field row: a 26px button beside each search box.
         foreach (var button in new[] { findFormatButton, findFormatClearButton, findChooseFormatButton,
@@ -14516,8 +14551,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         tabs.SelectionChanged += (_, _) =>
         {
             var tabHeight = OnReplaceTab()
-                ? FindReplaceDialogPlanner.ReplaceTabHeight
-                : FindReplaceDialogPlanner.FindTabHeight;
+                ? compactReplaceTabHeight
+                : compactFindTabHeight;
             tabs.Height = tabHeight;
             tabs.MinHeight = tabHeight;
             tabs.MaxHeight = tabHeight;
@@ -14561,6 +14596,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
             resultsList.ItemsSource = result.Matches;
+            resultsBorder.IsVisible = true;
             statusLabel.Text = result.MatchCount == 0
                 ? Fr(FindReplaceDialogText.NoMatchesFound)
                 : Fr(FindReplaceDialogText.CellsFoundStatus, result.MatchCount);
@@ -14631,9 +14667,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = FindReplaceDialogPlanner.ActionButtonSpacing,
+            Spacing = FindReplaceDialogPlanner.WpfCompactActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
+            Children = { replaceAllButton, replaceButton, findAllButton, findNextButton, closeButton },
         };
 
         var optionsGlyph = new Border
@@ -14714,6 +14750,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         optionsHeader.Click += (_, _) =>
         {
             optionsContent.IsVisible = !optionsContent.IsVisible;
+            formatSurfaceExpanded = optionsContent.IsVisible;
+            RefreshFormatSurface();
             optionsHeaderText.Text = optionsContent.IsVisible
                 ? Fr(FindReplaceDialogText.OptionsExpanded)
                 : Fr(FindReplaceDialogText.Options);
@@ -14732,31 +14770,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // WPF: <Grid Margin="12">. The planner's Avalonia right/bottom margins were measured against a
         // client area as large as the WPF *outer* window, so they carry the Windows frame on top of
         // that 12px margin; the window is now sized to the client area, so the frame share comes off.
-        const double findReplaceFrameShareOfRightMargin =
-            FindReplaceDialogPlanner.AvaloniaRootRightMargin - FindReplaceDialogPlanner.RootMargin;
-        const double findReplaceFrameShareOfBottomMargin =
-            FindReplaceDialogPlanner.AvaloniaRootBottomMargin - FindReplaceDialogPlanner.RootMargin;
+        // The current WPF FindReplaceDialog.xaml root is <Grid Margin="10"> (compact layout).
+        const double findReplaceCompactRootMargin = FindReplaceDialogPlanner.TabContentMargin;
         var root = new Grid
         {
-            Margin = new Thickness(
-                FindReplaceDialogPlanner.RootMargin,
-                FindReplaceDialogPlanner.RootMargin,
-                FindReplaceDialogPlanner.AvaloniaRootRightMargin - findReplaceFrameShareOfRightMargin,
-                FindReplaceDialogPlanner.AvaloniaRootBottomMargin - findReplaceFrameShareOfBottomMargin),
+            Margin = new Thickness(findReplaceCompactRootMargin),
             RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
         };
         ConfigureDialogTabCycle(dialog, root);
 
-        tabs.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.TabContentMargin);
-        optionsExpander.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.AvaloniaOptionsBottomMargin);
+        // WPF: TabControl Margin="0,0,0,6", Expander Margin="0,0,0,6", results grid Margin="0,0,0,8",
+        // status label Margin="0,0,0,4".
+        tabs.Margin = new Thickness(0, 0, 0, 6);
+        optionsExpander.Margin = new Thickness(0, 0, 0, 6);
         resultsBorder.MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight;
-        resultsBorder.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.ResultsBottomMargin);
+        resultsBorder.Margin = new Thickness(0, 0, 0, 8);
         resultsHeader.Height = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsHeader.MinHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsHeader.MaxHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsPanel.Background = Brush(242, 242, 242);
         statusLabel.MinHeight = FindReplaceDialogPlanner.StatusMinimumHeight;
-        statusLabel.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.StatusBottomMargin);
+        statusLabel.Margin = new Thickness(0, 0, 0, 4);
         buttonRow.Margin = new Thickness(0);
 
         Grid.SetRow(tabs, 0);

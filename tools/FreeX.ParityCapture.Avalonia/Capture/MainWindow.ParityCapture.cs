@@ -1273,14 +1273,27 @@ public sealed partial class MainWindow
         var stack = new StackPanel();
         var checkBoxes = new List<CheckBox>();
 
-        foreach (var item in model.Items)
+        // The product menu (MainWindow.AutoFilter.cs AddUnavailableColorRow) shows a disabled "Sort by
+        // Color" row after the sort commands and a disabled "Filter by Color" row after Clear Filter
+        // when the column has no cell colours; build the same rows here.
+        void AddUnavailableColorRow(string labelKey) =>
+            stack.Children.Add(CreateAutoFilterParityMenuButton(new AutoFilterMenuItem(
+                labelKey == "AutoFilter_SortByColor"
+                    ? AutoFilterMenuItemKind.SortByColor
+                    : AutoFilterMenuItemKind.FilterByColor,
+                UiText.Get(labelKey),
+                IsEnabled: false,
+                IconKind: RibbonCommandIconKind.Color,
+                ShowsContinuation: true)));
+
+        for (var index = 0; index < model.Items.Count; index++)
         {
+            var item = model.Items[index];
             switch (item.Kind)
             {
                 case AutoFilterMenuItemKind.SortAscending:
                 case AutoFilterMenuItemKind.SortDescending:
                 case AutoFilterMenuItemKind.ClearFilter:
-                case AutoFilterMenuItemKind.FilterByColor:
                 case AutoFilterMenuItemKind.FilterFamily:
                 case AutoFilterMenuItemKind.FilterFamilyCommand:
                     var menuButton = CreateAutoFilterParityMenuButton(item);
@@ -1288,6 +1301,13 @@ public sealed partial class MainWindow
                     if (item.Kind is AutoFilterMenuItemKind.FilterFamily or AutoFilterMenuItemKind.FilterFamilyCommand)
                         menuButton.Margin = new Thickness(0, 4, 0, 0);
                     stack.Children.Add(menuButton);
+                    if (model.ColorOptions.Count == 0)
+                    {
+                        if (item.Kind == AutoFilterMenuItemKind.SortDescending)
+                            AddUnavailableColorRow("AutoFilter_SortByColor");
+                        else if (item.Kind == AutoFilterMenuItemKind.ClearFilter)
+                            AddUnavailableColorRow("AutoFilter_FilterByColor");
+                    }
                     break;
                 case AutoFilterMenuItemKind.Search:
                     // WPF AutoFilterDialog: a 22px search box, 4px above and below, with the
@@ -1331,6 +1351,9 @@ public sealed partial class MainWindow
                     checkBoxes.Add(box);
                     break;
                 case AutoFilterMenuItemKind.Separator:
+                    // WPF AutoFilterDialog has no rule between "(Select All)" and the value list.
+                    if (index + 1 < model.Items.Count && model.Items[index + 1].Kind == AutoFilterMenuItemKind.ChecklistItem)
+                        break;
                     AddAutoFilterParitySeparator(stack);
                     break;
             }
@@ -1379,39 +1402,13 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// WPF AutoFilterDialog.CreateMenuCommandButton / SetMenuCommandButtonContent: a borderless
-    /// 22px row with (5,2) padding holding the 12px access-key label and, for the filter
-    /// families, a continuation chevron at the far right. The captured WPF dialog draws no icon
-    /// in front of the label, so the row carries none.
+    /// 22px row with (5,2) padding holding the icon, the 12px access-key label and, for the cascade
+    /// rows, a continuation chevron at the far right. The row content comes from the product's own
+    /// <see cref="CreateAutoFilterRowContent"/> so icons and chevrons cannot drift from the real menu.
     /// </summary>
     private static Button CreateAutoFilterParityMenuButton(AutoFilterMenuItem item)
     {
-        var content = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-
-        // WPF hosts the label in an AccessText: the access-key marker is consumed, not drawn.
-        var label = new AccessText
-        {
-            Text = item.Label,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 0, item.ShowsContinuation ? 8 : 0, 0),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-        };
-        AvaloniaGrid.SetColumn(label, 1);
-        content.Children.Add(label);
-
-        if (item.ShowsContinuation)
-        {
-            var cascade = new TextBlock
-            {
-                Text = "\u203A",
-                FontSize = 18,
-                FontFamily = FormulaBarFontFamily,
-                Margin = new Thickness(0, -2, 1, 0),
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            };
-            AvaloniaGrid.SetColumn(cascade, 2);
-            content.Children.Add(cascade);
-        }
+        var content = CreateAutoFilterRowContent(item.IconKind, item.Label, item.ShowsContinuation);
 
         return new Button
         {
@@ -1987,15 +1984,9 @@ public sealed partial class MainWindow
 
     private async Task ShowProtectWorkbookParityDialogAsync()
     {
-        // Protect the workbook (with a password) first so the dialog renders the SAME "Unprotect
-        // Workbook" variant the WPF host capture hard-codes — otherwise Linux shows the Protect
-        // variant and the two captures can't be compared.
-        if (!_session.Workbook.IsStructureProtected)
-        {
-            _session.ExecuteReviewCommand(new ProtectWorkbookCommand("pw"));
-            RefreshShell(_statusText.Text ?? "Ready");
-        }
-
+        // The WPF host capture constructs the real Protect Workbook dialog (the optional-password
+        // prompt of ProtectWorkbookBtn_Click), so show the Protect variant of an unprotected workbook
+        // here too; the session reset gives every capture an unprotected workbook.
         await ShowProtectWorkbookDialogAsync();
     }
 
