@@ -666,7 +666,7 @@ internal static class ParityCapture
                 new CellAddress(sheet.Id, 2, 6)));
 
         CaptureDialog(results, "dialog.AdvancedFilter", outDir, () =>
-            new AdvancedFilterDialog(sheet.Id, "Sheet1!$A$1:$D$5", ResolveSheetId(workbook)));
+            new AdvancedFilterDialog(sheet.Id, "A1:D5", ResolveSheetId(workbook)));
 
         CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
 

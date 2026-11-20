@@ -606,7 +606,13 @@ public sealed partial class MainWindow
     /// </summary>
     private IReadOnlyList<(string SurfaceId, Func<Task> Opener, string[] TabNames)> ParityTabDialogOpeners() =>
     [
-        ("dialog.FormatCells", () => ShowFormatCellsDialogAsync(),
+        // The WPF capture opens `new FormatCellsDialog(CellStyle.Default, ...)` (an unstyled cell), so
+        // select a blank, default-styled cell outside the demo data before opening this one.
+        ("dialog.FormatCells", () =>
+            {
+                _session.SelectCell(new CellAddress(_session.ActiveSheet.Id, 60, 26));
+                return ShowFormatCellsDialogAsync();
+            },
             ["Number", "Alignment", "Font", "Border", "Fill", "Protection"]),
         // Page Setup: both shells have the same 4 tabs in the same order (Page/Margins/Header-Footer/Sheet).
         ("dialog.PageSetup", () => ShowPageSetupDialogAsync(),
