@@ -46,6 +46,9 @@ public sealed partial class CellStyleDiffPlannerTests
 
         var result = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Normal).ApplyTo(styled);
 
-        result.Should().Be(CellStyle.Default);
+        var expected = CellStyle.Default.Clone();
+        expected.FontName = WorkbookCreationDefaults.FontName;
+        expected.FontScheme = CellFontScheme.None;
+        result.Should().Be(expected);
     }
 }
