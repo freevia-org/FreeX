@@ -83,7 +83,22 @@ public sealed partial class DocumentView
     /// blocks read before it.
     /// </summary>
     internal void ReadPagesInto(IReadOnlyList<FlowDocument> pages, IList<ModelBlock> target, int[] pageStarts) =>
-        ReadRenderedPagesInto(pages.Select(page => page.Blocks).ToList(), target, _model, pageStarts);
+        ReadRenderedPagesInto(pages.Select(page => (IEnumerable<System.Windows.Documents.Block>)page.Blocks).ToList(), target, _model, pageStarts);
+
+    /// <summary>The top-level blocks a page read visits, in order (sections replaced by their content).</summary>
+    internal static List<System.Windows.Documents.Block> ReadableBlocks(FlowDocument page) =>
+        FlattenSections(page.Blocks).ToList();
+
+    /// <summary>
+    /// <see cref="ReadPagesInto"/> over slices of pages: each entry is the (consecutive) top-level blocks of a
+    /// page that take part, so a page can supply just the block that continues onto, or from, a neighbour.
+    /// </summary>
+    internal void ReadPageSlicesInto(
+        IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> slices,
+        IList<ModelBlock> target,
+        int[] sliceStarts) =>
+        ReadRenderedPagesInto(
+            slices.Select(slice => (IEnumerable<System.Windows.Documents.Block>)slice).ToList(), target, _model, sliceStarts);
 
     private static bool TryReadContinuation(
         System.Windows.Documents.Block block,

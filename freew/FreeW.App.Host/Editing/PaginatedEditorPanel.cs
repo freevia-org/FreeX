@@ -2257,8 +2257,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         {
             // W10: lay out only through the pages the user sees (and the caret's page), show those, and
             // paginate the rest in the background.
-            var (targetPage, targetBlock) = ComputeSyncTarget();
-            PagedLayoutSession.LayoutRun? run = null;
+            var (targetPage, targetBlock) = ComputeSyncTarget();            PagedLayoutSession.LayoutRun? run = null;
             try
             {
                 var layoutClock = PagedEditDiagnostics.StartClock();
@@ -2268,6 +2267,14 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
                 _lastLayoutMs = layoutClock?.Elapsed.TotalMilliseconds ?? 0;
                 layoutClock?.Restart();
                 if (!run.IsComplete && TryApplyRun(run, reuseUnchangedPages, background: false))
+                {
+                    _lastApplyMs = layoutClock?.Elapsed.TotalMilliseconds ?? 0;
+                    _backgroundRun = run;
+                    ScheduleBackgroundLayout();
+                    return;
+                }
+                if (run.IsComplete && model.Blocks.Count > SmallDocumentBlocks
+                    && TryApplyCompletedRunPartly(run, targetPage, targetBlock, reuseUnchangedPages))
                 {
                     _lastApplyMs = layoutClock?.Elapsed.TotalMilliseconds ?? 0;
                     _backgroundRun = run;
@@ -2378,19 +2385,37 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             return ApplyBodyPlan(model, run.Assignment, pageCount, plan, pageCount, complete: true, reuseUnchangedPages, background);
         }
 
-        var known = run.FinalPageCount;
-        var frontier = run.FrontierModelBlock;
+        return ApplyPartialRun(
+            model, run.FinalPageCount, run.FrontierModelBlock, run.FrontierRendered,
+            run.PartialAssignment, run.PartialRenderedPages(), run.PartialCuts(), reuseUnchangedPages, background);
+    }
+
+    /// <summary>
+    /// Shows the final pages of a run in progress (<paramref name="known"/> pages, the blocks before
+    /// <paramref name="frontier"/>) followed by a sized placeholder for the rest.
+    /// </summary>
+    private bool ApplyPartialRun(
+        TextDocument model,
+        int known,
+        int frontier,
+        int frontierRendered,
+        Func<int[]> partialAssignment,
+        int[] renderedPages,
+        List<RenderedCut> cuts,
+        bool reuseUnchangedPages,
+        bool background)
+    {
         if (known <= 0 || frontier <= 0 || frontier >= model.Blocks.Count)
             return false;
 
         // The blocks whose page is not final yet go on one provisional page after the final ones; that
         // page is shown as a placeholder, not built.
-        var partial = run.PartialAssignment();
+        var partial = partialAssignment();
 
         // Split plan: show the final pages up to the last one followed by a page that starts on a whole
         // model block (a block running on into pages not laid out yet stays off the shown pages).
-        if (run.PartialRenderedPages() is { Length: > 0 } renderedPages
-            && PlanSplitPages(model, renderedPages, run.PartialCuts(), known + 1, run.FrontierRendered) is { Starts: { } starts } splitPartial)
+        if (renderedPages is { Length: > 0 }
+            && PlanSplitPages(model, renderedPages, cuts, known + 1, frontierRendered) is { Starts: { } starts } splitPartial)
         {
             var shown = known;
             while (shown >= 1 && starts[shown] is not { IsMid: false })
@@ -2402,7 +2427,7 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
                     partial[m] = shown;
                 if (ApplyBodyPlan(model, partial, shown + 1, splitPartial, shown, complete: false, reuseUnchangedPages, background))
                     return true;
-                partial = run.PartialAssignment();
+                partial = partialAssignment();
             }
         }
 
@@ -2411,6 +2436,57 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         if (PlanPages(model, partial, known + 1) is not { } partialPlan)
             return false;
         return ApplyBodyPlan(model, partial, known + 1, partialPlan, known, complete: false, reuseUnchangedPages, background);
+    }
+
+    /// <summary>Pages beyond the sync target a completed run must have before the rest is deferred.</summary>
+    private const int HoldBackMinimumPages = 6;
+
+    /// <summary>
+    /// A foreground re-flow whose layout finished by itself (the layout rejoined the previous run) but changed
+    /// the page count shifts every later page, and each shifted page is built afresh: building them all would
+    /// hold the keystroke for as long as there are pages. Show the pages through the sync target now and
+    /// leave the rest to the background pagination, exactly as when the layout had not finished. False when the
+    /// run is not worth holding back (or cannot be shown partly).
+    /// </summary>
+    private bool TryApplyCompletedRunPartly(
+        PagedLayoutSession.LayoutRun run, int targetPage, int targetBlock, bool reuseUnchangedPages)
+    {
+        var model = _sourceEditor.Model;
+        var rendered = run.RenderedPages;
+        var assignment = run.Assignment;
+        if (!run.IsComplete || rendered.Length == 0 || assignment.Length != model.Blocks.Count
+            || CompletePageCount(assignment, run.TotalPageCount) == _lastCompleteTotalPages
+            || _tailPlaceholder is not null)
+        {
+            return false;
+        }
+
+        var wanted = Math.Max(targetPage + 1, targetBlock >= 0 && targetBlock < assignment.Length ? assignment[targetBlock] + 1 : 0);
+        if (wanted + HoldBackMinimumPages >= run.TotalPageCount)
+            return false;
+        var firstHeld = 0;
+        while (firstHeld < rendered.Length && rendered[firstHeld] < wanted)
+            firstHeld++;
+        if (firstHeld == 0 || firstHeld >= rendered.Length)
+            return false;
+        var known = rendered[firstHeld];
+        var frontier = 0;
+        while (frontier < run.RenderedStartOfModel.Length && run.RenderedStartOfModel[frontier] < firstHeld)
+            frontier++;
+
+        int[] PartialAssignment()
+        {
+            var result = (int[])assignment.Clone();
+            for (var m = frontier; m < result.Length; m++)
+                result[m] = -1;
+            return result;
+        }
+
+        var renderedPages = (int[])rendered.Clone();
+        for (var r = firstHeld; r < renderedPages.Length; r++)
+            renderedPages[r] = -1;
+        var cuts = run.Cuts.Where(cut => cut.Page <= known).ToList();
+        return ApplyPartialRun(model, known, frontier, firstHeld, PartialAssignment, renderedPages, cuts, reuseUnchangedPages, background: false);
     }
 
     /// <summary>
@@ -4584,9 +4660,22 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
     /// The contiguous run of page boxes edited since the last commit and the model blocks they show, when
     /// that is known exactly: a commit then replaces only those blocks.
     /// </summary>
-    internal bool TryGetEditedSpan(out int firstBox, out int lastBox)
+    internal bool TryGetEditedSpan(out int firstBox, out int lastBox) =>
+        TryGetEditedSpan(out firstBox, out lastBox, out _, out _, bounded: false);
+
+    /// <summary>
+    /// <see cref="TryGetEditedSpan(out int, out int)"/>. With <paramref name="bounded"/> the span reaches only
+    /// as far as the pieces of the blocks split between its edited pages and their neighbours: the box before
+    /// the first edited page that holds the head of the block it continues (a box that is nothing but a middle
+    /// piece of one block extends it further), and the boxes after the last edited page that hold the rest of
+    /// its last block. Such a boundary box is read only for that one block (see
+    /// <see cref="PaginatedCommitCoordinator"/>), so a document where every page ends in a split paragraph
+    /// does not chain every page into one span. <paramref name="editedFirst"/>/<paramref name="editedLast"/>
+    /// are the first and last box edited since the last commit.
+    /// </summary>
+    internal bool TryGetEditedSpan(out int firstBox, out int lastBox, out int editedFirst, out int editedLast, bool bounded)
     {
-        firstBox = lastBox = -1;
+        firstBox = lastBox = editedFirst = editedLast = -1;
         if (!_boxRangesValid || _editedSinceCommit.Count == 0 || !ReferenceEquals(_sourceModel, _sourceEditor.Model))
             return false;
 
@@ -4600,14 +4689,36 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
         }
         if (firstBox < 0 || _editedSinceCommit.Any(box => !_pageBoxes.Contains(box)))
             return false;
+        editedFirst = firstBox;
+        editedLast = lastBox;
 
-        // A block split across pages is read back whole: the span covers every page it is on.
-        while (firstBox > 0 && _pageBoxes[firstBox].ContinuesPrevious)
-            firstBox--;
-        while (lastBox + 1 < _pageBoxes.Count && _pageBoxes[lastBox + 1].ContinuesPrevious)
-            lastBox++;
-        if (_pageBoxes[firstBox].ContinuesPrevious)
-            return false;
+        if (bounded)
+        {
+            while (firstBox > 0 && _pageBoxes[firstBox].ContinuesPrevious)
+            {
+                firstBox--;
+                if (!(_pageBoxes[firstBox].ContinuesPrevious && _pageBoxes[firstBox].ModelBlocks?.Length == 0))
+                    break;
+            }
+            while (lastBox + 1 < _pageBoxes.Count && _pageBoxes[lastBox + 1].ContinuesPrevious)
+            {
+                lastBox++;
+                if (_pageBoxes[lastBox].ModelBlocks?.Length != 0)
+                    break;
+            }
+            if (firstBox == 0 && _pageBoxes[0].ContinuesPrevious)
+                return false;
+        }
+        else
+        {
+            // A block split across pages is read back whole: the span covers every page it is on.
+            while (firstBox > 0 && _pageBoxes[firstBox].ContinuesPrevious)
+                firstBox--;
+            while (lastBox + 1 < _pageBoxes.Count && _pageBoxes[lastBox + 1].ContinuesPrevious)
+                lastBox++;
+            if (_pageBoxes[firstBox].ContinuesPrevious)
+                return false;
+        }
 
         // The model must still hold exactly what the boxes were built from.
         var blocks = _sourceEditor.Model.Blocks;
@@ -4647,9 +4758,10 @@ internal sealed partial class PaginatedEditorPanel : ScrollViewer, IExternalEdit
             if (i <= lastBox)
             {
                 box.ModelBlocks = perBox[i - firstBox];
-                if (box.ContinuesPrevious)
+                if (box.ContinuesPrevious && i > firstBox)
                 {
-                    // The block it continues is the last one that started on an earlier page of the span.
+                    // The block it continues is the last one that started on an earlier page of the span
+                    // (the span's first box continues a block from before it: that stays as it was).
                     box.LeadingModelBlock = null;
                     for (var k = i - firstBox - 1; k >= 0 && box.LeadingModelBlock is null; k--)
                     {

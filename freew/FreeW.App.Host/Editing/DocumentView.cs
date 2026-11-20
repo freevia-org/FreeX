@@ -9907,6 +9907,23 @@ public sealed partial class DocumentView : RichTextBox
         TextDocument document) =>
         ReadRenderedPagesInto([blocks], target, document, pageStarts: null);
 
+    /// <summary>The top-level blocks a page read visits: its blocks with sections replaced by their content.</summary>
+    private static IEnumerable<System.Windows.Documents.Block> FlattenSections(IEnumerable<System.Windows.Documents.Block> source)
+    {
+        foreach (var block in source)
+        {
+            if (block is System.Windows.Documents.Section section)
+            {
+                foreach (var nested in FlattenSections(section.Blocks))
+                    yield return nested;
+            }
+            else
+            {
+                yield return block;
+            }
+        }
+    }
+
     /// <summary>
     /// Reads the top-level blocks of consecutive pages (or of one document) into model blocks, in one
     /// pass: a table split into pagination segments is reassembled across pages, and a block a page
@@ -9916,27 +9933,11 @@ public sealed partial class DocumentView : RichTextBox
     /// are the blocks that start on page <c>i</c>.
     /// </summary>
     private static void ReadRenderedPagesInto(
-        IReadOnlyList<BlockCollection> pages,
+        IReadOnlyList<IEnumerable<System.Windows.Documents.Block>> pages,
         IList<ModelBlock> target,
         TextDocument document,
         int[]? pageStarts)
     {
-        static IEnumerable<System.Windows.Documents.Block> FlattenSections(IEnumerable<System.Windows.Documents.Block> source)
-        {
-            foreach (var block in source)
-            {
-                if (block is System.Windows.Documents.Section section)
-                {
-                    foreach (var nested in FlattenSections(section.Blocks))
-                        yield return nested;
-                }
-                else
-                {
-                    yield return block;
-                }
-            }
-        }
-
         // A segment table is added to the target when its first segment is read; later segments append
         // their rows to it while they follow in order.
         ModelTable? pendingSegmentTable = null;

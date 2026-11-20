@@ -856,7 +856,16 @@ internal sealed class PagedLayoutSession
         bool StartsWithRemainder,   // the pass begins with the rest of a paragraph split on the page before
         double CarriedNoteDip,
         CarryLink[] CarryChain,
-        int LocalPageStart);
+        int LocalPageStart)
+    {
+        /// <summary>
+        /// Plain path only: when the page starts with the rest of block <c>StartRendered - 1</c> and that rest is
+        /// exactly an inline page-break fragment (a forced page start), the index of that fragment in the
+        /// block's fragment group; otherwise 0. A forced page start depends on nothing before it, so layout can
+        /// restart (and stop, once it matches the previous run) there although the page starts mid-block.
+        /// </summary>
+        public int HardFragment { get; init; }
+    }
 
     internal enum SegmentMode
     {
@@ -1502,26 +1511,43 @@ internal sealed class PagedLayoutSession
         LayoutRun run,
         int pageOffset)
     {
-        // Restart point: the last page of the previous run that started cleanly on a whole block, at
-        // least one page before the page holding the first changed block.
+        // Restart point: the last page of the previous run that started cleanly on a whole block (or exactly
+        // on a forced inline-break fragment of one), at least one page before the page holding the first
+        // changed block.
         var restart = previous is null ? null : FindPlainRestart(previous, changedStart);
-        var startRendered = restart?.StartRendered ?? segment.Start;
-        var pageBase = restart?.LocalPageStart ?? 0;
+        // A forced-start restart begins inside the block the page continues: that block is laid out again
+        // from its top, which is harmless because everything from the forced fragment on depends on nothing
+        // before it; only the page numbering is shifted to match.
+        var fragmentRestart = restart is { StartsWithRemainder: true, HardFragment: > 0 };
+        var startRendered = restart is null ? segment.Start : fragmentRestart ? restart!.StartRendered - 1 : restart!.StartRendered;
+        var restartPage = restart?.LocalPageStart ?? 0;
+        var pageBase = restartPage;
         if (restart is not null)
         {
-            for (var r = segment.Start; r < startRendered; r++)
+            // Blocks before the restart (and, for a forced-start restart, the block that holds it: it starts
+            // on an earlier page) keep their previous pages.
+            for (var r = segment.Start; r < (fragmentRestart ? startRendered + 1 : startRendered); r++)
                 result.LocalPage[r - segment.Start] = previous!.LocalPage[r - segment.Start];
-            result.Passes.AddRange(previous!.Passes.TakeWhile(pass => pass.StartRendered < startRendered));
-            result.Cuts.AddRange(previous.Cuts.Where(cut => cut.Page < pageBase));
-            _pagesReused += pageBase;
+            result.Passes.AddRange(previous!.Passes.TakeWhile(pass => pass.StartRendered < restart.StartRendered));
+            result.Cuts.AddRange(previous.Cuts.Where(cut => cut.Page < restartPage
+                || (fragmentRestart && cut.Page == restartPage && cut.Rendered == startRendered)));
+            _pagesReused += restartPage;
         }
 
         // A fresh flow already starts a page: an explicit break on its first block would add a blank one.
-        var restoreBreak = (WpfBlock?)null;
-        if (restart is not null && RenderedBlock(startRendered) is { BreakPageBefore: true } firstBlock)
+        var restoreBreaks = new List<WpfBlock>();
+        if (restart is not null && RenderedBlock(startRendered) is { } firstBlock)
         {
-            firstBlock.BreakPageBefore = false;
-            restoreBreak = firstBlock;
+            if (firstBlock.BreakPageBefore)
+            {
+                firstBlock.BreakPageBefore = false;
+                restoreBreaks.Add(firstBlock);
+            }
+            if (fragmentRestart && firstBlock is WpfSection { Blocks.FirstBlock: { BreakPageBefore: true } firstChild })
+            {
+                firstChild.BreakPageBefore = false;
+                restoreBreaks.Add(firstChild);
+            }
         }
 
         var flow = newFlow();
@@ -1529,14 +1555,57 @@ internal sealed class PagedLayoutSession
         var oldCleanStarts = previous?.Passes
             .Where(pass => !pass.StartsWithRemainder)
             .ToDictionary(pass => pass.StartRendered, pass => pass);
+        var oldHardStarts = new Dictionary<int, PassRecord>();
+        if (previous is not null)
+        {
+            foreach (var pass in previous.Passes)
+            {
+                if (pass.HardFragment > 0)
+                    oldHardStarts.TryAdd(pass.StartRendered, pass);
+            }
+        }
         try
         {
             var currentLocal = -1;
+            var restartPassPending = false;
+            if (fragmentRestart)
+            {
+                // The forced fragment's page in this flow (the block sits at the top of it) maps to the page
+                // it had in the previous run; the block after it starts on the same page, as before.
+                var nextPage = window.PageOfStart(startRendered + 1);
+                var fragmentPage = RenderedBlock(startRendered) is WpfSection section
+                    && restart!.HardFragment < section.Blocks.Count
+                        ? window.Paginator.GetPageNumber(section.Blocks.ElementAt(restart.HardFragment).ContentStart)
+                        : -1;
+                if (fragmentPage < 1 || fragmentPage != nextPage)
+                    throw new UnsupportedException("forced-start restart did not reproduce the previous page start");
+                pageBase = restartPage - fragmentPage;
+                currentLocal = fragmentPage;
+                restartPassPending = true;
+            }
+
             for (var r = startRendered; r < end; r++)
             {
+                if (fragmentRestart && r == startRendered)
+                    continue; // its page was kept from the previous run
+
                 var page = window.PageOfStart(r);
                 if (page < 0)
                     page = Math.Max(0, currentLocal);
+                if (restartPassPending)
+                {
+                    restartPassPending = false;
+                    if (page == currentLocal)
+                    {
+                        // The page the restart began on is where block r starts too: the pass the previous run
+                        // recorded for it.
+                        result.Passes.Add(new PassRecord(r, true, 0, [], pageBase + page) { HardFragment = restart!.HardFragment });
+                        _pagesLaidOut++;
+                        run.FrontierRendered = r;
+                        run.FrontierPage = pageOffset + pageBase + page;
+                        yield return false;
+                    }
+                }
                 if (page != currentLocal)
                 {
                     // A new page starts at r. Clean when the block before it ended on an earlier page.
@@ -1555,23 +1624,35 @@ internal sealed class PagedLayoutSession
                                 result.Cuts.Add(cut);
                         }
                     }
-                    var record = new PassRecord(r, !clean, 0, [], pageBase + page);
-                    if (clean && r >= changedEnd && previous is not null && r > startRendered
-                        && oldCleanStarts!.TryGetValue(r - renderedDelta, out var old))
+                    var hard = clean || r == startRendered ? 0 : HardFragmentStart(window.Paginator, window[r - 1], page);
+                    var record = new PassRecord(r, !clean, 0, [], pageBase + page) { HardFragment = hard };
+                    PassRecord? old = null;
+                    if (previous is not null && r > startRendered)
+                    {
+                        if (clean && r >= changedEnd && oldCleanStarts!.TryGetValue(r - renderedDelta, out var cleanOld))
+                            old = cleanOld;
+                        else if (hard > 0 && r - 1 >= changedEnd
+                            && oldHardStarts.TryGetValue(r - renderedDelta, out var hardOld) && hardOld.HardFragment == hard)
+                            old = hardOld;
+                    }
+                    if (old is not null)
                     {
                         // Stabilised: from here on the previous run's pages repeat, shifted.
                         var pageDelta = record.LocalPageStart - old.LocalPageStart;
                         for (var k = r; k < end; k++)
-                            result.LocalPage[k - segment.Start] = previous.LocalPage[k - renderedDelta - previous.RenderedStart] + pageDelta;
-                        result.Passes.AddRange(previous.Passes
+                            result.LocalPage[k - segment.Start] = previous!.LocalPage[k - renderedDelta - previous.RenderedStart] + pageDelta;
+                        result.Passes.AddRange(previous!.Passes
                             .Skip(previous.Passes.IndexOf(old))
                             .Select(pass => pass with
                             {
                                 StartRendered = pass.StartRendered + renderedDelta,
                                 LocalPageStart = pass.LocalPageStart + pageDelta
                             }));
+                        // The cut of the page a forced fragment starts was just made above.
+                        var madeCutOf = hard > 0 ? r - 1 - renderedDelta : -1;
                         result.Cuts.AddRange(ShiftCuts(
-                            previous.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
+                            previous.Cuts.Where(cut => cut.Page >= old.LocalPageStart
+                                && !(cut.Page == old.LocalPageStart && cut.Rendered == madeCutOf)), renderedDelta, pageDelta));
                         result.PageCount = previous.PageCount + pageDelta;
                         _pagesReused += previous.PageCount - old.LocalPageStart;
                         yield break;
@@ -1607,15 +1688,49 @@ internal sealed class PagedLayoutSession
         finally
         {
             window.Release();
-            if (restoreBreak is not null)
-                restoreBreak.BreakPageBefore = true;
+            foreach (var block in restoreBreaks)
+                block.BreakPageBefore = true;
         }
+    }
+
+    /// <summary>
+    /// When the page <paramref name="page"/> starts exactly at an inline page-break fragment of
+    /// <paramref name="block"/> (a fragment group whose later paragraphs carry the break), that fragment's
+    /// index; otherwise 0.
+    /// </summary>
+    private static int HardFragmentStart(DynamicDocumentPaginator paginator, WpfBlock block, int page)
+    {
+        if (block is not WpfSection { Blocks.Count: > 1 } section)
+            return 0;
+        var children = new List<WpfParagraph>(section.Blocks.Count);
+        foreach (var child in section.Blocks)
+        {
+            if (child is not WpfParagraph paragraph)
+                return 0;
+            children.Add(paragraph);
+        }
+        if (PageSplitter.FirstPositionOnPage(paginator, block, page) is not { } position)
+            return 0;
+        for (var i = 1; i < children.Count; i++)
+        {
+            var child = children[i];
+            if (!child.BreakPageBefore || !DocumentView.IsInlineBreakContinuationFragment(child))
+                continue;
+            var inGap = position.CompareTo(children[i - 1].ContentEnd) >= 0 && position.CompareTo(child.ContentStart) <= 0;
+            var atStart = position.CompareTo(child.ContentStart) >= 0
+                && position.CompareTo(child.ContentEnd) <= 0
+                && PageSplitter.ContentOffset(child.ContentStart, position) == 0;
+            if (inGap || atStart)
+                return i;
+        }
+        return 0;
     }
 
     private static PassRecord? FindPlainRestart(SegmentResult previous, int changedStart)
     {
         // The page holding the first changed block, then one page back (a keep-with-next chain may pull
-        // that page's first lines back), then back to a page that starts on a whole block.
+        // that page's first lines back), then back to a page that starts on a whole block or exactly on a
+        // forced inline-break fragment.
         var holding = -1;
         for (var k = 0; k < previous.Passes.Count; k++)
         {
@@ -1626,7 +1741,7 @@ internal sealed class PagedLayoutSession
         }
         for (var k = holding - 1; k >= 1; k--)
         {
-            if (!previous.Passes[k].StartsWithRemainder)
+            if (!previous.Passes[k].StartsWithRemainder || previous.Passes[k].HardFragment > 0)
                 return previous.Passes[k];
         }
         return null;

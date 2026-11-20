@@ -75,6 +75,83 @@ public sealed class PagedEditW9IncrementalTests(Xunit.Abstractions.ITestOutputHe
         panel.Detach();
     }
 
+    /// <summary>
+    /// W14: when every page ends in a paragraph split at an inline break, an edit commits only the pieces it
+    /// shares with its neighbours -- a few blocks, not the chain of every page -- and the result is exactly
+    /// what a whole read gives (the page texts of a fresh build, the hidden editor of a fresh render).
+    /// </summary>
+    [StaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void BreakOnEveryPage_PageEdit_CommitsOnlyTheNeighbourhood(bool atEnd)
+    {
+        var (panel, editor) = BuildPanel(PagedEditW7PerformanceProbe.InlineBreakDocument(paragraphs: 90, breakEvery: 3));
+        panel.AttachAsActiveSurface();
+        editor.RefreshFromModel();
+        panel.PageBoxes.Count(box => box.ContinuesPrevious).Should().BeGreaterThan(20, "every page continues a split paragraph");
+        var before = editor.Model.Blocks.ToList();
+        var box = panel.PageBoxes[panel.PageBoxes.Count / 2];
+
+        if (atEnd)
+        {
+            Append(box, " typed");
+        }
+        else
+        {
+            box.Body.Focus();
+            box.Body.Document.ContentStart.GetInsertionPosition(LogicalDirection.Forward)!.InsertTextInRun("lead ");
+        }
+        PaginatedCommitCoordinator.Commit(panel, editor);
+
+        editor.Model.Blocks.Should().HaveCount(before.Count);
+        var changed = Enumerable.Range(0, before.Count).Where(i => !ReferenceEquals(editor.Model.Blocks[i], before[i])).ToList();
+        output.WriteLine($"changed blocks: {string.Join(",", changed)}");
+        changed.Should().NotBeEmpty().And.HaveCountLessThanOrEqualTo(5, "only the edited page's blocks (with the ones it shares with its neighbours) are replaced");
+        editor.Model.Blocks.OfType<ModelParagraph>().Count(p => p.PlainText.Contains(atEnd ? " typed" : "lead "))
+            .Should().Be(1);
+        editor.Model.Blocks.Count(block => block is ModelParagraph p && p.Runs.Any(run => run.IsPageBreak))
+            .Should().Be(before.Count(block => block is ModelParagraph p && p.Runs.Any(run => run.IsPageBreak)), "no break is lost");
+        HiddenText(editor).Should().Be(FreshRenderText(editor.Model));
+
+        panel.Repaginate();
+        PageTexts(panel).Should().Equal(PageTexts(PaginatedEditorPanel.Build(editor)));
+        editor.Undo();
+        editor.Model.Blocks.Should().Equal(before, "undo restores the exact block instances");
+        panel.Detach();
+    }
+
+    /// <summary>
+    /// W14: an edit that adds a page shifts every later page; when the layout finishes by itself the pages past
+    /// the sync target are left to the background pagination instead of all being built before the keystroke
+    /// returns -- and the result, once finished, is exactly a fresh build.
+    /// </summary>
+    [StaFact]
+    public void PageAddingEdit_HoldsBackLaterPages_AndFinishesAsAFreshBuild()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(PagedEditW7PerformanceProbe.InlineBreakDocument(paragraphs: 400, breakEvery: 12));
+        editor.CommitToModel();
+        var panel = PaginatedEditorPanel.Build(editor, progressive: true);
+        panel.Measure(new System.Windows.Size(1200, 900));
+        panel.Arrange(new System.Windows.Rect(0, 0, 1200, 900));
+        panel.FinishLayoutNow();
+        panel.AttachAsActiveSurface();
+        var pagesBefore = panel.PageBoxes.Count;
+        pagesBefore.Should().BeGreaterThan(40);
+
+        var box = panel.PageBoxes[2];
+        Append(box, string.Concat(Enumerable.Repeat(" more words that wrap onto new lines", 60)));
+        panel.Repaginate();
+
+        output.WriteLine($"after the edit: {panel.PageBoxes.Count} boxes shown of {pagesBefore}, layout complete: {panel.IsLayoutComplete}");
+        panel.IsLayoutComplete.Should().BeFalse("the pages the shift moved are built in the background");
+        panel.FinishLayoutNow();
+        panel.IsLayoutComplete.Should().BeTrue();
+        panel.PageBoxes.Count.Should().BeGreaterThan(pagesBefore);
+        PageTexts(panel).Should().Equal(PageTexts(PaginatedEditorPanel.Build(editor)));
+        panel.Detach();
+    }
+
     [StaFact]
     public void Reflow_KeepsUnchangedPageBoxes_AndMatchesAFreshBuild()
     {
