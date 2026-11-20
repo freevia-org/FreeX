@@ -16959,11 +16959,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // 10px margin, ends 24px short of the right edge and 48px short of the bottom edge of that
         // outer size. Avalonia sizes are client sizes, so the frame is subtracted here instead of
         // being re-created as an empty band right of and below OK/Cancel. WPF narrows the other
-        // five tabs to 550x510; this dialog keeps the Border-tab width on every tab because the
-        // Fill and Border editors are measured against that width.
+        // five tabs to 550x510, and this dialog does the same: 550 wide on every tab but Border.
         const double formatCellsFrameWidth = 14;
         const double formatCellsFrameHeight = 38;
-        const double formatCellsDialogWidth = 620 - formatCellsFrameWidth;
+        const double formatCellsDialogWidth = 550 - formatCellsFrameWidth;
+        const double formatCellsBorderDialogWidth = 620 - formatCellsFrameWidth;
         const double formatCellsDefaultDialogHeight = 540 - formatCellsFrameHeight;
         const double formatCellsBorderDialogHeight = 596.5 - formatCellsFrameHeight;
 
@@ -16989,7 +16989,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new FormatCellsDialogWindow
         {
             Title = UiText.Get("FormatCells_Title"),
-            Width = formatCellsDialogWidth,
+            Width = Math.Clamp(initialTabIndex, 0, 5) == 3 ? formatCellsBorderDialogWidth : formatCellsDialogWidth,
             Height = formatCellsDefaultDialogHeight,
             MinWidth = formatCellsDialogWidth,
             MinHeight = formatCellsDefaultDialogHeight,
@@ -18368,10 +18368,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             BorderBrush = FormulaBarControlBorder,
                             BorderThickness = new Thickness(1),
                             Padding = new Thickness(8, 6),
-                            Width = 94,
                             Height = 36,
                             Margin = new Thickness(0, 0, 0, 10),
-                            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
                             Child = numberPreview,
                         },
                     },
@@ -18941,8 +18940,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var targetHeight = tabStrip.SelectedIndex == 3
                 ? formatCellsBorderDialogHeight
                 : formatCellsDefaultDialogHeight;
-            var targetSize = new Size(formatCellsDialogWidth, targetHeight);
-            dialog.Width = formatCellsDialogWidth;
+            var targetWidth = tabStrip.SelectedIndex == 3
+                ? formatCellsBorderDialogWidth
+                : formatCellsDialogWidth;
+            var targetSize = new Size(targetWidth, targetHeight);
+            dialog.Width = targetWidth;
             dialog.MinHeight = targetHeight;
             dialog.Height = targetHeight;
             // Width/Height update layout constraints, but an already-open non-resizable X11
@@ -20922,6 +20924,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Text = text,
                 Foreground = selected ? Brushes.White : Brushes.Black,
+                // WPF draws the selected row's plain text at normal weight.
+                FontWeight = FontWeight.Normal,
                 FontSize = 12,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
@@ -21961,6 +21965,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 0,
                 GoalSeekStatusDialogPlanner.SummaryBottomMargin),
             FontSize = 12,
+            LineHeight = GoalSeekStatusDialogPlanner.SummaryLineHeight,
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetName(summaryBlock, UiText.CreateAutomationName(UiText.Get("GoalSeekStatus_GoalSeekStatus")));
