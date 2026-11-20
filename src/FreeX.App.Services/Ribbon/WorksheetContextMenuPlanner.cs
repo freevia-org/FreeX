@@ -39,7 +39,10 @@ public static class WorksheetContextMenuPlanner
             HasAutoFilterHeaderTarget: hasAutoFilterHeaderTarget,
             HasDropdownTarget: hasAutoFilterHeaderTarget || hasValidationDropdown,
             HasPivotTableTarget: PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null,
-            NoteIsShown: sheet.ShownComments.Contains(address));
+            NoteIsShown: sheet.ShownComments.Contains(address))
+        {
+            Protection = sheet.IsProtected ? sheet.ProtectionPermissions.ToHashSet() : null,
+        };
     }
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> ChartCommands =
@@ -81,6 +84,12 @@ public static class WorksheetContextMenuPlanner
 
     private static IReadOnlyList<WorksheetContextMenuCommand> GetWorksheetCommands(WorksheetContextMenuState state)
     {
+        var commands = GetClipboardAwareCommands(state);
+        return state.Protection is { } protection ? ApplySheetProtection(commands, protection) : commands;
+    }
+
+    private static IReadOnlyList<WorksheetContextMenuCommand> GetClipboardAwareCommands(WorksheetContextMenuState state)
+    {
         var index = GetStateCacheIndex(state);
         var copied = WorksheetCommandCache[index];
         var variants = state.Clipboard switch
@@ -98,6 +107,86 @@ public static class WorksheetContextMenuPlanner
 
         var built = ApplyClipboardState(copied, state.Clipboard);
         return Interlocked.CompareExchange(ref variants[index], built, null) ?? built;
+    }
+
+    // Commands a protected sheet always refuses, whatever options the protection allows.
+    private static readonly HashSet<WorksheetContextMenuAction> AlwaysDisabledOnProtectedSheet =
+    [
+        WorksheetContextMenuAction.Cut, WorksheetContextMenuAction.Paste, WorksheetContextMenuAction.PasteSpecial,
+        WorksheetContextMenuAction.InsertCopiedCells, WorksheetContextMenuAction.InsertCells,
+        WorksheetContextMenuAction.DeleteCells, WorksheetContextMenuAction.PickFromDropDown,
+        WorksheetContextMenuAction.DefineName, WorksheetContextMenuAction.CreateTable,
+        WorksheetContextMenuAction.FormatAsTable, WorksheetContextMenuAction.TextToColumns,
+        WorksheetContextMenuAction.RemoveDuplicates, WorksheetContextMenuAction.DataValidation,
+        WorksheetContextMenuAction.Group, WorksheetContextMenuAction.Ungroup,
+        WorksheetContextMenuAction.NewComment, WorksheetContextMenuAction.EditComment,
+        WorksheetContextMenuAction.ResolveComment, WorksheetContextMenuAction.UnresolveComment,
+        WorksheetContextMenuAction.DeleteComment, WorksheetContextMenuAction.NewNote,
+        WorksheetContextMenuAction.EditNote, WorksheetContextMenuAction.DeleteNote,
+        WorksheetContextMenuAction.ShowHideNote, WorksheetContextMenuAction.ClearAll,
+        WorksheetContextMenuAction.ClearComments, WorksheetContextMenuAction.ClearContents,
+    ];
+
+    // Commands a protected sheet allows only when its protection options permit that kind of action.
+    private static readonly Dictionary<WorksheetContextMenuAction, SheetProtectionPermission> ProtectedSheetPermissions = new()
+    {
+        [WorksheetContextMenuAction.InsertRowAbove] = SheetProtectionPermission.InsertRows,
+        [WorksheetContextMenuAction.InsertRowBelow] = SheetProtectionPermission.InsertRows,
+        [WorksheetContextMenuAction.InsertColumnLeft] = SheetProtectionPermission.InsertColumns,
+        [WorksheetContextMenuAction.InsertColumnRight] = SheetProtectionPermission.InsertColumns,
+        [WorksheetContextMenuAction.DeleteRows] = SheetProtectionPermission.DeleteRows,
+        [WorksheetContextMenuAction.DeleteColumns] = SheetProtectionPermission.DeleteColumns,
+        [WorksheetContextMenuAction.SortAscending] = SheetProtectionPermission.Sort,
+        [WorksheetContextMenuAction.SortDescending] = SheetProtectionPermission.Sort,
+        [WorksheetContextMenuAction.CustomSort] = SheetProtectionPermission.Sort,
+        [WorksheetContextMenuAction.Filter] = SheetProtectionPermission.UseAutoFilter,
+        [WorksheetContextMenuAction.ClearFilter] = SheetProtectionPermission.UseAutoFilter,
+        [WorksheetContextMenuAction.ReapplyFilter] = SheetProtectionPermission.UseAutoFilter,
+        [WorksheetContextMenuAction.FilterBySelectedCellValue] = SheetProtectionPermission.UseAutoFilter,
+        [WorksheetContextMenuAction.FormatCells] = SheetProtectionPermission.FormatCells,
+        [WorksheetContextMenuAction.ClearFormats] = SheetProtectionPermission.FormatCells,
+        [WorksheetContextMenuAction.RowHeight] = SheetProtectionPermission.FormatRows,
+        [WorksheetContextMenuAction.AutoFitRowHeight] = SheetProtectionPermission.FormatRows,
+        [WorksheetContextMenuAction.HideRows] = SheetProtectionPermission.FormatRows,
+        [WorksheetContextMenuAction.UnhideRows] = SheetProtectionPermission.FormatRows,
+        [WorksheetContextMenuAction.ColumnWidth] = SheetProtectionPermission.FormatColumns,
+        [WorksheetContextMenuAction.AutoFitColumnWidth] = SheetProtectionPermission.FormatColumns,
+        [WorksheetContextMenuAction.HideColumns] = SheetProtectionPermission.FormatColumns,
+        [WorksheetContextMenuAction.UnhideColumns] = SheetProtectionPermission.FormatColumns,
+        [WorksheetContextMenuAction.Hyperlink] = SheetProtectionPermission.InsertHyperlinks,
+        [WorksheetContextMenuAction.RemoveHyperlinks] = SheetProtectionPermission.InsertHyperlinks,
+        [WorksheetContextMenuAction.ClearHyperlinks] = SheetProtectionPermission.InsertHyperlinks,
+        [WorksheetContextMenuAction.PivotTableOptions] = SheetProtectionPermission.UsePivotTableReports,
+    };
+
+    // Excel greys out what a protected sheet refuses, and a submenu whose every entry is greyed out.
+    private static IReadOnlyList<WorksheetContextMenuCommand> ApplySheetProtection(
+        IReadOnlyList<WorksheetContextMenuCommand> commands,
+        IReadOnlySet<SheetProtectionPermission> allowed)
+    {
+        WorksheetContextMenuCommand Adjust(WorksheetContextMenuCommand command)
+        {
+            if (command.IsSeparator)
+                return command;
+
+            if (command.HasChildren)
+            {
+                var children = command.Children.Select(Adjust).ToArray();
+                var anyEnabled = children.Any(child => !child.IsSeparator && child.IsEnabled);
+                return command with
+                {
+                    Children = Freeze(children),
+                    IsEnabled = command.IsEnabled && anyEnabled,
+                };
+            }
+
+            var blocked =
+                AlwaysDisabledOnProtectedSheet.Contains(command.Action) ||
+                (ProtectedSheetPermissions.TryGetValue(command.Action, out var permission) && !allowed.Contains(permission));
+            return blocked ? command with { IsEnabled = false } : command;
+        }
+
+        return Freeze(commands.Select(Adjust).ToArray());
     }
 
     // Excel only offers "Insert Copied Cells..." while copied cells are outlined, and calls it
@@ -478,6 +567,12 @@ public sealed record WorksheetContextMenuState(
 
     /// <summary>Whether cells are currently outlined after Copy or Cut (marching ants).</summary>
     public WorksheetContextMenuClipboardState Clipboard { get; init; } = WorksheetContextMenuClipboardState.None;
+
+    /// <summary>
+    /// The actions the sheet's protection still allows, or null when the sheet is not protected. A
+    /// protected sheet greys out the commands that would edit it, as Excel does.
+    /// </summary>
+    public IReadOnlySet<SheetProtectionPermission>? Protection { get; init; }
 }
 
 public enum WorksheetContextMenuClipboardState
