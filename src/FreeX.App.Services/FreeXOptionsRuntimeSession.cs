@@ -26,6 +26,7 @@ public sealed class FreeXOptionsRuntimeSession
         _load = load ?? AppOptionsStore.Load;
         _save = save ?? AppOptionsStore.Save;
         LiveOptions = initialOptions ?? Normalize(LoadFromStore());
+        PublishCustomLists();
     }
 
     public AppOptions LiveOptions { get; private set; }
@@ -37,6 +38,7 @@ public sealed class FreeXOptionsRuntimeSession
         options = Normalize(options);
         if (!ReferenceEquals(LiveOptions, options))
             LiveOptions.CopyFrom(options);
+        PublishCustomLists();
         return LiveOptions;
     }
 
@@ -85,6 +87,9 @@ public sealed class FreeXOptionsRuntimeSession
             resultOptions,
             persisted ? null : options.LastPersistenceError);
     }
+
+    private void PublishCustomLists() =>
+        FreeX.Core.Commands.AutoFillCustomLists.Current = LiveOptions.CustomLists.Select(l => (IReadOnlyList<string>)l.ToList()).ToList();
 
     private AppOptions LoadFromStore() =>
         _load() ?? throw new InvalidOperationException("The FreeX options store returned no options snapshot.");
