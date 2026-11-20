@@ -26,7 +26,9 @@ public sealed class DialogTabCycleResidualTests
     private static readonly IReadOnlyDictionary<string, string> ExpectedInitialFocus =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["dialog.PageSetup"] = "passed:RadioButton#PageSetupPortraitRadio",
+            // The capture resets to the shared parity demo workbook (d609d01879), whose sheet is
+            // landscape, and Page Setup focuses the checked orientation radio, as Excel does.
+            ["dialog.PageSetup"] = "passed:RadioButton#PageSetupLandscapeRadio",
             ["dialog.LegalNotices"] = "passed:TextBox#LegalNoticesProjectLicenseText",
             ["dialog.PivotFieldFilter"] = "passed:TextBox#PivotItemFilterSearchBox",
             ["dialog.PivotValueFieldSettings"] = "passed:TextBox#PivotValueFieldSettingsNameBox",
