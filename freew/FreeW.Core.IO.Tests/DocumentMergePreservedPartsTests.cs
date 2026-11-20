@@ -149,7 +149,10 @@ public class DocumentMergePreservedPartsTests
         using var zip = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
         var document = ReadXml(zip, "word/document.xml");
         var sectionProperties = document.Descendants(Wordprocessing + "pPr").ElementAt(0).Element(Wordprocessing + "sectPr")!;
-        sectionProperties.Element(Wordprocessing + "type")!.Attribute(Wordprocessing + "val")!.Value.Should().Be("oddPage");
+        // The marker's OddPage is the break FOLLOWING it, so OOXML puts it on the body-level final sectPr
+        // (the section that starts on an odd page), not on the transferred section's own sectPr.
+        document.Descendants(Wordprocessing + "body").Single().Element(Wordprocessing + "sectPr")!
+            .Element(Wordprocessing + "type")!.Attribute(Wordprocessing + "val")!.Value.Should().Be("oddPage");
         sectionProperties.Element(Wordprocessing + "pgSz")!.Attribute(Wordprocessing + "orient")!.Value.Should().Be("landscape");
         sectionProperties.Elements(Wordprocessing + "headerReference").Should().ContainSingle();
         sectionProperties.Elements(Wordprocessing + "footerReference")

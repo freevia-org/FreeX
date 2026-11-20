@@ -55,8 +55,16 @@ internal sealed partial class AutosaveCoordinator
                     file.ConfirmCloseAllowed("recovering an unsaved document"),
                 RecoverInNewWindow: recoverInNewWindow),
             UiText.Get,
-            sessionFactory: sessionPorts => sessionFactory?.Invoke(sessionPorts) ?? new FreeWAutosaveSession(sessionPorts));
+            sessionFactory: sessionPorts => (sessionFactory ?? DefaultSessionFactory)?.Invoke(sessionPorts)
+                ?? new FreeWAutosaveSession(sessionPorts));
     }
+
+    /// <summary>
+    /// The session a coordinator created without an explicit factory uses; null (the product) means the
+    /// per-user recovery folder. The test host points it at a private temporary folder so a window a test
+    /// opens never offers (modally) the stale snapshots of an earlier killed run.
+    /// </summary>
+    internal static Func<AutosaveDocumentPorts<TextDocument>, FreeWAutosaveSession>? DefaultSessionFactory { get; set; }
 
     public void Start() => _host.Start();
 

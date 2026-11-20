@@ -1828,8 +1828,9 @@ public sealed class DocumentViewRoundTripTests
         var cells = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells;
         var expected = 8 * 96.0 / 72.0;
         RenderedCellParagraphs(cells[0]).Single().Margin.Bottom.Should().BeApproximately(expected, 0.001);
-        cells[0].Padding.Bottom.Should().BeApproximately(expected, 0.001,
-            "WPF collapses the trailing block margin against the cell edge; Word does not");
+        cells[0].Padding.Bottom.Should().Be(0,
+            "the trailing space-after is already inside the cell via the paragraph margin; reserving it as "
+            + "padding too counted it twice and made every row one space-after too tall");
         // A cell with its own borders keeps the reserve INSIDE its border chrome host.
         cells[1].Padding.Bottom.Should().Be(0);
         ((System.Windows.Controls.Grid)cells[1].Blocks.OfType<BlockUIContainer>().Single().Child)
