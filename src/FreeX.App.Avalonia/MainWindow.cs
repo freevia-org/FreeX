@@ -15816,6 +15816,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Setters = { new Setter(Visual.OpacityProperty, 1d) },
         });
+        // Fluent's disabled CheckBox template swaps the label to its disabled foreground resources
+        // regardless of Foreground, so pin them to the ink as well (WPF greys only the glyph).
+        checkBox.Foreground = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundDisabled"] = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundUncheckedDisabled"] = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundCheckedDisabled"] = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundIndeterminateDisabled"] = Brushes.Black;
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
     }
@@ -15915,14 +15922,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
-            // WPF sizes this column to HyperlinkDialogPlanner.LinkTypeColumnWidth, which fits the
-            // four link types in Segoe UI. The macOS fallback face is wider, so the list keeps that
-            // width as its minimum and grows to its longest entry instead of cutting the entries off
-            // (the body grid's first column is Auto for the same reason).
-            MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth,
-            Height = HyperlinkDialogPlanner.LinkTypeListHeight,
+            // WPF HyperlinkDialog: a fixed LinkTypeColumnWidth-wide list (long entries scroll
+            // horizontally) that is as tall as its four rows plus the horizontal scroll bar (~100px),
+            // so the Look-in column starts at the same x as in WPF.
+            Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
+            Height = 100,
         };
-        ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Auto);
         AvaloniaCompactDialogChrome.ApplyListBox(
             linkTypeBox,
             AvaloniaCompactDialogChrome.WindowsStyle with
@@ -16261,7 +16267,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ColumnDefinitions = new ColumnDefinitions
             {
-                new ColumnDefinition { Width = GridLength.Auto, MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth },
+                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnWidth) },
                 new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnGap) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
@@ -16964,7 +16970,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         const double formatCellsFrameHeight = 38;
         const double formatCellsDialogWidth = 550 - formatCellsFrameWidth;
         const double formatCellsBorderDialogWidth = 620 - formatCellsFrameWidth;
-        const double formatCellsDefaultDialogHeight = 540 - formatCellsFrameHeight;
+        // WPF FormatCellsDialog.CompactDialogHeight: the five non-Border tabs are 550x510 outer.
+        const double formatCellsDefaultDialogHeight = 510 - formatCellsFrameHeight;
         const double formatCellsBorderDialogHeight = 596.5 - formatCellsFrameHeight;
 
         FormatCellsCompactDialogPlan? result = null;

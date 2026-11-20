@@ -45,10 +45,9 @@ public sealed partial class MainWindow
 
     private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily)
     {
-        // WPF greys a disabled TextBox (the iterative-calculation limits, the Move-after-Enter
-        // direction); without an explicit disabled surface the shared chrome painted them white.
-        DisabledTextBoxBackgroundBrush = new global::Avalonia.Media.Immutable.ImmutableSolidColorBrush(
-            global::Avalonia.Media.Color.FromRgb(240, 240, 240)),
+        // WPF keeps a disabled Options TextBox (the iterative-calculation limits, the Move-after-Enter
+        // direction) on the white surface and only greys its text, so the disabled face stays white.
+        DisabledTextBoxBackgroundBrush = global::Avalonia.Media.Brushes.White,
     };
 
     // ── File ▸ Options entry point ──────────────────────────────────────────────

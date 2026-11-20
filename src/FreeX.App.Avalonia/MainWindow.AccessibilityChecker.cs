@@ -199,10 +199,11 @@ public sealed partial class MainWindow
         });
         ApplyAutomation(resultsTree, plan.IssueListAutomation);
 
-        // WPF: the results tree owns the star row between the "Inspection Results" header and the
-        // additional-information block, so it takes whatever height the window leaves.
+        // WPF (RenderAccessibilityCheckerDialog): the results tree is a fixed 176px box between the
+        // "Inspection Results" header and the additional-information block.
         var resultsBorder = new Border
         {
+            Height = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB)),
             BorderThickness = new Thickness(1),
@@ -350,7 +351,7 @@ public sealed partial class MainWindow
 
         var bodyGrid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
         };
         Grid.SetRow(resultsHeader, 0);
         Grid.SetRow(resultsBorder, 1);

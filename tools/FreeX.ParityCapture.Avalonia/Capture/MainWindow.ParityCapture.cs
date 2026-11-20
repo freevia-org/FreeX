@@ -1242,7 +1242,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText),
-            Width = 312,
+            // 296 client = 10 margin + 276 content + 10 margin (WPF AutoFilterDialog).
+            Width = 296,
             Height = 437,
             SizeToContent = SizeToContent.Manual,
             MaxHeight = 560,
@@ -1391,10 +1392,12 @@ public sealed partial class MainWindow
         var root = new DockPanel { Margin = new Thickness(10), LastChildFill = true };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
+        // WPF shows no scrollbar here (the content fits the 437px window); a scrollbar would also
+        // narrow the 276px content column.
         root.Children.Add(new ScrollViewer
         {
             Content = stack,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         });
         return root;
@@ -1410,7 +1413,7 @@ public sealed partial class MainWindow
     {
         var content = CreateAutoFilterRowContent(item.IconKind, item.Label, item.ShowsContinuation);
 
-        return new Button
+        var button = new Button
         {
             Content = content,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
@@ -1424,6 +1427,11 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
+        // WPF dims only the text of a disabled row; keep Fluent from shading the disabled face
+        // (same as the product CreateAutoFilterActionButton).
+        button.Resources["ButtonBackgroundDisabled"] = Brushes.Transparent;
+        button.Resources["ButtonBorderBrushDisabled"] = Brushes.Transparent;
+        return button;
     }
 
     // WPF AutoFilterDialog.AddFilterMenuSeparator: a separator with 4px above and below.
