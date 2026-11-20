@@ -24,12 +24,18 @@ public sealed partial class MainWindow
 
     private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)
     {
+        // The in-place rename editor owns the pointer while it is open (caret placement, selection).
+        if (IsInlineSheetTabRenameActiveFor(sheetId))
+            return;
+
         var point = args.GetCurrentPoint(this);
         if (point.Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed)
         {
             // WPF selects the tab before ContextMenuOpening. Preserve an existing group when the
             // clicked tab is already in it, but make an outside tab current before its menu opens.
-            SelectSheetForContextCommand(sheetId);
+            // The refresh rebuilds the tab buttons, so the menu is opened on the refreshed tab.
+            if (HandleSheetTabRightPress(sheetId))
+                args.Handled = true;
             return;
         }
 
@@ -45,8 +51,8 @@ public sealed partial class MainWindow
         if (args.ClickCount >= 2)
         {
             args.Handled = true;
-            if (SelectSheetForContextCommand(sheetId))
-                RunGuarded(RenameActiveSheetAsync);
+            // WPF f7abb1094f: double-click edits the tab name inline; Rename... keeps the dialog.
+            BeginInlineSheetTabRename(sheetId);
             return;
         }
 
@@ -159,6 +165,9 @@ public sealed partial class MainWindow
 
     private void CompleteSheetTabClick(SheetId sheetId)
     {
+        if (IsInlineSheetTabRenameActive)
+            return;
+
         if (_sheetTabModifierClickSuppressionId == sheetId)
         {
             _sheetTabModifierClickSuppressionId = null;

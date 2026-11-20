@@ -56,7 +56,7 @@ public sealed class R69NameBoxDragDimensionSourceTests
             source.IndexOf("private void DetachCellSelectionDragHandlers(", System.StringComparison.Ordinal)];
         revertHelper.Should().Contain("if (!_cellSelectionDragShowedDimensionText)");
         revertHelper.Should().Contain("_cellSelectionDragShowedDimensionText = false;");
-        revertHelper.Should().Contain("_cellAddressText.Text = FormatRangeReference(_session.SelectedRange);");
+        revertHelper.Should().Contain("_cellAddressText.Text = FormatSelectionNameBoxText();");
 
         var captureLost = source[
             source.IndexOf("private void CellSelectionCapturePointerCaptureLost(", System.StringComparison.Ordinal)..

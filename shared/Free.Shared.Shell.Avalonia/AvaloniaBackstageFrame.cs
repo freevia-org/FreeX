@@ -150,6 +150,10 @@ public sealed class AvaloniaBackstageFrame : UserControl
         return true;
     }
 
+    /// <summary>Moves keyboard focus to the entry's rail button without activating it.</summary>
+    public bool TryFocusEntry(string idOrLabel) =>
+        GetEntryButton(idOrLabel) is { IsVisible: true, IsEffectivelyEnabled: true } button && button.Focus();
+
     public Button? GetEntryButton(string idOrLabel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idOrLabel);
