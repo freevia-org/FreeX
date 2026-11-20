@@ -76,7 +76,13 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) => dialog.Close(true);
 
-        var content = new DockPanel { Margin = new Thickness(16) };
+        // A Grid (not a DockPanel) keeps the logical order label, list, buttons, so Tab order and the
+        // fallback first-stop focus match WPF: the style list first, then OK and Cancel.
+        var content = new Grid
+        {
+            Margin = new Thickness(16),
+            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+        };
 
         var label = new TextBlock
         {
@@ -85,14 +91,16 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 4),
         };
-        DockPanel.SetDock(label, Dock.Top);
+        Grid.SetRow(label, 0);
         content.Children.Add(label);
 
+        Grid.SetRow(gallery, 1);
+        content.Children.Add(gallery);
+
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        Grid.SetRow(buttonRow, 2);
         content.Children.Add(buttonRow);
 
-        content.Children.Add(gallery);
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, gallery);
 
