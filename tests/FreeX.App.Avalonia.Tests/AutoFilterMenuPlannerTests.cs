@@ -223,8 +223,14 @@ public sealed class AutoFilterMenuPlannerTests
 
         source.Should().Contain("using Free.Shared.Ribbon.Avalonia;");
         source.Should().Contain("CreateAutoFilterActionButton(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)");
-        source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21))");
-        source.Should().Contain("Text = item.Label");
+        source.Should().Contain("CreateAutoFilterRowContent(item.IconKind, item.Label, item.ShowsContinuation)");
+        source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome(iconKind, 14, null, Brush(0x21, 0x21, 0x21))");
+        source.Should().Contain("Text = label,");
+        // WPF SetMenuCommandButtonContent: submenu rows end in a "›" cascade glyph.
+        source.Should().Contain("Text = \"\\u203A\"");
+        // A column without cell colours still lists the disabled Sort/Filter by Color cascade rows.
+        source.Should().Contain("AddUnavailableColorRow(\"AutoFilter_SortByColor\")");
+        source.Should().Contain("AddUnavailableColorRow(\"AutoFilter_FilterByColor\")");
     }
 
     private static string RepoFile(params string[] parts) =>

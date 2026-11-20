@@ -117,7 +117,9 @@ public sealed partial class MainWindow
         var actionPanel = new GroupBox
         {
             Header = StripDisplayMnemonic(UiText.Get(ErrorCheckingDialogPlanner.HelpGroupHeaderKey)),
-            Width = ErrorCheckingDialogVisualMetrics.ActionPanelWidth,
+            // The WPF 180 px panel is a minimum: a wider platform font grows it so the stretched
+            // action buttons ("Show Calculation Steps...") are never clipped.
+            MinWidth = ErrorCheckingDialogVisualMetrics.ActionPanelWidth,
             Margin = new Thickness(10, 0, 0, 0),
             Padding = new Thickness(8),
             Content = actionStack,
@@ -404,6 +406,11 @@ public sealed partial class MainWindow
     // column header row is 24px.
     private const double ErrorCheckingWpfRowHeight = 22;
 
+    // Issue captions such as "FormulaStore..." are wider than the WPF 80 px column at the Linux
+    // dialog font; the columns scroll horizontally, so the Issue column is widened to show them.
+    private const double ErrorCheckingAvaloniaIssueColumnWidth = 120;
+    private const double ErrorCheckingAvaloniaDescriptionColumnWidth = 420;
+
     // WPF ListViewItem, selected and focused: a #98DDFB frame around a glassy two-segment gradient
     // (#EBFAFF down to #CCEFFE over the upper half, #B8E8FD down to #A0DFFB over the lower half).
     private static readonly IBrush ErrorCheckingActiveRowFrame =
@@ -515,9 +522,9 @@ public sealed partial class MainWindow
             ColumnDefinitions = new ColumnDefinitions(
                 $"{ErrorCheckingDialogVisualMetrics.SheetColumnWidth}," +
                 $"{ErrorCheckingDialogVisualMetrics.CellColumnWidth}," +
-                $"{ErrorCheckingDialogVisualMetrics.IssueColumnWidth}," +
+                $"{Math.Max(ErrorCheckingDialogVisualMetrics.IssueColumnWidth, ErrorCheckingAvaloniaIssueColumnWidth)}," +
                 $"{ErrorCheckingDialogVisualMetrics.FormulaColumnWidth}," +
-                $"{ErrorCheckingDialogVisualMetrics.DescriptionColumnWidth}"),
+                $"{Math.Max(ErrorCheckingDialogVisualMetrics.DescriptionColumnWidth, ErrorCheckingAvaloniaDescriptionColumnWidth)}"),
         };
 
     private static void AddErrorCheckingCell(Grid grid, string text, int column, bool isHeader = false)
@@ -552,7 +559,8 @@ public sealed partial class MainWindow
         var button = new Button
         {
             Content = UiText.Get(contentKey),
-            Width = width ?? double.NaN,
+            // The WPF fixed width is applied as a MinWidth (below) so a wider platform font grows
+            // the button instead of clipping its caption.
             // Side-panel buttons (no explicit width) stretch to a uniform full-panel width so the
             // "Error help" action stack is not ragged; bottom-bar buttons keep their fixed width.
             HorizontalAlignment = width is null ? AvaloniaHorizontalAlignment.Stretch : AvaloniaHorizontalAlignment.Left,

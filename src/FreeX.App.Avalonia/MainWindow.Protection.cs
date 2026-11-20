@@ -84,9 +84,6 @@ public sealed partial class MainWindow
         var passwordBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
         ApplyProtectTextBoxChrome(passwordBox);
         AutomationProperties.SetAutomationId(passwordBox, "ProtectSheetPasswordBox");
-        var confirmBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
-        ApplyProtectTextBoxChrome(confirmBox);
-        AutomationProperties.SetAutomationId(confirmBox, "ProtectSheetConfirmBox");
 
         var warningText = new TextBlock
         {
@@ -117,26 +114,34 @@ public sealed partial class MainWindow
 
         if (state.IsProtected)
         {
-            var unprotectPanel = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = state.HasPassword
-                            ? UiText.Get("ShellLoc_SheetProtectedEnterPassword")
-                            : UiText.Get("ShellLoc_SheetProtectedClickOk"),
-                        Foreground = HeaderForeground,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                    },
-                },
-            };
+            var unprotectPanel = new StackPanel();
 
-            if (state.HasPassword)
+            if (!state.HasPassword)
             {
-                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox, topMargin: 8));
+                unprotectPanel.Children.Add(new TextBlock
+                {
+                    Text = UiText.Get("ShellLoc_SheetProtectedClickOk"),
+                    Foreground = HeaderForeground,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                });
+            }
+            else
+            {
+                // WPF TryConfirmUnprotectPassword opens PasswordProtectionDialog with the password
+                // prompt as both the SemiBold heading above the group and the label inside it (no
+                // explanatory paragraph), followed by the password box and the grey caution line.
+                contentChildren.Add(new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("Protection_Password2")),
+                    Foreground = HeaderForeground,
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                });
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("Protection_Password2"), passwordBox));
                 unprotectPanel.Children.Add(new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
@@ -207,8 +212,9 @@ public sealed partial class MainWindow
             {
                 Children =
                 {
-                    ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox),
-                    ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox, topMargin: 8),
+                    // WPF: a single optional password field; the password is confirmed in a second
+                    // prompt after OK (see ConfirmProtectionPasswordAsync).
+                    ProtectionLabeledField(UiText.Get("MainWindowMessage_OptionalPasswordLabel"), passwordBox),
                     new TextBlock
                     {
                         Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
@@ -235,7 +241,7 @@ public sealed partial class MainWindow
             checklistGroup.Margin = new Thickness(0);
             contentChildren.Add(checklistGroup);
 
-            okButton.Click += (_, _) =>
+            okButton.Click += (_, _) => RunGuarded(async () =>
             {
                 warningText.IsVisible = false;
 
@@ -244,10 +250,15 @@ public sealed partial class MainWindow
                     .Select(p => p.Permission)
                     .ToList();
 
+                // WPF: a typed password is re-entered in a second prompt before it is applied.
+                var password = passwordBox.Text ?? string.Empty;
+                if (password.Length > 0 && !await ConfirmProtectionPasswordAsync(dialog, password))
+                    return;
+
                 var options = ProtectSheetOptions.FromCorePermissions(
                     enabled,
-                    passwordBox.Text,
-                    confirmBox.Text);
+                    password,
+                    password);
 
                 var outcome = ProtectionSession.ExecuteSheet(sheet, options);
                 if (!outcome.Success)
@@ -258,7 +269,7 @@ public sealed partial class MainWindow
 
                 RefreshShell(UiText.Get(outcome.SuccessStatusResourceKey));
                 dialog.Close();
-            };
+            });
         }
 
         contentChildren.Add(warningText);
@@ -305,9 +316,6 @@ public sealed partial class MainWindow
         var passwordBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
         ApplyProtectTextBoxChrome(passwordBox);
         AutomationProperties.SetAutomationId(passwordBox, "ProtectWorkbookPasswordBox");
-        var confirmBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
-        ApplyProtectTextBoxChrome(confirmBox);
-        AutomationProperties.SetAutomationId(confirmBox, "ProtectWorkbookConfirmBox");
 
         var structureBox = new CheckBox { Content = UiText.Get("ShellLoc_StructureCheckbox"), IsChecked = true };
         ApplyProtectCheckBoxChrome(structureBox);
@@ -428,8 +436,7 @@ public sealed partial class MainWindow
                 {
                     Children =
                     {
-                        ProtectionLabeledField(UiText.Get("ShellLoc_PasswordOptionalLabel"), passwordBox),
-                        ProtectionLabeledField(UiText.Get("ShellLoc_ConfirmPasswordLabel"), confirmBox, topMargin: 8),
+                        ProtectionLabeledField(UiText.Get("MainWindowMessage_OptionalPasswordLabel"), passwordBox),
                         new TextBlock
                         {
                             Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),
@@ -442,16 +449,21 @@ public sealed partial class MainWindow
                     },
                 }));
 
-            okButton.Click += (_, _) =>
+            okButton.Click += (_, _) => RunGuarded(async () =>
             {
                 warningText.IsVisible = false;
+
+                // WPF: a typed password is re-entered in a second prompt before it is applied.
+                var password = passwordBox.Text ?? string.Empty;
+                if (password.Length > 0 && !await ConfirmProtectionPasswordAsync(dialog, password))
+                    return;
 
                 var options = new ProtectWorkbookOptions
                 {
                     ProtectStructure = structureBox.IsChecked == true,
                     ProtectWindows = windowsBox.IsChecked == true,
-                    Password = passwordBox.Text,
-                    PasswordConfirmation = confirmBox.Text,
+                    Password = password,
+                    PasswordConfirmation = password,
                 };
 
                 var outcome = ProtectionSession.ExecuteWorkbook(options);
@@ -463,7 +475,7 @@ public sealed partial class MainWindow
 
                 RefreshShell(UiText.Get(outcome.SuccessStatusResourceKey));
                 dialog.Close();
-            };
+            });
         }
 
         contentChildren.Add(warningText);
@@ -471,6 +483,80 @@ public sealed partial class MainWindow
         dialog.Content = ProtectionDialogLayout(contentChildren, cancelButton, okButton);
         AttachProtectionDialogInitialFocus(dialog, passwordBox);
         await dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// WPF <c>ConfirmPasswordDialog</c>: after OK on Protect Sheet / Protect Workbook with a typed
+    /// password, a second small prompt asks the user to re-enter it. A mismatch warns and keeps the
+    /// prompt open; Cancel returns false so the Protect dialog stays open without applying anything.
+    /// </summary>
+    private static async Task<bool> ConfirmProtectionPasswordAsync(Window owner, string password)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get("Protection_ConfirmPassword"),
+            Width = 360 - WpfNoResizeFrameWidth,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ConfirmProtectionPasswordDialog");
+
+        var confirmBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
+        ApplyProtectTextBoxChrome(confirmBox);
+        AutomationProperties.SetAutomationId(confirmBox, "ConfirmProtectionPasswordBox");
+        AutomationProperties.SetName(confirmBox, UiText.Get("Protection_ConfirmPasswordAutomationName"));
+        AutomationProperties.SetHelpText(confirmBox, UiText.Get("Protection_ConfirmPasswordHelpText"));
+
+        var warningText = new TextBlock
+        {
+            Text = UiText.Get("Protection_TheConfirmationPasswordDoesNotMatch"),
+            Foreground = Brush(180, 30, 30),
+            TextWrapping = TextWrapping.Wrap,
+            IsVisible = false,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+
+        var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
+        ApplyProtectButtonChrome(okButton, 72, isDefault: true);
+        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 72 };
+        ApplyProtectButtonChrome(cancelButton, 72);
+        cancelButton.Click += (_, _) => dialog.Close(false);
+        okButton.Click += (_, _) =>
+        {
+            if (!ProtectionDialogPlanner.PasswordsMatch(password, confirmBox.Text))
+            {
+                warningText.IsVisible = true;
+                confirmBox.Focus();
+                confirmBox.SelectAll();
+                return;
+            }
+
+            dialog.Close(true);
+        };
+
+        var body = new Controls
+        {
+            new TextBlock
+            {
+                Text = UiText.Get("Protection_ReenterPasswordToProceed"),
+                Foreground = HeaderForeground,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(0, 0, 0, 8),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+            },
+            ProtectionLabeledField(UiText.Get("Protection_Password2"), confirmBox),
+            warningText,
+        };
+        dialog.Content = ProtectionDialogLayout(body, cancelButton, okButton);
+        AttachProtectionDialogInitialFocus(dialog, confirmBox);
+        return await dialog.ShowDialog<bool>(owner);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

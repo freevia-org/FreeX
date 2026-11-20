@@ -209,8 +209,9 @@ public sealed partial class MainWindow
         var button = new Button
         {
             Content = UiText.Get(contentKey),
-            Width = width,
         };
+        // The WPF fixed width is the minimum (ApplyButton sets MinWidth): a wider platform font grows
+        // the button to its content instead of clipping "Help on this Function...".
         AvaloniaCompactDialogChrome.ApplyButton(button, EvaluateFormulaDialogChromeStyle, width, isDefault);
         return button;
     }

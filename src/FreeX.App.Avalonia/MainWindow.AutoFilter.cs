@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.VisualTree;
 
+using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Presentation.Filtering;
@@ -218,6 +219,10 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
+        // The shared compact text-box chrome centres the text and placeholder vertically in the box;
+        // the bare Fluent padding clipped the placeholder at the top of the field.
+        AvaloniaCompactDialogChrome.ApplyTextBox(searchBox, AutoFilterDialogChromeStyle);
+        searchBox.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         AutomationProperties.SetAutomationId(searchBox, $"AutoFilterSearchBox_{headerCell.Row}_{headerCell.Col}");
         AutomationProperties.SetName(searchBox, UiText.CreateAutomationName(UiText.Get("AutoFilter_SectionSearch")));
         var addSelectionBox = new CheckBox
@@ -300,6 +305,19 @@ public sealed partial class MainWindow
             panel.Children.Add(button);
         }
 
+        void AddUnavailableColorRow(string labelKey)
+        {
+            var unavailable = new AutoFilterMenuItem(
+                labelKey == "AutoFilter_SortByColor"
+                    ? AutoFilterMenuItemKind.SortByColor
+                    : AutoFilterMenuItemKind.FilterByColor,
+                UiText.Get(labelKey),
+                IsEnabled: false,
+                IconKind: RibbonCommandIconKind.Color,
+                ShowsContinuation: true);
+            panel.Children.Add(CreateAutoFilterActionButton(unavailable, () => { }, isEnabled: false));
+        }
+
         void ApplySelectionToVisible(bool isSelected)
         {
             checklistEdited = true;
@@ -328,6 +346,10 @@ public sealed partial class MainWindow
                         RunAutoFilterResult(range, columnOffset, new AutoFilterDialogResult(
                             AutoFilterSortDirection.Descending, [], string.Empty, string.Empty));
                     });
+                    // WPF AutoFilterDialog: a column with no cell colours still shows a disabled
+                    // "Sort by Color" cascade row right after the sort commands.
+                    if (model.ColorOptions.Count == 0)
+                        AddUnavailableColorRow("AutoFilter_SortByColor");
                     break;
                 case AutoFilterMenuItemKind.ClearFilter:
                     AddMenuCommand(item, () =>
@@ -335,6 +357,9 @@ public sealed partial class MainWindow
                         flyout.Hide();
                         RunAutoFilterResult(range, columnOffset, AutoFilterDialogCriteriaPlanner.CreateClearFilterResult());
                     }, item.IsEnabled);
+                    // ...and a disabled "Filter by Color" cascade row right after Clear Filter.
+                    if (model.ColorOptions.Count == 0)
+                        AddUnavailableColorRow("AutoFilter_FilterByColor");
                     break;
                 case AutoFilterMenuItemKind.FilterByColor when model.ColorOptions.Count > 0:
                     panel.Children.Add(CreateAutoFilterColorPanel(model.ColorOptions, option =>
@@ -531,13 +556,20 @@ public sealed partial class MainWindow
         secondRow.Children.Add(secondSelector);
 
         var panel = new StackPanel { Spacing = 4 };
-        panel.Children.Add(new TextBlock
+        // WPF lists "Text/Number/Date Filters" as a menu row (filter icon, label, "›" cascade arrow)
+        // that opens its operator submenu; here the operator, value and combine controls follow the
+        // row inline, so the row is a non-interactive header with the same icon and cascade glyph.
+        var familyItem = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily);
+        var familyRow = new Border
         {
-            Text = familyLabel,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            Foreground = HeaderForeground,
-        });
+            Padding = new Thickness(5, 3),
+            Child = CreateAutoFilterRowContent(
+                familyItem?.IconKind ?? RibbonCommandIconKind.Filter,
+                familyLabel,
+                hasCascade: true),
+        };
+        AutomationProperties.SetName(familyRow, familyLabel);
+        panel.Children.Add(familyRow);
 
         string[] datePresets =
         [
@@ -751,27 +783,53 @@ public sealed partial class MainWindow
         return root;
     }
 
+    /// <summary>
+    /// WPF <c>SetMenuCommandButtonContent</c>: icon, access-text label and, for rows that open a
+    /// submenu (Sort/Filter by Color, Text/Number/Date Filters), a trailing "›" cascade glyph.
+    /// </summary>
+    private static Control CreateAutoFilterRowContent(RibbonCommandIconKind iconKind, string label, bool hasCascade)
+    {
+        var grid = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+        };
+        var icon = AvaloniaRibbonIcons.BuildMonochrome(iconKind, 14, null, Brush(0x21, 0x21, 0x21));
+        AvaloniaGrid.SetColumn(icon, 0);
+        grid.Children.Add(icon);
+
+        // WPF hosts the label in an AccessText, so the access-key marker is consumed.
+        var text = new AccessText
+        {
+            Text = label,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(7, 0, hasCascade ? 8 : 0, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AvaloniaGrid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        if (hasCascade)
+        {
+            var cascade = new TextBlock
+            {
+                Text = "›",
+                FontSize = 18,
+                Margin = new Thickness(0, -2, 1, 0),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            AvaloniaGrid.SetColumn(cascade, 2);
+            grid.Children.Add(cascade);
+        }
+
+        return grid;
+    }
+
     private Button CreateAutoFilterActionButton(AutoFilterMenuItem item, Action onClick, bool isEnabled = true)
     {
         var button = new Button
         {
-            Content = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 7,
-                Children =
-                {
-                    AvaloniaRibbonIcons.BuildMonochrome(item.IconKind, 14, null, Brush(0x21, 0x21, 0x21)),
-                    // WPF hosts the label in an AccessText, so the access-key marker is consumed.
-                    new AccessText
-                    {
-                        Text = item.Label,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                        VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                    },
-                },
-            },
+            Content = CreateAutoFilterRowContent(item.IconKind, item.Label, item.ShowsContinuation),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left,
             Background = Brushes.Transparent,
