@@ -2077,6 +2077,13 @@ public static class AvaloniaRibbonRenderer
         Walk(element);
     }
 
+    /// <summary>
+    /// Builds the Office-style tooltip (bold title with the key tip, grey description) the ribbon uses, so host
+    /// chrome such as a quick access toolbar can show identical content. Shortcut hints are shown as Cmd on macOS.
+    /// </summary>
+    public static Control CreateRibbonTooltipContent(string? title, string? description, string? keyTip) =>
+        BuildRibbonTooltipContent(title, description, RibbonKeyTipText.NormalizeOrEmpty(keyTip));
+
     internal static Control BuildRibbonTooltipContent(string? title, string? description, string? keyTip)
     {
         var panel = new StackPanel { MaxWidth = 270 };
