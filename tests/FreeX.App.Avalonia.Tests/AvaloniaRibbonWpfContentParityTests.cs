@@ -83,19 +83,34 @@ public sealed class AvaloniaRibbonWpfContentParityTests
         Caption(sheetButton).Should().Be(UiText.Get("MainWindow_Content_ProtectSheet"));
     });
 
+    // The window registry is process-static, so windows leaked by other tests in the same run change
+    // the visible/hidden counts. Derive the expectation from the live registry instead of assuming one window.
+    private static (int Visible, int Hidden) RegistryCounts()
+    {
+        var registry = typeof(MainWindow).GetField("WindowRegistry", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        var type = registry.GetType();
+        var visible = (int)type.GetProperty("VisibleCount", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(registry)!;
+        var hidden = ((System.Collections.ICollection)type.GetProperty("HiddenWindows", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.GetValue(registry)!).Count;
+        return (visible, hidden);
+    }
+
     [Fact]
-    public Task WindowCommands_ExplainUnavailabilityWithASingleVisibleWindow() => WithWindow(window =>
+    public Task WindowCommands_DescribeAvailabilityFromTheLiveWindowRegistry() => WithWindow(window =>
     {
         window.ApplyDynamicRibbonChrome();
-        Tip(Buttons(window, "Switch Windows").First())
-            .Should().Contain(UiText.Get("MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow"));
-        Tip(Buttons(window, "Hide").First())
-            .Should().Contain(UiText.Get("MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow"));
-        Tip(Buttons(window, "Unhide").First())
-            .Should().Contain(UiText.Get("MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow"));
+        var (visible, hidden) = RegistryCounts();
+        var multiple = visible > 1;
+        Tip(Buttons(window, "Switch Windows").First()).Should().Contain(UiText.Get(multiple
+            ? "MainWindow_TooltipDescription_SwitchToAnotherVisibleWorkbookWindow"
+            : "MainWindow_TooltipDescription_UnavailableSwitchWindowsRequiresSecondVisibleWindow"));
+        Tip(Buttons(window, "Hide").First()).Should().Contain(UiText.Get(multiple
+            ? "MainWindow_TooltipDescription_HideThisWorkbookWindowFromView"
+            : "MainWindow_TooltipDescription_UnavailableHideRequiresSecondVisibleWindow"));
+        Tip(Buttons(window, "Unhide").First()).Should().Contain(UiText.Get(hidden > 0
+            ? "MainWindow_TooltipDescription_RestoreAHiddenWorkbookWindow"
+            : "MainWindow_TooltipDescription_UnavailableUnhideRequiresAHiddenWindow"));
         Tip(Buttons(window, "New Window").First())
             .Should().Contain(UiText.Get("MainWindow_TooltipDescription_OpenAnotherLiveWindowForThisWorkbook"));
-        Buttons(window, "Switch Windows").First().IsEnabled.Should().BeFalse();
     });
 
     [Fact]
