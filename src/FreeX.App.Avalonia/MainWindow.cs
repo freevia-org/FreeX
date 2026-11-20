@@ -16083,14 +16083,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         //   row 3  OK / Cancel                                        (8px above)
         // Each label/box/button row uses the same three columns: an 88px label column, the
         // stretching editor and a (button + gap)-wide column with the button right-aligned.
-        static AvaloniaGrid CreateHyperlinkFieldRow(Control label, Control editor, Control? trailingButton, Thickness margin)
+        // The "Text to display:" / address rows share one label column that grows past the WPF 88px
+        // when the cross-platform UI font needs more room, so neither label is ever clipped.
+        static AvaloniaGrid CreateHyperlinkFieldRow(Control label, Control editor, Control? trailingButton, Thickness margin, bool sharedLabelColumn = false)
         {
             var row = new AvaloniaGrid
             {
                 Margin = margin,
                 ColumnDefinitions = new ColumnDefinitions
                 {
-                    new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) },
+                    sharedLabelColumn
+                        ? new ColumnDefinition
+                        {
+                            Width = GridLength.Auto,
+                            MinWidth = HyperlinkDialogPlanner.LabelColumnWidth,
+                            SharedSizeGroup = "HyperlinkLabelColumn",
+                        }
+                        : new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) },
                     new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                     new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.SecondaryButtonWidth + HyperlinkDialogPlanner.ButtonGap) },
                 },
@@ -16118,7 +16127,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_TextToDisplay2")) },
             displayBox,
             screenTipButton,
-            new Thickness(0, 0, 0, 4));
+            new Thickness(0, 0, 0, 4),
+            sharedLabelColumn: true);
 
         var linkToLabel = new TextBlock
         {
@@ -16221,7 +16231,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bodyGrid.Children.Add(detailArea);
         AvaloniaGrid.SetColumn(detailArea, 2);
 
-        var addressRow = CreateHyperlinkFieldRow(targetLabel, targetBox, bookmarkButton, new Thickness(0, 4, 0, 0));
+        var addressRow = CreateHyperlinkFieldRow(targetLabel, targetBox, bookmarkButton, new Thickness(0, 4, 0, 0), sharedLabelColumn: true);
 
         // The inline validation line (WPF uses a message box) shares the action row, left of OK/Cancel.
         validationText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -16240,6 +16250,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(HyperlinkDialogPlanner.DialogMargin),
             RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"),
         };
+        AvaloniaGrid.SetIsSharedSizeScope(rootGrid, true);
         rootGrid.Children.Add(headerRow);
         AvaloniaGrid.SetRow(bodyGrid, 1);
         rootGrid.Children.Add(bodyGrid);
@@ -18662,11 +18673,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // (read in Accept as borderChoice) is unchanged.
         var borderDetailsGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("80,*,*"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,*"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
             ColumnSpacing = 0,
             RowSpacing = 0,
         };
+        // 80 is the WPF label column; Auto lets a wider UI font grow it instead of clipping.
+        borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;
         void AddDetailHeader(string text, int column)
         {
             var header = new TextBlock
@@ -20630,17 +20643,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .Select(choice => new SortDialogComboItem<SortDirectionChoice>(choice.Label, choice))
                 .ToList();
 
+        // WPF SortDialog binds the Color / Icon combos straight to the choice Label, so with
+        // Sort On = Cell Values (the single empty choice) the cells show EMPTY, not "None".
         IReadOnlyList<SortDialogComboItem<SortColorChoice>> CreateColorItems(SortDialogLevel level) =>
             level.ColorChoices
                 .Select(choice => new SortDialogComboItem<SortColorChoice>(
-                    string.IsNullOrWhiteSpace(choice.Label) ? UiText.Get("Common_None") : choice.Label,
+                    string.IsNullOrWhiteSpace(choice.Label) && IsColorSort(level) ? UiText.Get("Common_None") : choice.Label,
                     choice))
                 .ToList();
 
         IReadOnlyList<SortDialogComboItem<SortIconChoice>> CreateIconItems(SortDialogLevel level) =>
             level.IconChoices
                 .Select(choice => new SortDialogComboItem<SortIconChoice>(
-                    string.IsNullOrWhiteSpace(choice.Label) ? UiText.Get("Common_None") : choice.Label,
+                    string.IsNullOrWhiteSpace(choice.Label) && IsIconSort(level) ? UiText.Get("Common_None") : choice.Label,
                     choice))
                 .ToList();
 
@@ -23224,14 +23239,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var plan = initialPlan;
         string? selectedScenarioName = plan.SelectedScenario?.Name;
+        // The WPF window is 360 wide with Segoe UI; the cross-platform UI font is wider, so the
+        // Avalonia client gets extra room (labels and buttons size to content) instead of clipping.
+        const double scenarioManagerWidth = ScenarioManagerDialogLayout.DialogWidth + 60;
         var dialog = new Window
         {
             Title = UiText.Get("ScenarioManager_ScenarioManager"),
-            Width = ScenarioManagerDialogLayout.DialogWidth,
+            Width = scenarioManagerWidth,
             Height = ScenarioManagerDialogLayout.DialogHeight,
-            MinWidth = ScenarioManagerDialogLayout.DialogWidth,
+            MinWidth = scenarioManagerWidth,
             MinHeight = ScenarioManagerDialogLayout.DialogHeight,
-            MaxWidth = ScenarioManagerDialogLayout.DialogWidth,
+            MaxWidth = scenarioManagerWidth,
             MaxHeight = ScenarioManagerDialogLayout.DialogHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -23336,7 +23354,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var saveButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Add")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(saveButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.Scenarios.Count == 0);
@@ -23347,7 +23364,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var editButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Edit")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(editButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
@@ -23358,7 +23374,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var showButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Show")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.SelectedScenario is not null);
@@ -23371,7 +23386,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var deleteButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Delete")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
@@ -23384,7 +23398,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var summaryButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Summary")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(summaryButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
@@ -23732,8 +23745,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var fields = new AvaloniaGrid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
-            ColumnDefinitions = new ColumnDefinitions($"{ScenarioManagerDialogLayout.FieldLabelColumnWidth},*"),
+            // Auto (min = the WPF 92 column) so the label never clips in the wider cross-platform font.
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
         };
+        fields.ColumnDefinitions[0].MinWidth = ScenarioManagerDialogLayout.FieldLabelColumnWidth;
 
         AddScenarioManagerField(fields, 0, StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")), nameBox);
         AddScenarioManagerField(fields, 1, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")), changingCellsBox);

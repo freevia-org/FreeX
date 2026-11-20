@@ -3310,9 +3310,10 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private async Task ShowScenarioManagerCompactDialogAsync(ScenarioManagerPlan initialPlan)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaDialog);");
-        source.Should().Contain("Width = ScenarioManagerDialogLayout.DialogWidth,");
+        source.Should().Contain("const double scenarioManagerWidth = ScenarioManagerDialogLayout.DialogWidth + 60;");
+        source.Should().Contain("Width = scenarioManagerWidth,");
         source.Should().Contain("Height = ScenarioManagerDialogLayout.DialogHeight,");
-        source.Should().Contain("MaxWidth = ScenarioManagerDialogLayout.DialogWidth,");
+        source.Should().Contain("MaxWidth = scenarioManagerWidth,");
         source.Should().Contain("MaxHeight = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("CanResize = false,");
         source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);");
