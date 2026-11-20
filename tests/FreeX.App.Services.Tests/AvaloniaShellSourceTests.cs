@@ -2913,7 +2913,7 @@ public sealed class AvaloniaShellSourceTests
         // automation id or the chrome and still pass.
         selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton, deleteButton }");
         selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.SelectionPane.DeleteButton)");
-        selectionPaneSource.Should().Contain("ApplySelectionPaneButtonChrome(deleteButton, 82)");
+        selectionPaneSource.Should().Contain("ApplySelectionPaneAutoWidthButtonChrome(deleteButton, 82)");
         selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
         selectionPaneSource.Should().NotContain("SelectionPane_Hint");

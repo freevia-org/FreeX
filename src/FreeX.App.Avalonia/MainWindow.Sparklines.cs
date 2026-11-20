@@ -101,7 +101,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(selectLocationRangeButton, "SparklineSelectLocationRangeButton");
 
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
-        typeBox.Width = 333;
+        typeBox.Width = 347;
         // Fluent's combo template contributes an eight-pixel leading/trailing inset on this
         // compact surface; offset the control so its visible field matches the WPF client lane.
         typeBox.Margin = new Thickness(-1, 0, 0, 0);
@@ -118,7 +118,9 @@ public sealed partial class MainWindow
             Title = UiText.Get("Sparkline_InsertTitle"),
             // The shared 380x280 size is the WPF *outer* NoResize window; Avalonia sizes the client
             // area, so drop the measured Windows frame from both.
-            Width = SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
+            // 347 = range box (190) + gap (5) + the widest picker button (152); with the 16px margins the
+            // client must be at least 379 wide or the "Select Location Range" button is clipped.
+            Width = Math.Max(SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth, 347 + 32),
             Height = SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeClientFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
@@ -160,7 +162,7 @@ public sealed partial class MainWindow
         {
             Spacing = 0,
             Margin = new Thickness(16),
-            Width = 333,
+            Width = 347,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         content.Children.Add(new TextBlock

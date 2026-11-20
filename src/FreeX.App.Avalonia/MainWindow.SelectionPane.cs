@@ -151,19 +151,19 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(toggleVisibilityButton, FreeXAutomationIdCatalog.SelectionPane.ToggleVisibilityButton);
 
         var moveUpButton = new Button { Content = UiText.Get("SelectionPane_BringForward"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
-        ApplySelectionPaneButtonChrome(moveUpButton, 104);
+        ApplySelectionPaneAutoWidthButtonChrome(moveUpButton, 104);
         AutomationProperties.SetAutomationId(moveUpButton, FreeXAutomationIdCatalog.SelectionPane.BringForwardButton);
         var moveDownButton = new Button { Content = UiText.Get("SelectionPane_SendBackward"), MinWidth = 104, Margin = new Thickness(0, 0, 6, 6) };
-        ApplySelectionPaneButtonChrome(moveDownButton, 104);
+        ApplySelectionPaneAutoWidthButtonChrome(moveDownButton, 104);
         AutomationProperties.SetAutomationId(moveDownButton, FreeXAutomationIdCatalog.SelectionPane.SendBackwardButton);
         var showAllButton = new Button { Content = UiText.Get("SelectionPane_ShowAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
-        ApplySelectionPaneButtonChrome(showAllButton, 82);
+        ApplySelectionPaneAutoWidthButtonChrome(showAllButton, 82);
         AutomationProperties.SetAutomationId(showAllButton, FreeXAutomationIdCatalog.SelectionPane.ShowAllButton);
         var hideAllButton = new Button { Content = UiText.Get("SelectionPane_HideAll"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
-        ApplySelectionPaneButtonChrome(hideAllButton, 82);
+        ApplySelectionPaneAutoWidthButtonChrome(hideAllButton, 82);
         AutomationProperties.SetAutomationId(hideAllButton, FreeXAutomationIdCatalog.SelectionPane.HideAllButton);
         var deleteButton = new Button { Content = UiText.Get("SelectionPane_Delete"), MinWidth = 82, Margin = new Thickness(0, 0, 6, 6) };
-        ApplySelectionPaneButtonChrome(deleteButton, 82);
+        ApplySelectionPaneAutoWidthButtonChrome(deleteButton, 82);
         AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.SelectionPane.DeleteButton);
 
         var isRebinding = false;
@@ -720,6 +720,24 @@ public sealed partial class MainWindow
     {
         button.Width = width;
         AvaloniaCompactDialogChrome.ApplyButton(button, SelectionPaneDialogChromeStyle, width, isDefault);
+        ApplySelectionPaneButtonHeight(button);
+    }
+
+    /// <summary>
+    /// A command-row button as WPF builds it: <c>MinWidth</c> = <paramref name="minWidth"/> and otherwise sized
+    /// to its caption, so a longer localized label ("Bring Forward") is never clipped.
+    /// </summary>
+    private static void ApplySelectionPaneAutoWidthButtonChrome(Button button, double minWidth)
+    {
+        AvaloniaCompactDialogChrome.ApplyButton(button, SelectionPaneDialogChromeStyle, minWidth);
+        button.Width = double.NaN;
+        button.MinWidth = minWidth;
+        button.Padding = new Thickness(10, 0);
+        ApplySelectionPaneButtonHeight(button);
+    }
+
+    private static void ApplySelectionPaneButtonHeight(Button button)
+    {
         button.Height = 20;
         button.MinHeight = 20;
         button.MaxHeight = 20;
