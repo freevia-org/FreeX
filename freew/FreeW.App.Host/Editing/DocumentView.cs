@@ -6560,7 +6560,10 @@ public sealed partial class DocumentView : RichTextBox
                 // Stash the exact model ListKind on the list's Tag: WPF renders Number and MultiLevel with
                 // the same Decimal marker, so ReadList recovers the kind from this Tag rather than inferring
                 // it from the marker (which can't tell MultiLevel from Number) — see ReadList/FromMarkerStyle.
-                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
+                // WPF resolves an unset (auto) List margin to one line above and below the list; Word puts no space
+                // around a list (the paragraphs' own spacing decides), so every list used to push its neighbours a
+                // line away and eat page capacity. A zero margin leaves the marker offset untouched.
+                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind, Margin = new Thickness(0) };
 
                 // Collect this list's paragraphs first so a MultiLevel list can compute its accumulated
                 // outline markers ("1.1.1") across the whole run before building the WPF items. R132
@@ -14469,9 +14472,11 @@ public sealed partial class DocumentView : RichTextBox
         };
         // A print clone (XAML round-trip) loses the Tag but keeps the automation id; under "restart each page"
         // print still has to find the mark to renumber it for the page it lands on (RenumberFootnoteMarksByPage).
-        if (document.FootnoteNumbering.NumberRestart == NoteNumberRestart.EachPage)
-            System.Windows.Automation.AutomationProperties.SetAutomationId(
-                marker, FootnoteMarkAutomationIdPrefix + footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // The id is stamped on every mark, not only under "restart each page": pagination of a tag-less flow
+        // also has to find the mark's own position (a paragraph can start on one page and place its
+        // reference on the next, and the note belongs to the page of the reference).
+        System.Windows.Automation.AutomationProperties.SetAutomationId(
+            marker, FootnoteMarkAutomationIdPrefix + footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture));
         ApplyNoteReferencePresentation(marker, document);
         if (document.Footnotes.TryGetValue(footnoteId, out var footnote) && footnote.PlainText is { Length: > 0 } text)
             marker.ToolTip = text;
@@ -14552,6 +14557,15 @@ public sealed partial class DocumentView : RichTextBox
         }
     }
 
+    private static bool TryReadFootnoteMarkAutomationId(WpfRun run, out int footnoteId)
+    {
+        footnoteId = 0;
+        return System.Windows.Automation.AutomationProperties.GetAutomationId(run) is { Length: > 0 } automationId
+            && automationId.StartsWith(FootnoteMarkAutomationIdPrefix, StringComparison.Ordinal)
+            && int.TryParse(automationId.AsSpan(FootnoteMarkAutomationIdPrefix.Length), System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out footnoteId);
+    }
+
     private static void SetMarkText(WpfRun run, string text)
     {
         if (!string.Equals(run.Text, text, StringComparison.Ordinal))
@@ -14619,11 +14633,12 @@ public sealed partial class DocumentView : RichTextBox
     /// Returns the ordered footnote marker IDs and text positions inside the supplied blocks.
     /// </summary>
     internal static IReadOnlyList<FootnoteMarkerPosition> CollectFootnoteMarkers(
-        IEnumerable<System.Windows.Documents.Block> blocks)
+        IEnumerable<System.Windows.Documents.Block> blocks,
+        bool includeAutomationIdMarks = false)
     {
         var markers = new List<FootnoteMarkerPosition>();
         foreach (var block in blocks)
-            CollectFootnoteMarkersFromBlock(block, markers);
+            CollectFootnoteMarkersFromBlock(block, markers, includeAutomationIdMarks);
         return markers;
     }
 
@@ -14636,38 +14651,42 @@ public sealed partial class DocumentView : RichTextBox
 
     private static void CollectFootnoteMarkersFromBlock(
         System.Windows.Documents.Block block,
-        List<FootnoteMarkerPosition> markers)
+        List<FootnoteMarkerPosition> markers,
+        bool includeAutomationIdMarks)
     {
         switch (block)
         {
             case WpfParagraph paragraph:
-                CollectFootnoteMarkersFromInlines(paragraph.Inlines, markers);
+                CollectFootnoteMarkersFromInlines(paragraph.Inlines, markers, includeAutomationIdMarks);
                 break;
             case WpfList list:
                 foreach (var item in list.ListItems)
                     foreach (var itemBlock in item.Blocks)
-                        CollectFootnoteMarkersFromBlock(itemBlock, markers);
+                        CollectFootnoteMarkersFromBlock(itemBlock, markers, includeAutomationIdMarks);
                 break;
             case System.Windows.Documents.Table table:
                 foreach (var rg in table.RowGroups)
                     foreach (var row in rg.Rows)
                         foreach (var cell in row.Cells)
                             foreach (var cellBlock in cell.Blocks)
-                                CollectFootnoteMarkersFromBlock(cellBlock, markers);
+                                CollectFootnoteMarkersFromBlock(cellBlock, markers, includeAutomationIdMarks);
                 break;
         }
     }
 
     private static void CollectFootnoteMarkersFromInlines(
         InlineCollection inlines,
-        List<FootnoteMarkerPosition> markers)
+        List<FootnoteMarkerPosition> markers,
+        bool includeAutomationIdMarks)
     {
         foreach (var inline in inlines)
         {
             if (inline is WpfRun run && run.Tag is FootnoteMarker marker)
                 markers.Add(new FootnoteMarkerPosition(marker.FootnoteId, run.ContentStart));
+            else if (includeAutomationIdMarks && inline is WpfRun markRun && TryReadFootnoteMarkAutomationId(markRun, out var markId))
+                markers.Add(new FootnoteMarkerPosition(markId, markRun.ContentStart));
             else if (inline is Span span)
-                CollectFootnoteMarkersFromInlines(span.Inlines, markers);
+                CollectFootnoteMarkersFromInlines(span.Inlines, markers, includeAutomationIdMarks);
         }
     }
 

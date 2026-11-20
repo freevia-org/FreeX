@@ -854,36 +854,12 @@ internal static class PaginationEngine
 
         // The notes a page carries are those whose reference mark lands on it (Word keeps a reference and
         // its note together), not every note of a paragraph that merely starts on the page.
-        List<int> NoteIdsOnFirstPage(int blockCount)
-        {
-            var ids = new List<int>();
-            foreach (var entry in pending.Take(blockCount))
-            {
-                var markers = DocumentView.CollectFootnoteMarkers([entry.Block]);
-                if (markers.Count == 0)
-                {
-                    if (!entry.IsContinuation)
-                        ids.AddRange(FootnoteIdsInModelBlock(modelBlocks[entry.ModelIndex]));
-                    continue;
-                }
-
-                foreach (var marker in markers)
-                {
-                    int markerPage;
-                    try
-                    {
-                        markerPage = dynamicWork.GetPageNumber(marker.Position);
-                    }
-                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
-                    {
-                        markerPage = 0;
-                    }
-                    if (markerPage <= 0)
-                        ids.Add(marker.FootnoteId);
-                }
-            }
-            return ids.Distinct().ToList();
-        }
+        List<int> NoteIdsOnFirstPage(int blockCount) =>
+            ResolveNoteIdsOnFirstPage(
+                pending.Take(blockCount).Select(entry => (entry.Block, entry.ModelIndex, entry.IsContinuation)),
+                pending.Select(entry => (entry.Block, entry.ModelIndex)).ToList(),
+                modelIndex => modelBlocks[modelIndex],
+                dynamicWork);
 
         double NoteDemandFor(int blockCount)
         {
@@ -1363,6 +1339,53 @@ internal static class PaginationEngine
         }
 
         return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value);
+    }
+
+    /// <summary>
+    /// The notes a page carries: those whose reference mark lands on its first page (Word keeps a
+    /// reference and its note together), not every note of a paragraph that merely starts there -- a
+    /// paragraph split across the page cut places its reference on the page the tail lands on. Marks are
+    /// found through <see cref="DocumentView.CollectFootnoteMarkers"/>; a block whose flow carries no mark
+    /// (and whose split-off tail carries none either) falls back to its model block's notes.
+    /// </summary>
+    internal static List<int> ResolveNoteIdsOnFirstPage(
+        IEnumerable<(System.Windows.Documents.Block Block, int ModelKey, bool IsContinuation)> entries,
+        IReadOnlyList<(System.Windows.Documents.Block Block, int ModelKey)> allPending,
+        Func<int, FreeW.Core.Model.Block> modelOf,
+        DynamicDocumentPaginator work)
+    {
+        var ids = new List<int>();
+        foreach (var entry in entries)
+        {
+            var markers = DocumentView.CollectFootnoteMarkers([entry.Block], includeAutomationIdMarks: true);
+            if (markers.Count == 0)
+            {
+                // A paragraph whose tail (and so its reference) was split off carries none itself.
+                var tailCarriesMarkers = allPending.Any(other =>
+                    other.ModelKey == entry.ModelKey
+                    && !ReferenceEquals(other.Block, entry.Block)
+                    && DocumentView.CollectFootnoteMarkers([other.Block], includeAutomationIdMarks: true).Count > 0);
+                if (!entry.IsContinuation && !tailCarriesMarkers)
+                    ids.AddRange(FootnoteIdsInModelBlock(modelOf(entry.ModelKey)));
+                continue;
+            }
+
+            foreach (var marker in markers)
+            {
+                int markerPage;
+                try
+                {
+                    markerPage = work.GetPageNumber(marker.Position);
+                }
+                catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+                {
+                    markerPage = 0;
+                }
+                if (markerPage <= 0)
+                    ids.Add(marker.FootnoteId);
+            }
+        }
+        return ids.Distinct().ToList();
     }
 
     internal static IEnumerable<int> FootnoteIdsInModelBlock(FreeW.Core.Model.Block block)

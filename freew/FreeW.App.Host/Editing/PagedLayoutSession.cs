@@ -1918,18 +1918,12 @@ internal sealed class PagedLayoutSession
             return count;
         }
 
-        List<int> NoteIdsOnFirstPage(int blockCount)
-        {
-            var ids = new List<int>();
-            foreach (var entry in pending.Take(blockCount))
-            {
-                // Layout renders carry no tags, so (as in the full computation) a block's notes come from
-                // its model owner, and a split-off remainder carries none of its own.
-                if (!entry.IsContinuation)
-                    ids.AddRange(PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(entry.Rendered)));
-            }
-            return ids.Distinct().ToList();
-        }
+        List<int> NoteIdsOnFirstPage(int blockCount) =>
+            PaginationEngine.ResolveNoteIdsOnFirstPage(
+                pending.Take(blockCount).Select(entry => (entry.Block, entry.Rendered, entry.IsContinuation)),
+                pending.Select(entry => (entry.Block, entry.Rendered)).ToList(),
+                rendered => OwnerOf(rendered),
+                dynamicWork);
 
         double NoteDemandFor(int blockCount)
         {

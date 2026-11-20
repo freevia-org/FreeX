@@ -854,7 +854,7 @@
                                                              FontSize="13"
                                                              FontFamily="Segoe UI"
                                                              VerticalContentAlignment="Center"
-                                                             AutomationProperties.Name="Rename sheet tab"
+                                                             AutomationProperties.Name="{local:Loc Key=MainWindow_AutomationName_RenameSheetTab}"
                                                              AutomationProperties.AutomationId="SheetTabRenameEditor"
                                                              PreviewKeyDown="SheetTabRenameEditor_PreviewKeyDown"/>
                                                 </Grid>
