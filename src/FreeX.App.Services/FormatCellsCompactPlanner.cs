@@ -33,7 +33,8 @@ public sealed record FormatCellsCompactRequest(
     bool? Superscript = null,
     bool? Subscript = null,
     CellFillPatternStyle? FillPatternStyle = null,
-    CellColor? FillPatternColor = null);
+    CellColor? FillPatternColor = null,
+    CellReadingOrder? ReadingOrder = null);
 
 public readonly record struct FormatCellsCompactBorderPresetMetadata(
     CellBorderPreset Preset,
@@ -99,6 +100,7 @@ public static class FormatCellsCompactPlanner
             DoubleUnderline: request.DoubleUnderline,
             IndentLevel: NormalizeIndentLevel(request.IndentLevel),
             TextRotation: NormalizeTextRotation(request.TextRotation),
+            ReadingOrder: request.ReadingOrder,
             BorderTop: borderTop,
             BorderRight: borderRight,
             BorderBottom: borderBottom,

@@ -822,6 +822,12 @@
   <data name="FormatCells_TextRotation" xml:space="preserve">
     <value>Text rotation</value>
   </data>
+  <data name="FormatCells_TextOrientation" xml:space="preserve">
+    <value>Text orientation</value>
+  </data>
+  <data name="FormatCells_TextDirection" xml:space="preserve">
+    <value>Text direction</value>
+  </data>
   <data name="FormatCells_Font" xml:space="preserve">
     <value>_Font</value>
   </data>
