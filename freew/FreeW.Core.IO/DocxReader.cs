@@ -439,6 +439,34 @@ public static partial class DocxReader
         // valid on token requires consuming applications to retain the embedded image data when saving.
         document.DoNotAutoCompressPictures = ReadToggle(root, "doNotAutoCompressPictures");
 
+        // Layout compatibility (w:compat): the compatibilityMode compatSetting plus the enabled legacy flags.
+        // A w:compat without a compatibilityMode setting is a Word 2007 (12) document; no w:compat leaves the
+        // current default. The settings element itself stays preserved verbatim for the writer.
+        if (root.Element(W + "compat") is { } compat)
+        {
+            var compatMode = 12;
+            foreach (var child in compat.Elements())
+            {
+                if (child.Name == W + "compatSetting")
+                {
+                    if (child.Attribute(W + "name")?.Value == "compatibilityMode"
+                        && int.TryParse(child.Attribute(W + "val")?.Value,
+                            System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out var parsedMode)
+                        && parsedMode > 0)
+                    {
+                        compatMode = parsedMode;
+                    }
+                }
+                else if (child.Name.Namespace == W
+                    && ReadOnOffValue(child.Attribute(W + "val")?.Value, defaultValue: true))
+                {
+                    document.CompatibilityFlags.Add(child.Name.LocalName);
+                }
+            }
+            document.CompatibilityMode = compatMode;
+        }
+
         // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
         if (root.Element(W + "footnotePr") is { } footnotePr)
             ReadNoteNumberingOptions(footnotePr, document.FootnoteNumbering);

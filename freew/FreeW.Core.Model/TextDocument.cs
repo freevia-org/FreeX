@@ -4212,6 +4212,27 @@ public sealed class TextDocument
     /// </summary>
     public bool DoNotAutoCompressPictures { get; set; }
 
+    /// <summary>Word 2013+ (the current) layout compatibility mode; the default for documents FreeW authors.</summary>
+    public const int CurrentCompatibilityMode = 15;
+
+    /// <summary>
+    /// The Word layout compatibility mode (<c>w:settings/w:compat/w:compatSetting[@w:name="compatibilityMode"]/@w:val</c>):
+    /// 11 = Word 2003, 12 = Word 2007, 14 = Word 2010, 15 = Word 2013 and later. A <c>w:compat</c> element without the
+    /// setting is Word 2007 (12); a document with no <c>w:compat</c> at all is <see cref="CurrentCompatibilityMode"/>.
+    /// The settings part itself is preserved verbatim on save, so this is read-only data for the renderer; a freshly
+    /// authored document writes the setting only when it differs from <see cref="CurrentCompatibilityMode"/>.
+    /// </summary>
+    public int CompatibilityMode { get; set; } = CurrentCompatibilityMode;
+
+    /// <summary>Whether Word lays this document out in a pre-2013 compatibility mode (below 15).</summary>
+    public bool UsesLegacyCompatibilityLayout => CompatibilityMode < CurrentCompatibilityMode;
+
+    /// <summary>
+    /// Local names of the enabled boolean <c>w:compat</c> flags (for example <c>doNotUseHTMLParagraphAutoSpacing</c>),
+    /// in document order, so the renderer can honour legacy layout flags. Authored documents write them back verbatim.
+    /// </summary>
+    public List<string> CompatibilityFlags { get; } = [];
+
     /// <summary>
     /// Whether common system fonts should be included when fonts are embedded for this document.
     /// Maps to <c>w:settings/w:embedSystemFonts</c>. False is Word's default and is omitted from newly

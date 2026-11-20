@@ -270,6 +270,8 @@ public static partial class DocxWriter
             || hasBackground
             || hasEmbeddedFonts
             || hasPreservedSettings
+            || document.CompatibilityMode != TextDocument.CurrentCompatibilityMode
+            || document.CompatibilityFlags.Count > 0
             || !document.FootnoteNumbering.IsDefault
             || !document.EndnoteNumbering.IsDefault;
 
@@ -343,7 +345,7 @@ public static partial class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.EmbedSystemFonts, document.SaveSubsetFonts, document.PageBordersDoNotSurroundHeader, document.PageBordersDoNotSurroundFooter, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.EmbedSystemFonts, document.SaveSubsetFonts, document.PageBordersDoNotSurroundHeader, document.PageBordersDoNotSurroundFooter, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages, document.CompatibilityMode, document.CompatibilityFlags));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -9492,7 +9494,7 @@ public static partial class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool embedSystemFonts, bool saveSubsetFonts, bool pageBordersDoNotSurroundHeader, bool pageBordersDoNotSurroundFooter, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool embedSystemFonts, bool saveSubsetFonts, bool pageBordersDoNotSurroundHeader, bool pageBordersDoNotSurroundFooter, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false, int compatibilityMode = TextDocument.CurrentCompatibilityMode, IReadOnlyList<string>? compatibilityFlags = null)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -9581,6 +9583,10 @@ public static partial class DocxWriter
                 fresh.Add(freshFootnotePr);
             if (BuildNotePr(endnoteNumbering, "endnotePr") is { } freshEndnotePr)
                 fresh.Add(freshEndnotePr);
+            // Layout compatibility (w:compat) follows endnotePr in CT_Settings order; only a non-default mode or
+            // explicit legacy flags are written, so a plain authored document stays minimal.
+            if (BuildCompat(compatibilityMode, compatibilityFlags) is { } freshCompat)
+                fresh.Add(freshCompat);
             if (doNotAutoCompressPictures)
                 fresh.Add(new XElement(W + "doNotAutoCompressPictures"));
             return new XDocument(fresh);
@@ -9628,6 +9634,38 @@ public static partial class DocxWriter
             ? new XElement(W + "doNotAutoCompressPictures")
             : null);
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Builds w:compat for a freshly authored settings part: the enabled legacy flags (as empty toggles) and, when
+    /// the mode is not the current default, the compatibilityMode compatSetting. Null when nothing needs writing.
+    /// A mode of 12 without the setting is how Word 2007 files read back, so it is emitted as flags only.
+    /// </summary>
+    private static XElement? BuildCompat(int mode, IReadOnlyList<string>? flags)
+    {
+        var hasFlags = flags is { Count: > 0 };
+        if (mode == TextDocument.CurrentCompatibilityMode && !hasFlags)
+            return null;
+
+        // A w:compat without the setting reads back as 12, so every other mode (15 beside flags included) is explicit.
+        var writeMode = mode != 12;
+
+        var compat = new XElement(W + "compat");
+        if (flags is not null)
+        {
+            foreach (var flag in flags)
+                compat.Add(new XElement(W + flag));
+        }
+
+        if (writeMode)
+        {
+            compat.Add(new XElement(W + "compatSetting",
+                new XAttribute(W + "name", "compatibilityMode"),
+                new XAttribute(W + "uri", "http://schemas.microsoft.com/office/word"),
+                new XAttribute(W + "val", mode.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        }
+
+        return compat;
     }
 
     private static bool HasCustomDefaultTabStop(PageSettings page) =>
