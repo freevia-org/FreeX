@@ -38,8 +38,12 @@ public sealed partial class MainWindow
     internal const int WpfResizableFrameHeight = 39;
     private const int WpfNoResizeFrameWidth = WpfResizableFrameWidth;
     private const int WpfNoResizeClientFrameHeight = WpfResizableFrameHeight;
-    private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth - WpfResizableFrameWidth;
-    private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight - WpfResizableFrameHeight;
+    // The WPF parity capture pins this dialog's CLIENT size to the planner metrics (see
+    // TryGetFixedDialogClientCaptureSize), so the Avalonia client is the metrics unreduced: subtracting
+    // the window frame left it 16px narrow and 39px short, with the missing height taken from the
+    // stretchable preview grid.
+    private const int TextToColumnsDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;
+    private const int TextToColumnsDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;
 
     private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0, double? bottomMargin = null) =>
         new()

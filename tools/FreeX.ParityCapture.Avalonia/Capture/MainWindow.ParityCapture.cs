@@ -2591,9 +2591,8 @@ public sealed partial class MainWindow
             "dialog.ExportOptions" => (
                 ExportOptionsDialogSurfacePlanner.CaptureWidth - WpfNoResizeFrameWidth,
                 ExportOptionsDialogSurfacePlanner.CaptureHeight - WpfNoResizeClientFrameHeight),
-            "dialog.ProtectWorkbook" => (
-                ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
-                ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight),
+            // dialog.ProtectWorkbook is intentionally NOT pinned: the WPF dialog now has the Structure /
+            // Windows options, so both shells capture their natural content size.
             "dialog.Sparkline" => (
                 SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
                 SparklinePlanner.InsertDialogCaptureHeight - WpfNoResizeClientFrameHeight),
