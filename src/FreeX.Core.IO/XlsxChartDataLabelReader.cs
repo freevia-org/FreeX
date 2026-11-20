@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 using System.Globalization;
@@ -572,12 +573,7 @@ internal static class XlsxChartDataLabelReader
         };
 
     private static bool? ReadNullableBool(string? value) =>
-        value switch
-        {
-            "1" or "true" => true,
-            "0" or "false" => false,
-            _ => null
-        };
+        OoxmlBooleanLexical.TryParse(value);
 
     private static ChartDataLabelSeparator FromXlsxDataLabelSeparator(string? value) =>
         value is null

@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -382,6 +383,6 @@ internal static class XlsxX14DataValidationReader
     {
         if (value is null)
             return defaultValue;
-        return value is "1" or "true";
+        return OoxmlBooleanLexical.IsTrue(value);
     }
 }

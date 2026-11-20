@@ -83,7 +83,7 @@ public static partial class DocxReader
     }
 
     private static bool FormFieldToggle(XElement element) =>
-        element.Attribute(W + "val")?.Value is null or "1" or "true" or "on";
+        ReadOnOffValue(element.Attribute(W + "val")?.Value, defaultValue: true);
 
     private static int? FormFieldInt(XElement? element, int minimum, int maximum)
     {
