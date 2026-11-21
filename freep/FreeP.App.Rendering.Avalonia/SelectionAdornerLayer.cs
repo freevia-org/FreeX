@@ -124,22 +124,15 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
         }
     }
 
-    private static void DrawSnapGuides(DrawingContext dc, IReadOnlyList<SnapGuideLine> guides, SlideTransformCore xf)
+    private void DrawSnapGuides(DrawingContext dc, IReadOnlyList<SnapGuideLine> guides, SlideTransformCore xf)
     {
-        // We don't know the actual bounds here — use very large values to span the screen.
-        const double Span = 5000;
-        foreach (var g in guides)
+        // The planner spans each guide over the layer's own extent, matching the WPF adorner.
+        foreach (var segment in SnapGuideRenderPlanner.Plan(guides, xf, Bounds.Width, Bounds.Height))
         {
-            if (g.IsHorizontal)
-            {
-                double sy = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
-                dc.DrawLine(SnapGuidePen, new Point(-Span, sy), new Point(Span, sy));
-            }
-            else
-            {
-                double sx = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
-                dc.DrawLine(SnapGuidePen, new Point(sx, -Span), new Point(sx, Span));
-            }
+            dc.DrawLine(
+                SnapGuidePen,
+                new Point(segment.Start.X, segment.Start.Y),
+                new Point(segment.End.X, segment.End.Y));
         }
     }
 

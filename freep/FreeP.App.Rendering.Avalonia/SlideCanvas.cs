@@ -593,57 +593,10 @@ public sealed partial class SlideCanvas : Control
         if (!autoFitPlan.GeometryTransform.IsIdentity)
             autoFitGeometryScope = dc.PushTransform(ToAvaloniaMatrix(autoFitPlan.GeometryTransform));
 
-        if (shape.Effects is not null)
-            RenderShapeEffects(dc, shape);
-
-        var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
-        if (materialPlan.Kind == ImportedShapeMaterialKind.IsometricCrossDepth)
-            RenderImportedShapeDepth(dc, shape, materialPlan);
-
-        // Wave 26: draw explicit elbow polyline route when available (overrides bbox geometry)
-        if (shape.ElbowRouteDip is { Count: >= 2 })
-        {
-            var pen = MakePen(shape.Outline);
-            if (pen is not null)
-            {
-                var pg = new PathGeometry();
-                var pf = new PathFigure
-                {
-                    StartPoint = new Point(shape.ElbowRouteDip[0].X, shape.ElbowRouteDip[0].Y),
-                    IsFilled = false,
-                };
-                for (int ri = 1; ri < shape.ElbowRouteDip.Count; ri++)
-                    pf.Segments!.Add(new LineSegment
-                    {
-                        Point = new Point(shape.ElbowRouteDip[ri].X, shape.ElbowRouteDip[ri].Y)
-                    });
-                pg.Figures!.Add(pf);
-                dc.DrawGeometry(null, pen, pg);
-            }
-        }
-        else if (shape.Geometry.Contours.Count > 0)
-        {
-            var geometry  = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-            if (geometry is not null)
-            {
-                var fillBrush = MakeBrush(shape.Fill, bounds);
-                var pen       = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
-                dc.DrawGeometry(fillBrush, pen, geometry);
-
-                if (materialPlan.Kind == ImportedShapeMaterialKind.Circle)
-                    RenderImportedShapeMaterial(dc, materialPlan, geometry);
-            }
-        }
-
-        if (shape.Effects is not null)
-            RenderShapeBevel(dc, shape);
-
-        if (materialPlan.Kind is ImportedShapeMaterialKind.RelaxedInset or ImportedShapeMaterialKind.Angle)
-        {
-            var geometry = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-            if (geometry is not null)
-                RenderImportedShapeMaterial(dc, materialPlan, geometry);
-        }
+        // One portable sequence (effects, extrusion, route/geometry, bevel, material); this host only
+        // supplies the native sink that paints each step.
+        var sink = new ShapeSink(dc, shape, bounds);
+        ShapeRenderSequence.Dispatch(shape, ref sink);
 
         autoFitGeometryScope?.Dispose();
 
@@ -676,113 +629,6 @@ public sealed partial class SlideCanvas : Control
                 request.MaximumWidthDip,
                 request.Wrap,
                 request.AutoFitKind).Height);
-
-    private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
-    {
-        if (shape.Geometry.Contours.Count == 0) return;
-        // r176: this used to skip ALL outer effects for an unfilled text box. The case it
-        // exists for is the SHADOW -- a shadow cast by a shape with nothing in it is a dark
-        // blob floating behind transparent text -- but suppressing glow and soft edge with it
-        // also made the screen disagree with print: PresentationPdfExporter has no equivalent
-        // guard and has always drawn the glow for exactly these shapes. A glow authored on a
-        // text box was therefore invisible on screen and present in the exported PDF.
-        var suppressShadow = shape.Text is not null && shape.Fill is ResolvedFill.None;
-        var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects, shape.BoundsDip);
-
-        if (plan.ShadowPasses.Count > 0 && !suppressShadow)
-        {
-            var shadowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-            if (shadowGeo is null) return;
-
-            foreach (var pass in plan.ShadowPasses)
-            {
-                var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
-                using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(pass.OffsetX, pass.OffsetY));
-                dc.DrawGeometry(shadowBrush, null, shadowGeo);
-            }
-        }
-
-        if (plan.GlowPasses.Count > 0)
-        {
-            var glowGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-            if (glowGeo is null) return;
-            foreach (var pass in plan.GlowPasses)
-            {
-                var glowBrush  = new SolidColorBrush(
-                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
-                var glowPen    = new Pen(glowBrush, pass.StrokeWidthDip);
-                dc.DrawGeometry(null, glowPen, glowGeo);
-            }
-        }
-
-        if (plan.SoftEdgePasses.Count > 0)
-        {
-            var softEdgeGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-            var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
-            if (softEdgeGeo is not null && fillBrush is not null)
-            {
-                foreach (var pass in plan.SoftEdgePasses)
-                {
-                    using var opacityScope = dc.PushOpacity(pass.Alpha / 255.0);
-                    dc.DrawGeometry(null, new Pen(fillBrush, pass.StrokeWidthDip), softEdgeGeo);
-                }
-            }
-        }
-
-        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
-        // mask, then flip the whole masked result about a pivot below the shape -- the same
-        // shadow/fade/flip shape as the DrawOp.Picture reflection block in RenderPicture below,
-        // just painting the shape geometry instead of the decoded bitmap.
-        //
-        // Unlike RenderPicture, PushOpacityMask's bounds here are given in the SAME local
-        // coordinate frame the geometry is actually drawn in (the shape's own un-flipped
-        // BoundsDip) rather than the post-flip destination: Avalonia's opacity-mask bounds are
-        // resolved inside the currently active transform along with the content, so a bounds
-        // rect that does not overlap the geometry's own (pre-flip) position masks it to nothing.
-        if (plan.HasReflection)
-        {
-            var reflectionGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
-            var reflectionPen = MakePen(shape.Outline);
-            if (reflectionGeo is not null && (reflectionFillBrush is not null || reflectionPen is not null))
-            {
-                var bounds = shape.BoundsDip;
-                double centerX = bounds.X + bounds.Width / 2;
-                foreach (var pass in plan.ReflectionPasses)
-                {
-                    var reflectionStops = new GradientStops
-                    {
-                        new AvGradientStop(
-                            Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
-                        new AvGradientStop(
-                            Color.FromArgb(0, 255, 255, 255),
-                            plan.ReflectionEndPos),
-                    };
-                    if (plan.ReflectionNeedsTerminalTransparentStop)
-                        reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
-                    var reflectionMask = new LinearGradientBrush
-                    {
-                        StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
-                        EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
-                        GradientStops = reflectionStops,
-                    };
-                    // Blur-ring offset composes as the innermost (leftmost) factor so it applies
-                    // to the geometry's own coordinates before the pivot flip, matching the WPF
-                    // sibling's nested PushTransform(scale) + PushTransform(translate) order.
-                    using var transformScope = dc.PushTransform(
-                        Matrix.CreateTranslation(pass.OffsetXDip, pass.OffsetYDip)
-                        * Matrix.CreateTranslation(-centerX, -plan.ReflectionPivotYDip)
-                        * Matrix.CreateScale(1, plan.ReflectionScaleY)
-                        * Matrix.CreateTranslation(centerX, plan.ReflectionPivotYDip));
-                    using var maskScope = dc.PushOpacityMask(
-                        reflectionMask,
-                        new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
-                    dc.DrawGeometry(reflectionFillBrush, reflectionPen, reflectionGeo);
-                }
-            }
-        }
-    }
 
     private static void RenderImportedShapeDepth(
         DrawingContext dc,
@@ -842,85 +688,177 @@ public sealed partial class SlideCanvas : Control
         };
     }
 
-    private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape)
+    private struct ShapeSink(DrawingContext dc, DrawOp.Shape shape, LayoutRect bounds) : IShapeRenderSink
     {
-        var fx = shape.Effects;
-        if (fx is null) return;
+        private Geometry? _geometry;
 
-        bool hasBevel   = fx.BevelTop is not null || fx.BevelBottom is not null;
-        bool hasContour = fx.ContourWidthDip > 0;
-        if (!hasBevel && !hasContour) return;
-        if (shape.Geometry.Contours.Count == 0) return;
-
-        var geo    = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
-        var bounds = shape.BoundsDip;
-
-        if (hasBevel && fx.BevelTop is not null && geo is not null)
+        public void UseGeometry(ShapeGeometrySource source)
         {
-            var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, fx.BevelTop, fx.LightDirDeg);
-            DrawBevelOverlay(dc, geo, bounds, highlight, shade, fx.BevelTop.WidthDip, fx.BevelTop.HeightDip);
-        }
-
-        if (hasContour && geo is not null)
-        {
-            var cColor     = fx.ContourColor ?? new SrgbColor(0x60, 0x60, 0x60);
-            var cBrush     = new SolidColorBrush(Color.FromArgb(255, cColor.R, cColor.G, cColor.B));
-            var contourPen = new Pen(cBrush, Math.Max(0.5, fx.ContourWidthDip));
-            dc.DrawGeometry(null, contourPen, geo);
-        }
-    }
-
-    private static void DrawBevelOverlay(
-        DrawingContext dc,
-        Geometry shapeGeo,
-        LayoutRect bounds,
-        BevelEdgeSet highlight,
-        BevelEdgeSet shade,
-        double bevelW,
-        double bevelH)
-    {
-        var highlightBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
-        var shadeBrush     = new SolidColorBrush(Color.FromArgb(110, 0,   0,   0  ));
-
-        using var clipScope = dc.PushGeometryClip(shapeGeo);
-
-        double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
-        var (bw, bh) = BevelGeometryHelper.GetRenderDimensions(bounds, bevelW, bevelH);
-
-        void DrawWedge(bool active, IBrush brush, Point tl, Point tr, Point br, Point bl)
-        {
-            if (!active) return;
-            var pg = new StreamGeometry();
-            using (var sgc = pg.Open())
+            if (source.Kind == ShapeGeometryKind.RoundedRect)
             {
-                sgc.BeginFigure(tl, isFilled: true);
-                sgc.LineTo(tr);
-                sgc.LineTo(br);
-                sgc.LineTo(bl);
-                sgc.EndFigure(isClosed: true);
+                _geometry = CreateRoundedRect(source.Bounds, source.CornerRadiusDip);
+                return;
             }
-            dc.DrawGeometry(brush, null, pg);
+
+            _geometry = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
         }
 
-        DrawWedge(highlight.Top || shade.Top,
-            highlight.Top ? highlightBrush : shadeBrush,
-            new Point(x, y), new Point(x + w, y),
-            new Point(x + w - bw, y + bh), new Point(x + bw, y + bh));
+        public readonly void FillShadow(ShapeShadowPass pass)
+        {
+            if (_geometry is null) return;
+            var shadowBrush = new SolidColorBrush(
+                Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            using var shadowScope = dc.PushTransform(Matrix.CreateTranslation(pass.OffsetX, pass.OffsetY));
+            dc.DrawGeometry(shadowBrush, null, _geometry);
+        }
 
-        DrawWedge(highlight.Bottom || shade.Bottom,
-            highlight.Bottom ? highlightBrush : shadeBrush,
-            new Point(x + bw, y + h - bh), new Point(x + w - bw, y + h - bh),
-            new Point(x + w, y + h), new Point(x, y + h));
+        public readonly void StrokeGlow(ShapeGlowPass pass)
+        {
+            if (_geometry is null) return;
+            var glowBrush = new SolidColorBrush(
+                Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            dc.DrawGeometry(null, new Pen(glowBrush, pass.StrokeWidthDip), _geometry);
+        }
 
-        DrawWedge(highlight.Left || shade.Left,
-            highlight.Left ? highlightBrush : shadeBrush,
-            new Point(x, y), new Point(x + bw, y + bh),
-            new Point(x + bw, y + h - bh), new Point(x, y + h));
+        public readonly void StrokeSoftEdge(ShapeSoftEdgePass pass)
+        {
+            var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            if (_geometry is null || fillBrush is null) return;
 
-        DrawWedge(highlight.Right || shade.Right,
-            highlight.Right ? highlightBrush : shadeBrush,
-            new Point(x + w - bw, y + bh), new Point(x + w, y),
-            new Point(x + w, y + h), new Point(x + w - bw, y + h - bh));
+            using var opacityScope = dc.PushOpacity(pass.Alpha / 255.0);
+            dc.DrawGeometry(null, new Pen(fillBrush, pass.StrokeWidthDip), _geometry);
+        }
+
+        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
+        // mask, then flip the whole masked result about a pivot below the shape -- the same
+        // shadow/fade/flip shape as the DrawOp.Picture reflection block in RenderPicture below,
+        // just painting the shape geometry instead of the decoded bitmap.
+        //
+        // Unlike RenderPicture, PushOpacityMask's bounds here are given in the SAME local
+        // coordinate frame the geometry is actually drawn in (the shape's own un-flipped
+        // BoundsDip) rather than the post-flip destination: Avalonia's opacity-mask bounds are
+        // resolved inside the currently active transform along with the content, so a bounds
+        // rect that does not overlap the geometry's own (pre-flip) position masks it to nothing.
+        public readonly void DrawReflection(ShapeReflectionStep step)
+        {
+            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            var reflectionPen = MakePen(shape.Outline);
+            if (_geometry is null || (reflectionFillBrush is null && reflectionPen is null)) return;
+
+            var reflectionStops = new GradientStops
+            {
+                new AvGradientStop(Color.FromArgb(step.MaskAlpha, 255, 255, 255), 0),
+                new AvGradientStop(Color.FromArgb(0, 255, 255, 255), step.MaskEndPos),
+            };
+            if (step.NeedsTerminalTransparentStop)
+                reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
+            var reflectionMask = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                GradientStops = reflectionStops,
+            };
+            // Blur-ring offset composes as the innermost (leftmost) factor so it applies
+            // to the geometry's own coordinates before the pivot flip, matching the WPF
+            // sibling's nested PushTransform(scale) + PushTransform(translate) order.
+            using var transformScope = dc.PushTransform(
+                Matrix.CreateTranslation(step.OffsetXDip, step.OffsetYDip)
+                * Matrix.CreateTranslation(-step.CenterXDip, -step.PivotYDip)
+                * Matrix.CreateScale(1, step.ScaleY)
+                * Matrix.CreateTranslation(step.CenterXDip, step.PivotYDip));
+            using var maskScope = dc.PushOpacityMask(
+                reflectionMask,
+                new Rect(shape.BoundsDip.X, shape.BoundsDip.Y, shape.BoundsDip.Width, shape.BoundsDip.Height));
+            using var opacityScope = dc.PushOpacity(step.Opacity);
+            dc.DrawGeometry(reflectionFillBrush, reflectionPen, _geometry);
+        }
+
+        public readonly void FillExtrusion(ShapeMaterialRenderPlan material) =>
+            RenderImportedShapeDepth(dc, shape, material);
+
+        public readonly void StrokeElbowRoute(IReadOnlyList<LayoutPoint> route, bool strokeOutline)
+        {
+            var pen = strokeOutline ? MakePen(shape.Outline) : null;
+            if (pen is null) return;
+
+            var pg = new PathGeometry();
+            var pf = new PathFigure
+            {
+                StartPoint = new Point(route[0].X, route[0].Y),
+                IsFilled = false,
+            };
+            for (int ri = 1; ri < route.Count; ri++)
+                pf.Segments!.Add(new LineSegment { Point = new Point(route[ri].X, route[ri].Y) });
+            pg.Figures!.Add(pf);
+            dc.DrawGeometry(null, pen, pg);
+        }
+
+        public readonly void DrawGeometry(bool strokeOutline)
+        {
+            if (_geometry is null) return;
+            dc.DrawGeometry(
+                MakeBrush(shape.Fill, bounds),
+                strokeOutline ? MakePen(shape.Outline) : null,
+                _geometry);
+        }
+
+        public readonly void PaintMaterial(ShapeMaterialRenderPlan material)
+        {
+            if (_geometry is null) return;
+            RenderImportedShapeMaterial(dc, material, _geometry);
+        }
+
+        public readonly void PaintBevel(IReadOnlyList<ShapeBevelWedge> wedges)
+        {
+            if (_geometry is null) return;
+
+            using var clipScope = dc.PushGeometryClip(_geometry);
+            foreach (var wedge in wedges)
+            {
+                var brush = new SolidColorBrush(
+                    Color.FromArgb(wedge.Alpha, wedge.Color.R, wedge.Color.G, wedge.Color.B));
+                var pg = new StreamGeometry();
+                using (var sgc = pg.Open())
+                {
+                    sgc.BeginFigure(new Point(wedge.P1.X, wedge.P1.Y), isFilled: true);
+                    sgc.LineTo(new Point(wedge.P2.X, wedge.P2.Y));
+                    sgc.LineTo(new Point(wedge.P3.X, wedge.P3.Y));
+                    sgc.LineTo(new Point(wedge.P4.X, wedge.P4.Y));
+                    sgc.EndFigure(isClosed: true);
+                }
+                dc.DrawGeometry(brush, null, pg);
+            }
+        }
+
+        public readonly void StrokeContour(SrgbColor color, double widthDip)
+        {
+            if (_geometry is null) return;
+            var brush = new SolidColorBrush(Color.FromArgb(255, color.R, color.G, color.B));
+            dc.DrawGeometry(null, new Pen(brush, widthDip), _geometry);
+        }
+
+        private static StreamGeometry CreateRoundedRect(LayoutRect rect, double radius)
+        {
+            double x = rect.X, y = rect.Y, r = radius;
+            double right = rect.Right, bottom = rect.Bottom;
+            var arc = new Size(r, r);
+            var geometry = new StreamGeometry();
+            using (var ctx = geometry.Open())
+            {
+                ctx.BeginFigure(new Point(x + r, y), isFilled: true);
+                ctx.LineTo(new Point(right - r, y));
+                ctx.ArcTo(new Point(right, y + r), arc, 0, false, SweepDirection.Clockwise);
+                ctx.LineTo(new Point(right, bottom - r));
+                ctx.ArcTo(new Point(right - r, bottom), arc, 0, false, SweepDirection.Clockwise);
+                ctx.LineTo(new Point(x + r, bottom));
+                ctx.ArcTo(new Point(x, bottom - r), arc, 0, false, SweepDirection.Clockwise);
+                ctx.LineTo(new Point(x, y + r));
+                ctx.ArcTo(new Point(x + r, y), arc, 0, false, SweepDirection.Clockwise);
+                ctx.EndFigure(isClosed: true);
+            }
+
+            return geometry;
+        }
     }
 
     private static Matrix ToAvaloniaMatrix(ShapeAffineTransform transform) =>

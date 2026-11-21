@@ -125,29 +125,18 @@ public sealed partial class SelectionAdorner : Adorner, ISelectionAdornerSurface
         }
     }
 
-    // Wave 12B: guide line rendering.
+    // Wave 12B: guide line rendering. The planner spans each guide over the adorner's own extent.
     private void DrawSnapGuides(
         DrawingContext dc,
         IReadOnlyList<SnapGuideLine> guides,
         SlideTransformCore xf)
     {
-        double w = ActualWidth;
-        double h = ActualHeight;
-
-        foreach (var g in guides)
+        foreach (var segment in SnapGuideRenderPlanner.Plan(guides, xf, ActualWidth, ActualHeight))
         {
-            if (g.IsHorizontal)
-            {
-                // Horizontal guide: a full-width line at screen-Y derived from guide DIP position.
-                double screenY = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
-                dc.DrawLine(SnapGuidePen, new Point(0, screenY), new Point(w, screenY));
-            }
-            else
-            {
-                // Vertical guide: a full-height line at screen-X.
-                double screenX = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
-                dc.DrawLine(SnapGuidePen, new Point(screenX, 0), new Point(screenX, h));
-            }
+            dc.DrawLine(
+                SnapGuidePen,
+                new Point(segment.Start.X, segment.Start.Y),
+                new Point(segment.End.X, segment.End.Y));
         }
     }
 

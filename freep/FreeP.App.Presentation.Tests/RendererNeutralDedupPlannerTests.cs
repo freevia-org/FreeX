@@ -1018,13 +1018,16 @@ public sealed class RendererNeutralDedupPlannerTests
         {
             source.Should().Contain("ShapeAutoFitRenderPlanner.PlanRender");
             source.Should().NotContain("ShapeTransformPlanner.PlanShapeRenderTransform");
-            source.Should().Contain("ResolvedShapeEffectRenderPlanner.PlanOuterEffects");
+            source.Should().Contain("ShapeRenderSequence.Dispatch(shape, ref sink)");
             source.Should().Contain("TextRunEffectRenderPlanner");
             source.Should().NotContain("BuildWarpYFunc");
             source.Should().NotContain("OuterShadowDirDeg * Math.PI");
             source.Should().NotContain("OuterShadowBlurDip / 2");
             source.Should().NotContain("GlowRadiusDip / 2");
         }
+
+        ReadWorkspaceFile("freep", "FreeP.App.Presentation", "ShapeRenderSequence.cs")
+            .Should().Contain("ResolvedShapeEffectRenderPlanner.PlanOuterEffects");
 
         textEffectPlanner.Should().Contain("WordArtWarpPlanner.ComputeYOffset");
         textEffectPlanner.Should().Contain("ResolvedRunShadow");
@@ -1058,13 +1061,16 @@ public sealed class RendererNeutralDedupPlannerTests
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
         var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
 
+        var sequence = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "ShapeRenderSequence.cs");
+        sequence.Should().Contain("ShapeMaterialRenderPlanner.Plan(shape)");
+        sequence.Should().Contain("ImportedShapeMaterialKind.IsometricCrossDepth");
+        sequence.Should().Contain("ImportedShapeMaterialKind.Circle");
+        sequence.Should().Contain("ImportedShapeMaterialKind.RelaxedInset");
+        sequence.Should().Contain("ImportedShapeMaterialKind.Angle");
+
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ShapeMaterialRenderPlanner.Plan(shape)");
-            source.Should().Contain("ImportedShapeMaterialKind.IsometricCrossDepth");
-            source.Should().Contain("ImportedShapeMaterialKind.Circle");
-            source.Should().Contain("ImportedShapeMaterialKind.RelaxedInset");
-            source.Should().Contain("ImportedShapeMaterialKind.Angle");
+            source.Should().Contain("ShapeRenderSequence.Dispatch(shape, ref sink)");
             source.Should().NotContain("shape.ShapeId == 3");
             source.Should().NotContain("shape.ShapeId == 4");
             source.Should().NotContain("shape.ShapeId == 5");
@@ -1076,10 +1082,14 @@ public sealed class RendererNeutralDedupPlannerTests
     public void WpfRelaxedInsetRouteUsesTheSharedMaterialGuardForRoundedGeometry()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+        var sequence = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "ShapeRenderSequence.cs");
 
-        wpf.Should().Contain("GetShapeRenderGeometry(shape, materialPlan)");
-        wpf.Should().Contain("materialPlan.Kind == ImportedShapeMaterialKind.RelaxedInset");
+        sequence.Should().Contain("material.Kind == ImportedShapeMaterialKind.RelaxedInset");
+        sequence.Should().Contain("ShapeGeometryKind.RoundedRect");
+        wpf.Should().Contain("source.Kind == ShapeGeometryKind.RoundedRect");
         wpf.Should().Contain("new RectangleGeometry");
+        avalonia.Should().Contain("source.Kind == ShapeGeometryKind.RoundedRect");
     }
 
     [Fact]

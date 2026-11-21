@@ -206,6 +206,21 @@ public sealed class ShapeRenderSequenceTests
         SnapGuideRenderPlanner.Plan([], SlideTransformCore.Identity, 10, 10).Should().BeEmpty();
     }
 
+    [Fact]
+    public void BothSlideCanvasHosts_PaintShapesOnlyThroughTheSharedSequence()
+    {
+        foreach (var host in new[] { "FreeP.App.Rendering.Wpf", "FreeP.App.Rendering.Avalonia" })
+        {
+            var source = TestWorkspaceFileLocator.ReadAllText("freep", host, "SlideCanvas.cs");
+
+            source.Should().Contain("ShapeRenderSequence.Dispatch(shape, ref sink)");
+            source.Should().NotContain("DrawBevelOverlay");
+            source.Should().NotContain("RenderShapeEffects");
+            source.Should().NotContain("SoftEdgeOuterSpreadScale");
+            source.Should().NotContain("ComputeBevelRegions");
+        }
+    }
+
     private static DrawOp.Shape Shape(
         ResolvedShapeEffects? effects,
         uint shapeId = 0,
