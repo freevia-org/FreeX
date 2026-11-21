@@ -478,6 +478,8 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             workbook.PivotTableStyles.Add(pivotTableStyle);
         foreach (var structuredTableStyle in structuredTableStyleMetadata)
             workbook.StructuredTableStyles.Add(structuredTableStyle);
+        workbook.CustomCellStyles.AddRange(
+            XlsxNamedCellStyleCodec.Read(stylesXml, workbookTheme, indexedColors));
 
         var loadedScenarioNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var customViewStatesById = new Dictionary<string, List<WorksheetCustomViewState>>(StringComparer.OrdinalIgnoreCase);
