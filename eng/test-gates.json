@@ -327,7 +327,8 @@
     },
     {
       "id": "freex-portable-unix-macos",
-      "costHintMinutes": 8,
+      "costHintMinutes": 7,
+      "partitions": 2,
       "app": "FreeX",
       "gate": "release",
       "platforms": ["macos"],
@@ -345,7 +346,7 @@
     },
     {
       "id": "freex-avalonia-macos",
-      "costHintMinutes": 6,
+      "costHintMinutes": 9,
       "app": "FreeX",
       "gate": "release",
       "requiresFullHistory": true,
