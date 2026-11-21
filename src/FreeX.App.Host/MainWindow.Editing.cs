@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation.DefinedNames;
+using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.Ribbon;
@@ -26,6 +27,9 @@ public partial class MainWindow
     // R83-app-flashfill-autocomplete-5-2: reentrancy guard for ApplyCellValueAutoCompleteSuggestion
     // (setting _inlineEditor.Text to add the suggested tail fires TextChanged again).
     private bool _applyingCellValueAutoCompleteSuggestion;
+
+    // "Automatically Flash Fill": the live grey-ghost suggestion for the in-cell edit in progress.
+    private readonly FlashFillSuggestionState _flashFillSuggestionState = new();
 
     // Set for one TextChanged pass when Backspace/Delete just removed a live suggestion, so that
     // pass doesn't instantly re-offer the very completion the user just rejected -- mirrors Excel,
@@ -161,7 +165,11 @@ public partial class MainWindow
                 RefreshInlineEditorChromeBorder();
                 RefreshFormulaReferenceHighlights();
 
-                if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
+                UpdateFlashFillSuggestion(_inlineEditor);
+                var cellValueAutocompleteSuppressed =
+                    _formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression();
+                // A detected Flash Fill pattern takes priority over plain column AutoComplete.
+                if (!cellValueAutocompleteSuppressed && _flashFillSuggestionState.Current is null)
                     ApplyCellValueAutoCompleteSuggestion();
 
                 RefreshFormulaFunctionAutocomplete(_inlineEditor);
@@ -393,6 +401,7 @@ public partial class MainWindow
         _inlineEditorAnchorOffscreen = true;
         FormulaBar.Text = _inlineEditor.Text;
         _inlineEditor.Visibility = Visibility.Collapsed;
+        ClearFlashFillSuggestion();
         if (_inlineEditorChrome is not null)
             _inlineEditorChrome.Visibility = Visibility.Collapsed;
         _inlineEditorChromeBaseRect = null;
@@ -493,6 +502,56 @@ public partial class MainWindow
         {
             _applyingCellValueAutoCompleteSuggestion = false;
         }
+    }
+
+    private void UpdateFlashFillSuggestion(System.Windows.Controls.TextBox? editor)
+    {
+        if (editor is null || _formulaEditCell is not { } address)
+        {
+            ClearFlashFillSuggestion();
+            return;
+        }
+
+        var enabled = _options.AutomaticallyFlashFill && CurrentGroupedEditSheetIds().Count <= 1;
+        if (_flashFillSuggestionState.Update(enabled, _workbook, address, editor.Text))
+            SheetGrid.FlashFillGhostCells = _flashFillSuggestionState.Current?.Ghosts;
+    }
+
+    private void ClearFlashFillSuggestion()
+    {
+        if (_flashFillSuggestionState.Clear())
+            SheetGrid.FlashFillGhostCells = null;
+    }
+
+    private static FlashFillSuggestionKey ToFlashFillSuggestionKey(Key key) => key switch
+    {
+        Key.Enter => FlashFillSuggestionKey.Enter,
+        Key.Tab => FlashFillSuggestionKey.Tab,
+        Key.Escape => FlashFillSuggestionKey.Escape,
+        _ => FlashFillSuggestionKey.Other,
+    };
+
+    /// <summary>
+    /// Enter/Tab while a Flash Fill suggestion is showing: drop the in-cell edit and run the normal
+    /// undoable Flash Fill command over the suggested rows (one undo step, same as Ctrl+E).
+    /// </summary>
+    private void AcceptFlashFillSuggestion(FlashFillSuggestion suggestion)
+    {
+        var address = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
+        HideInlineEditor(commit: false);
+        if (address.HasValue)
+        {
+            var sheet = _workbook.GetSheet(address.Value.Sheet);
+            var cell = sheet?.GetCell(address.Value);
+            FormulaBar.Text = FormatFormulaBarText(SpreadsheetDisplayFormatter.ResolveFormulaBarDisplayCell(sheet, cell, address.Value), address.Value);
+            RestoreFormulaEditCellSelection(address.Value);
+        }
+
+        ClearFormulaRangeEntryState();
+        TryExecuteCommand(suggestion.CreateAcceptCommand(), "Flash Fill");
+        UpdateViewport();
+        RefreshStatusBar();
+        FocusSheetGridIfNeeded();
     }
 
     // ── R91-formula-editing-assist-5-1: function-name AutoComplete popup ───────────────────────
@@ -917,6 +976,19 @@ public partial class MainWindow
         // other key handling below, exactly as Excel's own popup takes priority over those keys.
         if (_inlineEditor is not null && HandleFunctionAutocompleteKeyDown(_inlineEditor, e.Key))
         {
+            e.Handled = true;
+            return;
+        }
+
+        // "Automatically Flash Fill": Enter/Tab accept the grey ghost suggestion; Esc falls through
+        // to the normal cancel path, which also drops the ghost cells.
+        if (FlashFillSuggestionPlanner.Resolve(
+                _flashFillSuggestionState.Current,
+                ToFlashFillSuggestionKey(e.Key),
+                Keyboard.Modifiers != ModifierKeys.None) == FlashFillSuggestionKeyAction.Accept &&
+            _flashFillSuggestionState.Current is { } flashFillSuggestion)
+        {
+            AcceptFlashFillSuggestion(flashFillSuggestion);
             e.Handled = true;
             return;
         }

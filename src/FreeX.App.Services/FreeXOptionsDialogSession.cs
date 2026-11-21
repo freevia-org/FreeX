@@ -39,7 +39,22 @@ public sealed class FreeXOptionsDialogSession
         bool enableFillHandleAndCellDragAndDrop,
         bool enableAutoCompleteForCellValues,
         bool quickAccessToolbarBelowRibbon,
-        bool? formulaBarExpanded = null)
+        bool? formulaBarExpanded = null) =>
+        Commit(
+            input,
+            enableFillHandleAndCellDragAndDrop,
+            enableAutoCompleteForCellValues,
+            quickAccessToolbarBelowRibbon,
+            formulaBarExpanded,
+            automaticallyFlashFill: null);
+
+    public FreeXOptionsPersistenceResult Commit(
+        OptionsDialogPlanner.OptionsDialogInput input,
+        bool enableFillHandleAndCellDragAndDrop,
+        bool enableAutoCompleteForCellValues,
+        bool quickAccessToolbarBelowRibbon,
+        bool? formulaBarExpanded,
+        bool? automaticallyFlashFill)
     {
         ArgumentNullException.ThrowIfNull(input);
 
@@ -53,7 +68,10 @@ public sealed class FreeXOptionsDialogSession
                 QuickAccessToolbar.QuickAccessToolbarBelowRibbon,
                 QuickAccessToolbar.CommandIds,
                 CustomDictionary.Model.Words,
-                formulaBarExpanded));
+                formulaBarExpanded)
+            {
+                AutomaticallyFlashFill = automaticallyFlashFill,
+            });
 
         edited.CustomLists = AppOptions.NormalizeCustomLists(EditedCustomLists);
         return _runtimeSession.CommitDialog(OpenSnapshot, edited);
