@@ -457,6 +457,8 @@ public static class DocumentModelCloner
         {
             var rowClone = new TableRow
             {
+                GridBefore = row.GridBefore,
+                GridAfter = row.GridAfter,
                 HeightPt = row.HeightPt,
                 HeightRule = row.HeightRule,
                 AllowBreakAcrossPages = row.AllowBreakAcrossPages,

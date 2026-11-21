@@ -98,6 +98,9 @@ public static class DocumentRunFormattingResolver
             ? direct.CharacterSpacingPt
             : inherited.CharacterSpacingPt,
         KerningMinSizePt = direct.KerningMinSizePt ?? inherited.KerningMinSizePt,
+        CharacterScalePercent = direct.CharacterScalePercent != 0
+            ? direct.CharacterScalePercent
+            : inherited.CharacterScalePercent,
         PositionPt = direct.PositionPt != 0 ? direct.PositionPt : inherited.PositionPt,
         Ligatures = direct.Ligatures != LigatureMode.None ? direct.Ligatures : inherited.Ligatures,
         NumberForm = direct.NumberForm != NumberForm.Default ? direct.NumberForm : inherited.NumberForm,
