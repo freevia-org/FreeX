@@ -43,8 +43,22 @@ internal static class DocumentFontFamilies
     {
         if (!string.IsNullOrWhiteSpace(name) && !IsInstalled(name) && TryGetCloudFamily(name) is { } cloud)
             return cloud;
-        return new FontFamily(name);
+        if (string.IsNullOrWhiteSpace(name) || IsInstalled(name) || name.Contains(','))
+            return new FontFamily(name);
+        // A face that is neither installed nor cached: WPF would draw it in its sans-serif UI fallback, but
+        // Word substitutes Times New Roman, which is much narrower, so lines break (and pages end) differently.
+        return s_substituted.GetOrAdd(name, static n =>
+        {
+            var family = new FontFamily(n + ", " + SubstituteFaceName);
+            s_modelNameBySource[family.Source] = n;
+            return family;
+        });
     }
+
+    /// <summary>The face Word draws a missing document font with.</summary>
+    internal const string SubstituteFaceName = "Times New Roman";
+
+    private static readonly ConcurrentDictionary<string, FontFamily> s_substituted = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The document font name for a WPF family read back off a live run: a cloud-cache family's
