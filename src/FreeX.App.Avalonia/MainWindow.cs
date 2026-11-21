@@ -17363,7 +17363,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinHeight = 0,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(textRotationSlider, "Text orientation");
+        AutomationProperties.SetName(textRotationSlider, UiText.Get("MainWindow_Content_Orientation"));
         AutomationProperties.SetAutomationId(textRotationSlider, "FormatCellsTextRotationSlider");
         var syncingTextRotation = false;
         textRotationSlider.PropertyChanged += (_, e) =>
