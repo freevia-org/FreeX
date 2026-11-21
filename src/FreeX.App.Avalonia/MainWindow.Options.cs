@@ -612,6 +612,10 @@ public sealed partial class MainWindow
         var advancedAutoCompleteBox = OptionsCheckBox(
             OptionsText("Options_EnableAutoCompleteForCellValues"),
             isChecked: current.EnableAutoCompleteForCellValues);
+        var advancedAutomaticFlashFillBox = OptionsCheckBox(
+            OptionsText("Options_AutomaticallyFlashFill"),
+            isChecked: current.AutomaticallyFlashFill);
+        AutomationProperties.SetAutomationId(advancedAutomaticFlashFillBox, "OptionsAutomaticallyFlashFillCheckBox");
         var editCustomListsButton = OptionsButton(OptionsText("Options_EditCustomListsButton"), width: 150);
         AutomationProperties.SetAutomationId(editCustomListsButton, "OptionsEditCustomListsButton");
         editCustomListsButton.Click += (_, _) => RunGuarded(() => ShowCustomListsEditorAsync(dialog, optionsDialogSession));
@@ -652,6 +656,7 @@ public sealed partial class MainWindow
             advancedDirectionRow,
             OptionsToggleRow(advancedFillHandleBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedDisabledFillHandleBottomMargin)),
             OptionsToggleRow(advancedAutoCompleteBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedAutoCompleteBottomMargin)),
+            OptionsToggleRow(advancedAutomaticFlashFillBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedAutoCompleteBottomMargin)),
             OptionsToggleRow(editCustomListsButton, new Thickness(0, 0, 0, 6)),
             OptionsSectionHeader(OptionsText("Options_DisplayOptionsForThisWorkbook"), topMargin: OptionsDialogPlanner.AdvancedDisplaySectionTopMargin),
             OptionsToggleRow(showGridlinesBox, new Thickness(0, 0, 0, OptionsDialogPlanner.AdvancedGridlinesBottomMargin)),
@@ -1304,7 +1309,8 @@ public sealed partial class MainWindow
                 enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
                 enableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true,
                 quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true,
-                formulaBarExpanded: formulaBarExpandedBox.IsChecked == true);
+                formulaBarExpanded: formulaBarExpandedBox.IsChecked == true,
+                automaticallyFlashFill: advancedAutomaticFlashFillBox.IsChecked == true);
             if (!saveResult.IsPersisted)
             {
                 warningText.Text = saveResult.PersistenceError ?? UiText.Get("Options_SaveFailed");

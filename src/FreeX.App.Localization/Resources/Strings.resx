@@ -8724,6 +8724,9 @@ Do you want to expand the selection to include the adjacent data, or continue wi
   <data name="Options_EnableAutoCompleteForCellValues" xml:space="preserve">
     <value>Enable _AutoComplete for cell values</value>
   </data>
+  <data name="Options_AutomaticallyFlashFill" xml:space="preserve">
+    <value>Automatically Flash Fi_ll</value>
+  </data>
   <data name="Sort_MoveDown" xml:space="preserve">
     <value>Move Do_wn</value>
   </data>

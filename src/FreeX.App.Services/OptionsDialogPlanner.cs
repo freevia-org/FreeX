@@ -164,7 +164,11 @@ public static class OptionsDialogPlanner
         bool QuickAccessToolbarBelowRibbon,
         IReadOnlyList<string> QuickAccessToolbarCommands,
         IReadOnlyList<string> SpellCheckCustomDictionaryWords,
-        bool? FormulaBarExpanded = null);
+        bool? FormulaBarExpanded = null)
+    {
+        /// <summary>Excel's Advanced > "Automatically Flash Fill"; null keeps the existing value.</summary>
+        public bool? AutomaticallyFlashFill { get; init; }
+    }
 
     /// <summary>Font names offered in the Options dialog's default-font picker (parity with the WPF host).</summary>
     public static IReadOnlyList<string> FontNames { get; } =
@@ -309,6 +313,7 @@ public static class OptionsDialogPlanner
             FormulaBarExpanded = existing.FormulaBarExpanded,
             GenerateGetPivotData = existing.GenerateGetPivotData,
             EnableAutoCompleteForCellValues = existing.EnableAutoCompleteForCellValues,
+            AutomaticallyFlashFill = existing.AutomaticallyFlashFill,
             StatusBarShowCellMode = existing.StatusBarShowCellMode,
             StatusBarShowEndMode = existing.StatusBarShowEndMode,
             StatusBarShowSelectionMode = existing.StatusBarShowSelectionMode,
@@ -345,6 +350,8 @@ public static class OptionsDialogPlanner
         var options = Project(existing, input);
         options.EnableFillHandleAndCellDragAndDrop = supplemental.EnableFillHandleAndCellDragAndDrop;
         options.EnableAutoCompleteForCellValues = supplemental.EnableAutoCompleteForCellValues;
+        if (supplemental.AutomaticallyFlashFill is { } automaticallyFlashFill)
+            options.AutomaticallyFlashFill = automaticallyFlashFill;
         options.QuickAccessToolbarBelowRibbon = supplemental.QuickAccessToolbarBelowRibbon;
         options.QuickAccessToolbarCommands = supplemental.QuickAccessToolbarCommands.ToList();
         options.SpellCheckCustomDictionaryWords = supplemental.SpellCheckCustomDictionaryWords.ToList();
@@ -399,6 +406,7 @@ public static class OptionsDialogPlanner
         if (edited.AfterEnterDirection != openTimeSnapshot.AfterEnterDirection) merged.AfterEnterDirection = edited.AfterEnterDirection;
         if (edited.EnableFillHandleAndCellDragAndDrop != openTimeSnapshot.EnableFillHandleAndCellDragAndDrop) merged.EnableFillHandleAndCellDragAndDrop = edited.EnableFillHandleAndCellDragAndDrop;
         if (edited.EnableAutoCompleteForCellValues != openTimeSnapshot.EnableAutoCompleteForCellValues) merged.EnableAutoCompleteForCellValues = edited.EnableAutoCompleteForCellValues;
+        if (edited.AutomaticallyFlashFill != openTimeSnapshot.AutomaticallyFlashFill) merged.AutomaticallyFlashFill = edited.AutomaticallyFlashFill;
         if (edited.ShowGridlines != openTimeSnapshot.ShowGridlines) merged.ShowGridlines = edited.ShowGridlines;
         if (edited.ShowHeadings != openTimeSnapshot.ShowHeadings) merged.ShowHeadings = edited.ShowHeadings;
         if (edited.ObjectsDisplay != openTimeSnapshot.ObjectsDisplay) merged.ObjectsDisplay = edited.ObjectsDisplay;
