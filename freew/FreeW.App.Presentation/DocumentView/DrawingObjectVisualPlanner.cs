@@ -77,7 +77,11 @@ public sealed record DrawingObjectOutlinePlan(
     bool IsVisible,
     string? ColorHex,
     double WidthDip,
-    string? DashStyle);
+    string? DashStyle)
+{
+    /// <summary>Compound line type (<c>a:ln/@cmpd</c>, e.g. "dbl"); null is a single stroke.</summary>
+    public string? CompoundStyle { get; init; }
+}
 
 public sealed record DrawingObjectTextRunPlan(
     string Text,
@@ -969,7 +973,10 @@ public static class DrawingObjectVisualPlanner
             true,
             NormalizeHex(shape.OutlineColorHex, "#808080"),
             Math.Max(0.75, shape.OutlineWidthPt * DipPerPoint),
-            shape.OutlineDash);
+            shape.OutlineDash)
+        {
+            CompoundStyle = shape.OutlineCompound,
+        };
     }
 
     private static DrawingObjectEffectsPlan BuildEffectsPlan(ShapeEffectLst? effects)

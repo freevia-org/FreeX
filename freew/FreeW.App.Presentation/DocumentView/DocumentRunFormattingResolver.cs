@@ -30,8 +30,14 @@ public static class DocumentRunFormattingResolver
         // The run's own linked character style (w:rPr/w:rStyle, e.g. "Intense Emphasis") layers on top
         // of the paragraph's style chain and under the run's direct formatting -- the same three-tier
         // cascade Word uses (paragraph style -> character style -> direct formatting).
-        foreach (var style in StyleChain(document, runStyleId))
-            resolved = Overlay(resolved, style.Run);
+        // Word does not paint the built-in "Hyperlink" character style (blue + underline) inside a table of
+        // contents: a TOC entry keeps its TOC-level paragraph look even though Word tags every entry run
+        // with rStyle=Hyperlink (inside w:hyperlink with \h). Ignore that one link style for TOC paragraphs.
+        if (!(IsHyperlinkStyle(document, runStyleId) && TableOfContents.IsTocParagraph(paragraph)))
+        {
+            foreach (var style in StyleChain(document, runStyleId))
+                resolved = Overlay(resolved, style.Run);
+        }
         // Theme-font tokens and symbol fonts stay tokens in the model; they become font names only here,
         // against the document's current theme, so a theme change re-fonts the run.
         resolved = Overlay(resolved, ThemeFontTokenResolver.ApplyForRendering(directFormatting, document));
@@ -48,6 +54,16 @@ public static class DocumentRunFormattingResolver
     {
         ArgumentNullException.ThrowIfNull(run);
         return Resolve(document, paragraph, run.Formatting, run.StyleId);
+    }
+
+    private static bool IsHyperlinkStyle(TextDocument document, string? runStyleId)
+    {
+        if (string.IsNullOrWhiteSpace(runStyleId))
+            return false;
+        if (string.Equals(runStyleId, "Hyperlink", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return document.Styles.TryGetValue(runStyleId, out var style)
+            && string.Equals(style.Name, "Hyperlink", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<DocumentStyle> StyleChain(TextDocument document, string? styleId)
@@ -111,6 +127,8 @@ public static class DocumentRunFormattingResolver
         // "on"; otherwise the non-nullable toggles keep their logical-OR inheritance.
         ExplicitlyOff = RunToggleOverrides.None,
         Bold = Toggle(inherited.Bold, direct.Bold, direct, RunToggleOverrides.Bold),
+        // w:bCs bolds complex-script (RTL) text only; it cascades like the other toggles.
+        ComplexScriptBold = inherited.ComplexScriptBold || direct.ComplexScriptBold,
         Italic = Toggle(inherited.Italic, direct.Italic, direct, RunToggleOverrides.Italic),
         Underline = Toggle(inherited.Underline, direct.Underline, direct, RunToggleOverrides.Underline),
         Strikethrough = Toggle(inherited.Strikethrough, direct.Strikethrough, direct, RunToggleOverrides.Strikethrough),
@@ -161,6 +179,9 @@ public static class DocumentRunFormattingResolver
         {
             FontFamily = family,
             FontSizePt = sizePt,
+            // Complex-script text is bolded by w:bCs (Word's TOC1 style sets only bCs, so a level-1 row of
+            // an Arabic table of contents is bold while the ascii/hAnsi bold flag stays off).
+            Bold = resolved.Bold || resolved.ComplexScriptBold,
         };
     }
 

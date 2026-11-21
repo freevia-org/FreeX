@@ -1664,10 +1664,10 @@ public static partial class DocxReader
         }
 
         // A run-less paragraph is a real line in Word (a trailing empty Footer-style paragraph under a
-        // page-number shape sets how far the footer pushes the body up), so it is kept -- but only
-        // beside real content: a part that is nothing but empty paragraphs stays empty, as before.
-        if (result.Paragraphs.All(paragraph => paragraph.Runs.Count == 0))
-            result.Paragraphs.Clear();
+        // page-number shape sets how far the footer pushes the body up). A part made only of empty
+        // paragraphs still has no visible content (HeaderFooter.IsEmpty), but its blank lines keep their
+        // place: a chapter-opening first-page header of three empty paragraphs pushes the body down by
+        // three lines, and layout needs those paragraphs to measure it.
         return result;
     }
 
@@ -6298,6 +6298,8 @@ public static partial class DocxReader
                 if (long.TryParse(ln.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
                     shape.OutlineWidthPt = widthEmu / 12700.0;
                 shape.OutlineDash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
+                if (ln.Attribute("cmpd")?.Value is { Length: > 0 } compound && compound != "sng")
+                    shape.OutlineCompound = compound;
             }
 
             shape.HeadEnd = ReadShapeLineEnd(ln.Element(A + "headEnd"));
@@ -8087,6 +8089,8 @@ public static partial class DocxReader
         "upperRoman" => PageNumberFormat.UpperRoman,
         "lowerLetter" => PageNumberFormat.LowerLetter,
         "upperLetter" => PageNumberFormat.UpperLetter,
+        "arabicAbjad" => PageNumberFormat.ArabicAbjad,
+        "arabicAlpha" => PageNumberFormat.ArabicAlpha,
         _ => PageNumberFormat.Decimal
     };
 
@@ -8890,6 +8894,7 @@ public static partial class DocxReader
         {
             ExplicitlyOff = explicitlyOff,
             Bold = ReadToggle(rPr, "b"),
+            ComplexScriptBold = ReadToggle(rPr, "bCs"),
             Italic = ReadToggle(rPr, "i"),
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
             Strikethrough = ReadToggle(rPr, "strike"),

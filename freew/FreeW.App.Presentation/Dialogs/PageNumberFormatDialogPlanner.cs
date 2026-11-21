@@ -72,6 +72,8 @@ public static class PageNumberFormatDialogPlanner
         new("I, II, III, ...", PageNumberFormat.UpperRoman),
         new("a, b, c, ...", PageNumberFormat.LowerLetter),
         new("A, B, C, ...", PageNumberFormat.UpperLetter),
+        new("أ, ب, ج, ... (Arabic abjad)", PageNumberFormat.ArabicAbjad),
+        new("أ, ب, ت, ... (Arabic alphabetical)", PageNumberFormat.ArabicAlpha),
     ];
 
     public static readonly IReadOnlyList<PageNumberChapterStyleChoice> ChapterStyleItems =
@@ -571,6 +573,8 @@ public static class PageNumberFormatDialogPlanner
             PageNumberFormat.UpperRoman => ToRoman(value),
             PageNumberFormat.LowerLetter => ToLetters(value, lower: true),
             PageNumberFormat.UpperLetter => ToLetters(value, lower: false),
+            PageNumberFormat.ArabicAbjad => ToArabicLetters(value, ArabicAbjadLetters),
+            PageNumberFormat.ArabicAlpha => ToArabicLetters(value, ArabicAlphaLetters),
             _ => value.ToString(CultureInfo.InvariantCulture)
         };
     }
@@ -635,6 +639,29 @@ public static class PageNumberFormatDialogPlanner
         return Free.Shared.IO.NumeralFormatter.TryToRoman(value, upper: true, out var roman)
             ? roman
             : value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    // Word's arabicAbjad / arabicAlpha number formats walk a fixed 28-letter sequence and, like its Latin
+    // letter formats, repeat the letter (not a bijective base) once the sequence is exhausted.
+    private static readonly string[] ArabicAbjadLetters =
+    [
+        "أ", "ب", "ج", "د", "هـ", "و", "ز", "ح", "ط", "ي",
+        "ك", "ل", "م", "ن", "س", "ع", "ف", "ص", "ق", "ر",
+        "ش", "ت", "ث", "خ", "ذ", "ض", "ظ", "غ",
+    ];
+
+    private static readonly string[] ArabicAlphaLetters =
+    [
+        "أ", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر",
+        "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف",
+        "ق", "ك", "ل", "م", "ن", "هـ", "و", "ي",
+    ];
+
+    private static string ToArabicLetters(int value, string[] letters)
+    {
+        var letter = letters[(value - 1) % letters.Length];
+        var repeat = (value - 1) / letters.Length + 1;
+        return repeat == 1 ? letter : string.Concat(Enumerable.Repeat(letter, repeat));
     }
 
     private static string ToLetters(int value, bool lower) =>

@@ -3587,7 +3587,11 @@ public enum PageNumberFormat
     /// <summary>Lower-case letters: a, b, c (w:fmt="lowerLetter").</summary>
     LowerLetter,
     /// <summary>Upper-case letters: A, B, C (w:fmt="upperLetter").</summary>
-    UpperLetter
+    UpperLetter,
+    /// <summary>Arabic abjad letters: أ, ب, ج, ... (w:fmt="arabicAbjad").</summary>
+    ArabicAbjad,
+    /// <summary>Arabic alphabetical letters: أ, ب, ت, ... (w:fmt="arabicAlpha").</summary>
+    ArabicAlpha
 }
 
 /// <summary>

@@ -82,12 +82,16 @@ public class HeaderFooterFieldAndFrameReadTests
     }
 
     [Fact]
-    public void FooterOfOnlyEmptyParagraphs_StaysEmpty()
+    public void FooterOfOnlyEmptyParagraphs_HasNoVisibleContentButKeepsItsLines()
     {
         var doc = ReadWithFooter("<w:p/><w:p/>");
 
         var footer = doc.FinalSectionHeadersFooters.Footer;
-        (footer is null || footer.Paragraphs.Count == 0).Should().BeTrue();
+        footer.Should().NotBeNull();
+        footer!.IsEmpty.Should().BeTrue();
+        // Word lays each blank line out (a chapter-opening first-page header of blank paragraphs pushes
+        // the body down), so the paragraphs stay in the model for layout to measure.
+        footer.Paragraphs.Should().HaveCount(2);
     }
 
     internal const string MarginCirclePageNumberFooter =

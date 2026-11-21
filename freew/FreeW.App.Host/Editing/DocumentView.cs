@@ -7996,6 +7996,20 @@ public sealed partial class DocumentView : RichTextBox
         if (plan.CustomGeometry is { } cg && cg.Segments.Count > 0)
         {
             var geo = CustomShapePathWpfAdapter.Build(cg, 0, 0, widthPx, heightPx);
+            if (BuildDoubleCompoundStrokeGeometry(geo, plan.Outline, strokeThickness) is { } compoundGeometry
+                && plan.Fill.Kind == DrawingObjectFillKind.None)
+            {
+                // a:ln cmpd="dbl": two parallel strokes a third of the width each, split by a third-width gap.
+                element = new System.Windows.Shapes.Path
+                {
+                    Width = widthPx,
+                    Height = heightPx,
+                    Data = compoundGeometry,
+                    Fill = stroke,
+                    Stretch = System.Windows.Media.Stretch.None,
+                };
+            }
+            else
             element = new System.Windows.Shapes.Path
             {
                 Width = widthPx,
@@ -8019,6 +8033,40 @@ public sealed partial class DocumentView : RichTextBox
                 StrokeThickness = strokeThickness,
                 StrokeDashArray = dashArray
             };
+        }
+        else if (plan.Fill.Kind == DrawingObjectFillKind.None
+            && plan.Outline.IsVisible
+            && strokeThickness >= 1.5
+            && string.Equals(plan.Outline.CompoundStyle, "dbl", StringComparison.OrdinalIgnoreCase)
+            && (heightPx < 1 || widthPx < 1))
+        {
+            // A straight horizontal/vertical connector with a double compound stroke (a:ln cmpd="dbl"): two
+            // parallel bars a third of the stroke width each, centred on the line with a third-width gap.
+            var band = strokeThickness / 3.0;
+            var canvas = new Canvas { Width = widthPx, Height = heightPx };
+            if (heightPx < 1)
+            {
+                canvas.Children.Add(new System.Windows.Shapes.Rectangle
+                {
+                    Width = widthPx, Height = band, Fill = stroke, Margin = new Thickness(0, -strokeThickness / 2.0, 0, 0)
+                });
+                canvas.Children.Add(new System.Windows.Shapes.Rectangle
+                {
+                    Width = widthPx, Height = band, Fill = stroke, Margin = new Thickness(0, strokeThickness / 2.0 - band, 0, 0)
+                });
+            }
+            else
+            {
+                canvas.Children.Add(new System.Windows.Shapes.Rectangle
+                {
+                    Width = band, Height = heightPx, Fill = stroke, Margin = new Thickness(-strokeThickness / 2.0, 0, 0, 0)
+                });
+                canvas.Children.Add(new System.Windows.Shapes.Rectangle
+                {
+                    Width = band, Height = heightPx, Fill = stroke, Margin = new Thickness(strokeThickness / 2.0 - band, 0, 0, 0)
+                });
+            }
+            element = canvas;
         }
         else
         {
@@ -8786,6 +8834,24 @@ public sealed partial class DocumentView : RichTextBox
                     fill.PatternBackgroundColorHex)),
             _ => System.Windows.Media.Brushes.Transparent
         };
+    }
+
+    private static System.Windows.Media.Geometry? BuildDoubleCompoundStrokeGeometry(
+        System.Windows.Media.Geometry geometry,
+        DrawingObjectOutlinePlan outline,
+        double thicknessDip)
+    {
+        if (!outline.IsVisible
+            || !string.Equals(outline.CompoundStyle, "dbl", StringComparison.OrdinalIgnoreCase)
+            || thicknessDip < 1.5)
+            return null;
+
+        var outer = geometry.GetWidenedPathGeometry(new System.Windows.Media.Pen(Brushes.Black, thicknessDip));
+        var inner = geometry.GetWidenedPathGeometry(new System.Windows.Media.Pen(Brushes.Black, thicknessDip / 3.0));
+        var combined = new System.Windows.Media.CombinedGeometry(
+            System.Windows.Media.GeometryCombineMode.Exclude, outer, inner);
+        combined.Freeze();
+        return combined;
     }
 
     private static System.Windows.Media.Brush BuildDrawingStrokeBrush(DrawingObjectOutlinePlan outline)
@@ -12905,7 +12971,7 @@ public sealed partial class DocumentView : RichTextBox
                 }
 
                 var tabInline = BuildRenderedTabStopInline(plan, run, paragraph, document);
-                wpf.Inlines.Add(WrapHyperlinkIfNeeded(run, tabInline));
+                wpf.Inlines.Add(NeutralizeTocHyperlink(WrapHyperlinkIfNeeded(run, tabInline), run, paragraph, document));
                 penPositionDip += plan.AdvanceDip;
                 start = tabIndex + 1;
             }
@@ -13233,6 +13299,34 @@ public sealed partial class DocumentView : RichTextBox
         int? sourceRunIndex = null,
         bool suppressFloatingWrapReservation = false)
     {
+        var inline = BuildRunCore(
+            run, paragraph, document, sourceBlockIndex, sourceRunIndex, suppressFloatingWrapReservation);
+        return NeutralizeTocHyperlink(inline, run, paragraph, document);
+    }
+
+    // Word draws a table-of-contents entry in its TOC paragraph style, not as a blue underlined link,
+    // even though the entry text sits in a clickable w:hyperlink (h switch). The default WPF Hyperlink
+    // style paints blue + underline, so pin both to the entry's own look for runs inside a TOC paragraph.
+    private static Inline NeutralizeTocHyperlink(Inline inline, ModelRun run, ModelParagraph paragraph, TextDocument document)
+    {
+        if (inline is WpfHyperlink tocLink && TableOfContents.IsTocParagraph(paragraph))
+        {
+            tocLink.Foreground = TryParseColor(Resolve(run, paragraph, document).ColorHex, out var tocColor)
+                ? new SolidColorBrush(tocColor)
+                : Brushes.Black;
+            tocLink.TextDecorations = null;
+        }
+        return inline;
+    }
+
+    private static Inline BuildRunCore(
+        ModelRun run,
+        ModelParagraph paragraph,
+        TextDocument document,
+        int? sourceBlockIndex,
+        int? sourceRunIndex,
+        bool suppressFloatingWrapReservation)
+    {
         var effectSet = DocumentEffectSet.FromTheme(document.Theme);
         var effectiveFormatting = Resolve(run, paragraph, document);
 
@@ -13303,7 +13397,8 @@ public sealed partial class DocumentView : RichTextBox
 
         if (run.ComplexField is not null)
         {
-            var complexRun = BuildComplexFieldRun(run, document, sourceBlockIndex: sourceBlockIndex ?? -1);
+            var complexRun = BuildComplexFieldRun(
+                run, document, sourceBlockIndex: sourceBlockIndex ?? -1, effectiveFormatting: effectiveFormatting);
             Inline complexInline = run.HyperlinkUrl is { Length: > 0 } cfUrl
                 ? BuildHyperlink(complexRun, cfUrl, run.HyperlinkTooltip)
                 : run.HyperlinkAnchor is { Length: > 0 } cfAnchor
@@ -15248,7 +15343,8 @@ public sealed partial class DocumentView : RichTextBox
         TextDocument document,
         TextDocument? evaluationDocument = null,
         string? evaluationFileName = null,
-        int sourceBlockIndex = -1)
+        int sourceBlockIndex = -1,
+        RunFormatting? effectiveFormatting = null)
     {
         var field = run.ComplexField!;
         var fieldDocument = evaluationDocument ?? _renderFieldEvaluationDocument ?? document;
@@ -15261,19 +15357,22 @@ public sealed partial class DocumentView : RichTextBox
             document);
         var display = displayPlan.Text;
         var fmt = run.Formatting ?? document.DefaultRun;
+        // Rendering uses the cascaded (style-resolved, script-projected) look when the caller has it, so a
+        // right-to-left field result such as a TOC page number takes its complex-script face, size and bold.
+        var drawFmt = effectiveFormatting is null ? fmt : ProjectForScript(effectiveFormatting, display, document);
         var wpf = new WpfRun(display)
         {
-            FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
-            FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal,
+            FontWeight = drawFmt.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = drawFmt.Italic ? FontStyles.Italic : FontStyles.Normal,
             Tag = new ComplexFieldMarker(field, run.Text, fmt)
         };
-        if (fmt.FontFamily is { Length: > 0 } family)
+        if (drawFmt.FontFamily is { Length: > 0 } family)
             wpf.FontFamily = DocumentFontFamilies.Create(family);
-        if (fmt.FontSizePt is { } size)
+        if (drawFmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         if (displayPlan.IsFieldCode)
             wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
-        else if (TryParseColor(fmt.ColorHex, out var color))
+        else if (TryParseColor(drawFmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = (field.Keyword.Length > 0 ? field.Keyword : "Field") + " field: " + field.Instruction.Trim();
         if (field.FormField is not null && !displayPlan.IsFieldCode)

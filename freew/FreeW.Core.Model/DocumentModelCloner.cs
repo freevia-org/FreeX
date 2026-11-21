@@ -330,6 +330,7 @@ public static class DocumentModelCloner
             OutlineColorHex = source.OutlineColorHex,
             OutlineWidthPt = source.OutlineWidthPt,
             OutlineDash = source.OutlineDash,
+            OutlineCompound = source.OutlineCompound,
             AltText = source.AltText,
             TextDirection = source.TextDirection,
             Placement = source.Placement?.Clone(),
