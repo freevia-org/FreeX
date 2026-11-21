@@ -410,7 +410,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         sheetOptionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, SheetOptionsDialogChromeStyle);");
-        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([goToButton, closeButton], new Thickness(0, 10, 0, 0));");
+        sheetOptionsSource.Should().Contain("[toggleResolvedButton, deleteThreadButton, goToButton, closeButton],");
+        sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(filterBox, SheetOptionsDialogChromeStyle);");
         // The gridlines/headings sheet-options dialog that owned the check box and the ok/cancel
         // action row was not moved by "Share FreeX sheet options ribbon state" -- it was removed, in
         // favour of direct Page Layout ribbon toggles. Nothing in this file constructs a CheckBox or
