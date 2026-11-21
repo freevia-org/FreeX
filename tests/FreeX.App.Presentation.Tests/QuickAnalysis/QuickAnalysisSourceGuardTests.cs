@@ -90,11 +90,11 @@ public sealed class QuickAnalysisSourceGuardTests
         avaloniaSource.Should().Contain("catch (Exception exception)");
         avaloniaSource.Should().Contain("ShowEditIssue(exception.Message)");
         hostSource.Should().Contain("ShowCfDialog(dialogPlan.Title)");
-        avaloniaSource.Should().Contain("dialogPlan.Seed");
+        avaloniaSource.Should().Contain("dialogPlan.Title");
         avaloniaSource.Should().Contain("CreateQuickAnalysisItemButton(flyout, item)");
         avaloniaSource.Should().Contain("ApplyQuickAnalysisItemAsync(item)");
         avaloniaSource.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
-            "var built = await ShowConditionalFormatRuleEditorAsync(dialogPlan.Seed);");
+            "var built = await ShowConditionalFormatRuleDialogAsync(dialogPlan.Title);");
         shellSources.Should().NotContain("QuickAnalysisConditionalFormatDialogPlanner.Plan(");
         avaloniaSource.Should().Contain("ConditionalFormatCommandPlanner.PlanApplyRule(");
         avaloniaSource.Should().Contain("_session.GetCurrentGroupedEditSheetIds()");

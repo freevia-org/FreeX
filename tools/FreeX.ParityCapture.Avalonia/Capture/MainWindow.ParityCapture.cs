@@ -1969,7 +1969,7 @@ public sealed partial class MainWindow
 
         try
         {
-            await ShowManageConditionalFormatsDialogAsync(access => access.AppliesToRow.IsVisible = false);
+            await ShowManageConditionalFormatsDialogAsync(_ => { });
         }
         finally
         {

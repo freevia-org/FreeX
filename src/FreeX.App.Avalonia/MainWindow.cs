@@ -1294,15 +1294,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Unhide Columns"] = UnhideSelectedColumns,
                     ["Protect Sheet"] = () => RunGuarded(ShowProtectSheetDialogAsync),
                     ["Unhide Sheet"] = () => RunGuarded(UnhideSheetAsync),
-                    // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
-                    // (canonical ids from HomeRibbonMenus.ConditionalFormatting). The remaining Highlight/Top-Bottom/
-                    // Icon-Set variants stay NoOp until their presets exist.
+                    // Home ▸ Styles ▸ Conditional Formatting dropdown items (canonical ids from
+                    // HomeRibbonMenus.ConditionalFormatting). Like WPF's ShowCfDialog, the Highlight Cells, Top/Bottom,
+                    // Data Bars, Color Scales and More Rules entries open their dedicated rule dialogs.
                     ["New Rule"] = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
                     ["Clear Rules"] = ClearConditionalFormatsFromSelection,
-                    ["Data Bars"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.DataBar),
-                    ["Color Scales"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.ColorScale),
-                    ["Greater Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightGreaterThan),
-                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10),
+                    ["Data Bars"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.DataBarRule)),
+                    ["Color Scales"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.ColorScaleRule)),
+                    ["Greater Than"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.GreaterThanRule)),
+                    ["Top 10 Items"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Top10ItemsRule)),
                     // Insert tab (Links / Text groups).
                     ["Insert Link"] = () => RunGuarded(ShowInsertHyperlinkDialogAsync),
                     // Home Font group (added buttons).
@@ -1421,19 +1421,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["More Accounting Formats"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
-                    ["Less Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightLessThan),
-                    ["Between"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightBetween),
-                    ["Equal To"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightEqualTo),
-                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightTextContains),
-                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightDateOccurring),
-                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightDuplicateValues),
+                    ["Less Than"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.LessThanRule)),
+                    ["Between"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.BetweenRule)),
+                    ["Equal To"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.EqualToRule)),
+                    ["Text that Contains"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.TextContainsRule)),
+                    ["A Date Occurring"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.DateOccurringRule)),
+                    ["Duplicate Values"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.DuplicateValuesRule)),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Top/Bottom Rules detail items.
-                    ["Top 10%"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10Percent),
-                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Bottom10Items),
-                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Bottom10Percent),
-                    ["Above Average"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.AboveAverage),
-                    ["Below Average"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.BelowAverage),
+                    ["Top 10%"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Top10PercentRule)),
+                    ["Bottom 10 Items"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Bottom10ItemsRule)),
+                    ["Bottom 10%"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Bottom10PercentRule)),
+                    ["Above Average"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.AboveAverageRule)),
+                    ["Below Average"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.BelowAverageRule)),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Icon Sets submenu.
                     ["3 Arrows"] = () => ApplyConditionalFormatIconSet("3Arrows"),
@@ -1454,7 +1454,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["5 Ratings"] = () => ApplyConditionalFormatIconSet("5Rating"),
                     ["5 Quarters"] = () => ApplyConditionalFormatIconSet("5Quarters"),
                     ["5 Boxes"] = () => ApplyConditionalFormatIconSet("5Boxes"),
-                    ["More Rules"] = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
+                    ["More Rules"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.IconSetRule)),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ New Formula Rule / Manage Rules.
                     ["New Formula Rule"] = () => RunGuarded(() => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula)),
