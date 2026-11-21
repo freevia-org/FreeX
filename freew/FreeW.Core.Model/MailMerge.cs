@@ -2077,6 +2077,7 @@ public static class MailMerge
             DoNotTrackMoves = template.DoNotTrackMoves,
             DoNotTrackFormatting = template.DoNotTrackFormatting,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
+            CompatibilityMode = template.CompatibilityMode,
             EmbedSystemFonts = template.EmbedSystemFonts,
             SaveSubsetFonts = template.SaveSubsetFonts,
             PageBordersDoNotSurroundHeader = template.PageBordersDoNotSurroundHeader,
@@ -2089,6 +2090,7 @@ public static class MailMerge
         foreach (var (id, style) in template.Styles)
             doc.Styles[id] = style;
 
+        doc.CompatibilityFlags.AddRange(template.CompatibilityFlags);
         CopyDocumentState(template, doc, block => CloneBlockWithRules(template, block, row, state, recordIndex));
         doc.Preserved.CopyFrom(template.Preserved);
         CopyPageSettings(template.Page, doc.Page);

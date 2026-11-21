@@ -195,6 +195,9 @@ public partial class MainWindow
     {
         switch (action)
         {
+            case WorksheetContextMenuAction.ConvertTableToRange:
+                TableDesignConvertToRangeBtn_Click(this, new RoutedEventArgs());
+                break;
             case WorksheetContextMenuAction.DeleteObject:
                 TryDeleteSelectedDrawingObject();
                 break;

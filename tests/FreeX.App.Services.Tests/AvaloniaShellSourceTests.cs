@@ -5083,16 +5083,17 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetName(button, tab.Name);");
         source.Should().Contain("AutomationProperties.SetHelpText(button, UiText.Get(\"SheetTabs_ContextHelpText\"));");
         source.Should().Contain("private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab)");
-        source.Should().Contain("ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray()");
-        source.Should().Contain("private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)");
+        source.Should().Contain("ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle).ToArray()");
+        source.Should().Contain("private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle)");
         source.Should().Contain("SheetTabContextMenuPlanner.BuildSheetTabCommands(");
         source.Should().Contain("string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);");
         source.Should().Contain("bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;");
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename))");
         source.Should().Contain("CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet))");
         source.Should().Contain("CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor))");
-        source.Should().Contain("UiText.Get(\"MainWindow_Header_MoveLeft\")");
-        source.Should().Contain("UiText.Get(\"MainWindow_Header_MoveRight\")");
+        // The WPF sheet-tab menu has no Duplicate / Move Left / Move Right rows (they live on the native Sheet menu).
+        source.Should().NotContain("UiText.Get(\"MainWindow_Header_MoveLeft\")");
+        source.Should().NotContain("UiText.Get(\"MainWindow_Header_MoveRight\")");
         source.Should().Contain("internal bool SelectSheetForContextCommand(SheetId sheetId)");
         pointerSource.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
         pointerSource.Should().Contain("if (args.ClickCount >= 2)");

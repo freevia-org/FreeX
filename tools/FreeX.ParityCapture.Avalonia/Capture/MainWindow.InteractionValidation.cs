@@ -725,8 +725,8 @@ public sealed partial class MainWindow
 
     private static IReadOnlyList<(string Name, WorksheetContextMenuState State)> WorksheetContextValidationStates()
     {
-        var states = new List<(string, WorksheetContextMenuState)>(1 << 8);
-        for (var bits = 0; bits < 1 << 8; bits++)
+        var states = new List<(string, WorksheetContextMenuState)>(1 << 9);
+        for (var bits = 0; bits < 1 << 9; bits++)
         {
             var state = new WorksheetContextMenuState(
                 HasThreadedComment: (bits & 1) != 0,
@@ -736,7 +736,10 @@ public sealed partial class MainWindow
                 HasAutoFilterHeaderTarget: (bits & (1 << 4)) != 0,
                 HasDropdownTarget: (bits & (1 << 5)) != 0,
                 HasPivotTableTarget: (bits & (1 << 6)) != 0,
-                NoteIsShown: (bits & (1 << 7)) != 0);
+                NoteIsShown: (bits & (1 << 7)) != 0)
+            {
+                HasTableTarget = (bits & (1 << 8)) != 0,
+            };
             states.Add(($"state-{bits:X2}", state));
         }
 

@@ -3022,13 +3022,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
                     AutomationProperties.SetName(button, tab.Name);
                     AutomationProperties.SetHelpText(button, UiText.Get("SheetTabs_ContextHelpText"));
-                    ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray();
+                    ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle).ToArray();
                     SheetTabContextMenuPlanner.BuildSheetTabCommands(
                     string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);
                     bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
                     CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
                     CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
-                    CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
                     button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);
                     args.Key == Key.Apps;
                     args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.Shift;
@@ -3378,7 +3377,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private async Task UnhideSheetAsync() => await Task.CompletedTask;
                 private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets) => await Task.FromResult<WorkbookHiddenSheet?>(null);
                 private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab) => new();
-                private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex) => [];
+                private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle) => [];
                 private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Action action, bool isEnabled) => new();
                 internal bool SelectSheetForContextCommand(SheetId sheetId) => true;
                 private async Task RenameSheetFromTabAsync(SheetId sheetId, TappedEventArgs args) => await RenameActiveSheetAsync();

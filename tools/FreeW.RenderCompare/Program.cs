@@ -80,7 +80,15 @@ internal static class Program
     {
         var model = DocxReader.Read(docxPath);
 
-        var view = new DocumentView();
+        // Render like the print path (BuildPaginator's view clone): no editor-only separators and the
+        // page-only display transforms (slash word joiners, synthesized small capitals).
+        var view = new DocumentView { RenderPageBreakMarkers = false };
+        // The Word ground-truth PDFs were exported in Word's Final view (insertions plain, deletions hidden, no
+        // balloons). Render the same view; FREEW_RENDER_REVIEW=all compares against an all-markup export instead.
+        view.DisplayForReview = string.Equals(
+            Environment.GetEnvironmentVariable("FREEW_RENDER_REVIEW"), "all", StringComparison.OrdinalIgnoreCase)
+            ? FreeW.App.Presentation.DocumentView.ReviewDisplayMode.AllMarkup
+            : FreeW.App.Presentation.DocumentView.ReviewDisplayMode.NoMarkup;
         view.LoadModel(model);
 
         if ((model.Sections.Count > 1 && NeedsSectionAwareRendering(model))

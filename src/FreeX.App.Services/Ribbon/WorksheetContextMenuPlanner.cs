@@ -7,7 +7,7 @@ namespace FreeX.App.Services.Ribbon;
 
 public static class WorksheetContextMenuPlanner
 {
-    private const int WorksheetStateCacheSize = 1 << 8;
+    private const int WorksheetStateCacheSize = 1 << 9;
 
     private static readonly IReadOnlyList<WorksheetContextMenuCommand> PictureCommands =
         BuildPictureCommands();
@@ -41,6 +41,7 @@ public static class WorksheetContextMenuPlanner
             HasPivotTableTarget: PivotUiPlanner.FindPivotTableContainingCell(sheet, address) is not null,
             NoteIsShown: sheet.ShownComments.Contains(address))
         {
+            HasTableTarget = sheet.StructuredTables.Any(table => table.Range.Contains(address)),
             Protection = sheet.IsProtected ? sheet.ProtectionPermissions.ToHashSet() : null,
         };
     }
@@ -125,6 +126,7 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuAction.EditNote, WorksheetContextMenuAction.DeleteNote,
         WorksheetContextMenuAction.ShowHideNote, WorksheetContextMenuAction.ClearAll,
         WorksheetContextMenuAction.ClearComments, WorksheetContextMenuAction.ClearContents,
+        WorksheetContextMenuAction.ConvertTableToRange,
     ];
 
     // Commands a protected sheet allows only when its protection options permit that kind of action.
@@ -250,7 +252,10 @@ public static class WorksheetContextMenuPlanner
             HasAutoFilterHeaderTarget: (index & (1 << 4)) != 0,
             HasDropdownTarget: (index & (1 << 5)) != 0,
             HasPivotTableTarget: (index & (1 << 6)) != 0,
-            NoteIsShown: (index & (1 << 7)) != 0);
+            NoteIsShown: (index & (1 << 7)) != 0)
+        {
+            HasTableTarget = (index & (1 << 8)) != 0,
+        };
 
     private static int GetStateCacheIndex(WorksheetContextMenuState state)
     {
@@ -271,6 +276,8 @@ public static class WorksheetContextMenuPlanner
             index |= 1 << 6;
         if (state.NoteIsShown)
             index |= 1 << 7;
+        if (state.HasTableTarget)
+            index |= 1 << 8;
 
         return index;
     }
@@ -351,6 +358,7 @@ public static class WorksheetContextMenuPlanner
             new WorksheetContextMenuCommand("Show Notes", WorksheetContextMenuAction.ShowAllNotes, AccessHeader: "_Show Notes")),
         .. BuildHyperlinkCommands(state),
         .. BuildPivotTableCommands(state),
+        .. BuildTableCommands(state),
         WorksheetContextMenuCommand.Separator,
         new("Format Cells...", WorksheetContextMenuAction.FormatCells, AccessHeader: "_Format Cells..."),
         Submenu(
@@ -524,6 +532,17 @@ public static class WorksheetContextMenuPlanner
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
             ]);
 
+    // Excel adds a "Table" submenu to the cell menu when the cell is inside a table.
+    private static IReadOnlyList<WorksheetContextMenuCommand> BuildTableCommands(WorksheetContextMenuState state) =>
+        state.HasTableTarget
+            ? Freeze([
+                Submenu(
+                    "Table",
+                    "T_able",
+                    new WorksheetContextMenuCommand("Convert to Range", WorksheetContextMenuAction.ConvertTableToRange, AccessHeader: "Convert to _Range"))
+            ])
+            : [];
+
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildPivotTableCommands(WorksheetContextMenuState state) =>
         state.HasPivotTableTarget
             ? Freeze([
@@ -567,6 +586,9 @@ public sealed record WorksheetContextMenuState(
 
     /// <summary>Whether cells are currently outlined after Copy or Cut (marching ants).</summary>
     public WorksheetContextMenuClipboardState Clipboard { get; init; } = WorksheetContextMenuClipboardState.None;
+
+    /// <summary>True when the clicked cell is inside a structured table.</summary>
+    public bool HasTableTarget { get; init; }
 
     /// <summary>
     /// The actions the sheet's protection still allows, or null when the sheet is not protected. A
@@ -663,7 +685,8 @@ public enum WorksheetContextMenuAction
     EditAltText,
     SelectionPane,
     DeleteObject,
-    FilterBySelectedCellValue
+    FilterBySelectedCellValue,
+    ConvertTableToRange
 }
 
 public enum WorksheetContextMenuTargetKind

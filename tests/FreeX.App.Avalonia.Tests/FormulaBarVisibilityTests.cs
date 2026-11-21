@@ -158,8 +158,10 @@ public sealed class FormulaBarVisibilityTests
                 first.FormulaBarExpandedForTest.Should().BeTrue();
                 sibling.FormulaBarExpandedForTest.Should().BeFalse();
                 saved.FormulaBarExpanded.Should().BeTrue();
-                ToolTip.GetTip(chevron).Should().BeOfType<string>().Which
-                    .Should().Contain(UiText.Get("MainWindow_TooltipTitle_CollapseFormulaBar"));
+                // WPF RibbonTooltip: a bold "Title (BX)" line over the grey description.
+                ToolTip.GetTip(chevron).Should().BeOfType<StackPanel>().Which
+                    .Children.OfType<TextBlock>().Select(text => text.Text).Should().Contain(
+                        UiText.Get("MainWindow_TooltipTitle_CollapseFormulaBar") + " (BX)");
 
                 reopened = CreateWindow(saved);
                 reopened.Show();

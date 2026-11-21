@@ -1074,6 +1074,7 @@ public sealed partial class MainWindow
             1 << 5 => "context-menu.worksheet.state.dropdown",
             1 << 6 => "context-menu.worksheet.state.pivot-table",
             1 << 7 => "context-menu.worksheet.state.note-shown",
+            1 << 8 => "context-menu.worksheet.state.table",
             _ => "context-menu.worksheet.target.worksheet",
         };
     }

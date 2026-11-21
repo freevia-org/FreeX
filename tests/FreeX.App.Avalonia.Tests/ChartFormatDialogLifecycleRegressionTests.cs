@@ -18,7 +18,7 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
         {
             // These are the equivalent Avalonia controls for the WPF chart-area fill editor and axis
             // minimum editor, whose Loaded handlers explicitly focus and select the initial target.
-            ["dialog.ChartAreaLegendDialog"] = "Button#ChartAreaFillButton",
+            ["dialog.ChartAreaLegendDialog"] = "TextBox#ChartAreaFillTextBox",
             ["dialog.ChartAxisFormatDialog"] = "TextBox#ChartAxisMinimumBox",
         };
 
