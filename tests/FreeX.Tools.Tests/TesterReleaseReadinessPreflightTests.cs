@@ -34,7 +34,7 @@ public sealed class TesterReleaseReadinessPreflightTests
         plan.Should().Contain("-AccessibilityScreenReader");
         plan.Should().Contain("-AccessibilityUiaCatalog");
         plan.Should().Contain("-AccessibilityKnownIssues");
-        plan.Should().Contain("Release dispatches must run from `main`");
+        plan.Should().Contain("Release dispatches use the `Full Signed Release` workflow");
         plan.Should().Contain("fails closed unless GitHub OIDC authenticates the dedicated release identity");
         plan.Should().Contain("Azure Artifact Signing signs and verifies the standalone executable");
         plan.Should().Contain("MSIX asset is retained only for Store/package validation");

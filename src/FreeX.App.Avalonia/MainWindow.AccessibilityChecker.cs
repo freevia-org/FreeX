@@ -269,6 +269,12 @@ public sealed partial class MainWindow
             closeButton,
             AvaloniaCompactDialogChrome.WindowsStyle,
             AccessibilityCheckerDialogMetrics.ActionButtonWidth);
+        foreach (var actionButton in new[] { goToButton, closeButton })
+        {
+            actionButton.Height = AccessibilityCheckerDialogMetrics.ActionButtonHeight;
+            actionButton.MinHeight = AccessibilityCheckerDialogMetrics.ActionButtonHeight;
+            actionButton.MaxHeight = AccessibilityCheckerDialogMetrics.ActionButtonHeight;
+        }
 
         AccessibilityIssue? selectedIssue = null;
 
@@ -379,7 +385,10 @@ public sealed partial class MainWindow
         {
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xDE)),
             BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(0, 11, 0, 0),
+            // 26px action buttons start 16px under the rule (WPF ButtonDividerTop 458 -> ActionButtonTop 474)
+            // and end 20px above the window edge, 4px more than the content margin.
+            Padding = new Thickness(0, 15, 0, 0),
+            Margin = new Thickness(0, 0, 0, 4),
             Child = buttonRow,
         };
 
@@ -435,7 +444,7 @@ public sealed partial class MainWindow
             Template = AccessibilityCheckerTreeItemTemplate,
             Header = plan.Header,
             FontWeight = plan.Kind == AccessibilityCheckerTreeNodeKind.Section
-                ? FontWeight.SemiBold
+                ? FontWeight.Bold
                 : FontWeight.Normal,
             IsExpanded = plan.IsExpanded,
             Tag = plan.Item is not null ? plan.Item : plan.Group,

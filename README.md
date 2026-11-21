@@ -73,7 +73,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPre
 dotnet build FreeX.slnx --configuration Release
 ```
 
-Do not run the complete UI lane locally as routine verification. The canonical tester-release workflow runs the UI/render/release-only matrix for the immutable release SHA. Run a focused UI test locally only when diagnosing a specific UI failure, or run the complete lane when the user explicitly asks:
+Do not run the complete UI lane locally as routine verification. The canonical Full Signed Release workflow runs the UI/render/release-only matrix for the immutable release SHA. Run a focused UI test locally only when diagnosing a specific UI failure, or run the complete lane when the user explicitly asks:
 
 ```powershell
 dotnet test FreeX.UiTests.slnx --configuration Release --no-build --logger "trx;LogFileName=ui-tests.trx"

@@ -5614,6 +5614,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(overlay, "WorksheetFormulaReferenceOverlay");
         _formulaReferenceGridOverlay = overlay;
         AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);
+        _flashFillGhostVisuals.Clear();
+        if (_flashFillSuggestionState.Current is { } flashFillSuggestion)
+            AddFlashFillGhostOverlay(overlay, flashFillSuggestion, viewport, showHeadings, zoomFactor);
         return overlay;
     }
 
@@ -9778,7 +9781,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RefreshFormulaFunctionAutocomplete(editor);
             RefreshFormulaSignatureHelp(editor);
 
-            if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
+            UpdateFlashFillSuggestion(address, _inlineCellEditText);
+            var cellValueAutocompleteSuppressed =
+                _formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression();
+            // A detected Flash Fill pattern takes priority over plain column AutoComplete.
+            if (!cellValueAutocompleteSuppressed && _flashFillSuggestionState.Current is null)
                 ApplyCellValueAutoCompleteSuggestion(address, editor);
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
@@ -9915,6 +9922,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
     {
+        // "Automatically Flash Fill": Enter/Tab accept the grey ghost suggestion; Esc falls through
+        // to the normal cancel path, which also drops the ghost cells.
+        if (TryAcceptFlashFillSuggestion(args.Key, args.KeyModifiers))
+        {
+            args.Handled = true;
+            return;
+        }
+
         // R92-meta-2: while the function-name AutoComplete popup is open, Up/Down/Tab/Enter/Escape
         // drive the popup instead of their normal formula-editing meaning, exactly as Excel's own
         // popup takes priority over those keys. Checked first, before any other key handling below.
@@ -10144,6 +10159,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ClearInlineCellEditorState()
     {
+        ClearFlashFillSuggestion();
         HideFormulaFunctionAutocomplete();
         HideFormulaSignatureHelp();
         _inlineCellEditor = null;
@@ -21322,8 +21338,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return border;
         }
 
-        static TextBlock CreateCellText(string text, bool selected) =>
-            new()
+        static TextBlock CreateCellText(string text, bool selected)
+        {
+            var block = new TextBlock
             {
                 Text = text,
                 Foreground = selected ? Brushes.White : Brushes.Black,
@@ -21332,6 +21349,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 FontSize = 12,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
+            // Light text on the selection blue: LCD sub-pixel rendering fattens white strokes well past
+            // WPF's thin grayscale look at the same (normal) weight, so use grayscale anti-aliasing.
+            if (selected)
+                TextOptions.SetTextRenderingMode(block, TextRenderingMode.Antialias);
+            return block;
+        }
 
         // Selected-row text cell (white on the selection blue) that hands over to its combo box as
         // the cell editor. The combo stays in the cell so its automation id and selection state
