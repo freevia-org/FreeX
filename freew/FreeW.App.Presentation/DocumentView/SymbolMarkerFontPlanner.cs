@@ -39,7 +39,7 @@ public static class SymbolMarkerFontPlanner
                     level.Element(W + "rPr")?.Element(W + "sz")?.Attribute(W + "val")?.Value,
                     System.Globalization.NumberStyles.Float,
                     System.Globalization.CultureInfo.InvariantCulture,
-                    out var halfPoints) && halfPoints > 0)
+                    out var halfPoints) && double.IsFinite(halfPoints) && halfPoints > 0)
                 return halfPoints / 2.0;
         }
 
