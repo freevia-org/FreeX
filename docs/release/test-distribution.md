@@ -85,6 +85,8 @@ Tester-facing warning: Windows direct-download executables are signed by Freevia
 
 Default tester versions come from `release/progress.json`: the current `overallCompletion` value maps to a minor-version band, and the GitHub run number becomes the patch number. At 95% completion, default tester releases use the `v0.8.<run>` stream. Manual `release_version` overrides remain available for special validation builds.
 
+After a release is published, update the README Downloads section so testers are not sent to a stale build: run `pwsh -NoProfile -File tools/Update-ReadmeDownloadLinks.ps1 -Version <version> -ReleaseDate <yyyy-MM-dd>`, review the diff, and land it through a normal branch. The release-readiness `README download links` job (`tools/Test-ReadmeDownloadFreshness.ps1`) fails until this is done; the release workflow deliberately does not push commits to `main` itself.
+
 Current release gate: do not treat a new tester release as available until the workflow completes successfully through repository preflight, build, the manifest-defined release test gate, test-result artifact collection, release metadata, artifact upload, optional macOS preview artifact bundling when requested, and GitHub release publication. See [testing/test-gates.md](../testing/test-gates.md) for the commit versus release gate contract.
 
 Before dispatching a candidate, run `tools/Test-TesterReleaseReadiness.ps1` from the repo root to preflight `release/progress.json`, workflow accessibility inputs, release docs, and checklist alignment. For a public-preview candidate, include `-PublicPreviewCandidate -AccessibilityKeyboardOnly -AccessibilityScreenReader -AccessibilityUiaCatalog -AccessibilityKnownIssues`; otherwise the preflight reports the build as internal-only.
