@@ -48,6 +48,7 @@ using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Presentation.TableUI;
 using FreeX.App.Presentation.ThemeUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -1460,6 +1461,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Manage Rules"] = () => RunGuarded(ShowManageConditionalFormatsDialogAsync),
 
                     // Home ▸ Cells ▸ Insert / Delete dropdowns.
+                    ["Insert Table Rows Above"] = () => ExecuteTableStructureAction(TableStructureAction.InsertRowsAbove),
+                    ["Insert Table Columns to the Left"] = () => ExecuteTableStructureAction(TableStructureAction.InsertColumnsLeft),
+                    ["Delete Table Rows"] = () => ExecuteTableStructureAction(TableStructureAction.DeleteRows),
+                    ["Delete Table Columns"] = () => ExecuteTableStructureAction(TableStructureAction.DeleteColumns),
                     ["Insert Sheet Rows"] = InsertSheetRows,
                     ["Insert Sheet Columns"] = InsertSheetColumns,
                     ["Delete Sheet Rows"] = DeleteSheetRows,
@@ -11978,6 +11983,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         try
         {
             if (!Enum.TryParse<WorksheetContextMenuAction>(commandId.Value, out var action))
+                return;
+
+            if (TryExecuteTableStructureContextMenuAction(action))
                 return;
 
             if (!WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))

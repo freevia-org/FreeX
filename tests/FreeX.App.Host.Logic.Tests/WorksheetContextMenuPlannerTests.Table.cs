@@ -43,4 +43,64 @@ public sealed partial class WorksheetContextMenuPlannerTests
         Assert.All(table.Children, c => Assert.False(c.IsEnabled));
         Assert.False(table.IsEnabled);
     }
+
+    [Fact]
+    public void TableCell_OffersTableScopedInsertAndDeleteEntries_AndOtherCellsDoNot()
+    {
+        var inTable = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Worksheet, new WorksheetContextMenuState { HasTableTarget = true });
+        var insertDelete = Assert.Single(inTable, c => c.Header == "Insert and Delete");
+        foreach (var action in new[]
+                 {
+                     WorksheetContextMenuAction.InsertTableRowAbove, WorksheetContextMenuAction.InsertTableRowBelow,
+                     WorksheetContextMenuAction.InsertTableColumnLeft, WorksheetContextMenuAction.InsertTableColumnRight,
+                     WorksheetContextMenuAction.DeleteTableRows, WorksheetContextMenuAction.DeleteTableColumns,
+                 })
+        {
+            Assert.Contains(insertDelete.Children, c => c.Action == action && c.IsEnabled);
+        }
+
+        Assert.Contains(insertDelete.Children, c => c.Header == "Table Rows Above");
+        Assert.Contains(insertDelete.Children, c => c.Header == "Table Columns to the Left");
+        Assert.Contains(insertDelete.Children, c => c.Header == "Delete Table Rows");
+
+        var outside = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Worksheet, WorksheetContextMenuState.Default);
+        var plain = Assert.Single(outside, c => c.Header == "Insert and Delete");
+        Assert.DoesNotContain(plain.Children, c => c.Header.StartsWith("Table ", StringComparison.Ordinal));
+        Assert.DoesNotContain(plain.Children, c => c.Header == "Delete Table Rows");
+    }
+
+    [Fact]
+    public void ProtectedSheet_DisablesTableScopedInsertAndDeleteEntries()
+    {
+        var commands = WorksheetContextMenuPlanner.BuildCommands(
+            WorksheetContextMenuTargetKind.Worksheet,
+            new WorksheetContextMenuState
+            {
+                HasTableTarget = true,
+                Protection = new HashSet<SheetProtectionPermission>
+                {
+                    SheetProtectionPermission.InsertRows, SheetProtectionPermission.InsertColumns,
+                    SheetProtectionPermission.DeleteRows, SheetProtectionPermission.DeleteColumns,
+                },
+            });
+        var insertDelete = Assert.Single(commands, c => c.Header == "Insert and Delete");
+        Assert.All(
+            insertDelete.Children.Where(c => c.Header.Contains("Table ", StringComparison.Ordinal)),
+            c => Assert.False(c.IsEnabled));
+        Assert.Contains(insertDelete.Children, c => c.Action == WorksheetContextMenuAction.InsertRowAbove && c.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(WorksheetContextMenuAction.InsertTableRowAbove)]
+    [InlineData(WorksheetContextMenuAction.InsertTableRowBelow)]
+    [InlineData(WorksheetContextMenuAction.InsertTableColumnLeft)]
+    [InlineData(WorksheetContextMenuAction.InsertTableColumnRight)]
+    [InlineData(WorksheetContextMenuAction.DeleteTableRows)]
+    [InlineData(WorksheetContextMenuAction.DeleteTableColumns)]
+    public void TableScopedActions_MapToTheSharedTablePlanner(WorksheetContextMenuAction action) =>
+        Assert.True(WorksheetContextMenuTableActions.TryGetTableStructureAction(action, out _));
+
+    [Fact]
+    public void OrdinaryActions_AreNotTableScoped() =>
+        Assert.False(WorksheetContextMenuTableActions.TryGetTableStructureAction(WorksheetContextMenuAction.InsertRowAbove, out _));
 }

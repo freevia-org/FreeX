@@ -58,6 +58,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         ? 0
         : (int)Math.Min((long)_capturedCells.Count * BytesPerCell, int.MaxValue);
 
+    /// <summary>
+    /// Set only by the table-scoped row/column commands: the one structured table whose range this
+    /// band shift may cross because the owning command resizes it afterwards.
+    /// </summary>
+    internal int? AllowedStructuredTableId { get; init; }
+
     public InsertCellsCommand(SheetId sheetId, GridRange range, InsertCellsShiftDirection direction)
     {
         _sheetId = sheetId;
@@ -109,7 +115,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             // AutoFilter.Reference here would corrupt rows/columns outside the shifted band. Excel's
             // own behavior is to refuse the operation outright when it would partially disrupt a
             // table/AutoFilter range, so mirror that instead of silently leaving stale state behind.
-            if (AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
+            if (AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion, AllowedStructuredTableId))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -222,7 +228,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // G3: see the Shift-Right branch above for why this band-scoped operation must refuse
             // rather than silently shift AutoFilter/table state it cannot safely relocate.
-            if (AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
+            if (AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion, AllowedStructuredTableId))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -1154,7 +1160,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     /// placed on Sheet2, Excel's default "New Worksheet" destination) — mirrors the same N33
     /// workbook-wide rationale in RowColumnShiftHelpers.AddressState.cs's CapturePivotTables.
     /// </summary>
-    internal static bool AutoFilterOverlapsBand(Workbook workbook, Sheet sheet, CellShiftRegion band)
+    internal static bool AutoFilterOverlapsBand(Workbook workbook, Sheet sheet, CellShiftRegion band, int? allowedStructuredTableId = null)
     {
         if (AutoFilterRangeResolver.TryGetWorksheetAutoFilterRange(sheet, out var autoFilterRange) &&
             RangeIntersectsBand(autoFilterRange, band))
@@ -1164,6 +1170,10 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         foreach (var table in sheet.StructuredTables)
         {
+            // Table-scoped row/column insert/delete (InsertTableRowsCommand & co.) shifts exactly one
+            // table's own cells and resizes that table itself, so it exempts the table it owns.
+            if (allowedStructuredTableId == table.Id)
+                continue;
             if (RangeIntersectsBand(table.Range, band))
                 return true;
         }
@@ -2007,6 +2017,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         ? 0
         : (int)Math.Min((long)_capturedCells.Count * BytesPerCell, int.MaxValue);
 
+    /// <summary>
+    /// Set only by the table-scoped row/column commands: the one structured table whose range this
+    /// band shift may cross because the owning command resizes it afterwards.
+    /// </summary>
+    internal int? AllowedStructuredTableId { get; init; }
+
     public DeleteCellsCommand(SheetId sheetId, GridRange range, DeleteCellsShiftDirection direction)
     {
         _sheetId = sheetId;
@@ -2053,7 +2069,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // G3: see InsertCellsCommand.AutoFilterOverlapsBand — this band-scoped shift cannot
             // safely relocate AutoFilter.Reference/FilterHiddenRows, so refuse rather than corrupt.
-            if (InsertCellsCommand.AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
+            if (InsertCellsCommand.AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion, AllowedStructuredTableId))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 
@@ -2150,7 +2166,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // G3: see InsertCellsCommand.AutoFilterOverlapsBand — this band-scoped shift cannot
             // safely relocate AutoFilter.Reference/FilterHiddenRows, so refuse rather than corrupt.
-            if (InsertCellsCommand.AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion))
+            if (InsertCellsCommand.AutoFilterOverlapsBand(ctx.Workbook, sheet, shiftRegion, AllowedStructuredTableId))
                 return new CommandOutcome(false,
                     "This operation is not allowed. The operation is attempting to shift cells in a table or AutoFilter range on your worksheet.");
 

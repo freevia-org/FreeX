@@ -709,7 +709,7 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     /// resize. A malformed formula is skipped rather than surfaced (it has no resolvable
     /// dependencies either way).
     /// </summary>
-    private static IEnumerable<CellAddress> FindFormulaCellsReferencingTable(Workbook workbook, StructuredTableModel table)
+    internal static IEnumerable<CellAddress> FindFormulaCellsReferencingTable(Workbook workbook, StructuredTableModel table)
     {
         foreach (var sheet in workbook.Sheets)
         {
