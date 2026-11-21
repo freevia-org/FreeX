@@ -1011,14 +1011,18 @@ public static class DocumentNoteRegionPlanner
         if (hasSeparator)
             height += textMetrics.SeparatorHeightDip;
         height += rows.Sum(r => r.EstimatedHeightDip + MetricsOf(r.Layout, textMetrics).RowGapDip);
-        return Math.Ceiling(height);
+        return height;
     }
 
     private static double EstimateRowHeight(string text, double contentWidthDip, NoteTextMetrics metrics)
     {
         var approxCharsPerLine = ApproximateCharsPerLine(contentWidthDip - metrics.IndentLeftDip, metrics.CharWidthDip);
-        var normalized = text.ReplaceLineEndings(" ");
-        var lines = Math.Max(1, (int)Math.Ceiling(normalized.Length / (double)approxCharsPerLine));
+        // Each paragraph of a note starts a line of its own, an empty one (Word keeps a trailing blank note
+        // paragraph) still takes a whole line.
+        var lines = 0;
+        foreach (var paragraph in text.ReplaceLineEndings("\n").Split('\n'))
+            lines += Math.Max(1, (int)Math.Ceiling(paragraph.Length / (double)approxCharsPerLine));
+        lines = Math.Max(1, lines);
         return metrics.FontFamily is null
             ? Math.Ceiling(lines * metrics.LineHeightDip)
             : lines * metrics.LineHeightDip;

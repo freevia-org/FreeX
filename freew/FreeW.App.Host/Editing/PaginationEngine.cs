@@ -825,7 +825,7 @@ internal static class PaginationEngine
             {
                 PageWidth = pageSize.Width,
                 PageHeight = pageSize.Height,
-                PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip),
+                PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip - LastLineLeadingAllowanceDip),
                 FontFamily = sourceFlow.FontFamily,
                 FontSize = sourceFlow.FontSize
             };
@@ -948,11 +948,14 @@ internal static class PaginationEngine
             var demand = NoteDemandFor(blockCount);
             return demand <= 0
                 ? 0
-                : ClampFootnoteReserveDip(Math.Min(demand, bodyHeightDip) + footnoteFrameClearanceDip, segment.Page);
+                : ClampFootnoteReserveDip(
+                    Math.Min(demand + FootnoteMarkLineExtraDip * NoteIdsOnFirstPage(blockCount).Count, bodyHeightDip)
+                        + footnoteFrameClearanceDip,
+                    segment.Page);
         }
 
         void SetReserve(double reserveDip) =>
-            work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
+            work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip - LastLineLeadingAllowanceDip);
 
         // The last of the first blockCount entries that carries its own footnote reference, or -1. Evaluated
         // under the reserve currently set (callers use none): the entry's last reference mark that sits on
@@ -1027,6 +1030,7 @@ internal static class PaginationEngine
             // reserve fewer blocks fit, so try the smaller reserve they need and keep it only if it
             // still covers the page it produces.
             SetReserve(0);
+            var bandSplitsNote = false;
             var countWithoutReserve = CountBlocksStartingOnFirstPage();
             var lastReferencing = LastReferencingEntry(countWithoutReserve);
             var reserveDip = ReserveFor(countWithoutReserve);
@@ -1039,7 +1043,23 @@ internal static class PaginationEngine
                     // referencing text off the page, the band shrinks to what still leaves that reference
                     // on the page and the rest of the note continues on the next page. Only when not even
                     // the separator and a first note line fit does the reference move on.
-                    var keptReserve = LargestReserveKeeping(lastReferencing, reserveDip);
+                    // Word moves the last reference lines (with their notes) to the next page before it splits a
+                    // note, so first look for the most blocks whose own notes fit beside them.
+                    var movedReserve = 0.0;
+                    for (var k = countWithoutReserve; k >= 1 && movedReserve <= 0; k--)
+                    {
+                        var candidate = ReserveFor(k);
+                        if (candidate <= 0)
+                            break;
+                        SetReserve(candidate);
+                        var blocksNow = CountBlocksStartingOnFirstPage();
+                        var lastKept = LastReferencingEntry(blocksNow);
+                        if (lastKept >= 0 && ReferenceStaysOnFirstPage(lastKept) && ReserveFor(blocksNow) <= candidate + 0.01)
+                            movedReserve = candidate;
+                    }
+                    SetReserve(reserveDip);
+                    var keptReserve = movedReserve > 0 ? movedReserve : LargestReserveKeeping(lastReferencing, reserveDip);
+                    bandSplitsNote = movedReserve <= 0;
                     if (keptReserve > 0)
                     {
                         reserveDip = keptReserve;
@@ -1061,6 +1081,22 @@ internal static class PaginationEngine
             // Find where the second page begins, by page number rather than by hit-testing the page
             // (DynamicDocumentPaginator.GetPagePosition probes the page's top-left corner, which in
             // right-to-left text is the END of the first line, not its start).
+            // A paragraph ending the page with its note reference needs its space after as well beside the band
+            // (Word keeps the reference line off a page that cannot also hold the gap that follows it).
+            var lastOnPage = CountBlocksStartingOnFirstPage() - 1;
+            if (!bandSplitsNote && reserveDip > 0 && lastOnPage >= 0 && lastOnPage < pending.Count
+                && !pending[lastOnPage].IsContinuation
+                && pending[lastOnPage].Block is System.Windows.Documents.Paragraph closing
+                && closing.Margin.Bottom > 0.5
+                && FootnoteIdsInModelBlock(modelBlocks[pending[lastOnPage].ModelIndex]).Any()
+                && dynamicWork.GetPageNumber(closing.ContentEnd) <= 0)
+            {
+                SetReserve(reserveDip + closing.Margin.Bottom);
+                if (dynamicWork.GetPageNumber(closing.ContentEnd) > 0)
+                    reserveDip += closing.Margin.Bottom;
+                else
+                    SetReserve(reserveDip);
+            }
             var take = pending.Count;
             for (var index = 0; index < pending.Count; index++)
             {
@@ -1494,6 +1530,19 @@ internal static class PaginationEngine
     /// means very long footnotes overflow their region instead of failing print and print preview.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Word sets a line that carries a footnote reference mark 0.5-0.9 pt (about 0.8 dip) taller than its
+    /// neighbours; a page's note band is charged that much per note so pages fill as Word's do.
+    /// </summary>
+    internal const double FootnoteMarkLineExtraDip = 0.8;
+
+    /// <summary>
+    /// Word does not need the trailing line-spacing leading of the last line on a page to fit above the
+    /// bottom limit (its descender may touch the limit), while WPF's line box does; the per-page flows give
+    /// that sliver back so the last line lands where Word puts it.
+    /// </summary>
+    internal const double LastLineLeadingAllowanceDip = 0.7;
+
     internal static double ClampFootnoteReserveDip(double reserveDip, PageSettings page)
     {
         if (reserveDip <= 0)
