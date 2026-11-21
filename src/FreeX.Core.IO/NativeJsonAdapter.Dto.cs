@@ -56,6 +56,7 @@ public sealed partial class NativeJsonAdapter
         public bool FullPrecision { get; set; } = true;
         public List<string> DisabledFormulaErrorCodes { get; set; } = [];
         public List<NamedRangeDto> NamedRanges { get; set; } = [];
+        public List<CustomCellStyleDto>? CustomCellStyles { get; set; }
         public List<CustomViewDto> CustomViews { get; set; } = [];
         public List<WatchedCellDto> WatchedCells { get; set; } = [];
         public List<ScenarioDto> Scenarios { get; set; } = [];
@@ -233,6 +234,13 @@ public sealed partial class NativeJsonAdapter
     {
         public string? NativeXml { get; set; }
         public Dictionary<string, string> NativeAttributes { get; set; } = new(StringComparer.Ordinal);
+    }
+
+    private class CustomCellStyleDto
+    {
+        public string? Name { get; set; }
+        public int Parts { get; set; }
+        public CellStyleDto? Style { get; set; }
     }
 
     private class NamedRangeDto

@@ -5497,6 +5497,32 @@ public sealed partial class WorkbookSession : IDisposable
         return ApplySelectedRangeStyle(diff);
     }
 
+    /// <summary>Excel's New Cell Style: captures the active cell's formatting as a named style.</summary>
+    public WorkbookCellEditResult DefineCustomCellStyleFromActiveCell(string name, CustomCellStyleParts parts)
+    {
+        if (!CustomCellStylePlanner.IsValidNewName(name, out var error))
+            return new WorkbookCellEditResult(false, error, [], RecalcReport: null);
+
+        var style = Workbook.GetStyle(GetCellStyleId(ActiveSheet, ActiveCell));
+        return ExecuteReviewCommand(
+            new DefineCustomCellStyleCommand(new CustomCellStyle(name.Trim(), style, parts)),
+            fallbackAddress: ActiveCell);
+    }
+
+    /// <summary>The style of a cell, including an empty cell that only carries formatting.</summary>
+    public static StyleId GetCellStyleId(Sheet sheet, CellAddress address) =>
+        sheet.GetCell(address)?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
+
+    /// <summary>Applies a user-defined named style to the current selection.</summary>
+    public WorkbookCellEditResult ApplyCustomCellStyle(string name)
+    {
+        var style = Workbook.CustomCellStyles.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (style is null)
+            return new WorkbookCellEditResult(false, "That cell style no longer exists.", [], RecalcReport: null);
+
+        return ApplySelectedRangeStyle(CustomCellStylePlanner.BuildDiff(style));
+    }
+
     // R128-services-multiarea-compactformat-1: a Ctrl+click multi-area selection (SelectedRanges) must
     // have the Border-preset gallery, Format Cells dialog apply, and Lock/Unlock Cell toggle -- the three
     // Avalonia entry points that all funnel through this shared method -- act on EVERY disjoint area, not
