@@ -61,6 +61,9 @@ public partial class GridView
     private Button? _threadedDeleteReplyButton;
     private CheckBox? _threadedResolveBox;
     private ThreadedComment? _threadedEditExisting;
+    private ThreadedCommentCardPlan? _threadedCard;
+    private Button? _threadedToggleResolvedButton;
+    private Button? _threadedDeleteThreadButton;
 
     // Pinned ("Show Comment") boxes — keyed by (Row, Col), always-visible in CommentOverlayHost.
     private readonly Dictionary<(uint Row, uint Col), Border> _pinnedNoteBorders = [];
@@ -89,7 +92,11 @@ public partial class GridView
         return true;
     }
 
-    public bool BeginThreadedCommentInlineEdit(CellAddress address, string cellReference, ThreadedComment? existing)
+    public bool BeginThreadedCommentInlineEdit(
+        CellAddress address,
+        string cellReference,
+        ThreadedComment? existing,
+        ThreadedCommentCardPlan? card = null)
     {
         if (!TryGetCellRect(Viewport, address.Row, address.Col, out var cellRect))
             return false;
@@ -102,6 +109,7 @@ public partial class GridView
         _activeCommentPopupRow = address.Row;
         _activeCommentPopupCol = address.Col;
         _threadedEditExisting = existing;
+        _threadedCard = existing is null ? null : card;
 
         BuildThreadedCommentInlineEditor(existing);
         ShowCommentPopup(
@@ -184,6 +192,9 @@ public partial class GridView
         _activeNoteEditAddress = null;
         _activeThreadedEditAddress = null;
         _threadedEditExisting = null;
+        _threadedCard = null;
+        _threadedToggleResolvedButton = null;
+        _threadedDeleteThreadButton = null;
         _noteEditBox = null;
         _threadedRootBox = null;
         _threadedReplyBox = null;
@@ -697,6 +708,9 @@ public partial class GridView
             UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
         panel.Children.Add(_threadedResolveBox);
 
+        if (existing is not null)
+            panel.Children.Add(CreateThreadActionRow(existing));
+
         AddInlineErrorBlock(panel);
         panel.Children.Add(CreateEditorButtonRow(
             SubmitThreadedCommentInlineEdit,
@@ -704,6 +718,67 @@ public partial class GridView
             UiText.Get(existing is null
                 ? "GridInlineComment_SaveButton"
                 : "GridInlineComment_ApplyButton")));
+    }
+
+    // Excel card actions: Resolve thread / Reopen thread and Delete thread, gated by sheet protection.
+    private StackPanel CreateThreadActionRow(ThreadedComment existing)
+    {
+        var card = _threadedCard;
+        var allowed = card?.CanToggleResolved ?? true;
+        var toggleText = (card?.ToggleResolvedLabel
+            ?? Free.Shared.Localization.LocalizedTextDescriptor.Resource(existing.IsResolved
+                ? "ThreadedCommentCard_ReopenThread"
+                : "ThreadedCommentCard_ResolveThread")).Resolve(UiText.Get, UiText.Format);
+        var deleteText = UiText.Get("ThreadedCommentCard_DeleteThread");
+
+        _threadedToggleResolvedButton = new Button
+        {
+            Content = toggleText,
+            MinWidth = 104,
+            MinHeight = 24,
+            Margin = new Thickness(0, 6, 6, 0),
+            IsEnabled = allowed
+        };
+        AutomationProperties.SetAutomationId(_threadedToggleResolvedButton, "GridThreadedCommentToggleResolvedButton");
+        AutomationProperties.SetName(_threadedToggleResolvedButton, toggleText);
+        _threadedToggleResolvedButton.Click += (_, _) =>
+            SubmitThreadedCommentInlineResult(new ThreadedCommentDialogResult(null, null, !existing.IsResolved));
+
+        _threadedDeleteThreadButton = new Button
+        {
+            Content = deleteText,
+            MinWidth = 104,
+            MinHeight = 24,
+            Margin = new Thickness(0, 6, 0, 0),
+            IsEnabled = card?.CanDeleteThread ?? true
+        };
+        AutomationProperties.SetAutomationId(_threadedDeleteThreadButton, "GridThreadedCommentDeleteThreadButton");
+        AutomationProperties.SetName(_threadedDeleteThreadButton, deleteText);
+        _threadedDeleteThreadButton.Click += (_, _) =>
+            SubmitThreadedCommentInlineResult(new ThreadedCommentDialogResult(
+                null, null, existing.IsResolved, ThreadedCommentDialogAction.DeleteThread));
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(_threadedToggleResolvedButton);
+        row.Children.Add(_threadedDeleteThreadButton);
+        if (card?.ReadOnlyNotice is { } notice)
+        {
+            var wrap = new StackPanel();
+            wrap.Children.Add(row);
+            wrap.Children.Add(new TextBlock
+            {
+                Text = notice.Resolve(UiText.Get, UiText.Format),
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(178, 34, 34)),
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+            if (_threadedRootBox is not null) _threadedRootBox.IsReadOnly = true;
+            if (_threadedReplyBox is not null) _threadedReplyBox.IsReadOnly = true;
+            return wrap;
+        }
+
+        return row;
     }
 
     private StackPanel ResetCommentPanel()

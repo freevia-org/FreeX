@@ -266,7 +266,10 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Address);
         UpdateViewport();
-        SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment);
+        var card = _workbook.GetSheet(_currentSheetId) is { } cardSheet
+            ? ThreadedCommentCardPlanner.BuildCard(cardSheet, target.Address)
+            : null;
+        SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment, card);
     }
 
     private void SheetGrid_NoteInlineEditSubmitted(object? sender, GridNoteInlineEditSubmittedEventArgs e)
@@ -400,7 +403,14 @@ public partial class MainWindow
     {
         if (window is null || !window.IsLoaded)
         {
-            window = new CommentListWindow(title, items, NavigateToCell) { Owner = this };
+            window = new CommentListWindow(
+                title,
+                items,
+                NavigateToCell,
+                getPane: filter => ThreadedCommentCardPlanner.BuildPane(CurrentCommentSheet(), filter),
+                getCard: address => ThreadedCommentCardPlanner.BuildCard(CurrentCommentSheet(), address),
+                applyAction: ApplyThreadedCommentCardActionFromPane)
+            { Owner = this };
             window.Closed += (_, _) => setWindow(null);
             window.Show();
             return window;
@@ -411,6 +421,22 @@ public partial class MainWindow
             window.WindowState = WindowState.Normal;
         window.Activate();
         return window;
+    }
+
+    private Sheet CurrentCommentSheet() => _workbook.GetSheet(_currentSheetId) ?? new Sheet(_currentSheetId, "");
+
+    private void ApplyThreadedCommentCardActionFromPane(CellAddress address, ThreadedCommentCardAction action)
+    {
+        var result = ReviewSessionController.ApplyThreadedCommentCardAction(address, action);
+        if (!result.Success)
+        {
+            _messageService.ShowInfo(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindowMessage_CommentsTitle"));
+            return;
+        }
+
+        ApplyReviewRefreshPlan(result.RefreshPlan);
     }
 
     private void ExecuteShowHideNote(CellAddress address)
