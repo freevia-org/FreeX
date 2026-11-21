@@ -430,6 +430,11 @@ internal static class PaginationEngine
                 }
             }
 
+            // Word recalculates PAGEREF results (a TOC's page numbers) against the pagination it just laid
+            // out; the printed pages should show the same numbers, not the last-saved cache.
+            if (segmentPaginations is { Count: > 0 })
+                ApplyPrintPageReferences(editor.Model, scratchBlocks, assignment, totalPageCount, segmentPaginations);
+
             // The scratch clone's effect runs carry the brushes TagTextEffectsForPrint gave them; hand the
             // plans to every segment so the section-aware print path can paint outline/shadow/glow/reflection.
             if (segmentPaginations is { Count: > 0 } && TextEffectsPrintPaginator.TryGetPlans(flow) is { } effectPlans)
@@ -447,6 +452,49 @@ internal static class PaginationEngine
         }
 
         return assignment;
+    }
+
+    /// <summary>
+    /// Refreshes the displayed PAGEREF numbers of the laid-out print flows from the page assignment, and
+    /// keeps the refresh only when it leaves every segment's page count as it was (a number's width must
+    /// never move the pagination the numbers were derived from, nor loop).
+    /// </summary>
+    private static void ApplyPrintPageReferences(
+        TextDocument model,
+        System.Windows.Documents.Block[] scratchBlocks,
+        int[] assignment,
+        int totalPageCount,
+        List<SegmentPagination> segmentPaginations)
+    {
+        List<(System.Windows.Documents.Run Run, string Previous)> changed;
+        try
+        {
+            var resolve = FreeW.App.Presentation.DocumentView.PrintPageReferencePlanner.Build(model, assignment, totalPageCount);
+            changed = DocumentView.RefreshPrintPageReferences(scratchBlocks, resolve);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return;
+        }
+
+        if (changed.Count == 0)
+            return;
+
+        var stable = true;
+        foreach (var segment in segmentPaginations)
+        {
+            segment.Paginator.ComputePageCount();
+            if (segment.Paginator.PageCount != segment.PageCount)
+                stable = false;
+        }
+
+        if (stable)
+            return;
+
+        foreach (var (run, previous) in changed)
+            run.Text = previous;
+        foreach (var segment in segmentPaginations)
+            segment.Paginator.ComputePageCount();
     }
 
     /// <summary>

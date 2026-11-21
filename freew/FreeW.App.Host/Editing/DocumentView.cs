@@ -15345,6 +15345,54 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Page-known-late display refresh of every PAGEREF run (tagged by <see cref="BuildComplexFieldRun"/>)
+    /// under <paramref name="blocks"/>: the printed number becomes the one <paramref name="resolve"/> derives
+    /// from the laid-out pagination, as Word recalculates it on print/export. Returns the runs it changed
+    /// with their previous text so a caller whose pagination moved can put every one back.
+    /// </summary>
+    internal static List<(WpfRun Run, string Previous)> RefreshPrintPageReferences(
+        IEnumerable<System.Windows.Documents.Block> blocks,
+        Func<string, string, string> resolve)
+    {
+        var runs = new List<WpfRun>();
+        foreach (var block in blocks)
+            CollectPageReferenceRuns(block, runs);
+
+        var changed = new List<(WpfRun, string)>();
+        foreach (var run in runs)
+        {
+            var instruction = PrintPageReferencePlanner.InstructionOf(
+                System.Windows.Automation.AutomationProperties.GetAutomationId(run));
+            if (instruction is null)
+                continue;
+            var text = resolve(instruction, run.Text);
+            if (string.Equals(text, run.Text, StringComparison.Ordinal))
+                continue;
+            changed.Add((run, run.Text));
+            run.Text = text;
+        }
+
+        return changed;
+    }
+
+    private static void CollectPageReferenceRuns(DependencyObject node, List<WpfRun> runs)
+    {
+        if (node is WpfRun run)
+        {
+            if (System.Windows.Automation.AutomationProperties.GetAutomationId(run)
+                    .StartsWith(PrintPageReferencePlanner.RunMarkerPrefix, StringComparison.Ordinal))
+                runs.Add(run);
+            return;
+        }
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+        {
+            if (child is DependencyObject element)
+                CollectPageReferenceRuns(element, runs);
+        }
+    }
+
+    /// <summary>
     /// Renders a generic complex field (the <c>w:fldChar</c>/<c>w:instrText</c> construct). When the field's
     /// <see cref="ComplexField.ShowCode"/> is on (Alt+F9) it shows the field code as <c>{ INSTR }</c>;
     /// otherwise it shows the resolved result — DATE/TIME/AUTHOR/FILENAME resolve live (reusing
@@ -15388,6 +15436,10 @@ public sealed partial class DocumentView : RichTextBox
         else if (TryParseColor(drawFmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = (field.Keyword.Length > 0 ? field.Keyword : "Field") + " field: " + field.Instruction.Trim();
+        // A print clone loses the Tag; this id survives the XAML round trip so the page-known-late PAGEREF
+        // refresh can find the run (see RefreshPrintPageReferences).
+        if (PrintPageReferencePlanner.MarkerFor(field) is { } pageRefMarker && !displayPlan.IsFieldCode)
+            System.Windows.Automation.AutomationProperties.SetAutomationId(wpf, pageRefMarker);
         if (field.FormField is not null && !displayPlan.IsFieldCode)
             ApplyLegacyFormFieldChrome(wpf, field);
         return wpf;
