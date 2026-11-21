@@ -67,4 +67,18 @@ public sealed record LegacyTextBoxFrame(
     double InsetLeftPt = 7.2,
     double InsetTopPt = 3.6,
     double InsetRightPt = 7.2,
-    double InsetBottomPt = 3.6);
+    double InsetBottomPt = 3.6)
+{
+    /// <summary>
+    /// Offset from the box top of the bottom rule of a layout table the text box wraps (the table's exact
+    /// row heights, which can be shorter than the box); zero when the box holds no ruled table. Init-only
+    /// so the positional constructor stays binary compatible.
+    /// </summary>
+    public double TableRuleOffsetPt { get; init; }
+
+    /// <summary>Width of the wrapped table's bottom rule in points; zero draws none.</summary>
+    public double TableRuleWidthPt { get; init; }
+
+    /// <summary>Colour of the wrapped table's bottom rule (<c>#RRGGBB</c>); null is black.</summary>
+    public string? TableRuleColorHex { get; init; }
+}

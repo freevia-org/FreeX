@@ -1649,6 +1649,14 @@ public static partial class DocxReader
             var authoredEmpty = !p.Descendants(W + "r").Any();
             if (!preservedParagraph.Descendants(W + "r").Any() && !authoredEmpty)
                 continue;
+            // The empty paragraph Word keeps after a layout table in a text box is not part of the table's
+            // rows: for a bottom-anchored table frame it would lift the text off the rule.
+            if (legacyFrame is { TableRuleOffsetPt: > 0, TextAnchor: LegacyFrameTextAnchor.Bottom }
+                && authoredEmpty
+                && !p.Ancestors(W + "tbl").Any(table => table.Ancestors(W + "txbxContent").Any()))
+            {
+                continue;
+            }
 
             var storyParagraph = ReadParagraph(
                 preservedParagraph,
@@ -1688,6 +1696,52 @@ public static partial class DocxReader
         if (!cache.TryGetValue(shape, out var frame))
             cache[shape] = frame = ReadLegacyTextBoxFrame(shape, textBox);
         return frame;
+    }
+
+    /// <summary>
+    /// A layout table that fills a legacy text box (the header text box of UN documents: one exact-height row,
+    /// bottom-aligned cells, a rule under it) loses its geometry when the story is flattened to paragraphs.
+    /// Recovers what the flattening drops: whether every cell is bottom-aligned, the table's exact height
+    /// (where its rule sits) and the bottom rule itself.
+    /// </summary>
+    private static (bool BottomAnchored, double RuleOffsetPt, double RuleWidthPt, string? RuleColorHex)
+        ReadWrappedTableChrome(XElement textBox)
+    {
+        var table = textBox.Element(W + "txbxContent")?.Elements(W + "tbl").FirstOrDefault();
+        if (table is null)
+            return (false, 0, 0, null);
+
+        var cells = table.Elements(W + "tr").SelectMany(row => row.Elements(W + "tc")).ToList();
+        var bottomAnchored = cells.Count > 0 && cells.All(cell =>
+            string.Equals(cell.Element(W + "tcPr")?.Element(W + "vAlign")?.Attribute(W + "val")?.Value, "bottom", StringComparison.Ordinal));
+
+        var heightPt = 0.0;
+        foreach (var row in table.Elements(W + "tr"))
+        {
+            var rowHeight = row.Element(W + "trPr")?.Element(W + "trHeight");
+            if (rowHeight is null
+                || rowHeight.Attribute(W + "hRule")?.Value != "exact"
+                || !double.TryParse(rowHeight.Attribute(W + "val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var twips)
+                || twips <= 0)
+            {
+                return (bottomAnchored, 0, 0, null);
+            }
+
+            heightPt += twips / 20.0;
+        }
+
+        var bottom = table.Element(W + "tblPr")?.Element(W + "tblBorders")?.Element(W + "bottom");
+        var style = bottom?.Attribute(W + "val")?.Value;
+        if (bottom is null || style is null or "nil" or "none"
+            || !double.TryParse(bottom.Attribute(W + "sz")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var eighths)
+            || eighths <= 0)
+        {
+            return (bottomAnchored, heightPt, 0, null);
+        }
+
+        var color = bottom.Attribute(W + "color")?.Value;
+        var colorHex = color is { Length: 6 } && color.All(Uri.IsHexDigit) ? "#" + color.ToUpperInvariant() : null;
+        return (bottomAnchored, heightPt, eighths / 8.0, colorHex);
     }
 
     private static LegacyTextBoxFrame? ReadLegacyTextBoxFrame(XElement shape, XElement textBox)
@@ -1779,7 +1833,8 @@ public static partial class DocxReader
         double Inset(int index, double fallback) =>
             index < insets.Length && ParseVmlLengthPt(insets[index]) is { } value ? value : fallback;
 
-        return new LegacyTextBoxFrame(
+        var wrappedTable = ReadWrappedTableChrome(textBox);
+        var frame = new LegacyTextBoxFrame(
             shape.Name == V + "oval",
             widthPt,
             heightPt,
@@ -1797,7 +1852,22 @@ public static partial class DocxReader
             Inset(0, 7.2),
             Inset(1, 3.6),
             Inset(2, 7.2),
-            Inset(3, 3.6));
+            Inset(3, 3.6))
+        {
+            TableRuleOffsetPt = wrappedTable.RuleOffsetPt,
+            TableRuleWidthPt = wrappedTable.RuleWidthPt,
+            TableRuleColorHex = wrappedTable.RuleColorHex,
+        };
+        // The wrapped table's rows end where its rule sits; the trailing paragraph Word adds after a table in
+        // a text box makes the box taller. Bottom-aligned cells put the text on that rule, so size the frame
+        // to the table.
+        if (!wrappedTable.BottomAnchored)
+            return frame;
+        return frame with
+        {
+            TextAnchor = LegacyFrameTextAnchor.Bottom,
+            HeightPt = wrappedTable.RuleOffsetPt > 0 ? Math.Min(frame.HeightPt, wrappedTable.RuleOffsetPt) : frame.HeightPt,
+        };
     }
 
     /// <summary>Parses a VML/CSS length ("1pt", "0.05in", "2mm", "12px", "0") into points.</summary>

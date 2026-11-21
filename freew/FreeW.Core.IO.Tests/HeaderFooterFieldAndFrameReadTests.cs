@@ -104,6 +104,32 @@ public class HeaderFooterFieldAndFrameReadTests
         "</w:p></w:txbxContent></v:textbox><w10:wrap anchorx=\"margin\" anchory=\"page\"/></v:oval></w:pict></w:r></w:p>" +
         "<w:p><w:r><w:t>Plain footer</w:t></w:r></w:p>";
 
+    internal const string RuledTableTextBoxFooter =
+        "<w:p><w:r><w:pict><v:shape id=\"_x0000_s1026\" style=\"position:absolute;margin-left:0;margin-top:0;width:492.5pt;height:50.4pt;" +
+        "mso-position-horizontal:center\" stroked=\"f\"><v:textbox inset=\"0,0,0,0\"><w:txbxContent>" +
+        "<w:tbl><w:tblPr><w:tblBorders><w:bottom w:val=\"single\" w:sz=\"4\" w:space=\"0\" w:color=\"000000\"/></w:tblBorders></w:tblPr>" +
+        "<w:tblGrid><w:gridCol w:w=\"9865\"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:hRule=\"exact\" w:val=\"864\"/></w:trPr>" +
+        "<w:tc><w:tcPr><w:tcW w:w=\"9865\" w:type=\"dxa\"/><w:vAlign w:val=\"bottom\"/></w:tcPr><w:p><w:r><w:t>CEDAW</w:t></w:r></w:p></w:tc></w:tr></w:tbl>" +
+        "<w:p/></w:txbxContent></v:textbox></v:shape></w:pict></w:r></w:p>";
+
+    [Fact]
+    public void TextBoxWrappingARuledBottomAlignedTable_KeepsItsRuleAndAnchorsTheTextOnIt()
+    {
+        var doc = ReadWithFooter(RuledTableTextBoxFooter);
+
+        var paragraphs = doc.FinalSectionHeadersFooters.Footer!.Paragraphs;
+        var framed = paragraphs.Single(paragraph => paragraph.PlainText == "CEDAW");
+        var frame = framed.LegacyTextBoxFrame;
+        frame.Should().NotBeNull();
+        frame!.TextAnchor.Should().Be(LegacyFrameTextAnchor.Bottom);
+        frame.TableRuleOffsetPt.Should().BeApproximately(43.2, 0.001);
+        frame.TableRuleWidthPt.Should().BeApproximately(0.5, 0.001);
+        frame.TableRuleColorHex.Should().Be("#000000");
+        // The box is trimmed to the table so the text sits on the rule, not above Word's trailing blank line.
+        frame.HeightPt.Should().BeApproximately(43.2, 0.001);
+        paragraphs.Should().NotContain(paragraph => paragraph.PlainText.Length == 0 && paragraph.LegacyTextBoxFrame != null);
+    }
+
     [Fact]
     public void PositionedVmlTextBox_TagsItsFlattenedParagraphsWithTheShapeFrame()
     {

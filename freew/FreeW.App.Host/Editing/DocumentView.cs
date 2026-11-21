@@ -13172,6 +13172,9 @@ public sealed partial class DocumentView : RichTextBox
         var fontSizePx = (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
         if (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
             fontSizePx *= SuperSubScale;
+        // Measure the glyph size the page-only render paints (see the small-character-scale note in BuildRun).
+        if (_renderJoinSlashes && SmallCharacterScaleFactor(fmt.CharacterScalePercent) is { } widthFactor)
+            fontSizePx *= widthFactor;
 
         var flowDirection = fmt.Rtl
             ? System.Windows.FlowDirection.RightToLeft
@@ -13484,6 +13487,14 @@ public sealed partial class DocumentView : RichTextBox
             wpf.FontSize = size * PxPerPoint;
         }
         ApplyBaselinePositionPresentation(wpf, fmt);
+        // A near-100% character scale (w:w) cannot be painted with stretched text boxes without losing
+        // line stacking and justification, but it still widens every glyph and so moves line breaks and
+        // pages. A page-only render approximates it by growing the glyphs' em by the same factor.
+        if (_renderJoinSlashes && SmallCharacterScaleFactor(fmt.CharacterScalePercent) is { } widthFactor)
+        {
+            wpf.FontSize = fontSizePx * widthFactor
+                * (fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript ? SuperSubScale : 1);
+        }
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         ApplyTextEffectPresentation(wpf, fmt, document);
@@ -13685,6 +13696,18 @@ public sealed partial class DocumentView : RichTextBox
     // A near-100% scale (Word's Normal style of some documents sets 103) changes widths by a few percent only;
     // the per-word text boxes cost more in layout fidelity (line stacking, justification) than they recover.
     internal const int MinimumRenderedCharacterScalePercentDelta = 10;
+
+    /// <summary>
+    /// The glyph-width factor of a character scale (w:w) too close to 100% for per-word stretched boxes
+    /// (see <see cref="MinimumRenderedCharacterScalePercentDelta"/>), or null when the run is unscaled
+    /// or scaled enough for <see cref="ScaleInlineWidth"/>.
+    /// </summary>
+    internal static double? SmallCharacterScaleFactor(int characterScalePercent) =>
+        characterScalePercent > 0
+        && characterScalePercent != 100
+        && Math.Abs(characterScalePercent - 100) < MinimumRenderedCharacterScalePercentDelta
+            ? characterScalePercent / 100.0
+            : null;
 
     internal static Inline ScaleInlineWidth(Inline inline, double scale, double fallbackFontSizePx)
     {
