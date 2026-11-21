@@ -88,6 +88,17 @@ public sealed class RunToggleOffAndNestedTableOrderReaderTests
         cell.NestedTableParagraphOffsets.Should().Equal(1, 2);
     }
 
+    [Theory]
+    [InlineData("lowKashida")]
+    [InlineData("mediumKashida")]
+    [InlineData("highKashida")]
+    public void KashidaJustification_IsReadAsJustified(string jc)
+    {
+        var doc = Read("<w:p><w:pPr><w:jc w:val=\"" + jc + "\"/></w:pPr><w:r><w:t>a</w:t></w:r></w:p>");
+
+        doc.Blocks.OfType<Paragraph>().Single().Formatting.Alignment.Should().Be(TextAlignment.Justify);
+    }
+
     [Fact]
     public void ExplicitLeftAlignmentAndComplexScriptSize_AreReadAndRoundTrip()
     {

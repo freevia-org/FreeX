@@ -69,6 +69,7 @@ public sealed partial class DocumentView : RichTextBox
     private const double WpfTableCellContentInsetDip = 6.0;
     // WPF's Calibri line box remains about 1% short after restoring Word's 12-point application fallback.
     private const double ImportedWordApplicationLineHeightScale = 1.00975;
+    private const double ThickRuleMinimumWidthPt = 3.0;
 
     // Matches the shared planner's default page-space gap around wrapped objects.
     private const double FloatingWrapGapDip = 9.0;
@@ -12646,6 +12647,10 @@ public sealed partial class DocumentView : RichTextBox
             Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001 ||
             usesWordApplicationDefaultLineSpacing;
         var multipleLineBasisPx = ParagraphMultipleLineBasisPx(paragraph, document);
+        // An empty paragraph's line is its paragraph mark's line (a 33pt mark is a 33pt line). WPF sizes the
+        // line of an empty paragraph from the paragraph's own font, which carries no mark size, so a document
+        // whose cascade never states a line pitch would otherwise collapse it to a default-size line.
+        var emptyMarkLineBasis = !hasExplicitMultipleLineSpacing && IsMarkOnlyParagraph(paragraph) && MarkSizeDiffersFromDefault(paragraph, document);
         var wpf = new WpfParagraph
         {
             // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
@@ -12686,9 +12691,9 @@ public sealed partial class DocumentView : RichTextBox
             // text run, or the paragraph mark for an empty paragraph), not the document default font: a
             // Times New Roman paragraph in a Calibri-default document is ~1.15 em per line, not Calibri's
             // ~1.22 em, and a 16pt paragraph's 1.15 lines are 1.15 x its 16pt line, not x 11pt.
-            LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
+            LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && (hasExplicitMultipleLineSpacing || emptyMarkLineBasis)
                 ? (paraFmt.LineSpacing > 0
-                    ? paraFmt.LineSpacing * multipleLineBasisPx *
+                    ? (emptyMarkLineBasis && !hasExplicitMultipleLineSpacing ? 1.0 : paraFmt.LineSpacing) * multipleLineBasisPx *
                       (ImportedWordLineSpacingPlanner.UsesApplicationDefaultRunLineHeightCalibration(document, paraFmt)
                           ? ImportedWordApplicationLineHeightScale
                           : 1.0)
@@ -12730,6 +12735,14 @@ public sealed partial class DocumentView : RichTextBox
                 ? new Thickness(0, 0, 0, w)
                 : new Thickness(border.Left ? w : 0, border.Top ? w : 0, border.Right ? w : 0, border.Bottom ? w : 0);
             wpf.Padding = new Thickness(2);
+            // A thick horizontal rule (o:hr shape of several points) sits ON its paragraph's line in Word,
+            // so the paragraph is one text line tall. Drawn as a bottom border it would stack the border and
+            // padding below that line; shrink the line to leave the same total height.
+            if (border.BottomOnly && border.WidthPt >= ThickRuleMinimumWidthPt && IsMarkOnlyParagraph(paragraph))
+            {
+                wpf.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+                wpf.LineHeight = Math.Max(1.0, multipleLineBasisPx - w - wpf.Padding.Top - wpf.Padding.Bottom);
+            }
         }
         if (TryParseColor(paraFmt.ShadingColorHex, out var shading))
             wpf.Background = new SolidColorBrush(shading);
@@ -15355,6 +15368,54 @@ public sealed partial class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Page-known-late display refresh of every PAGEREF run (tagged by <see cref="BuildComplexFieldRun"/>)
+    /// under <paramref name="blocks"/>: the printed number becomes the one <paramref name="resolve"/> derives
+    /// from the laid-out pagination, as Word recalculates it on print/export. Returns the runs it changed
+    /// with their previous text so a caller whose pagination moved can put every one back.
+    /// </summary>
+    internal static List<(WpfRun Run, string Previous)> RefreshPrintPageReferences(
+        IEnumerable<System.Windows.Documents.Block> blocks,
+        Func<string, string, string> resolve)
+    {
+        var runs = new List<WpfRun>();
+        foreach (var block in blocks)
+            CollectPageReferenceRuns(block, runs);
+
+        var changed = new List<(WpfRun, string)>();
+        foreach (var run in runs)
+        {
+            var instruction = PrintPageReferencePlanner.InstructionOf(
+                System.Windows.Automation.AutomationProperties.GetAutomationId(run));
+            if (instruction is null)
+                continue;
+            var text = resolve(instruction, run.Text);
+            if (string.Equals(text, run.Text, StringComparison.Ordinal))
+                continue;
+            changed.Add((run, run.Text));
+            run.Text = text;
+        }
+
+        return changed;
+    }
+
+    private static void CollectPageReferenceRuns(DependencyObject node, List<WpfRun> runs)
+    {
+        if (node is WpfRun run)
+        {
+            if (System.Windows.Automation.AutomationProperties.GetAutomationId(run)
+                    .StartsWith(PrintPageReferencePlanner.RunMarkerPrefix, StringComparison.Ordinal))
+                runs.Add(run);
+            return;
+        }
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+        {
+            if (child is DependencyObject element)
+                CollectPageReferenceRuns(element, runs);
+        }
+    }
+
+    /// <summary>
     /// Renders a generic complex field (the <c>w:fldChar</c>/<c>w:instrText</c> construct). When the field's
     /// <see cref="ComplexField.ShowCode"/> is on (Alt+F9) it shows the field code as <c>{ INSTR }</c>;
     /// otherwise it shows the resolved result — DATE/TIME/AUTHOR/FILENAME resolve live (reusing
@@ -15398,6 +15459,10 @@ public sealed partial class DocumentView : RichTextBox
         else if (TryParseColor(drawFmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = (field.Keyword.Length > 0 ? field.Keyword : "Field") + " field: " + field.Instruction.Trim();
+        // A print clone loses the Tag; this id survives the XAML round trip so the page-known-late PAGEREF
+        // refresh can find the run (see RefreshPrintPageReferences).
+        if (PrintPageReferencePlanner.MarkerFor(field) is { } pageRefMarker && !displayPlan.IsFieldCode)
+            System.Windows.Automation.AutomationProperties.SetAutomationId(wpf, pageRefMarker);
         if (field.FormField is not null && !displayPlan.IsFieldCode)
             ApplyLegacyFormFieldChrome(wpf, field);
         return wpf;
@@ -20599,6 +20664,37 @@ public sealed partial class DocumentView : RichTextBox
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, double> LineHeightRatioCache = new();
     private static double DefaultLineHeightRatio(TextDocument document) =>
         FontLineHeightRatio(document.DefaultRun.FontFamily);
+
+    // Only a mark whose size differs from the document default needs the explicit line: WPF's own empty line
+    // already follows the default size.
+    private static bool MarkSizeDiffersFromDefault(ModelParagraph paragraph, TextDocument document)
+    {
+        var mark = ProjectForScript(
+            DocumentRunFormattingResolver.Resolve(
+                document, paragraph, paragraph.MarkFormatting ?? RunFormatting.Default, null),
+            null,
+            document);
+        var markSize = mark.FontSizePt ?? DefaultFontSizePt;
+        var defaultSize = document.DefaultRun.FontSizePt ?? DefaultFontSizePt;
+        return !mark.Hidden && Math.Abs(markSize - defaultSize) > 0.01;
+    }
+
+    /// <summary>A paragraph with no text and no object: only its paragraph mark occupies the line.</summary>
+    internal static bool IsMarkOnlyParagraph(ModelParagraph paragraph)
+    {
+        foreach (var run in paragraph.Runs)
+        {
+            if (!string.IsNullOrEmpty(run.Text)
+                || run.Image is not null || run.Chart is not null || run.Shape is not null
+                || run.WordArt is not null || run.SmartArt is not null || run.Equation is not null
+                || run.EmbeddedObject is not null || run.PreservedDrawing is not null
+                || run.DrawingGroup is not null || run.FootnoteId is not null || run.EndnoteId is not null
+                || run.IsPageBreak || run.IsColumnBreak)
+                return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// The one-line height (DIP) that Word's Multiple line rule scales for this paragraph: the natural

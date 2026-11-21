@@ -17,16 +17,18 @@ public sealed class EmptyParagraphMarkHeightTests
     private const double PxPerPoint = 96.0 / 72.0;
     private static string Dbg = "";
 
-    private static double PageContentHeight(double markSizePt, string family, bool leadingText)
+    private static double PageContentHeight(double markSizePt, string family, bool leadingText, bool explicitSpacing = true, ParagraphBorder? border = null)
     {
         var doc = TextDocument.CreateEmpty();
         doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
         doc.Blocks.Clear();
+        if (!explicitSpacing)
+            doc.UseWordApplicationDefaultLineSpacing = false;
         var spacing = ParagraphFormatting.Default with
         {
-            LineSpacing = 1.0,
+            LineSpacing = explicitSpacing ? 1.0 : ParagraphFormatting.Default.LineSpacing,
             LineRule = LineSpacingRule.Multiple,
-            LineSpacingIsSet = true,
+            LineSpacingIsSet = explicitSpacing,
             SpaceAfterPt = 0,
         };
         if (leadingText)
@@ -35,7 +37,7 @@ public sealed class EmptyParagraphMarkHeightTests
         {
             doc.Blocks.Add(new Paragraph(string.Empty)
             {
-                Formatting = spacing,
+                Formatting = border is null ? spacing : spacing with { Border = border },
                 MarkFormatting = RunFormatting.Default with { FontFamily = family, FontSizePt = markSizePt },
             });
         }
@@ -99,5 +101,28 @@ public sealed class EmptyParagraphMarkHeightTests
 
         Assert.True(with - without > natural * 0.95,
             $"28pt mark line must be about {natural:F1}px but added {with - without:F1}px {Dbg} w={with} wo={without}");
+    }
+
+    [StaFact]
+    public void EmptyParagraph_WithoutStatedLineSpacing_IsOneSingleLineOfItsMarkSize()
+    {
+        // The cascade never states a line pitch (Word: single). The mark's 28pt line must neither be lost
+        // nor inflated by the library default 1.15 multiple.
+        var without = PageContentHeight(0, "Calibri", true, explicitSpacing: false);
+        var with = PageContentHeight(28, "Bookman Old Style", true, explicitSpacing: false);
+        var natural = new System.Windows.Media.FontFamily("Bookman Old Style").LineSpacing * 28 * PxPerPoint;
+
+        Assert.True(with - without >= natural * 0.95 && with - without <= natural * 1.06, $"added {with - without:F1}px natural {natural:F1}px {Dbg}");
+    }
+
+    [StaFact]
+    public void ThickHorizontalRuleParagraph_IsOneTextLineTall()
+    {
+        // A 9pt o:hr rule sits on its paragraph's line in Word; as a bottom border it must not stack
+        // the border below a full text line.
+        var plain = PageContentHeight(12, "Calibri", true);
+        var rule = PageContentHeight(12, "Calibri", true, border: new ParagraphBorder("#E5E5E5", 9, BottomOnly: true));
+
+        Assert.InRange(rule - plain, -2.0, 2.0);
     }
 }

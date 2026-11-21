@@ -780,6 +780,9 @@ internal static class PrintLayout
             DocumentView.RenumberFootnoteMarksByPage(flow, dynamicPaginator, editor.Model);
         }
 
+        if (paginator is DynamicDocumentPaginator pageRefPaginator)
+            ApplySingleFlowPageReferences(editor.Model, flow, pageRefPaginator);
+
         IReadOnlyDictionary<int, DocumentFootnoteContinuationPagePlan>? fragmentedFootnotePages = null;
         if (footnoteComposition is not null)
         {
@@ -806,6 +809,49 @@ internal static class PrintLayout
             changeBarBands: changeBarBands,
             floatingObjectsByPage: floatingObjectsByPage,
             changedLineRules: !editor.CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar), flow);
+    }
+
+    /// <summary>
+    /// The single-flow print path's PAGEREF refresh (see <see cref="PaginationEngine"/>'s section-aware
+    /// equivalent): numbers shown on the printed pages follow the pagination just laid out, and are put
+    /// back when showing them would change the page count.
+    /// </summary>
+    private static void ApplySingleFlowPageReferences(
+        TextDocument model,
+        FlowDocument flow,
+        DynamicDocumentPaginator paginator)
+    {
+        try
+        {
+            paginator.ComputePageCount();
+            var pageCount = Math.Max(1, paginator.PageCount);
+            var flowBlocks = flow.Blocks.ToArray();
+            var renderedStart = PaginationEngine.MapModelBlocksToRenderedBlocks(model, flowBlocks.Length);
+            var assignment = new int[model.Blocks.Count];
+            for (var i = 0; i < assignment.Length; i++)
+            {
+                var rendered = renderedStart is null ? i : renderedStart[i];
+                assignment[i] = rendered >= 0 && rendered < flowBlocks.Length
+                    ? Math.Clamp(paginator.GetPageNumber(flowBlocks[rendered].ContentStart), 0, pageCount - 1)
+                    : -1;
+            }
+
+            var resolve = FreeW.App.Presentation.DocumentView.PrintPageReferencePlanner.Build(model, assignment, pageCount);
+            var changed = DocumentView.RefreshPrintPageReferences(flowBlocks, resolve);
+            if (changed.Count == 0)
+                return;
+
+            paginator.ComputePageCount();
+            if (paginator.PageCount == pageCount)
+                return;
+
+            foreach (var (run, previous) in changed)
+                run.Text = previous;
+            paginator.ComputePageCount();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+        }
     }
 
     /// <summary>
