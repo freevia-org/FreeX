@@ -208,6 +208,16 @@ public sealed class ReleaseResilienceWorkflowTests
         candidate.Should().Contain("source_sha is only allowed on a dispatch from refs/heads/main");
         candidate.Should().Contain("-cnotmatch '^[0-9a-f]{40}$'");
         candidate.Should().Contain("git merge-base --is-ancestor $env:RELEASE_SHA $env:GITHUB_SHA");
+
+        // The job checks out the OLDER commit, so the dispatched head is absent locally: it must be
+        // fetched (via env, never script interpolation) and fail closed BEFORE the ancestry test.
+        var fetchIndex = candidate.IndexOf("git fetch --no-tags origin $env:GITHUB_SHA", StringComparison.Ordinal);
+        var mergeBaseIndex = candidate.IndexOf("git merge-base --is-ancestor $env:RELEASE_SHA $env:GITHUB_SHA", StringComparison.Ordinal);
+        fetchIndex.Should().BeGreaterThan(0);
+        fetchIndex.Should().BeLessThan(mergeBaseIndex);
+        candidate.Should().Contain("Could not fetch the dispatched main head $env:GITHUB_SHA");
+        candidate.Should().Contain("git cat-file -e \"$($env:GITHUB_SHA)^{commit}\"");
+        candidate.Should().NotContain("${{ github.sha }}");
         candidate.Should().Contain("tools/Resolve-GitHubReleaseCandidate.ps1");
         candidate.Should().Contain("-CommitSha $env:RELEASE_SHA");
         candidate.Should().Contain("tools/Resolve-ReleaseGateEvidence.ps1");
