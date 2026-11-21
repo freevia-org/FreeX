@@ -318,6 +318,8 @@ public partial class GridView
 
         if (cell.HasComment)
             DrawCommentIndicator(dc, rect, cell.CommentDisplay?.Kind ?? CellCommentDisplayKind.Note);
+        if (ErrorIndicatorPredicate?.Invoke(cell.Row, cell.Col) == true)
+            DrawErrorIndicator(dc, rect);
 
         if (!ShouldDrawCellContent(cell, EditingCell))
             return;
@@ -751,10 +753,12 @@ public partial class GridView
             }
         }
 
-        // Pass 2b: comment/note indicators
+        // Pass 2b: comment/note indicators (top-right) and green error indicators (top-left)
+        var errorIndicatorPredicate = ErrorIndicatorPredicate;
         foreach (var cell in viewport.Cells)
         {
-            if (!cell.HasComment) continue;
+            var hasErrorIndicator = errorIndicatorPredicate?.Invoke(cell.Row, cell.Col) == true;
+            if (!cell.HasComment && !hasErrorIndicator) continue;
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
@@ -781,7 +785,10 @@ public partial class GridView
             if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
-            DrawCommentIndicator(dc, rect, cell.CommentDisplay?.Kind ?? CellCommentDisplayKind.Note);
+            if (cell.HasComment)
+                DrawCommentIndicator(dc, rect, cell.CommentDisplay?.Kind ?? CellCommentDisplayKind.Note);
+            if (hasErrorIndicator)
+                DrawErrorIndicator(dc, rect);
         }
 
         // Pass 3: text
@@ -1455,6 +1462,31 @@ public partial class GridView
         }
         geometry.Freeze();
         return geometry;
+    }
+
+    /// <summary>Excel's green error indicator: a small triangle in the cell's top-left corner.</summary>
+    internal static void DrawErrorIndicator(DrawingContext dc, Rect rect)
+    {
+        const double size = 6;
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(rect.Left + 1, rect.Top + 1), isFilled: true, isClosed: true);
+            context.LineTo(new Point(rect.Left + 1 + size, rect.Top + 1), isStroked: false, isSmoothJoin: false);
+            context.LineTo(new Point(rect.Left + 1, rect.Top + 1 + size), isStroked: false, isSmoothJoin: false);
+        }
+        geometry.Freeze();
+        dc.DrawGeometry(ErrorIndicatorBrush, null, geometry);
+    }
+
+    // Excel's "Automatic" error indicator colour.
+    internal static readonly Brush ErrorIndicatorBrush = CreateFrozenBrush(Color.FromRgb(0x00, 0x80, 0x00));
+
+    private static SolidColorBrush CreateFrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 
     internal readonly record struct CellTextRenderLayout(Point TextPoint, Rect Bounds, double TransformAngle)

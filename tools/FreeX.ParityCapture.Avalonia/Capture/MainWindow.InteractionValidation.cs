@@ -29,6 +29,11 @@ public sealed partial class MainWindow
         int contextMenuDispatchCount = int.MaxValue)
     {
         var results = new List<InteractionValidationResult>();
+        // Any shortcut or Quick Access key tip that reaches Save on an untitled workbook (for example Alt+1)
+        // would otherwise open the real native save panel, which never completes under validation and leaves
+        // the window's save guard set, so every later dialog silently refuses to open. Cancel it by default;
+        // the Save-specific probes below install their own picker and restore this one.
+        _workbookSaveAsPickerOverride ??= static _ => Task.FromResult<WorkbookSaveAsPickerSelection?>(null);
         if (includeCoreResults)
         {
             bool Includes(string section) => coreSection is null ||
@@ -720,8 +725,8 @@ public sealed partial class MainWindow
 
     private static IReadOnlyList<(string Name, WorksheetContextMenuState State)> WorksheetContextValidationStates()
     {
-        var states = new List<(string, WorksheetContextMenuState)>(1 << 8);
-        for (var bits = 0; bits < 1 << 8; bits++)
+        var states = new List<(string, WorksheetContextMenuState)>(1 << 9);
+        for (var bits = 0; bits < 1 << 9; bits++)
         {
             var state = new WorksheetContextMenuState(
                 HasThreadedComment: (bits & 1) != 0,
@@ -731,7 +736,10 @@ public sealed partial class MainWindow
                 HasAutoFilterHeaderTarget: (bits & (1 << 4)) != 0,
                 HasDropdownTarget: (bits & (1 << 5)) != 0,
                 HasPivotTableTarget: (bits & (1 << 6)) != 0,
-                NoteIsShown: (bits & (1 << 7)) != 0);
+                NoteIsShown: (bits & (1 << 7)) != 0)
+            {
+                HasTableTarget = (bits & (1 << 8)) != 0,
+            };
             states.Add(($"state-{bits:X2}", state));
         }
 

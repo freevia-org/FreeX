@@ -270,6 +270,7 @@ public static partial class DocxWriter
             || hasBackground
             || hasEmbeddedFonts
             || hasPreservedSettings
+            || BuildCompat(document.CompatibilityMode, document.CompatibilityFlags) is not null
             || !document.FootnoteNumbering.IsDefault
             || !document.EndnoteNumbering.IsDefault;
 
@@ -343,7 +344,7 @@ public static partial class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.EmbedSystemFonts, document.SaveSubsetFonts, document.PageBordersDoNotSurroundHeader, document.PageBordersDoNotSurroundFooter, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.EmbedSystemFonts, document.SaveSubsetFonts, document.PageBordersDoNotSurroundHeader, document.PageBordersDoNotSurroundFooter, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages, document.CompatibilityMode, document.CompatibilityFlags));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -2637,6 +2638,9 @@ public static partial class DocxWriter
             // order (w:ins and w:del are the trailing children per CT_TrPr's extension of CT_TrPrBase).
             // Emitted only when a non-default row property is set, so plain rows stay unchanged.
             var trPr = new XElement(W + "trPr");
+            // CT_TrPrBase order: gridBefore, wBefore, gridAfter, wAfter precede cantSplit / trHeight.
+            AddRowGridSkip(trPr, "gridBefore", "wBefore", row.GridBefore, table, 0);
+            AddRowGridSkip(trPr, "gridAfter", "wAfter", row.GridAfter, table, TableGridProjection.RowWidth(row));
             if (!row.AllowBreakAcrossPages)
                 trPr.Add(new XElement(W + "cantSplit"));
             if (row.HeightPt is { } heightPt)
@@ -2690,6 +2694,22 @@ public static partial class DocxWriter
             tbl.Add(tr);
         }
         return tbl;
+    }
+
+    private static void AddRowGridSkip(XElement trPr, string countName, string widthName, int count, Table table, int firstColumn)
+    {
+        if (count <= 0)
+            return;
+        trPr.Add(new XElement(W + countName, new XAttribute(W + "val", count)));
+        var widthPt = 0.0;
+        for (var c = firstColumn; c < firstColumn + count && c < table.ColumnWidthsPt.Count; c++)
+            widthPt += table.ColumnWidthsPt[c];
+        if (widthPt > 0)
+        {
+            trPr.Add(new XElement(W + widthName,
+                new XAttribute(W + "w", PointsToDxa(widthPt)),
+                new XAttribute(W + "type", "dxa")));
+        }
     }
 
     /// <summary>
@@ -3916,14 +3936,21 @@ public static partial class DocxWriter
         // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
         // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
         // indent entirely on save -- in every locale, not only a foreign one.
-        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0
+            || f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet)
         {
-            var indEl = new XElement(W + "ind",
-                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
-                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
+            // Formatting that carries explicit-indent flags (a direct "0" cancelling a style indent) writes only
+            // the attributes it actually owns, so an unflagged edge keeps inheriting the style; legacy formatting
+            // without any flag keeps writing both edges.
+            var indEl = new XElement(W + "ind");
+            var ownsEdges = f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet;
+            if (!ownsEdges || f.IndentLeftIsSet || f.IndentLeftPt != 0)
+                indEl.Add(new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)));
+            if (!ownsEdges || f.IndentRightIsSet || f.IndentRightPt != 0)
+                indEl.Add(new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
             if (f.FirstLineIndentPt < 0)
                 indEl.Add(new XAttribute(W + "hanging", PointsToDxa(-f.FirstLineIndentPt)));
-            else if (f.FirstLineIndentPt > 0)
+            else if (f.FirstLineIndentPt > 0 || f.FirstLineIndentIsSet)
                 indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
             pPr.Add(indEl);
         }
@@ -5426,6 +5453,8 @@ public static partial class DocxWriter
             var lnAttrs = new List<object>();
             if (shape.OutlineWidthPt > 0)
                 lnAttrs.Add(new XAttribute("w", (long)(shape.OutlineWidthPt * 12700)));
+            if (shape.OutlineCompound is { Length: > 0 } compound)
+                lnAttrs.Add(new XAttribute("cmpd", compound));
             var ln = new XElement(A + "ln", lnAttrs);
             ln.Add(new XElement(A + "solidFill",
                 new XElement(A + "srgbClr", new XAttribute("val", outlineColor.TrimStart('#')))));
@@ -8540,6 +8569,8 @@ public static partial class DocxWriter
         if (BuildRunFontsElement(f) is { } rFontsEl)
             rPr.Add(rFontsEl);
         AddRunToggle(rPr, "b", f.Bold, f, RunToggleOverrides.Bold);
+        if (f.ComplexScriptBold)
+            rPr.Add(new XElement(W + "bCs"));
         AddRunToggle(rPr, "i", f.Italic, f, RunToggleOverrides.Italic);
         AddRunToggle(rPr, "caps", f.AllCaps, f, RunToggleOverrides.AllCaps);
         AddRunToggle(rPr, "smallCaps", f.SmallCaps, f, RunToggleOverrides.SmallCaps);
@@ -8558,6 +8589,8 @@ public static partial class DocxWriter
         // Emitted only when non-zero so default runs round-trip byte-unchanged.
         if (f.CharacterSpacingPt != 0)
             rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        if (f.CharacterScalePercent > 0)
+            rPr.Add(new XElement(W + "w", new XAttribute(W + "val", f.CharacterScalePercent)));
         // w:kern (kerning minimum font size) — value in half-points. Emitted only when a positive
         // threshold is set.
         if (f.KerningMinSizePt is { } kern && kern > 0)
@@ -8903,6 +8936,8 @@ public static partial class DocxWriter
         PageNumberFormat.UpperRoman => "upperRoman",
         PageNumberFormat.LowerLetter => "lowerLetter",
         PageNumberFormat.UpperLetter => "upperLetter",
+        PageNumberFormat.ArabicAbjad => "arabicAbjad",
+        PageNumberFormat.ArabicAlpha => "arabicAlpha",
         _ => "decimal"
     };
 
@@ -9492,7 +9527,7 @@ public static partial class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool embedSystemFonts, bool saveSubsetFonts, bool pageBordersDoNotSurroundHeader, bool pageBordersDoNotSurroundFooter, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool embedSystemFonts, bool saveSubsetFonts, bool pageBordersDoNotSurroundHeader, bool pageBordersDoNotSurroundFooter, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false, int compatibilityMode = TextDocument.CurrentCompatibilityMode, IReadOnlyList<string>? compatibilityFlags = null)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -9581,6 +9616,10 @@ public static partial class DocxWriter
                 fresh.Add(freshFootnotePr);
             if (BuildNotePr(endnoteNumbering, "endnotePr") is { } freshEndnotePr)
                 fresh.Add(freshEndnotePr);
+            // Layout compatibility (w:compat) follows endnotePr in CT_Settings order; only a non-default mode or
+            // explicit legacy flags are written, so a plain authored document stays minimal.
+            if (BuildCompat(compatibilityMode, compatibilityFlags) is { } freshCompat)
+                fresh.Add(freshCompat);
             if (doNotAutoCompressPictures)
                 fresh.Add(new XElement(W + "doNotAutoCompressPictures"));
             return new XDocument(fresh);
@@ -9628,6 +9667,39 @@ public static partial class DocxWriter
             ? new XElement(W + "doNotAutoCompressPictures")
             : null);
         return new XDocument(settings);
+    }
+
+    /// <summary>
+    /// Builds w:compat for a freshly authored settings part: the enabled legacy flags (as empty toggles) and, when
+    /// the mode is not the current default, the compatibilityMode compatSetting. Null when nothing needs writing.
+    /// Mode 12 is the reader's default for a package without the setting, so it is emitted as flags only.
+    /// </summary>
+    private static XElement? BuildCompat(int mode, IReadOnlyList<string>? flags)
+    {
+        var hasFlags = flags is { Count: > 0 };
+        // A package without the setting reads back as 12 (Word's own rule), so 12 needs no element of its own and
+        // an authored current-mode document without flags stays minimal; every other mode is explicit.
+        if ((mode == TextDocument.CurrentCompatibilityMode || mode == 12) && !hasFlags)
+            return null;
+
+        var writeMode = mode != 12;
+
+        var compat = new XElement(W + "compat");
+        if (flags is not null)
+        {
+            foreach (var flag in flags)
+                compat.Add(new XElement(W + flag));
+        }
+
+        if (writeMode)
+        {
+            compat.Add(new XElement(W + "compatSetting",
+                new XAttribute(W + "name", "compatibilityMode"),
+                new XAttribute(W + "uri", "http://schemas.microsoft.com/office/word"),
+                new XAttribute(W + "val", mode.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        }
+
+        return compat;
     }
 
     private static bool HasCustomDefaultTabStop(PageSettings page) =>
@@ -10417,6 +10489,8 @@ public static partial class DocxWriter
             rPr.Add(rFontsEl);
         if (f.Bold)
             rPr.Add(new XElement(W + "b"));
+        if (f.ComplexScriptBold)
+            rPr.Add(new XElement(W + "bCs"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
         if (f.AllCaps)
@@ -10437,6 +10511,8 @@ public static partial class DocxWriter
             rPr.Add(color);
         if (f.CharacterSpacingPt != 0)
             rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        if (f.CharacterScalePercent > 0)
+            rPr.Add(new XElement(W + "w", new XAttribute(W + "val", f.CharacterScalePercent)));
         if (f.KerningMinSizePt is { } kern && kern > 0)
             rPr.Add(new XElement(W + "kern", new XAttribute(W + "val", PointsToHalfPoints(kern))));
         if (f.PositionPt != 0)
@@ -10645,14 +10721,21 @@ public static partial class DocxWriter
         // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
         // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
         // indent entirely on save -- in every locale, not only a foreign one.
-        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0
+            || f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet)
         {
-            var indEl = new XElement(W + "ind",
-                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
-                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
+            // Formatting that carries explicit-indent flags (a direct "0" cancelling a style indent) writes only
+            // the attributes it actually owns, so an unflagged edge keeps inheriting the style; legacy formatting
+            // without any flag keeps writing both edges.
+            var indEl = new XElement(W + "ind");
+            var ownsEdges = f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet;
+            if (!ownsEdges || f.IndentLeftIsSet || f.IndentLeftPt != 0)
+                indEl.Add(new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)));
+            if (!ownsEdges || f.IndentRightIsSet || f.IndentRightPt != 0)
+                indEl.Add(new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
             if (f.FirstLineIndentPt < 0)
                 indEl.Add(new XAttribute(W + "hanging", PointsToDxa(-f.FirstLineIndentPt)));
-            else if (f.FirstLineIndentPt > 0)
+            else if (f.FirstLineIndentPt > 0 || f.FirstLineIndentIsSet)
                 indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
             pPr.Add(indEl);
         }

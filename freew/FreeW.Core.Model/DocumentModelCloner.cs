@@ -22,6 +22,9 @@ public static class DocumentModelCloner
         target.DefaultRun = source.DefaultRun;
         target.DefaultParagraph = source.DefaultParagraph;
         target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
+        target.CompatibilityMode = source.CompatibilityMode;
+        target.CompatibilityFlags.Clear();
+        target.CompatibilityFlags.AddRange(source.CompatibilityFlags);
         target.EmbedSystemFonts = source.EmbedSystemFonts;
         target.SaveSubsetFonts = source.SaveSubsetFonts;
         target.PageBordersDoNotSurroundHeader = source.PageBordersDoNotSurroundHeader;
@@ -277,6 +280,7 @@ public static class DocumentModelCloner
         EmbeddedObject = source.EmbeddedObject?.Clone(),
         Ruby = source.Ruby?.Clone(),
         PreservedDrawing = source.PreservedDrawing?.Duplicate(),
+        PreservedDrawingPreview = source.PreservedDrawingPreview,
         DrawingGroup = source.DrawingGroup is { } drawingGroup
             ? CloneDrawingGroup(drawingGroup, preserveRevisions)
             : null,
@@ -326,6 +330,7 @@ public static class DocumentModelCloner
             OutlineColorHex = source.OutlineColorHex,
             OutlineWidthPt = source.OutlineWidthPt,
             OutlineDash = source.OutlineDash,
+            OutlineCompound = source.OutlineCompound,
             AltText = source.AltText,
             TextDirection = source.TextDirection,
             Placement = source.Placement?.Clone(),
@@ -454,6 +459,8 @@ public static class DocumentModelCloner
         {
             var rowClone = new TableRow
             {
+                GridBefore = row.GridBefore,
+                GridAfter = row.GridAfter,
                 HeightPt = row.HeightPt,
                 HeightRule = row.HeightRule,
                 AllowBreakAcrossPages = row.AllowBreakAcrossPages,

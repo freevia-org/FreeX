@@ -1599,6 +1599,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
+                    // WPF RefreshPivotChartInsertCommandState: enabled only while the selection is inside a PivotTable.
+                    [FreeXRibbonCommandIds.PivotChartInsert] = () => new RibbonCommandState(
+                        IsEnabled: PivotSourceContext.FindActivePivot(_session.ActiveSheet, _session.ActiveCell) is not null),
+                    ["Switch Windows"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.VisibleCount > 1),
+                    // WPF ArrangeAllContextMenu_Opened: the stored arrangement is shown checked.
+                    [FreeXRibbonCommandIds.ViewArrangeTiled] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Tiled),
+                    [FreeXRibbonCommandIds.ViewArrangeHorizontal] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Horizontal),
+                    [FreeXRibbonCommandIds.ViewArrangeVertical] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Vertical),
+                    [FreeXRibbonCommandIds.ViewArrangeCascade] = () => GetArrangeAllRibbonState(WorkbookWindowArrangement.Cascade),
                     ["Hide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.CanHide(this)),
                     ["Unhide"] = () => new RibbonCommandState(IsEnabled: WindowRegistry.HiddenWindows.Count > 0),
                     ["Gridlines"] = () => GetWorkbookViewRibbonState().GetCommandState("Gridlines"),
@@ -1700,7 +1709,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ribbonCallbacks,
             _ribbonContextSource,
             _ribbonStateStore);
-        _refreshRibbonToggleStates = refreshRibbonToggleStates;
+        _refreshRibbonToggleStates = () =>
+        {
+            refreshRibbonToggleStates();
+            ApplyDynamicRibbonChrome();
+        };
         _ribbonCommandRegistry = ribbonCommandRegistry;
         _ribbonControl = ribbon;
         ConfigureWorksheetRibbonFlyouts(ribbon);
@@ -2349,7 +2362,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _newWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New));
 
         ConfigureNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open);
-        _openMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open));
+        // WPF 3b3ad143af: Open (Cmd+O on macOS arrives here as the native menu key equivalent)
+        // lands on the Backstage Open pane instead of launching the picker.
+        _openMenuItem.Click += (_, _) => RunGuarded(() =>
+        {
+            ShowBackstageOpenPane();
+            return Task.CompletedTask;
+        });
 
         ConfigureNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent);
         _openRecentMenuItem.Menu = CreateNativeOpenRecentMenu(isIdle: true);
@@ -3149,10 +3168,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (OperatingSystem.IsWindows())
             return;
 
-        if (Application.Current is { } app)
-            NativeDock.SetMenu(app, menu);
+        TryInstallNativeDockMenu(Application.Current, menu);
 
         NativeMenu.SetMenu(this, menu);
+    }
+
+    /// <summary>
+    /// The Dock menu is one application-wide native menu. AppKit's native menu proxy is bound to the
+    /// first managed <see cref="NativeMenu"/> it receives, and re-pointing it at a different instance
+    /// throws <c>ArgumentException: The menu being updated does not match</c> from inside Avalonia's
+    /// property-changed propagation. Every additional MainWindow (View > New Window, Dock reopen,
+    /// hidden capture windows) builds its own menu, so only the first one may become the Dock menu,
+    /// and a failure here must never escape the window constructor or the UI loop.
+    /// </summary>
+    public static bool TryInstallNativeDockMenu(Application? app, NativeMenu menu)
+    {
+        if (app is null || NativeDock.GetMenu(app) is not null)
+            return false;
+
+        try
+        {
+            NativeDock.SetMenu(app, menu);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     private void ConfigureWorkbookDropTarget()
@@ -3827,6 +3869,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         button.Click += (_, _) => action();
+        // WPF: Cursor Hand and the ribbon-style tooltip (bold title with the key tip, grey description).
+        button.Cursor = new Cursor(StandardCursorType.Hand);
+        ToolTip.SetTip(
+            button,
+            AvaloniaRibbonRenderer.CreateRibbonTooltipContent(
+                FormulaBarText(plan.AutomationNameResourceKey),
+                FormulaBarText(plan.HelpTextResourceKey),
+                plan.KeyTip));
         AutomationProperties.SetAutomationId(button, plan.AutomationId);
         AutomationProperties.SetName(button, FormulaBarText(plan.AutomationNameResourceKey));
         AutomationProperties.SetHelpText(button, FormulaBarText(plan.HelpTextResourceKey));
@@ -3845,6 +3895,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaExpandButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _formulaExpandButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _formulaExpandButton.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        _formulaExpandButton.Cursor = new Cursor(StandardCursorType.Hand);
         _formulaExpandButton.Click += (_, _) => ToggleFormulaBarExpansion();
         var plan = FormulaBarChromePlanner.BuildExpansion(_formulaBarExpanded);
         AutomationProperties.SetAutomationId(_formulaExpandButton, plan.Button.AutomationId);
@@ -3878,8 +3929,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBarHost.Height = plan.HostHeight;
         _formulaExpandButton.Content = CreateFormulaBarChevron(pointsUp: plan.ChevronPointsUp);
         ApplyFormulaBarExpandAutomation(plan.Button);
-        ToolTip.SetTip(_formulaExpandButton,
-            $"{FormulaBarText(plan.TooltipTitleResourceKey)}\n{FormulaBarText(plan.TooltipDescriptionResourceKey)}");
+        ToolTip.SetTip(
+            _formulaExpandButton,
+            AvaloniaRibbonRenderer.CreateRibbonTooltipContent(
+                FormulaBarText(plan.TooltipTitleResourceKey),
+                FormulaBarText(plan.TooltipDescriptionResourceKey),
+                plan.Button.KeyTip));
     }
 
     private void ApplyFormulaBarExpandAutomation(FormulaBarChromeElementPlan plan)
@@ -4095,6 +4150,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var statusBarBackground = AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.StatusSurfaceBrush) ?? StatusBarSurface;
         // Resolve height from token (FreeXStatusBarHeight = 28); falls back to captured literal.
         var statusBarHeight = AvaloniaThemeResourceResolver.ResolveOr(ThemeResources.StatusBarHeight, 28.0);
+        ApplyStatusBarWpfInteractionParity();
         // WPF StatusBarRoot has no explicit height: it is the 24px control row inside Padding 8,3
         // under a 1px FreeXBorderBrush top rule, 31px in all. A 28px bar squeezes the 24px view and
         // zoom rows into 22px, so the bar is never shorter than its WPF content.
@@ -4298,10 +4354,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             else
                 ZoomOut();
         };
-        AutomationProperties.SetName(button, isZoomIn ? "Zoom in" : "Zoom out");
-        AutomationProperties.SetHelpText(button, isZoomIn
-            ? "Increases the worksheet zoom."
-            : "Decreases the worksheet zoom.");
+        ConfigureStatusBarZoomButtonParity(button, isZoomIn);
         return button;
     }
 
@@ -4829,6 +4882,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
             content.Children.Add(label);
+            if (CreateInlineSheetTabRenameEditor(tab) is { } renameEditor)
+            {
+                // WPF f7abb1094f: the inline editor replaces the tab label while renaming.
+                label.IsVisible = false;
+                content.Children.Add(renameEditor);
+            }
 
             // WPF RenderInactiveSheetTab: a short #B8BEC4 rule (14px of the strip height, 0.68
             // opacity) closes every inactive tab except the one just left of the active tab, whose
@@ -4936,17 +4995,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private ContextMenu CreateSheetTabContextMenu(WorkbookSheetTab tab)
     {
         var isIdle = !_isOpening && !_isSaving;
-        var sheetTabIndex = FindSheetTabIndex(tab.Id);
         var menu = new ContextMenu
         {
-            ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle, sheetTabIndex).ToArray(),
+            ItemsSource = CreateSheetTabContextMenuItems(tab, isIdle).ToArray(),
         };
         // WPF chrome (12px rows, seeded command icons). No key letters: the WPF tab menu hides
         // them when it is opened with the mouse (HideSheetTabContextMenuInputGestures).
         return AvaloniaContextMenuChrome.Apply(menu);
     }
 
-    private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
+    private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle)
     {
         // R139-workbook-protection: mirrors MainWindow.SheetTabs.cs (WPF)'s BuildSheetTabContextMenuState
         // -- gray out structural tab commands under workbook structure protection (F2) and
@@ -4975,8 +5033,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // Item order and separators follow the WPF sheet-tab menu (SheetTabContextMenuPlanner order,
         // with the outline settings item spliced in before the select-all block exactly as
-        // MainWindow.SheetTabs.cs RebuildSheetTabContextMenu does). The Avalonia-only commands
-        // (duplicate, move left/right) follow in a trailing block.
+        // MainWindow.SheetTabs.cs RebuildSheetTabContextMenu does). The WPF menu has no duplicate or
+        // move left/right rows (those stay on the native Sheet menu), so none are added here.
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), () => AddNewSheet(tab.Id), Enabled(SheetTabContextMenuAction.InsertSheet));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
@@ -4993,14 +5051,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.SelectAllSheets), SelectAllVisibleSheets, Enabled(SheetTabContextMenuAction.SelectAllSheets));
         yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.UngroupSheets), UngroupSheets, Enabled(SheetTabContextMenuAction.UngroupSheets));
-        yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
-        yield return CreateSheetTabContextMenuItem(
-            tab,
-            UiText.Get("MainWindow_Header_MoveRight"),
-            MoveActiveSheetRight,
-            isIdle && sheetTabIndex >= 0 && sheetTabIndex < _session.SheetTabs.Count - 1);
     }
 
     private MenuItem CreateSheetTabContextMenuItem(WorkbookSheetTab tab, string header, Action action, bool isEnabled)
@@ -5290,6 +5340,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAffordanceOverlay = overlay;
         AddFormulaReferenceGripOverlay(overlay, viewport, showHeadings, zoomFactor);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
+        AddErrorSmartTagOverlay(overlay, viewport, showHeadings, zoomFactor);
+        AddPasteOptionsOverlay(overlay, viewport, showHeadings, zoomFactor);
+        AddInsertOptionsOverlay(overlay, viewport, showHeadings, zoomFactor);
+        AddAutofillOptionsOverlay(overlay, viewport, showHeadings, zoomFactor);
 
         var pageBreakOverlay = WorksheetViewModeUiStatePlanner.Build(_session.ViewMode).UsesPageBreakPreviewOverlay
             ? BuildPageBreakPreviewOverlay(viewport, showHeadings, zoomFactor)
@@ -7665,9 +7719,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     // While a plain mouse-drag selection was in progress, the Name Box showed a live dimension
     // readout instead of the range address (see SelectRangeFromAnchor); now that the drag has
-    // ended (release or an interrupted capture loss), revert it to the plain range address,
-    // matching Excel and the WPF host's CompleteDragSelectionStatusRefresh
-    // (R69-render-active-cell-selection-6-2).
+    // ended (release or an interrupted capture loss), restore Excel's active-cell Name Box text,
+    // matching the WPF host's CompleteDragSelectionStatusRefresh
+    // (R69-render-active-cell-selection-6-2, 56ac52f5c3).
     private void RevertNameBoxAfterCellSelectionDragEnd()
     {
         if (!_cellSelectionDragShowedDimensionText)
@@ -7675,7 +7729,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _cellSelectionDragShowedDimensionText = false;
         if (!_cellAddressBoxHasPendingEdit)
-            _cellAddressText.Text = FormatRangeReference(_session.SelectedRange);
+            _cellAddressText.Text = FormatSelectionNameBoxText();
     }
 
     private void DetachCellSelectionDragHandlers()
@@ -7821,10 +7875,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_autofillDragging)
         {
             ClearAutofillPreview();
-            CommitAutofillDrag(args.KeyModifiers.HasFlag(KeyModifiers.Control));
+            CommitAutofillDrag(IsCellDragCopyModifier(args.KeyModifiers));
         }
         else if (_selectionMoveDragging)
-            await CommitSelectionMoveDragAsync(args.KeyModifiers.HasFlag(KeyModifiers.Control));
+            await CommitSelectionMoveDragAsync(IsCellDragCopyModifier(args.KeyModifiers), args.KeyModifiers.HasFlag(KeyModifiers.Shift));
 
         DetachCellSelectionDragHandlers();
         _cellDragSelectionPointer?.Capture(null);
@@ -8515,7 +8569,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // not here — the user may press/release Ctrl mid-drag, exactly like the existing
         // autofill-drag Ctrl handling.
         if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
-            (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Control) ||
+            (args.KeyModifiers != KeyModifiers.None && !IsCellDragCopyModifier(args.KeyModifiers) && args.KeyModifiers != KeyModifiers.Shift) ||
             !IsPointerOnSelectionMoveBorder(args) ||
             _session.SelectedRanges.Count > 1)
         {
@@ -8531,6 +8585,45 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionMoveSourceRange = source;
         _selectionMoveStartCell = startCell;
         _selectionMovePreviewRange = source;
+        return true;
+    }
+
+    // Excel: double-clicking an edge of the selection's border jumps to the edge of the data in that
+    // direction (Ctrl+Arrow); Shift+double-click extends the selection there. Mirrors WPF's
+    // MainWindow.OnSelectionBorderDoubleClicked.
+    private bool TryJumpFromSelectionBorder(PointerEventArgs args)
+    {
+        if (!EnableFillHandleAndCellDragAndDrop ||
+            IsPointerOnAutofillHandle(args) ||
+            _activeSelectionOutlineVisual is not { } outline ||
+            outline.Bounds.Width <= 0 ||
+            outline.Bounds.Height <= 0)
+        {
+            return false;
+        }
+
+        var pos = args.GetPosition(outline);
+        var zoomFactor = GetActiveZoomFactor();
+        var edge = GridSelectionMovePlanner.HitBorderEdge(
+            new GridSelectionLayout(
+                new GridRect(0, 0, outline.Bounds.Width, outline.Bounds.Height),
+                _activeSelectionHasTopEdge,
+                _activeSelectionHasLeftEdge,
+                _activeSelectionHasBottomEdge,
+                _activeSelectionHasRightEdge),
+            _session.SelectedRanges.Count > 1 ? _session.SelectedRanges : null,
+            new GridPoint(pos.X, pos.Y),
+            handleSize: Math.Max(AutofillHandleSize, AutofillHandleSize * zoomFactor),
+            handleHitPadding: Math.Max(AutofillHandleHitPadding, AutofillHandleHitPadding * zoomFactor));
+        if (edge == GridSelectionBorderEdge.None)
+            return false;
+
+        var extend = args.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var current = extend && _selectionExtensionCursor is { } cursor ? cursor : _session.ActiveCell;
+        var target = GridSelectionMovePlanner.FindBorderJumpTarget(_session.ActiveSheet, current, edge);
+        MoveOrExtendActiveCellTo(target, extend);
+        ClearSelectedDrawingObject();
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         return true;
     }
 
@@ -8596,12 +8689,29 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShellForGridPreview();
     }
 
-    private async Task CommitSelectionMoveDragAsync(bool ctrlHeld = false)
+    private async Task CommitSelectionMoveDragAsync(bool ctrlHeld = false, bool shiftHeld = false)
     {
         if (_selectionMoveSourceRange is not { } source ||
             _selectionMovePreviewRange is not { } target ||
             source == target)
         {
+            return;
+        }
+
+        if (shiftHeld && !ctrlHeld)
+        {
+            // Excel's Shift+drag: insert the moved cells at the destination, shifting existing cells.
+            ClearSelectedDrawingObject();
+            var insertResult = _session.InsertMovedRangeAt(source, target);
+            var insertStatus = insertResult.Success
+                ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
+                : insertResult.ErrorMessage ?? UiText.Get("MainLoc_MoveCellsFailed");
+            RefreshShell(insertStatus);
+            if (insertResult.Success)
+            {
+                _session.SelectRange(target);
+                RefreshShell(insertStatus);
+            }
             return;
         }
 
@@ -9342,6 +9452,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             richRuns: richRuns,
             flowDirection: flowDirection,
             commentDisplay: commentDisplay,
+            errorIndicator: HasErrorIndicatorAt(address),
             fontFamily: fontFamily,
             suppressDefaultGridlines: CellSurfaceGridlinePlanner.HasVisibleFill(
                 style,
@@ -9461,7 +9572,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 // opens the worksheet cell context menu, built from the shared neutral plan.
                 if (!IsSelectedCell(address))
                     SelectCell(address);
-                OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost);
+                OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost, clickedCell: address);
                 args.Handled = true;
                 return;
             }
@@ -9473,6 +9584,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var referenceLength = _formulaRangeEditingSession.ReferenceSpan?.Length;
                 BeginCellSelectionDrag(args, border, address);
                 TrackFormulaPointDragAnchor(address, referenceStart, referenceLength);
+                args.Handled = true;
+                return;
+            }
+
+            // Excel: double-clicking the selection's border jumps to the edge of the data that way.
+            if (!IsBorderDrawModeActive && args.ClickCount >= 2 && TryJumpFromSelectionBorder(args))
+            {
                 args.Handled = true;
                 return;
             }
@@ -11757,9 +11875,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// uses), bridged to the shared <see cref="RibbonMenu"/> model, then rendered into an Avalonia
     /// <see cref="ContextMenu"/> by <see cref="AvaloniaContextMenuRenderer"/>.
     /// </summary>
-    private void OpenWorksheetCellContextMenu(Control anchor, bool showMiniToolbar = true)
+    private void OpenWorksheetCellContextMenu(Control anchor, bool showMiniToolbar = true, CellAddress? clickedCell = null)
     {
-        var menu = BuildWorksheetCellContextMenu();
+        var menu = BuildWorksheetCellContextMenuFor(clickedCell);
         // The mini toolbar floats above the pointer-opened cell menu and shares its lifetime; the
         // keyboard-opened menu and whole row/column selections go without it, as in the WPF host.
         if (showMiniToolbar && ShouldShowWorksheetContextMiniToolbar(_session.SelectedRange))
@@ -11776,10 +11894,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// state flags mirror the WPF host's worksheet context state so comments, notes, filters, pivots,
     /// and hyperlinks expose the same enabled commands on both shells.
     /// </summary>
-    private ContextMenu BuildWorksheetCellContextMenu()
+    private ContextMenu BuildWorksheetCellContextMenu() => BuildWorksheetCellContextMenuFor(null);
+
+    private ContextMenu BuildWorksheetCellContextMenuFor(CellAddress? clickedCell)
     {
         var sheet = _session.ActiveSheet;
-        var address = _session.ActiveCell;
+        // WPF plans the menu for the clicked cell (OnGridContextMenuRequested), which stays inside a
+        // preserved multi-cell selection; the keyboard path uses the active cell.
+        var address = clickedCell ?? _session.ActiveCell;
         var state = WorksheetContextMenuPlanner.ResolveWorksheetState(sheet, address) with
         {
             Clipboard = _clipboardMarqueeRange is null
@@ -11789,10 +11911,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     : WorksheetContextMenuClipboardState.Copied,
         };
         var commands = WorksheetContextMenuPlanner.BuildCommands(
-            WorksheetContextMenuTargetKind.Worksheet,
+            ResolveWorksheetContextMenuTargetKind(),
             state);
         var ribbonMenu = WorksheetContextMenuRibbonAdapter.ToRibbonMenu(commands);
-        return BuildWorksheetContextMenu(ribbonMenu, DispatchWorksheetContextMenuCommand);
+        return BuildWorksheetContextMenu(ribbonMenu, commandId => DispatchWorksheetContextMenuCommand(commandId, address));
+    }
+
+    // WPF GetWorksheetContextMenuTargetKind: a whole-row or whole-column selection (Ctrl/Shift+Space,
+    // header click, then Menu key or a right-click inside it) gets the row/column menu.
+    private WorksheetContextMenuTargetKind ResolveWorksheetContextMenuTargetKind()
+    {
+        var selected = _session.SelectedRange;
+        if (SelectionRangeService.IsWholeRowSelection(selected))
+            return WorksheetContextMenuTargetKind.RowSelection;
+        if (SelectionRangeService.IsWholeColumnSelection(selected))
+            return WorksheetContextMenuTargetKind.ColumnSelection;
+        return WorksheetContextMenuTargetKind.Worksheet;
     }
 
     /// <summary>
@@ -11820,7 +11954,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// drawing object) via <see cref="DispatchDrawingObjectContextMenuCommand"/>, so they do not appear
     /// in this worksheet cell menu.
     /// </summary>
-    private async void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId)
+    private void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId) =>
+        DispatchWorksheetContextMenuCommand(commandId, _session.ActiveCell);
+
+    private async void DispatchWorksheetContextMenuCommand(RibbonCommandId commandId, CellAddress targetAddress)
     {
         try
         {
@@ -11832,7 +11969,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             await WorkbookApplicationCommands.TryExecuteAsync(
                 route,
-                targetAddress: _session.ActiveCell);
+                targetAddress: targetAddress);
         }
         catch (Exception ex)
         {
@@ -11872,6 +12009,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
         CellCommentDisplay? commentDisplay = null,
+        bool errorIndicator = false,
         FontFamily? fontFamily = null,
         bool suppressDefaultGridlines = false,
         CellBorderNeighborEdges borderNeighbors = default,
@@ -12038,6 +12176,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var indicatorHost = new AvaloniaGrid { ClipToBounds = true };
             indicatorHost.Children.Add(cellContent);
             indicatorHost.Children.Add(CreateCommentIndicatorLayer(indicatorComment.Kind, zoomFactor));
+            cellContent = indicatorHost;
+        }
+
+        // Excel's green error indicator (background error checking), top-left; mirrors WPF's
+        // GridView.DrawErrorIndicator.
+        if (errorIndicator)
+        {
+            var indicatorHost = new AvaloniaGrid { ClipToBounds = true };
+            indicatorHost.Children.Add(cellContent);
+            indicatorHost.Children.Add(CreateErrorIndicatorLayer(zoomFactor));
             cellContent = indicatorHost;
         }
 
@@ -12239,6 +12387,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// cell, purple #7C379E for ThreadedComment or Mixed (Excel suppresses the note color once a
     /// thread coexists on the same cell).
     /// </summary>
+    private static Control CreateErrorIndicatorLayer(double zoomFactor)
+    {
+        const double size = 6;
+        var scaledSize = size * zoomFactor;
+        var geometry = new StreamGeometry();
+        using (var context = geometry.Open())
+        {
+            context.BeginFigure(new Point(0, 0), isFilled: true);
+            context.LineTo(new Point(scaledSize, 0));
+            context.LineTo(new Point(0, scaledSize));
+            context.EndFigure(isClosed: true);
+        }
+
+        return new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = geometry,
+            Fill = ErrorIndicatorFill,
+            Stretch = Stretch.None,
+            Width = scaledSize,
+            Height = scaledSize,
+            Margin = new Thickness(1, 1, 0, 0),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+    }
+
     private static Control CreateCommentIndicatorLayer(CellCommentDisplayKind kind, double zoomFactor)
     {
         const double size = 7;
@@ -13040,6 +13215,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void HandleSheetTabKeyDown(SheetId sheetId, Button button, KeyEventArgs args)
     {
+        // The in-place rename editor owns the keyboard while it is open.
+        if (IsInlineSheetTabRenameActiveFor(sheetId))
+            return;
+
         OpenSheetTabContextMenuFromKeyboard(sheetId, button, args);
         if (args.Handled)
             return;
@@ -14150,13 +14329,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = FindReplaceText(FindReplaceDialogText.Title),
-            // WPF FindReplaceDialog.xaml: Width/MaxHeight/MinWidth are *outer* sizes; the window opens
-            // compact (Options collapsed, no results grid) and SizeToContent="Height" follows its content.
-            // Avalonia sizes the client area, so take the Windows caption/frame off.
+            // WPF FindReplaceDialog.xaml (3d5eb06c4a): a compact, non-resizable Excel-style surface -
+            // Width=WpfCompactWidth, MaxHeight=WpfCompactMaximumHeight, SizeToContent=Height. The WPF values
+            // are *outer* sizes; Avalonia sizes the client area, so take the Windows caption/frame off.
             Width = FindReplaceDialogPlanner.WpfCompactWidth - WpfResizableFrameWidth,
-            MinWidth = FindReplaceDialogPlanner.MinWidth - WpfResizableFrameWidth,
             MaxHeight = FindReplaceDialogPlanner.WpfCompactMaximumHeight - WpfResizableFrameHeight,
             SizeToContent = SizeToContent.Height,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -14169,13 +14348,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FindReplaceText(text, arguments);
 
         // ── Find tab: "Find what" box ───────────────────────────────────────────
-        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
+        // WPF FindReplaceDialog opens with empty boxes (no seeding from the last search).
+        var findBox = new TextBox { Text = string.Empty, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(findBox, Fr(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
         ApplyDialogTextBoxChrome(findBox);
 
         // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
-        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
+        var replaceFindBox = new TextBox { Text = string.Empty, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(replaceFindBox, Fr(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
         ApplyDialogTextBoxChrome(replaceFindBox);
@@ -14212,7 +14392,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var findTabGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto"),
-            // WPF tab content grid: Margin="4,6,4,4".
             Margin = new Thickness(4, 6, 4, 4),
         };
         var findLabel = new TextBlock { Text = Fr(FindReplaceDialogText.FindWhat), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
@@ -14281,20 +14460,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceTabItem = new TabItem { Header = Fr(FindReplaceDialogText.Replace), Content = replaceTabPanel };
         AutomationProperties.SetAutomationId(replaceTabItem, "FindReplaceReplaceTab");
 
-        // Compact WPF tab host heights measured from the WPF capture (Find 63, Replace 93); the planner's
-        // 74/108 belong to the old expanded 720x430 layout.
-        const double compactFindTabHeight = 63;
-        const double compactReplaceTabHeight = 93;
-        var openTabHeight = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode)
-            ? compactReplaceTabHeight
-            : compactFindTabHeight;
+        // The compact WPF host auto-sizes its tab host (no fixed per-tab height any more).
         var tabs = new TabControl
         {
             Items = { findTabItem, replaceTabItem },
             SelectedIndex = FindReplaceDialogPlanner.ShowsReplaceCommands(replaceMode) ? 1 : 0,
-            Height = openTabHeight,
-            MinHeight = openTabHeight,
-            MaxHeight = openTabHeight,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
@@ -14309,11 +14479,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         StyleDiff? findFormat = null;
         StyleDiff? replacementFormat = null;
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
-        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, MinHeight = 18 };
+        var statusLabel = new TextBlock { Foreground = Brush(85, 85, 85), FontSize = 11, IsVisible = false };
+        statusLabel.PropertyChanged += (_, e) =>
+        {
+            // WPF SetStatusText: the label is collapsed until it has text.
+            if (e.Property == TextBlock.TextProperty)
+                statusLabel.IsVisible = !string.IsNullOrEmpty(statusLabel.Text);
+        };
         AutomationProperties.SetAutomationId(statusLabel, "FindReplaceStatusLabel");
-        // WPF UpdateFormatSurfaceVisibility: the Format / Choose From Cell buttons (and the Clear button
-        // of a set format) only exist while the Options expander is expanded.
-        var formatSurfaceExpanded = false;
+        // WPF UpdateFormatSurfaceVisibility: the Format / Choose Format From Cell / Clear buttons only
+        // exist while the Options expander is open (collapsed Ctrl+H is just the text fields).
+        var formatSurfaceVisible = false;
+        void RefreshFormatSurfaceVisibility()
+        {
+            foreach (var button in new[]
+                     {
+                         findFormatButton, replaceFindFormatButton, replaceWithFormatButton,
+                         findChooseFormatButton, replaceFindChooseFormatButton, replaceWithChooseFormatButton,
+                     })
+            {
+                button.IsVisible = formatSurfaceVisible;
+            }
+
+            findFormatClearButton.IsVisible = formatSurfaceVisible && findFormat is not null;
+            replaceFindFormatClearButton.IsVisible = formatSurfaceVisible && findFormat is not null;
+            replaceWithFormatClearButton.IsVisible = formatSurfaceVisible && replacementFormat is not null;
+        }
         void UpdateFormatButtons(
             StyleDiff? format,
             Button formatButton,
@@ -14325,21 +14516,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 clearButton,
                 Fr(FindReplaceDialogText.Format),
                 Fr(FindReplaceDialogText.FormatSetButton));
-            formatButton.IsVisible = formatSurfaceExpanded;
-            clearButton.IsVisible = formatSurfaceExpanded && format is not null;
+            RefreshFormatSurfaceVisibility();
         }
 
-        void RefreshFormatSurface()
-        {
-            UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
-            UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
-            UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
-            findChooseFormatButton.IsVisible = formatSurfaceExpanded;
-            replaceFindChooseFormatButton.IsVisible = formatSurfaceExpanded;
-            replaceWithChooseFormatButton.IsVisible = formatSurfaceExpanded;
-        }
-
-        RefreshFormatSurface();
+        UpdateFormatButtons(findFormat, findFormatButton, findFormatClearButton);
+        UpdateFormatButtons(findFormat, replaceFindFormatButton, replaceFindFormatClearButton);
+        UpdateFormatButtons(replacementFormat, replaceWithFormatButton, replaceWithFormatClearButton);
         findFormatButton.Click += (_, _) => RunGuarded(async () =>
         {
             var selectedFormat = await PickFindReplaceFormatAsync(findFormat);
@@ -14453,39 +14635,31 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         resultsPanel.Children.Add(resultsList);
         var resultsBorder = new Border
         {
+            IsVisible = false,
             BorderBrush = Brush(68, 114, 196),
             BorderThickness = new Thickness(1),
             Background = Brush(242, 242, 242),
             Child = resultsPanel,
-            // WPF FindResultsGrid is Collapsed until a Find All produces results.
-            IsVisible = false,
-        };
-        // WPF StatusLabel is Collapsed until a status text is set.
-        statusLabel.IsVisible = false;
-        statusLabel.PropertyChanged += (_, e) =>
-        {
-            if (e.Property == TextBlock.TextProperty)
-                statusLabel.IsVisible = !string.IsNullOrEmpty(statusLabel.Text);
         };
 
         // ── Buttons ─────────────────────────────────────────────────────────────
-        var findAllButton = new Button { Content = Fr(FindReplaceDialogText.FindAll), Width = FindReplaceDialogPlanner.FindAllButtonWidth, MinWidth = FindReplaceDialogPlanner.FindAllButtonWidth, Padding = new Thickness(4, 1) };
+        var findAllButton = new Button { Content = Fr(FindReplaceDialogText.FindAll), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
         ApplyDialogButtonChrome(findAllButton);
 
-        var findNextButton = new Button { Content = Fr(FindReplaceDialogText.FindNext), Width = FindReplaceDialogPlanner.FindNextButtonWidth, MinWidth = FindReplaceDialogPlanner.FindNextButtonWidth, Padding = new Thickness(4, 1) };
+        var findNextButton = new Button { Content = Fr(FindReplaceDialogText.FindNext), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
         ApplyDialogButtonChrome(findNextButton, isDefault: true);
 
-        var replaceButton = new Button { Content = Fr(FindReplaceDialogText.Replace), Width = FindReplaceDialogPlanner.ReplaceButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceButton = new Button { Content = Fr(FindReplaceDialogText.Replace), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
         ApplyDialogButtonChrome(replaceButton);
 
-        var replaceAllButton = new Button { Content = Fr(FindReplaceDialogText.ReplaceAll), Width = FindReplaceDialogPlanner.ReplaceAllButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceAllButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceAllButton = new Button { Content = Fr(FindReplaceDialogText.ReplaceAll), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
         ApplyDialogButtonChrome(replaceAllButton);
 
-        var closeButton = new Button { Content = Fr(FindReplaceDialogText.Close), Width = FindReplaceDialogPlanner.CloseButtonWidth, MinWidth = FindReplaceDialogPlanner.CloseButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
+        var closeButton = new Button { Content = Fr(FindReplaceDialogText.Close), Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
         ApplyDialogButtonChrome(closeButton);
 
@@ -14502,13 +14676,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             button.Background = Brush(221, 221, 221);
             button.BorderBrush = button.IsDefault ? Brush(0, 120, 215) : Brush(112, 112, 112);
         }
-        // WPF compact action row: five 90px buttons, 12px apart (Replace All, Replace, Find All, Find Next, Close).
-        foreach (var button in new[] { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton })
-        {
-            button.Width = FindReplaceDialogPlanner.WpfCompactActionButtonWidth;
-            button.MinWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth;
-            button.MaxWidth = FindReplaceDialogPlanner.WpfCompactActionButtonWidth;
-        }
         // WPF stretches the format buttons to their field row: a 26px button beside each search box.
         foreach (var button in new[] { findFormatButton, findFormatClearButton, findChooseFormatButton,
                                        replaceFindFormatButton, replaceFindFormatClearButton, replaceFindChooseFormatButton,
@@ -14521,10 +14688,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         foreach (var textBox in new[] { findBox, replaceFindBox, replaceWithBox })
         {
             textBox.CornerRadius = new CornerRadius(0);
-            // The search boxes share the 26px WPF field row with their format buttons (34px pitch).
-            textBox.Height = 26;
-            textBox.MinHeight = 26;
-            textBox.MaxHeight = 26;
+            // Collapsed (default) the search boxes keep the stock dialog field height; the 26px
+            // WPF field row only applies while the Options expander shows the format buttons.
         }
 
         // The selected TabItem is this renderer's rendering of the cross-app FindReplaceOpenMode;
@@ -14550,12 +14715,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         tabs.SelectionChanged += (_, _) =>
         {
-            var tabHeight = OnReplaceTab()
-                ? compactReplaceTabHeight
-                : compactFindTabHeight;
-            tabs.Height = tabHeight;
-            tabs.MinHeight = tabHeight;
-            tabs.MaxHeight = tabHeight;
             UpdateButtonVisibility();
             if (dialog.IsVisible)
                 Dispatcher.UIThread.Post(FocusSearchBox, DispatcherPriority.Input);
@@ -14571,6 +14730,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         void DoFindNext()
         {
             if (!TryCommitPendingFormulaEdit()) return;
+            // WPF HideFindAllResults: Find Next collapses the Find All list.
+            resultsList.ItemsSource = null;
+            resultsBorder.IsVisible = false;
             var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
             if (!r.Success)
             {
@@ -14652,7 +14814,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key == Key.Enter)
             {
                 e.Handled = true;
-                if (OnReplaceTab()) DoReplace(); else DoFindNext();
+                // WPF: Find Next is the default button on both tabs (Enter never replaces).
+                DoFindNext();
             }
             else if (e.Key == Key.Escape)
             {
@@ -14669,6 +14832,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Orientation = Orientation.Horizontal,
             Spacing = FindReplaceDialogPlanner.WpfCompactActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            // WPF compact order (Excel's): Replace All, Replace, Find All, Find Next, Close.
             Children = { replaceAllButton, replaceButton, findAllButton, findNextButton, closeButton },
         };
 
@@ -14747,11 +14911,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Grid.SetRow(optionsContent, 1);
         optionsExpander.Children.Add(optionsHeader);
         optionsExpander.Children.Add(optionsContent);
+        var collapsedFieldHeights = new Dictionary<TextBox, (double Height, double MinHeight, double MaxHeight)>();
         optionsHeader.Click += (_, _) =>
         {
             optionsContent.IsVisible = !optionsContent.IsVisible;
-            formatSurfaceExpanded = optionsContent.IsVisible;
-            RefreshFormatSurface();
+            formatSurfaceVisible = optionsContent.IsVisible;
+            RefreshFormatSurfaceVisibility();
+            foreach (var box in new[] { findBox, replaceFindBox, replaceWithBox })
+            {
+                // WPF: the 26px field row (textbox stretched beside the 26px buttons) only while they show.
+                if (!collapsedFieldHeights.ContainsKey(box))
+                    collapsedFieldHeights[box] = (box.Height, box.MinHeight, box.MaxHeight);
+                var (height, minHeight, maxHeight) = collapsedFieldHeights[box];
+                box.Height = formatSurfaceVisible ? 26 : height;
+                box.MinHeight = formatSurfaceVisible ? 26 : minHeight;
+                box.MaxHeight = formatSurfaceVisible ? 26 : maxHeight;
+            }
             optionsHeaderText.Text = optionsContent.IsVisible
                 ? Fr(FindReplaceDialogText.OptionsExpanded)
                 : Fr(FindReplaceDialogText.Options);
@@ -14767,20 +14942,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
         };
 
-        // WPF: <Grid Margin="12">. The planner's Avalonia right/bottom margins were measured against a
-        // client area as large as the WPF *outer* window, so they carry the Windows frame on top of
-        // that 12px margin; the window is now sized to the client area, so the frame share comes off.
-        // The current WPF FindReplaceDialog.xaml root is <Grid Margin="10"> (compact layout).
-        const double findReplaceCompactRootMargin = FindReplaceDialogPlanner.TabContentMargin;
+        // WPF compact host (3d5eb06c4a): <Grid Margin="10"> inside a size-to-content window, so the
+        // right/bottom frame share no longer applies.
         var root = new Grid
         {
-            Margin = new Thickness(findReplaceCompactRootMargin),
+            Margin = new Thickness(10),
             RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
         };
         ConfigureDialogTabCycle(dialog, root);
 
-        // WPF: TabControl Margin="0,0,0,6", Expander Margin="0,0,0,6", results grid Margin="0,0,0,8",
-        // status label Margin="0,0,0,4".
         tabs.Margin = new Thickness(0, 0, 0, 6);
         optionsExpander.Margin = new Thickness(0, 0, 0, 6);
         resultsBorder.MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight;
@@ -14789,7 +14959,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         resultsHeader.MinHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsHeader.MaxHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsPanel.Background = Brush(242, 242, 242);
-        statusLabel.MinHeight = FindReplaceDialogPlanner.StatusMinimumHeight;
         statusLabel.Margin = new Thickness(0, 0, 0, 4);
         buttonRow.Margin = new Thickness(0);
 
@@ -15332,8 +15501,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
         };
 
-        void AcceptReference()
+        void AcceptReference() => RunGuarded(AcceptReferenceAsync);
+
+        async Task AcceptReferenceAsync()
         {
+            // WPF GoToDialog.Accept validates before closing: an invalid reference shows
+            // "Reference is not valid." titled "Go To", keeps the dialog open and refocuses the box.
+            if (!_session.TryResolveReferenceRange(inputBox.Text ?? string.Empty, out _))
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    UiText.Get("GoTo_ReferenceIsNotValid"),
+                    UiText.Get("GoTo_GoTo"));
+                AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);
+                return;
+            }
+
             result = new GoToDialogResult(inputBox.Text ?? "", SpecialKind: null, SpecialOptions: null);
             dialog.Close();
         }
@@ -16037,18 +16220,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 ? choice.Value
                 : HyperlinkTargetKind.ExistingFileOrWebPage;
 
+        // Set once the panes below exist: show the selected link type's pane, and build its target.
+        Action<HyperlinkTargetKind>? showPane = null;
+        Func<string> composeTarget = () => targetBox.Text ?? string.Empty;
+
         void RefreshTargetField()
         {
             var linkType = CurrentLinkType();
             targetLabel.Text = GetHyperlinkTargetLabel(linkType);
             AutomationProperties.SetName(targetBox, targetLabel.Text);
             AutomationProperties.SetHelpText(targetBox, GetHyperlinkTargetHelpText(linkType));
+            showPane?.Invoke(linkType);
         }
 
         void Accept()
         {
             if (!HyperlinkDialogPlanner.TryPlan(
-                    targetBox.Text,
+                    composeTarget(),
                     displayBox.Text,
                     CurrentLinkType(),
                     screenTipBox.Text,
@@ -16185,14 +16373,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-        // WPF shows the workbook's folder in a read-only look-in box with a browse button in the
-        // trailing column and a list naming the current folder, the current file and a browse hint.
+        // Excel's panes, one per "Link to" choice (HyperlinkDialogPanePlanner); WPF HyperlinkDialog
+        // builds the same four. The pane's main field is always targetBox, relabelled per pane.
         var currentFilePath = _session.CurrentFilePath;
-        var currentFolder = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetDirectoryName(currentFilePath);
-        var currentFileName = string.IsNullOrWhiteSpace(currentFilePath) ? null : System.IO.Path.GetFileName(currentFilePath);
+        var currentFolder = HyperlinkDialogPanePlanner.DefaultFolder(currentFilePath);
+        var newDocumentFolder = currentFolder;
         var folderBox = new TextBox
         {
-            Text = string.IsNullOrWhiteSpace(currentFolder) ? UiText.Get("Hyperlink_CurrentFolderHeading") : currentFolder,
+            Text = currentFolder,
             IsReadOnly = true,
             IsTabStop = false,
             Focusable = false,
@@ -16221,31 +16409,55 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             ApplyHyperlinkBrowseResult(targetBox, file.TryGetLocalPath() ?? file.Name);
         });
+        var folderEntries = new ListBox();
+        AvaloniaCompactDialogChrome.ApplyListBox(folderEntries, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
+        AutomationProperties.SetName(folderEntries, UiText.Get("Hyperlink_CurrentFolder"));
+        AutomationProperties.SetAutomationId(folderEntries, "HyperlinkFolderEntries");
+        void ShowFolder(string folder)
+        {
+            currentFolder = folder;
+            folderBox.Text = folder;
+            folderEntries.ItemsSource = HyperlinkDialogPanePlanner.ListFolder(folder)
+                .Select(entry => new ListBoxItem { Content = HyperlinkDialogPanePlanner.EntryText(entry), Tag = entry })
+                .ToArray();
+        }
+
+        folderEntries.SelectionChanged += (_, _) =>
+        {
+            if ((folderEntries.SelectedItem as ListBoxItem)?.Tag is HyperlinkFolderEntry { IsFolder: false } file)
+                targetBox.Text = file.FullPath;
+        };
+        folderEntries.DoubleTapped += (_, _) =>
+        {
+            if ((folderEntries.SelectedItem as ListBoxItem)?.Tag is HyperlinkFolderEntry { IsFolder: true } folder)
+                ShowFolder(folder.FullPath);
+        };
+        var upButton = new Button { Content = HyperlinkDialogPanePlanner.UpOneFolderGlyph, Width = 26, Margin = new Thickness(4, 0, 0, 0) };
+        ApplyDialogButtonChrome(upButton);
+        ToolTip.SetTip(upButton, HyperlinkDialogPanePlanner.UpOneFolderToolTip);
+        AutomationProperties.SetAutomationId(upButton, "HyperlinkUpFolderButton");
+        upButton.Click += (_, _) =>
+        {
+            if (System.IO.Directory.GetParent(currentFolder) is { } parent)
+                ShowFolder(parent.FullName);
+        };
+        var folderRow = new DockPanel();
+        DockPanel.SetDock(upButton, Dock.Right);
+        folderRow.Children.Add(upButton);
+        folderRow.Children.Add(folderBox);
         var lookInRow = CreateHyperlinkFieldRow(
             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_LookIn")) },
-            folderBox,
+            folderRow,
             browseButton,
             new Thickness(0, 0, 0, 4));
 
-        // WPF HyperlinkDialog.CurrentFolderContext: literal "Current Folder" heading, the current
-        // file name when there is one, then the browse hint ("another file" when a file is listed).
-        // The English text is WPF's literal; Avalonia keeps it behind resource keys so it stays localizable.
-        var currentFolderItems = new List<string> { UiText.Get("Hyperlink_CurrentFolderHeading") };
-        if (!string.IsNullOrWhiteSpace(currentFileName))
-        {
-            currentFolderItems.Add(currentFileName);
-            currentFolderItems.Add(UiText.Get("Hyperlink_UseBrowseToChooseAnotherFile"));
-        }
-        else
-        {
-            currentFolderItems.Add(UiText.Get("Hyperlink_UseBrowseToChooseAFile"));
-        }
+        // Excel's in-pane switcher: Current Folder / Recent Files.
         var currentFolderList = new ListBox
         {
-            ItemsSource = currentFolderItems,
+            ItemsSource = new[] { UiText.Get("Hyperlink_CurrentFolder"), HyperlinkDialogPanePlanner.RecentFilesLabel },
             SelectedIndex = 0,
-            IsTabStop = false,
-            Focusable = false,
+            Width = 92,
+            Margin = new Thickness(0, 0, 6, 0),
         };
         AvaloniaCompactDialogChrome.ApplyListBox(
             currentFolderList,
@@ -16255,14 +16467,167 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         AutomationProperties.SetName(currentFolderList, UiText.Get("Hyperlink_CurrentFolderLinkLocation"));
         AutomationProperties.SetAutomationId(currentFolderList, "HyperlinkCurrentFolderContext");
-
-        var detailArea = new AvaloniaGrid
+        currentFolderList.SelectionChanged += (_, _) =>
         {
-            RowDefinitions = new RowDefinitions("Auto,*"),
+            if (currentFolderList.SelectedIndex != 1)
+            {
+                ShowFolder(currentFolder);
+                return;
+            }
+
+            folderEntries.ItemsSource = RecentFilesStore.Load().Snapshot()
+                .Select(entry => entry.Path)
+                .Where(System.IO.File.Exists)
+                .Select(path => new ListBoxItem
+                {
+                    Content = HyperlinkDialogPanePlanner.FileEntryPrefix + path,
+                    Tag = new HyperlinkFolderEntry(System.IO.Path.GetFileName(path), path, IsFolder: false),
+                })
+                .ToArray();
         };
-        detailArea.Children.Add(lookInRow);
-        AvaloniaGrid.SetRow(currentFolderList, 1);
-        detailArea.Children.Add(currentFolderList);
+        ShowFolder(currentFolder);
+        var existingList = new DockPanel();
+        DockPanel.SetDock(currentFolderList, Dock.Left);
+        existingList.Children.Add(currentFolderList);
+        existingList.Children.Add(folderEntries);
+        var existingPane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,*") };
+        existingPane.Children.Add(lookInRow);
+        AvaloniaGrid.SetRow(existingList, 1);
+        existingPane.Children.Add(existingList);
+
+        // Place in This Document: worksheets then defined names; targetBox holds the cell reference.
+        var documentPlaces = new ListBox
+        {
+            ItemsSource = HyperlinkDialogPanePlanner.DocumentPlaces(_session.Workbook)
+                .Select(place => new ListBoxItem { Content = place.IsDefinedName ? "  " + place.Name : place.Name, Tag = place })
+                .ToArray(),
+        };
+        AvaloniaCompactDialogChrome.ApplyListBox(documentPlaces, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
+        AutomationProperties.SetName(documentPlaces, UiText.Get("Hyperlink_SelectPlaceInDocument"));
+        AutomationProperties.SetAutomationId(documentPlaces, "HyperlinkDocumentPlaces");
+        HyperlinkDocumentPlace? SelectedPlace() => (documentPlaces.SelectedItem as ListBoxItem)?.Tag as HyperlinkDocumentPlace;
+        documentPlaces.SelectionChanged += (_, _) =>
+        {
+            if (SelectedPlace() is { IsDefinedName: true })
+                targetBox.Text = string.Empty;
+            else if (string.IsNullOrWhiteSpace(targetBox.Text) && CurrentLinkType() == HyperlinkTargetKind.PlaceInThisDocument)
+                targetBox.Text = HyperlinkDialogPanePlanner.DefaultCellReference;
+        };
+        var placePane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,*") };
+        placePane.Children.Add(new TextBlock { Text = HyperlinkDialogPanePlanner.SelectPlaceCaption, Margin = new Thickness(0, 0, 0, 4) });
+        AvaloniaGrid.SetRow(documentPlaces, 1);
+        placePane.Children.Add(documentPlaces);
+
+        // Create New Document: targetBox holds the name; the full path and Change... sit here.
+        var fullPathText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        AutomationProperties.SetAutomationId(fullPathText, "HyperlinkNewDocumentFullPath");
+        void UpdateFullPath() =>
+            fullPathText.Text = HyperlinkDialogPanePlanner.ComposeNewDocumentPath(newDocumentFolder, targetBox.Text) is { Length: > 0 } path
+                ? path
+                : newDocumentFolder;
+        targetBox.TextChanged += (_, _) => UpdateFullPath();
+        var changePathButton = new Button { Content = HyperlinkDialogPanePlanner.ChangePathButton };
+        ApplyDialogButtonChrome(changePathButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
+        AutomationProperties.SetAutomationId(changePathButton, "HyperlinkChangePathButton");
+        changePathButton.Click += (_, _) => RunGuarded(async () =>
+        {
+            var folders = await dialog.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = UiText.Get("Hyperlink_LinkTypeCreateNewDocument"),
+                AllowMultiple = false,
+            });
+            if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } folder)
+            {
+                newDocumentFolder = folder;
+                UpdateFullPath();
+            }
+        });
+        var newDocumentPane = CreateHyperlinkFieldRow(new TextBlock { Text = HyperlinkDialogPanePlanner.FullPathLabel }, fullPathText, changePathButton, new Thickness(0));
+        newDocumentPane.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+
+        // E-mail Address: targetBox holds the address; subject and recently used addresses here.
+        var subjectBox = new TextBox { Height = HyperlinkDialogPlanner.FieldHeight, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
+        ApplyDialogTextBoxChrome(subjectBox);
+        AutomationProperties.SetName(subjectBox, HyperlinkDialogPanePlanner.SubjectAutomationName);
+        AutomationProperties.SetAutomationId(subjectBox, "HyperlinkEmailSubjectTextBox");
+        var recentEmails = new ListBox
+        {
+            ItemsSource = _session.Workbook.Sheets
+                .SelectMany(sheet => sheet.Hyperlinks.Values)
+                .Where(target => target.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(10)
+                .ToArray(),
+        };
+        AvaloniaCompactDialogChrome.ApplyListBox(recentEmails, AvaloniaCompactDialogChrome.WindowsStyle with { ListBoxItemPadding = new Thickness(4, 0) });
+        AutomationProperties.SetName(recentEmails, HyperlinkDialogPanePlanner.RecentEmailAutomationName);
+        AutomationProperties.SetAutomationId(recentEmails, "HyperlinkRecentEmailAddresses");
+        recentEmails.SelectionChanged += (_, _) =>
+        {
+            if (recentEmails.SelectedItem is string recent)
+            {
+                var (address, subject) = HyperlinkDialogPanePlanner.SplitEmailTarget(recent);
+                targetBox.Text = address;
+                subjectBox.Text = subject;
+            }
+        };
+        var emailPane = new AvaloniaGrid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
+        emailPane.Children.Add(CreateHyperlinkFieldRow(new TextBlock { Text = HyperlinkDialogPanePlanner.SubjectLabel }, subjectBox, null, new Thickness(0, 0, 0, 8)));
+        var recentCaption = new TextBlock { Text = HyperlinkDialogPanePlanner.RecentEmailCaption, Margin = new Thickness(0, 0, 0, 4) };
+        AvaloniaGrid.SetRow(recentCaption, 1);
+        emailPane.Children.Add(recentCaption);
+        AvaloniaGrid.SetRow(recentEmails, 2);
+        emailPane.Children.Add(recentEmails);
+
+        // Open an existing link on its own pane, split back into that pane's fields.
+        switch (prefill.LinkType)
+        {
+            case HyperlinkTargetKind.PlaceInThisDocument:
+                var (placeName, reference) = HyperlinkDialogPanePlanner.SplitDocumentLocation(prefill.Target);
+                documentPlaces.SelectedItem = documentPlaces.Items.OfType<ListBoxItem>()
+                    .FirstOrDefault(item => item.Tag is HyperlinkDocumentPlace place &&
+                        string.Equals(place.Name, placeName, StringComparison.OrdinalIgnoreCase));
+                targetBox.Text = SelectedPlace() is { IsDefinedName: true } ? string.Empty : reference;
+                break;
+            case HyperlinkTargetKind.EmailAddress:
+                var (emailAddress, emailSubject) = HyperlinkDialogPanePlanner.SplitEmailTarget(prefill.Target);
+                targetBox.Text = emailAddress;
+                subjectBox.Text = emailSubject;
+                break;
+            case HyperlinkTargetKind.CreateNewDocument when System.IO.Path.IsPathRooted(prefill.Target):
+                newDocumentFolder = System.IO.Path.GetDirectoryName(prefill.Target) ?? newDocumentFolder;
+                targetBox.Text = System.IO.Path.GetFileName(prefill.Target);
+                break;
+        }
+
+        if (documentPlaces.SelectedItem is null && documentPlaces.ItemCount > 0)
+            documentPlaces.SelectedIndex = 0;
+        UpdateFullPath();
+
+        var detailArea = new AvaloniaGrid();
+        detailArea.Children.Add(existingPane);
+        detailArea.Children.Add(placePane);
+        detailArea.Children.Add(newDocumentPane);
+        detailArea.Children.Add(emailPane);
+        showPane = linkType =>
+        {
+            existingPane.IsVisible = linkType == HyperlinkTargetKind.ExistingFileOrWebPage;
+            placePane.IsVisible = linkType == HyperlinkTargetKind.PlaceInThisDocument;
+            newDocumentPane.IsVisible = linkType == HyperlinkTargetKind.CreateNewDocument;
+            emailPane.IsVisible = linkType == HyperlinkTargetKind.EmailAddress;
+            bookmarkButton.IsVisible = linkType == HyperlinkTargetKind.ExistingFileOrWebPage;
+            UpdateFullPath();
+        };
+        composeTarget = () => CurrentLinkType() switch
+        {
+            HyperlinkTargetKind.PlaceInThisDocument => SelectedPlace() is { } place
+                ? HyperlinkDialogPanePlanner.ComposeDocumentLocation(place, targetBox.Text)
+                : targetBox.Text ?? string.Empty,
+            HyperlinkTargetKind.CreateNewDocument => HyperlinkDialogPanePlanner.ComposeNewDocumentPath(newDocumentFolder, targetBox.Text),
+            HyperlinkTargetKind.EmailAddress => HyperlinkDialogPanePlanner.ComposeEmailTarget(targetBox.Text, subjectBox.Text),
+            _ => targetBox.Text ?? string.Empty,
+        };
+        RefreshTargetField();
 
         var bodyGrid = new AvaloniaGrid
         {
@@ -16406,13 +16771,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result;
     }
 
+    // Excel's "Link to" order (HyperlinkDialogPanePlanner.LinkTypeOrder).
     private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
-    [
-        new(UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"), HyperlinkTargetKind.ExistingFileOrWebPage),
-        new(UiText.Get("Hyperlink_LinkTypeCreateNewDocument"), HyperlinkTargetKind.CreateNewDocument),
-        new(UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"), HyperlinkTargetKind.PlaceInThisDocument),
-        new(UiText.Get("Hyperlink_LinkTypeEmailAddress"), HyperlinkTargetKind.EmailAddress),
-    ];
+        HyperlinkDialogPanePlanner.LinkTypeOrder
+            .Select(kind => new SortDialogComboItem<HyperlinkTargetKind>(HyperlinkLinkTypeLabel(kind), kind))
+            .ToArray();
+
+    private static string HyperlinkLinkTypeLabel(HyperlinkTargetKind kind) => kind switch
+    {
+        HyperlinkTargetKind.PlaceInThisDocument => UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"),
+        HyperlinkTargetKind.CreateNewDocument => UiText.Get("Hyperlink_LinkTypeCreateNewDocument"),
+        HyperlinkTargetKind.EmailAddress => UiText.Get("Hyperlink_LinkTypeEmailAddress"),
+        _ => UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"),
+    };
 
     private static string StripDisplayMnemonic(string text) =>
         (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
@@ -16877,6 +17248,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(list, automationId);
         return list;
     }
+
+    // WPF FormatCellsDialog._lastSelectedTab: process-wide, updated on every tab change.
+    private static int s_formatCellsLastSelectedTabIndex;
+
+    internal static int ResolveFormatCellsEffectiveInitialTabIndex(int initialTabIndex) =>
+        initialTabIndex == 0 ? s_formatCellsLastSelectedTabIndex : initialTabIndex;
 
     private async Task ShowFormatCellsDialogAsync(int initialTabIndex = 0)
     {
@@ -17350,8 +17727,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
         ApplyDialogTextBoxChrome(textRotationBox);
 
-        // WPF DlgTextRotationSlider: -90..90 in 15-degree ticks, mirrored with the rotation text box
-        // (255 = vertical text parks the slider at 0).
+        // WPF FormatCellsDialog.xaml (82c59df057): a -90..90 Slider under the rotation box and a
+        // "Text direction" ComboBox (CellReadingOrder names) below it, kept in sync both ways.
         var textRotationSlider = new Slider
         {
             Minimum = -90,
@@ -17359,18 +17736,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TickFrequency = 15,
             IsSnapToTickEnabled = false,
             Value = currentTextRotation == 255 ? 0 : Math.Clamp(currentTextRotation, -90, 90),
-            Height = 20,
-            MinHeight = 0,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            Height = 22,
+            MinHeight = 22,
         };
-        AutomationProperties.SetName(textRotationSlider, UiText.Get("MainWindow_Content_Orientation"));
+        AutomationProperties.SetName(textRotationSlider, UiText.Get("FormatCells_TextOrientation"));
         AutomationProperties.SetAutomationId(textRotationSlider, "FormatCellsTextRotationSlider");
         var syncingTextRotation = false;
         textRotationSlider.PropertyChanged += (_, e) =>
         {
             if (e.Property != RangeBase.ValueProperty || syncingTextRotation)
                 return;
-
             syncingTextRotation = true;
             textRotationBox.Text = ((int)Math.Round(textRotationSlider.Value)).ToString(CultureInfo.InvariantCulture);
             syncingTextRotation = false;
@@ -17380,28 +17755,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (syncingTextRotation
                 || !int.TryParse(textRotationBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation)
                 || rotation is < -90 or > 90)
-            {
                 return;
-            }
-
             syncingTextRotation = true;
             textRotationSlider.Value = rotation;
             syncingTextRotation = false;
         };
-
-        // WPF DlgReadingOrderBox: "Text direction" lists the CellReadingOrder names.
-        var currentReadingOrder = _session.SelectedRangeStartStyle.ReadingOrder;
+        var currentReadingOrder = currentFillStyle.ReadingOrder;
         var readingOrderBox = new ComboBox
         {
-            ItemsSource = Enum.GetNames<CellReadingOrder>(),
+            ItemsSource = Enum.GetNames(typeof(CellReadingOrder)),
             SelectedItem = currentReadingOrder.ToString(),
             MinWidth = 180,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
+        AutomationProperties.SetName(readingOrderBox, UiText.Get("FormatCells_TextDirection"));
         AutomationProperties.SetAutomationId(readingOrderBox, "FormatCellsReadingOrderBox");
         ApplyFormatCellsComboBoxChrome(readingOrderBox);
 
-        var boldBox =CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
+        var boldBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Bold"), "FormatCellsBoldBox", _session.IsSelectedRangeStartBold);
         var italicBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Italic"), "FormatCellsItalicBox", _session.IsSelectedRangeStartItalic);
         var underlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_Underline"), "FormatCellsUnderlineBox", currentUnderline);
         var doubleUnderlineBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_DoubleUnderline"), "FormatCellsDoubleUnderlineBox", currentDoubleUnderline);
@@ -18262,6 +18633,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 MergeCells: mergeCellsBox.IsChecked == true,
                 IndentLevelText: indentLevelBox.Text,
                 TextRotationText: textRotationBox.Text,
+                ReadingOrder: Enum.TryParse<CellReadingOrder>(readingOrderBox.SelectedItem as string, out var selectedReadingOrder)
+                    && Enum.IsDefined(selectedReadingOrder)
+                        ? selectedReadingOrder
+                        : currentReadingOrder,
                 UseNormalFont: normalFont,
                 Bold: boldBox.IsChecked == true,
                 Italic: italicBox.IsChecked == true,
@@ -18286,10 +18661,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 BorderTop: borderTopSide,
                 BorderRight: borderRightSide,
                 BorderBottom: borderBottomSide,
-                BorderLeft: borderLeftSide,
-                ReadingOrder: Enum.TryParse<CellReadingOrder>(readingOrderBox.SelectedItem as string, out var selectedReadingOrder)
-                    ? selectedReadingOrder
-                    : null);
+                BorderLeft: borderLeftSide);
             if (!FormatCellsDialogPlanner.TryCreateCompactPlan(plannerInput, out var plan, out var validation))
             {
                 Control? target = validation!.Target switch
@@ -18452,7 +18824,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
                 textRotationSlider,
                 CreateFormatCellsField(
-                    "Text direction",
+                    UiText.Get("FormatCells_TextDirection"),
                     readingOrderBox,
                     new Thickness(
                         0,
@@ -18921,7 +19293,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         var tabStrip = new TabControl
         {
-            SelectedIndex = Math.Clamp(initialTabIndex, 0, 5),
+            // WPF FormatCellsDialog: a Number (default) request reopens on the tab last selected in any
+            // Format Cells dialog this session; explicit non-Number requests (Alignment launcher,
+            // Ctrl+Shift+F Font, Find/Replace format) always open the requested tab.
+            SelectedIndex = Math.Clamp(ResolveFormatCellsEffectiveInitialTabIndex(initialTabIndex), 0, 5),
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 8),
             ItemsSource = new[]
@@ -18961,7 +19336,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             dialog.ResizeClient(targetSize);
         }
 
-        tabStrip.SelectionChanged += (_, _) => ApplyFormatCellsDialogFrameForSelectedTab();
+        tabStrip.SelectionChanged += (_, e) =>
+        {
+            // Only the TabControl's own selection (not bubbled child-list selections) is remembered.
+            if (ReferenceEquals(e.Source, tabStrip) && tabStrip.SelectedIndex is >= 0 and <= 5)
+                s_formatCellsLastSelectedTabIndex = tabStrip.SelectedIndex;
+            ApplyFormatCellsDialogFrameForSelectedTab();
+        };
+        // WPF records the initial selection too (its Loaded handler sets SelectedIndex).
+        s_formatCellsLastSelectedTabIndex = tabStrip.SelectedIndex;
         ApplyFormatCellsDialogFrameForSelectedTab();
 
         var buttonRow = new StackPanel
@@ -19169,12 +19552,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         new("Right", CellHAlign.Right),
         new("Justify", CellHAlign.Justify),
         new("Distributed", CellHAlign.Distributed),
+        // WPF lists every CellHAlign enum name (Fill is last); without it a Fill cell was rewritten to General.
+        new("Fill", CellHAlign.Fill),
     ];
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellVAlign>> CreateFormatCellsVerticalAlignmentChoices() =>
     [
         new("Top", CellVAlign.Top),
-        new("Middle", CellVAlign.Center),
+        // WPF lists the CellVAlign enum names, so the middle entry reads "Center".
+        new("Center", CellVAlign.Center),
         new("Bottom", CellVAlign.Bottom),
         new("Justify", CellVAlign.Justify),
         new("Distributed", CellVAlign.Distributed),
@@ -21016,6 +21402,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
             selectedLevelIndex = Math.Clamp(selectedLevelIndex, 0, Math.Max(0, levels.Count - 1));
+            // WPF SortDialog.UpdateColumnChoices: "My data has headers" is unavailable for left-to-right sorts.
+            headersCheck.IsEnabled = !optionsState.LeftToRight;
             levelsGrid.Children.Clear();
             levelsGrid.RowDefinitions.Clear();
             levelsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -21631,6 +22019,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(okButton, "SortOptionsOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "SortOptionsCancelButton");
 
+        // WPF SortOptionsDialog.FocusInitialKeyboardTarget: the Case sensitive check box.
+        dialog.Opened += (_, _) => caseSensitiveBox.Focus();
         okButton.Click += (_, _) =>
         {
             // The editor text is authoritative: it names a catalog choice (by label or value) or
@@ -24739,6 +25129,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = 560 - WpfNoResizeClientFrameHeight,
             MinWidth = 480,
             MinHeight = 460,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -25904,7 +26295,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.ActiveSheet,
                 _session.SelectedRange)
             .Range;
-        _session.SelectRange(range);
+        // WPF 4b00dec437: the expanded selection keeps the active cell when it is still inside it.
+        _session.SelectRanges(range, [range], _session.ActiveCell);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
@@ -25925,7 +26317,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _session.ActiveSheet,
                 _session.SelectedRange)
             .Range;
-        _session.SelectRange(range);
+        // WPF 4b00dec437: the expanded selection keeps the active cell when it is still inside it.
+        _session.SelectRanges(range, [range], _session.ActiveCell);
         RefreshShell(UiText.Format("MainLoc_SelectedX", FormatRangeReference(range)));
     }
 
@@ -28722,9 +29115,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.Y);
         var horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.X);
 
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        if (IsWheelZoomModifier(e.KeyModifiers))
         {
-            // Ctrl+Scroll = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
+            // Ctrl+Scroll (Cmd+Scroll on macOS) = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
             var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
             if (wheelScroll != 0)
                 ApplyZoomPercent(_session.ZoomPercent + wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
@@ -30166,6 +30559,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
         UpdateSaveButton();
+        // WPF reports these failures in an owned modal message box titled with the dialog; the
+        // status bar is hidden behind an open modal dialog, so surface it there as well.
+        ShowWarningOverOpenModalDialog(message);
     }
 
     private void ShowHelpIssue(string message)
@@ -30594,8 +30990,38 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // notation instead of exposing that implementation geometry.
     // Excel's Name Box shows the active cell for an unnamed selection, including a whole row
     // ("A5" after clicking row header 5, not "5:5").
-    private string FormatSelectionNameBoxText() =>
-        FormatCellReference(_session.ActiveCell);
+    // A selection that is exactly a defined name shows that name (sheet-scoped names on the active
+    // sheet win over workbook-global ones, then the alphabetically first), as WPF's
+    // FormatNameBoxSelectionText does.
+    private string FormatSelectionNameBoxText()
+    {
+        var range = _session.SelectedRange;
+        var workbook = _session.Workbook;
+        string? best = null;
+        foreach (var (key, namedRange) in workbook.ScopedNamedRanges)
+        {
+            if (key.Sheet.Equals(_session.ActiveSheet.Id) &&
+                namedRange.Equals(range) &&
+                (best is null || string.Compare(key.Name, best, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                best = key.Name;
+            }
+        }
+
+        if (best is not null)
+            return best;
+
+        foreach (var (name, namedRange) in workbook.NamedRanges)
+        {
+            if (namedRange.Equals(range) &&
+                (best is null || string.Compare(name, best, StringComparison.OrdinalIgnoreCase) < 0))
+            {
+                best = name;
+            }
+        }
+
+        return best ?? FormatCellReference(_session.ActiveCell);
+    }
 
     private static string FormatRangeReference(GridRange range) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(

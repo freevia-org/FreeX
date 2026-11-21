@@ -408,7 +408,8 @@ internal sealed class PagedLayoutSession
         IReadOnlyDictionary<int, PreservedNumberingMarkerPlan> preserved,
         IReadOnlyDictionary<int, int> footnoteSequence,
         IReadOnlyDictionary<int, int> endnoteSequence,
-        bool signTableIndex)
+        bool signTableIndex,
+        double[] leadingHeights)
     {
         var builder = new StringBuilder();
         for (var index = start; index < end; index++)
@@ -421,7 +422,7 @@ internal sealed class PagedLayoutSession
                         return null;
                     break;
                 case ModelTable table:
-                    builder.Append("T:").Append(DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(model, index).ToString("R"));
+                    builder.Append("T:").Append(leadingHeights[index].ToString("R"));
                     if (signTableIndex)
                         builder.Append('@').Append(index);
                     foreach (var row in table.Rows)
@@ -496,6 +497,8 @@ internal sealed class PagedLayoutSession
     {
         var blocks = model.Blocks;
         var plans = new List<UnitPlan>();
+        // One pass for every table's leading-content estimate (it was one pass over the prefix per table).
+        var leadingHeights = DocumentViewLayoutPlanner.EstimateLeadingContentHeightsDip(model);
         var inlineFragments = DocumentView.HasRendererInlineFlowBreakFragments(model);
         var sequence = new DocumentListMarkerSequencePlanner(
             model.MultiLevelList.NumberFormats, model.MultiLevelList.LevelTexts);
@@ -580,7 +583,7 @@ internal sealed class PagedLayoutSession
             }
 
             plan.Signature = UnitSignatureContext(
-                model, plan.Start, plan.End, listPlans, preserved, footnoteSequence, endnoteSequence, signTableIndex);
+                model, plan.Start, plan.End, listPlans, preserved, footnoteSequence, endnoteSequence, signTableIndex, leadingHeights);
             if (wrapSignatures is not null)
             {
                 var wraps = new StringBuilder();
@@ -1248,6 +1251,7 @@ internal sealed class PagedLayoutSession
             document, segment.Page, runningHeader, runningFooter);
         top += topInsetDip;
         bottom += bottomInsetDip;
+        PaginationEngine.ApplyFirstPageHeaderInset(RenderedBlock(segment.Start), document, segment.Page, topInsetDip);
         var pageSize = new Size(pageWidth, pageHeight);
         var padding = new Thickness(left, top, right, bottom);
         var fontFamily = new System.Windows.Media.FontFamily(document.DefaultRun.FontFamily ?? "Calibri");
@@ -1768,10 +1772,19 @@ internal sealed class PagedLayoutSession
         const double footnoteFrameClearanceDip = 0.0;
         const double minimumSplitBandDip = 36.0;
         var (contentWidthDip, _) = PageLayout.ContentAreaDip(segment.Page);
-        var work = newFlow(0);
+        FlowDocument NewPageFlow(double reserveDip)
+        {
+            var flow = newFlow(reserveDip);
+            flow.PagePadding = new Thickness(
+                flow.PagePadding.Left, flow.PagePadding.Top, flow.PagePadding.Right,
+                flow.PagePadding.Bottom - PaginationEngine.LastLineLeadingAllowanceDip);
+            return flow;
+        }
+
+        var work = NewPageFlow(0);
         var padding = work.PagePadding;
         var pageSize = new Size(work.PageWidth, work.PageHeight);
-        var bodyHeightDip = Math.Max(0, pageSize.Height - padding.Top - padding.Bottom);
+        var bodyHeightDip = Math.Max(0, pageSize.Height - padding.Top - padding.Bottom + PaginationEngine.LastLineLeadingAllowanceDip);
         var workPaginator = ((IDocumentPaginatorSource)work).DocumentPaginator;
         workPaginator.PageSize = pageSize;
         var dynamicWork = (DynamicDocumentPaginator)workPaginator;
@@ -1781,6 +1794,9 @@ internal sealed class PagedLayoutSession
         var carriedNoteDip = 0.0;
         var carryChain = new List<(IReadOnlyList<int> FootnoteIds, double BandHeightDip, int PageNumber)>();
         var localPage = 0;
+        var skipFragmentsOfUnit = -1;
+        var skipFragments = 0;
+        var fragmentIndex = new Dictionary<WpfBlock, int>();
 
         // Restart from the previous run where it is safe: the pass holding the first changed block, one
         // pass back, then back to a pass that starts on a whole block.
@@ -1798,7 +1814,9 @@ internal sealed class PagedLayoutSession
             var restartIndex = -1;
             for (var k = holding - 1; k >= 1; k--)
             {
-                if (!previous.Passes[k].StartsWithRemainder)
+                // A pass that starts on a forced inline-break fragment depends on nothing before it either
+                // (its carry is in the record), so it is as good a restart as a whole-block start.
+                if (!previous.Passes[k].StartsWithRemainder || previous.Passes[k].HardFragment > 0)
                 {
                     restart = previous.Passes[k];
                     restartIndex = k;
@@ -1808,8 +1826,11 @@ internal sealed class PagedLayoutSession
 
             if (restart is not null)
             {
-                for (var r = segment.Start; r < restart.StartRendered; r++)
+                var keepHeadBlock = restart.HardFragment > 0 ? 1 : 0;
+                for (var r = segment.Start; r < restart.StartRendered + keepHeadBlock; r++)
                     result.LocalPage[r - segment.Start] = previous.LocalPage[r - segment.Start];
+                skipFragmentsOfUnit = restart.HardFragment > 0 ? restart.StartRendered : -1;
+                skipFragments = restart.HardFragment;
                 result.Passes.AddRange(previous.Passes.Take(restartIndex));
                 result.Cuts.AddRange(previous.Cuts.Where(cut => cut.Page < restart.LocalPageStart));
                 nextRendered = restart.StartRendered;
@@ -1824,6 +1845,16 @@ internal sealed class PagedLayoutSession
         var oldFreshStarts = previous?.Passes
             .Where(pass => !pass.StartsWithRemainder)
             .ToDictionary(pass => pass.StartRendered, pass => pass);
+
+        var oldHardStarts = new Dictionary<(int Rendered, int Fragment), PassRecord>();
+        if (previous is not null)
+        {
+            foreach (var pass in previous.Passes)
+            {
+                if (pass.StartsWithRemainder && pass.HardFragment > 0)
+                    oldHardStarts.TryAdd((pass.StartRendered, pass.HardFragment), pass);
+            }
+        }
 
         void TopUp(int count)
         {
@@ -1859,8 +1890,9 @@ internal sealed class PagedLayoutSession
                         RenderedBlock(nextRendered + 1).BreakPageBefore = true;
                     }
 
-                    for (var c = 0; c < children.Count; c++)
+                    for (var c = nextRendered == skipFragmentsOfUnit ? skipFragments : 0; c < children.Count; c++)
                     {
+                        fragmentIndex[children[c]] = c;
                         pending.Add((children[c], nextRendered, c > 0, bases[c]));
                         work.Blocks.Add(children[c]);
                     }
@@ -1896,18 +1928,12 @@ internal sealed class PagedLayoutSession
             return count;
         }
 
-        List<int> NoteIdsOnFirstPage(int blockCount)
-        {
-            var ids = new List<int>();
-            foreach (var entry in pending.Take(blockCount))
-            {
-                // Layout renders carry no tags, so (as in the full computation) a block's notes come from
-                // its model owner, and a split-off remainder carries none of its own.
-                if (!entry.IsContinuation)
-                    ids.AddRange(PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(entry.Rendered)));
-            }
-            return ids.Distinct().ToList();
-        }
+        List<int> NoteIdsOnFirstPage(int blockCount) =>
+            PaginationEngine.ResolveNoteIdsOnFirstPage(
+                pending.Take(blockCount).Select(entry => (entry.Block, entry.Rendered, entry.IsContinuation)),
+                pending.Select(entry => (entry.Block, entry.Rendered)).ToList(),
+                rendered => OwnerOf(rendered),
+                dynamicWork);
 
         double NoteDemandFor(int blockCount)
         {
@@ -1942,28 +1968,55 @@ internal sealed class PagedLayoutSession
             var demand = NoteDemandFor(blockCount);
             return demand <= 0
                 ? 0
-                : PaginationEngine.ClampFootnoteReserveDip(Math.Min(demand, bodyHeightDip) + footnoteFrameClearanceDip, segment.Page);
+                : PaginationEngine.ClampFootnoteReserveDip(
+                    Math.Min(demand + PaginationEngine.FootnoteMarkLineExtraDip * NoteIdsOnFirstPage(blockCount).Count, bodyHeightDip)
+                        + footnoteFrameClearanceDip,
+                    segment.Page);
         }
 
         void SetReserve(double reserveDip) =>
             work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
 
+        // As PaginationEngine.PaginateWithPerPageFootnoteReserve: the reference is judged at the line of its
+        // mark, so a long paragraph whose mark line is pushed to the next page shrinks the band instead of
+        // moving the reference (and its note) away.
+        TextPointer? lastReferenceMark = null;
         int LastReferencingEntry(int blockCount)
         {
+            lastReferenceMark = null;
             for (var index = Math.Min(blockCount, pending.Count) - 1; index >= 0; index--)
             {
-                if (!pending[index].IsContinuation
-                    && PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(pending[index].Rendered)).Any())
-                    return index;
+                if (pending[index].IsContinuation
+                    || !PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(pending[index].Rendered)).Any())
+                    continue;
+                foreach (var marker in DocumentView.CollectFootnoteMarkers([pending[index].Block], includeAutomationIdMarks: true))
+                {
+                    int markerPage;
+                    try { markerPage = dynamicWork.GetPageNumber(marker.Position); }
+                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { markerPage = 0; }
+                    if (markerPage <= 0)
+                        lastReferenceMark = marker.Position;
+                }
+                return index;
             }
             return -1;
+        }
+
+        bool ReferenceStaysOnFirstPage(int lastReferencing)
+        {
+            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+                return false;
+            if (lastReferenceMark is null)
+                return true;
+            try { return dynamicWork.GetPageNumber(lastReferenceMark) <= 0; }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { return true; }
         }
 
         double LargestReserveKeeping(int lastReferencing, double upperDip)
         {
             var minimumDip = Math.Min(upperDip, minimumSplitBandDip);
             SetReserve(minimumDip);
-            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+            if (!ReferenceStaysOnFirstPage(lastReferencing))
                 return 0;
 
             var low = minimumDip;
@@ -1972,7 +2025,7 @@ internal sealed class PagedLayoutSession
             {
                 var middle = (low + high) / 2;
                 SetReserve(middle);
-                if (CountBlocksStartingOnFirstPage() > lastReferencing)
+                if (ReferenceStaysOnFirstPage(lastReferencing))
                     low = middle;
                 else
                     high = middle;
@@ -1994,28 +2047,42 @@ internal sealed class PagedLayoutSession
                     head.IsContinuation,
                     carriedNoteDip,
                     carryChain.Select(link => new CarryLink(link.FootnoteIds.ToArray(), link.BandHeightDip, link.PageNumber)).ToArray(),
-                    localPage);
-                if (!head.IsContinuation
-                    && previous is not null
-                    && head.Rendered >= changedEnd
-                    && passesThisRun > 0
-                    && oldFreshStarts!.TryGetValue(head.Rendered - renderedDelta, out var old)
-                    && SameCarry(old, state))
+                    localPage)
+                {
+                    HardFragment = head.IsContinuation
+                        && head.Block is WpfParagraph { BreakPageBefore: true } headParagraph
+                        && DocumentView.IsInlineBreakContinuationFragment(headParagraph)
+                        && fragmentIndex.TryGetValue(headParagraph, out var headFragment)
+                            ? headFragment
+                            : 0
+                };
+                PassRecord? old = null;
+                if (previous is not null && head.Rendered >= changedEnd && passesThisRun > 0)
+                {
+                    if (!head.IsContinuation)
+                        oldFreshStarts!.TryGetValue(head.Rendered - renderedDelta, out old);
+                    else if (state.HardFragment > 0
+                        && oldHardStarts.TryGetValue((head.Rendered - renderedDelta, state.HardFragment), out var hardOld))
+                        old = hardOld;
+                }
+                if (old is not null && SameCarry(old, state))
                 {
                     var pageDelta = localPage - old.LocalPageStart;
-                    for (var k = head.Rendered; k < end; k++)
-                        result.LocalPage[k - segment.Start] = previous.LocalPage[k - renderedDelta - previous.RenderedStart] + pageDelta;
-                    result.Passes.AddRange(previous.Passes
-                        .Skip(previous.Passes.IndexOf(old))
+                    var previousRun = previous!;
+                    // A block whose forced fragment starts this page began on an earlier page of this run.
+                    for (var k = head.IsContinuation ? head.Rendered + 1 : head.Rendered; k < end; k++)
+                        result.LocalPage[k - segment.Start] = previousRun.LocalPage[k - renderedDelta - previousRun.RenderedStart] + pageDelta;
+                    result.Passes.AddRange(previousRun.Passes
+                        .Skip(previousRun.Passes.IndexOf(old))
                         .Select(pass => pass with
                         {
                             StartRendered = pass.StartRendered + renderedDelta,
                             LocalPageStart = pass.LocalPageStart + pageDelta
                         }));
                     result.Cuts.AddRange(ShiftCuts(
-                        previous.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
-                    result.PageCount = previous.PageCount + pageDelta;
-                    _pagesReused += previous.PageCount - old.LocalPageStart;
+                        previousRun.Cuts.Where(cut => cut.Page >= old.LocalPageStart), renderedDelta, pageDelta));
+                    result.PageCount = previousRun.PageCount + pageDelta;
+                    _pagesReused += previousRun.PageCount - old.LocalPageStart;
                     yield break;
                 }
                 result.Passes.Add(state);
@@ -2039,15 +2106,32 @@ internal sealed class PagedLayoutSession
                 EnsureSafe();
                 // Mid-pass yield (no progress to report): keeps one step of background work short.
                 yield return false;
+                var bandSplitsNote = false;
                 var countWithoutReserve = CountBlocksStartingOnFirstPage();
+                var lastReferencing = LastReferencingEntry(countWithoutReserve);
                 var reserveDip = ReserveFor(countWithoutReserve);
                 if (reserveDip > 0)
                 {
                     SetReserve(reserveDip);
-                    var lastReferencing = LastReferencingEntry(countWithoutReserve);
-                    if (lastReferencing >= 0 && CountBlocksStartingOnFirstPage() <= lastReferencing)
+                    if (lastReferencing >= 0 && !ReferenceStaysOnFirstPage(lastReferencing))
                     {
-                        var keptReserve = LargestReserveKeeping(lastReferencing, reserveDip);
+                        // Word moves the last reference lines (with their notes) to the next page before it splits
+                        // a note, so first look for the most blocks whose own notes fit beside them.
+                        var movedReserve = 0.0;
+                        for (var k = countWithoutReserve; k >= 1 && movedReserve <= 0; k--)
+                        {
+                            var candidate = ReserveFor(k);
+                            if (candidate <= 0)
+                                break;
+                            SetReserve(candidate);
+                            var blocksNow = CountBlocksStartingOnFirstPage();
+                            var lastKept = LastReferencingEntry(blocksNow);
+                            if (lastKept >= 0 && ReferenceStaysOnFirstPage(lastKept) && ReserveFor(blocksNow) <= candidate + 0.01)
+                                movedReserve = candidate;
+                        }
+                        SetReserve(reserveDip);
+                        var keptReserve = movedReserve > 0 ? movedReserve : LargestReserveKeeping(lastReferencing, reserveDip);
+                        bandSplitsNote = movedReserve <= 0;
                         if (keptReserve > 0)
                         {
                             reserveDip = keptReserve;
@@ -2064,6 +2148,23 @@ internal sealed class PagedLayoutSession
                         }
                         SetReserve(reserveDip);
                     }
+                }
+
+                // A paragraph ending the page with its note reference needs its space after as well beside the
+                // band (Word keeps the reference line off a page that cannot also hold the gap that follows it).
+                var lastOnPage = CountBlocksStartingOnFirstPage() - 1;
+                if (!bandSplitsNote && reserveDip > 0 && lastOnPage >= 0 && lastOnPage < pending.Count
+                    && !pending[lastOnPage].IsContinuation
+                    && pending[lastOnPage].Block is WpfParagraph closing
+                    && closing.Margin.Bottom > 0.5
+                    && PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(pending[lastOnPage].Rendered)).Any()
+                    && dynamicWork.GetPageNumber(closing.ContentEnd) <= 0)
+                {
+                    SetReserve(reserveDip + closing.Margin.Bottom);
+                    if (dynamicWork.GetPageNumber(closing.ContentEnd) > 0)
+                        reserveDip += closing.Margin.Bottom;
+                    else
+                        SetReserve(reserveDip);
                 }
 
                 var take = pending.Count;
@@ -2103,7 +2204,7 @@ internal sealed class PagedLayoutSession
                 yield return false;
                 var chunkFootnoteIds = NoteIdsOnFirstPage(take);
                 UpdateCarry(chunkFootnoteIds, Math.Max(0, reserveDip - footnoteFrameClearanceDip), take);
-                var chunk = newFlow(reserveDip);
+                var chunk = NewPageFlow(reserveDip);
                 for (var i = 0; i < take; i++)
                 {
                     work.Blocks.Remove(pending[i].Block);

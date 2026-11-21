@@ -47,6 +47,8 @@ public sealed class R305_AppOptionsCopyFromCompletenessTests
             return (current is int i ? i : 0) + 5;
         if (type == typeof(string))
             return "r305-" + property.Name;
+        if (type == typeof(List<List<string>>))
+            return new List<List<string>> { new() { "r305-x-" + property.Name, "r305-y" } };
         if (type == typeof(List<string>))
             return new List<string> { "r305-" + property.Name };
         if (type.IsEnum)
@@ -105,7 +107,9 @@ public sealed class R305_AppOptionsCopyFromCompletenessTests
                 continue;
 
             var got = property.GetValue(target);
-            var same = want is List<string> wantList
+            var same = want is List<List<string>> wantLists
+                ? got is List<List<string>> gotLists && wantLists.Select(l => string.Join("|", l)).SequenceEqual(gotLists.Select(l => string.Join("|", l)))
+                : want is List<string> wantList
                 ? got is List<string> gotList && wantList.SequenceEqual(gotList)
                 : Equals(want, got);
 
@@ -173,5 +177,5 @@ public sealed class R305_AppOptionsCopyFromCompletenessTests
             + "test above is iterating an empty list");
 
     private static string Describe(object? value) =>
-        value is List<string> list ? string.Join("|", list) : value?.ToString() ?? "<null>";
+        value is List<List<string>> lists ? string.Join(";", lists.Select(l => string.Join("|", l))) : value is List<string> list ? string.Join("|", list) : value?.ToString() ?? "<null>";
 }

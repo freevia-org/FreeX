@@ -387,7 +387,11 @@ foreach ($workflow in $workflows) {
     # release-readiness covers the release-only TEST gates, but packaging is where the last several
     # releases actually broke, and no test gate reaches it. It dispatches the real release workflow
     # in dry-run mode weekly.
-    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml", "release-packaging-rehearsal.yml")
+    # release-auto-retry.yml reacts to the end of a manually dispatched Full Signed Release run
+    # (workflow_run), re-running its failed jobs once when -- and only when -- every failure is
+    # infrastructure. It never starts anything on a push or a schedule, so it adds no automatic
+    # runner demand beyond about a minute per failed release.
+    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml", "release-packaging-rehearsal.yml", "release-auto-retry.yml")
     if ($automaticQualityWorkflows -contains $workflow.Name) {
         # Each canonical workflow has its own trigger contract. ci.yml and codeql.yml gate every
         # push; release-readiness.yml deliberately does NOT run per push (it would double the
@@ -396,6 +400,9 @@ foreach ($workflow in $workflows) {
         $scheduledOnlyWorkflows = @("release-readiness.yml", "release-packaging-rehearsal.yml")
         $requiredTriggers = if ($scheduledOnlyWorkflows -contains $workflow.Name) {
             @("workflow_dispatch", "schedule")
+        }
+        elseif ($workflow.Name -eq "release-auto-retry.yml") {
+            @("workflow_dispatch", "workflow_run")
         }
         else {
             @("workflow_dispatch", "push")
@@ -411,6 +418,7 @@ foreach ($workflow in $workflows) {
             "ci.yml" { @("push", "schedule") }
             "release-readiness.yml" { @("schedule") }
             "release-packaging-rehearsal.yml" { @("schedule") }
+            "release-auto-retry.yml" { @("workflow_run") }
             default { @("push") }
         }
         $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })

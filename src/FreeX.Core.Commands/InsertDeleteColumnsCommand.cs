@@ -42,6 +42,13 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
 
     public string Label => $"Insert {_count} Column(s)";
 
+    public SheetId SheetId => _sheetId;
+
+    /// <summary>The first inserted column.</summary>
+    public uint BeforeCol => _beforeCol;
+
+    public uint Count => _count;
+
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     /// <inheritdoc/>

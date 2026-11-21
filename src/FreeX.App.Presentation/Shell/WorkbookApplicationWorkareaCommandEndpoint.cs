@@ -118,6 +118,7 @@ public sealed class WorkbookApplicationWorkareaCommandEndpointProfile
     public WorkbookApplicationWorkareaEndpoint? CustomSort { get; init; }
     public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? ToggleFilter { get; init; }
     public WorkbookApplicationWorkareaEndpoint? ClearFilter { get; init; }
+    public WorkbookApplicationWorkareaEndpoint? FilterBySelectedCellValue { get; init; }
     public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandVariant>? ReapplyFilter { get; init; }
     public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? OpenDataValidation { get; init; }
     public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? OpenNameManager { get; init; }
@@ -241,6 +242,7 @@ public static class WorkbookApplicationWorkareaCommandDispatcher
             WorkbookApplicationCommandIntent.ToggleFilter =>
                 Invoke(request, endpoints.ToggleFilter, request.Invocation),
             WorkbookApplicationCommandIntent.ClearFilter => Invoke(request, endpoints.ClearFilter),
+            WorkbookApplicationCommandIntent.FilterBySelectedCellValue => Invoke(request, endpoints.FilterBySelectedCellValue),
             WorkbookApplicationCommandIntent.ReapplyFilter =>
                 Invoke(request, endpoints.ReapplyFilter, request.Variant),
             WorkbookApplicationCommandIntent.OpenDataValidation =>

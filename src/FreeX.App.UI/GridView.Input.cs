@@ -912,6 +912,23 @@ public partial class GridView
             return;
         }
 
+        if (e.ClickCount >= 2 &&
+            EnableFillHandleAndCellDragAndDrop &&
+            SelectionBorderDoubleClicked is not null &&
+            GridSelectionMovePlanner.HitBorderEdge(
+                Viewport,
+                SelectedRange,
+                SelectedRanges,
+                pos,
+                ActualRowHeaderWidth,
+                EffectiveColHeaderHeight) is var edge &&
+            edge != FreeX.App.Presentation.GridInteraction.GridSelectionBorderEdge.None)
+        {
+            SelectionBorderDoubleClicked(edge, (Keyboard.Modifiers & ModifierKeys.Shift) != 0);
+            e.Handled = true;
+            return;
+        }
+
         if (TryBeginSelectionMoveDrag(pos))
         {
             e.Handled = true;
@@ -1389,7 +1406,7 @@ public partial class GridView
 
     private bool IsOnSelectionMoveBorder(Point pos) =>
         EnableFillHandleAndCellDragAndDrop &&
-        (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Control) &&
+        (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Control || Keyboard.Modifiers == ModifierKeys.Shift) &&
         GridSelectionMovePlanner.IsOnMoveBorder(
             Viewport,
             SelectedRange,

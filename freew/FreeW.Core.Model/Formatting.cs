@@ -273,6 +273,13 @@ public sealed record RunFormatting
     public string? FontFamily { get; init; }
 
     /// <summary>
+    /// Complex-script bold (<c>rPr/w:bCs</c>): Word bolds right-to-left (Arabic/Hebrew) text from this flag
+    /// rather than from <c>w:b</c>. Renderers fold it into the effective bold of complex-script text only
+    /// (<c>DocumentRunFormattingResolver.ProjectForScript</c>); a plain <c>w:b</c> is unchanged.
+    /// </summary>
+    public bool ComplexScriptBold { get; init; }
+
+    /// <summary>
     /// East Asian script typeface for this run (<c>rPr/w:rFonts/@w:eastAsia</c>), e.g. <c>"MS Gothic"</c>.
     /// Independent of <see cref="FontFamily"/> (which maps to <c>@w:ascii</c>/<c>@w:hAnsi</c>) — Word stores
     /// the three <c>w:rFonts</c> typeface attributes (ascii/eastAsia/cs) separately because a single run
@@ -360,6 +367,14 @@ public sealed record RunFormatting
     /// converts to twentieths of a point (dxa) for <c>w:spacing/@w:val</c>.
     /// </summary>
     public double CharacterSpacingPt { get; init; }
+
+    /// <summary>
+    /// Character width scale in percent (rPr/w:w): 150 stretches every glyph to one and a half times its width,
+    /// 50 condenses it to half. <c>0</c> (the default) means "not set" (inherit, and 100 percent when nothing
+    /// above sets it) and emits no <c>w:w</c>, so existing runs round-trip unchanged; an explicit 100 is a real
+    /// override of an inherited scale and is written back.
+    /// </summary>
+    public int CharacterScalePercent { get; init; }
 
     /// <summary>
     /// Kerning threshold: the minimum font size (in points) at which kerning is applied (rPr/w:kern). Null
@@ -555,6 +570,33 @@ public sealed record ParagraphFormatting
     public double IndentLeftPt { get; init; }
     public double IndentRightPt { get; init; }
     public double FirstLineIndentPt { get; init; }
+
+    /// <summary>
+    /// True when this formatting carries an EXPLICIT left indent (<c>w:ind/@w:left</c>), even a zero one. Lets the
+    /// style cascade tell a direct <c>left="0"</c> that cancels an indented style (List Paragraph's 36pt) from an
+    /// absent attribute that should inherit it; the value comparison against the default 0 cannot.
+    /// </summary>
+    public bool IndentLeftIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="IndentLeftIsSet"/> (right indent).</summary>
+    public bool IndentRightIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="IndentLeftIsSet"/> (first-line / hanging indent).</summary>
+    public bool FirstLineIndentIsSet { get; init; }
+
+    /// <summary>
+    /// The left indent (points) of this paragraph's numbering level (<c>w:lvl/w:pPr/w:ind/@w:left</c>) in the
+    /// source document, or null when the paragraph is not a list item or the level declares none. Render-only
+    /// (the writer regenerates numbering definitions): a list item with no direct <c>w:ind</c> takes its
+    /// level's indent, which is where Word places the bullet/number hanging out to the left of the text.
+    /// </summary>
+    public double? ListLevelIndentLeftPt { get; init; }
+
+    /// <summary>
+    /// The first-line indent (points, negative = hanging) of this paragraph's numbering level; see
+    /// <see cref="ListLevelIndentLeftPt"/>.
+    /// </summary>
+    public double? ListLevelFirstLineIndentPt { get; init; }
     public ListKind ListKind { get; init; } = ListKind.None;
     public int ListLevel { get; init; }
 

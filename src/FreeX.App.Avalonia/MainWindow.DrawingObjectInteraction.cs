@@ -168,6 +168,10 @@ public sealed partial class MainWindow
                 RunGuarded(ResizeSelectedChartObjectAsync);
                 break;
 
+            case WorksheetContextMenuAction.ConvertTableToRange:
+                ConvertActiveTableToRange();
+                break;
+
             // --- Shared Picture/Shape/TextBox/Chart ---
             case WorksheetContextMenuAction.DeleteObject:
                 TryDeleteSelectedDrawingObject();

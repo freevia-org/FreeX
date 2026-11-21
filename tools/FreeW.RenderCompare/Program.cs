@@ -80,7 +80,21 @@ internal static class Program
     {
         var model = DocxReader.Read(docxPath);
 
-        var view = new DocumentView();
+        // Render like the print path (BuildPaginator's view clone): no editor-only separators and the
+        // page-only display transforms (slash word joiners, synthesized small capitals).
+        // A document with an inline page/column break renders the print path's inline-break fragments (the
+        // break splits the paragraph where it occurs, rather than starting the whole paragraph on a new page).
+        var view = new DocumentView
+        {
+            RenderPageBreakMarkers = false,
+            RenderInlineFlowBreakFragmentsForPagination = DocumentView.HasRendererInlineFlowBreakFragments(model),
+        };
+        // The Word ground-truth PDFs were exported in Word's Final view (insertions plain, deletions hidden, no
+        // balloons). Render the same view; FREEW_RENDER_REVIEW=all compares against an all-markup export instead.
+        view.DisplayForReview = string.Equals(
+            Environment.GetEnvironmentVariable("FREEW_RENDER_REVIEW"), "all", StringComparison.OrdinalIgnoreCase)
+            ? FreeW.App.Presentation.DocumentView.ReviewDisplayMode.AllMarkup
+            : FreeW.App.Presentation.DocumentView.ReviewDisplayMode.NoMarkup;
         view.LoadModel(model);
 
         if ((model.Sections.Count > 1 && NeedsSectionAwareRendering(model))

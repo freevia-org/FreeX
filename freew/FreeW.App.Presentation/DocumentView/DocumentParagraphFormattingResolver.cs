@@ -13,6 +13,29 @@ public static class DocumentParagraphFormattingResolver
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(paragraph);
 
+        return ApplyNumberingLevelIndent(ResolveCascade(document, paragraph), paragraph.Formatting);
+    }
+
+    /// <summary>
+    /// A list item with no direct <c>w:ind</c> takes its numbering level's indent (Word's cascade is direct
+    /// paragraph &gt; numbering level &gt; paragraph style), which is what hangs the bullet/number out to the
+    /// left of the text.
+    /// </summary>
+    private static ParagraphFormatting ApplyNumberingLevelIndent(ParagraphFormatting resolved, ParagraphFormatting direct)
+    {
+        if (direct.ListLevelIndentLeftPt is null && direct.ListLevelFirstLineIndentPt is null)
+            return resolved;
+        var left = !direct.IndentLeftIsSet && direct.ListLevelIndentLeftPt is { } levelLeft
+            ? levelLeft
+            : resolved.IndentLeftPt;
+        var first = !direct.FirstLineIndentIsSet && direct.ListLevelFirstLineIndentPt is { } levelFirst
+            ? levelFirst
+            : resolved.FirstLineIndentPt;
+        return resolved with { IndentLeftPt = left, FirstLineIndentPt = first };
+    }
+
+    private static ParagraphFormatting ResolveCascade(TextDocument document, Paragraph paragraph)
+    {
         var direct = paragraph.Formatting;
         // A paragraph with no w:pStyle resolves through the document's default paragraph style.
         var style = ResolveStyleChain(
@@ -82,15 +105,18 @@ public static class DocumentParagraphFormattingResolver
             LineSpacingIsSet = direct.LineSpacingIsSet
                 || style.LineSpacingIsSet
                 || document.DefaultParagraph.LineSpacingIsSet,
-            IndentLeftPt = direct.IndentLeftPt != defaults.IndentLeftPt
+            IndentLeftPt = direct.IndentLeftIsSet || direct.IndentLeftPt != defaults.IndentLeftPt
                 ? direct.IndentLeftPt
                 : style.IndentLeftPt,
-            IndentRightPt = direct.IndentRightPt != defaults.IndentRightPt
+            IndentRightPt = direct.IndentRightIsSet || direct.IndentRightPt != defaults.IndentRightPt
                 ? direct.IndentRightPt
                 : style.IndentRightPt,
-            FirstLineIndentPt = direct.FirstLineIndentPt != defaults.FirstLineIndentPt
+            FirstLineIndentPt = direct.FirstLineIndentIsSet || direct.FirstLineIndentPt != defaults.FirstLineIndentPt
                 ? direct.FirstLineIndentPt
                 : style.FirstLineIndentPt,
+            IndentLeftIsSet = direct.IndentLeftIsSet || style.IndentLeftIsSet,
+            IndentRightIsSet = direct.IndentRightIsSet || style.IndentRightIsSet,
+            FirstLineIndentIsSet = direct.FirstLineIndentIsSet || style.FirstLineIndentIsSet,
             Border = direct.Border ?? style.Border,
             ShadingColorHex = shadingFrom.ShadingColorHex,
             ShadingPattern = shadingFrom.ShadingPattern,
@@ -174,15 +200,18 @@ public static class DocumentParagraphFormattingResolver
             LineRule = lineFrom.LineRule,
             LineHeightPt = lineFrom.LineHeightPt,
             LineSpacingIsSet = inherited.LineSpacingIsSet || over.LineSpacingIsSet,
-            IndentLeftPt = over.IndentLeftPt != defaults.IndentLeftPt
+            IndentLeftPt = over.IndentLeftIsSet || over.IndentLeftPt != defaults.IndentLeftPt
                 ? over.IndentLeftPt
                 : inherited.IndentLeftPt,
-            IndentRightPt = over.IndentRightPt != defaults.IndentRightPt
+            IndentRightPt = over.IndentRightIsSet || over.IndentRightPt != defaults.IndentRightPt
                 ? over.IndentRightPt
                 : inherited.IndentRightPt,
-            FirstLineIndentPt = over.FirstLineIndentPt != defaults.FirstLineIndentPt
+            FirstLineIndentPt = over.FirstLineIndentIsSet || over.FirstLineIndentPt != defaults.FirstLineIndentPt
                 ? over.FirstLineIndentPt
                 : inherited.FirstLineIndentPt,
+            IndentLeftIsSet = over.IndentLeftIsSet || inherited.IndentLeftIsSet,
+            IndentRightIsSet = over.IndentRightIsSet || inherited.IndentRightIsSet,
+            FirstLineIndentIsSet = over.FirstLineIndentIsSet || inherited.FirstLineIndentIsSet,
             ListKind = over.ListKind != defaults.ListKind ? over.ListKind : inherited.ListKind,
             ListLevel = over.ListLevel != defaults.ListLevel ? over.ListLevel : inherited.ListLevel,
             ListStartOverride = over.ListStartOverride ?? inherited.ListStartOverride,

@@ -116,6 +116,57 @@ public sealed class SectionAwarePrintFootnoteRegressionTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
+    // 3. Word keeps every note beside its reference: when a page cannot hold the last reference line and
+    //    its note, the reference line moves to the next page (with the note), instead of the band
+    //    shrinking and the note continuing on a later page.
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void PerPageFootnoteLayout_NotesStayOnThePageOfTheirReference()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Page.WidthPt = 612;
+        doc.Page.HeightPt = 792;
+        doc.Page.MarginLeftPt = 72;
+        doc.Page.MarginRightPt = 72;
+        doc.Page.MarginTopPt = 72;
+        doc.Page.MarginBottomPt = 72;
+        const int count = 36;
+        for (var i = 1; i <= count; i++)
+        {
+            doc.Footnotes[i] = new Footnote(i, $"NOTE{i:00}END");
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run($"BODY{i:00}BEGIN a sentence long enough to take a line or two of the page body here"));
+            paragraph.Runs.Add(Run.FootnoteReference(i));
+            doc.Blocks.Add(paragraph);
+        }
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        editor.CommitToModel();
+        var paginator = PrintLayout.BuildPaginator(editor);
+        paginator.ComputePageCount();
+        paginator.PageCount.Should().BeGreaterThan(2);
+
+        var seenBody = 0;
+        for (var pageIndex = 0; pageIndex < paginator.PageCount; pageIndex++)
+        {
+            var text = ExtractDrawnText((Visual)paginator.GetPage(pageIndex).Visual);
+            for (var i = 1; i <= count; i++)
+            {
+                if (!text.Contains($"BODY{i:00}BEGIN"))
+                    continue;
+                seenBody++;
+                text.Should().Contain($"NOTE{i:00}END",
+                    $"note {i} belongs on page {pageIndex + 1}, the page of its reference");
+            }
+        }
+
+        seenBody.Should().Be(count, "every body paragraph is drawn on some page");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────────
     // helpers
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 

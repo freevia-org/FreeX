@@ -77,3 +77,21 @@ requirements apply to both release states.
 The older focused workflows remain diagnostic or preview lanes. They are not
 the canonical all-app publication path and must not be used to claim a complete
 signed release.
+
+## Failing fast and recovering from infrastructure flakes
+
+- `early_abort` (default on) starts a watcher job that cancels the whole run on the first
+  real failure, because GitHub can cancel a run but not a single job. The run then ends as
+  Cancelled, the failed job and its error stay visible, and nothing is published: the
+  publication gate still requires every upstream job to have succeeded. Set `early_abort=false`
+  to let every job finish.
+- A failure is real unless `tools/Get-ReleaseRunFailureClass.ps1` can positively show the
+  platform caused it (runner lost or never acquired, or only a job-setup or artifact-transfer
+  step failed). Timeouts and anything uncertain are real.
+- `release-auto-retry.yml` re-runs the failed jobs once when a run concluded `failure`, was on
+  its first attempt, and every failed job is infrastructure. It never retries a real failure,
+  a cancelled run or a second attempt. A re-run still parks Windows signing jobs at the
+  `public-preview` approval again.
+- Publication resumes safely: `tools/Send-ReleaseAssets.ps1` uploads only assets that are
+  missing, leaves identical ones, replaces only interrupted uploads, and refuses to overwrite a
+  published asset whose content differs.

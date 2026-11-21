@@ -817,6 +817,8 @@ public partial class MainWindow
         if (!TryExecuteCommand(cmd, "Autofill", out var outcome))
             return;
 
+        if (!outcome.IsNoOp)
+            _session.NoteAutofill(sourceRange, fillRange, ctrlHeld);
         SelectCompletedAutofillRange(sourceRange, fillRange);
         UpdateViewport();
         RefreshStatusBar();
@@ -854,17 +856,24 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        if (SelectionMoveOverwritePlanner.HasOverwriteTargets(sheet, sourceRange, targetRange) &&
+        // Excel's Shift+drag inserts the moved cells at the destination (shifting what is there)
+        // instead of overwriting it, so no replace prompt applies.
+        var isShiftInsert = (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Shift) != 0 && !_selectionMoveCtrlHeld;
+        if (!isShiftInsert &&
+            SelectionMoveOverwritePlanner.HasOverwriteTargets(sheet, sourceRange, targetRange) &&
             !_messageService.AskYesNo(UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt")))
         {
             return;
         }
 
         var isCtrlCopy = _selectionMoveCtrlHeld;
-        IWorkbookCommand command = isCtrlCopy
-            ? new CopyRangeCommand(_currentSheetId, sourceRange, targetRange.Start)
-            : new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start);
-        if (!TryExecuteCommand(command, isCtrlCopy ? "Copy Cells" : "Move Cells", out var outcome))
+        IWorkbookCommand? command = isShiftInsert
+            ? ShiftDragInsertPlanner.CreateCommand(_workbook, _currentSheetId, sourceRange, targetRange)
+            : isCtrlCopy
+                ? new CopyRangeCommand(_currentSheetId, sourceRange, targetRange.Start)
+                : new MoveRangeCommand(_currentSheetId, sourceRange, targetRange.Start);
+        if (command is null ||
+            !TryExecuteCommand(command, isShiftInsert ? "Insert Moved Cells" : isCtrlCopy ? "Copy Cells" : "Move Cells", out var outcome))
             return;
 
         ClearClipboardVisualState();

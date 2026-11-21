@@ -231,6 +231,27 @@ public sealed class DocumentParagraphFormattingResolverTests
             .And.Contain("SelectedParagraphIndices().FirstOrDefault(-1)");
     }
 
+    [Fact]
+    public void Resolve_explicit_zero_indent_cancels_the_style_indent()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Styles["ListPara"] = new DocumentStyle
+        {
+            Id = "ListPara",
+            Name = "List Paragraph",
+            Paragraph = new ParagraphFormatting { IndentLeftPt = 36, IndentRightPt = 12, IndentLeftIsSet = true, IndentRightIsSet = true },
+        };
+        var cancelled = new Paragraph { StyleId = "ListPara", Formatting = new ParagraphFormatting { IndentLeftIsSet = true } };
+        var inherited = new Paragraph { StyleId = "ListPara" };
+
+        var resolvedCancelled = DocumentParagraphFormattingResolver.Resolve(document, cancelled);
+        var resolvedInherited = DocumentParagraphFormattingResolver.Resolve(document, inherited);
+
+        resolvedCancelled.IndentLeftPt.Should().Be(0);
+        resolvedCancelled.IndentRightPt.Should().Be(12);
+        resolvedInherited.IndentLeftPt.Should().Be(36);
+    }
+
     private static string Read(string root, params string[] parts) =>
         File.ReadAllText(Path.Combine([root, .. parts])).ReplaceLineEndings("\n");
 }

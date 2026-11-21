@@ -822,6 +822,12 @@
   <data name="FormatCells_TextRotation" xml:space="preserve">
     <value>Text rotation</value>
   </data>
+  <data name="FormatCells_TextOrientation" xml:space="preserve">
+    <value>Text orientation</value>
+  </data>
+  <data name="FormatCells_TextDirection" xml:space="preserve">
+    <value>Text direction</value>
+  </data>
   <data name="FormatCells_Font" xml:space="preserve">
     <value>_Font</value>
   </data>
@@ -9276,6 +9282,9 @@ Do you want to expand the selection to include the adjacent data, or continue wi
   </data>
   <data name="MainWindow_AutomationName_Minimize" xml:space="preserve">
     <value>Minimize</value>
+  </data>
+  <data name="MainWindow_AutomationName_RenameSheetTab" xml:space="preserve">
+    <value>Rename sheet tab</value>
   </data>
   <data name="PageSetup_PrintRowAndColumnHeadings" xml:space="preserve">
     <value>Print row and column _headings</value>
@@ -20956,5 +20965,62 @@ and {0} more.</value>
   </data>
   <data name="WorkbookPerformance_ReportHelpText" xml:space="preserve">
     <value>Reports formatting-only cells that extend worksheet used ranges. This report does not change the workbook.</value>
+  </data>
+  <data name="Options_EditCustomListsButton" xml:space="preserve">
+    <value>Edit Custom Lists...</value>
+  </data>
+  <data name="Options_CustomListsTitle" xml:space="preserve">
+    <value>Custom Lists</value>
+  </data>
+  <data name="Options_CustomListsDescription" xml:space="preserve">
+    <value>Enter one list per line, with the entries separated by commas. The fill handle continues these lists.</value>
+  </data>
+  <data name="Options_CustomListsEditorAutomationName" xml:space="preserve">
+    <value>Custom lists</value>
+  </data>
+  <data name="CellStyles_CustomHeader" xml:space="preserve">
+    <value>Custom</value>
+  </data>
+  <data name="CellStyles_NewButton" xml:space="preserve">
+    <value>New Cell Style...</value>
+  </data>
+  <data name="CellStyles_ModifyButton" xml:space="preserve">
+    <value>Modify...</value>
+  </data>
+  <data name="CellStyles_StyleDialogTitle" xml:space="preserve">
+    <value>Style</value>
+  </data>
+  <data name="CellStyles_NameLabel" xml:space="preserve">
+    <value>Style name:</value>
+  </data>
+  <data name="CellStyles_IncludeHeader" xml:space="preserve">
+    <value>Style includes</value>
+  </data>
+  <data name="CellStyles_PartNumber" xml:space="preserve">
+    <value>Number</value>
+  </data>
+  <data name="CellStyles_PartAlignment" xml:space="preserve">
+    <value>Alignment</value>
+  </data>
+  <data name="CellStyles_PartFont" xml:space="preserve">
+    <value>Font</value>
+  </data>
+  <data name="CellStyles_PartBorder" xml:space="preserve">
+    <value>Border</value>
+  </data>
+  <data name="CellStyles_PartFill" xml:space="preserve">
+    <value>Fill</value>
+  </data>
+  <data name="CellStyles_PartProtection" xml:space="preserve">
+    <value>Protection</value>
+  </data>
+  <data name="CellStyles_DefineFailed" xml:space="preserve">
+    <value>The cell style could not be saved.</value>
+  </data>
+  <data name="CellStyles_SavedStatusFormat" xml:space="preserve">
+    <value>Cell style '{0}' saved.</value>
+  </data>
+  <data name="CellStyles_AppliedStatusFormat" xml:space="preserve">
+    <value>Applied style '{0}' to {1}.</value>
   </data>
 </root>

@@ -50,6 +50,25 @@ public sealed partial class MainWindow
 
     private ExcelSelectionMode _keyboardSelectionMode;
 
+    /// <summary>
+    /// Windows copies on Ctrl+drag (fill handle and selection move). On macOS Ctrl+click is the
+    /// context click and Option is the platform's copy-drag modifier, so Option copies there too.
+    /// </summary>
+    internal static bool IsCellDragCopyModifier(KeyModifiers modifiers) =>
+        modifiers.HasFlag(KeyModifiers.Control) ||
+        OperatingSystem.IsMacOS() && modifiers.HasFlag(KeyModifiers.Alt);
+
+    /// <summary>Ctrl+Enter commits a comment/note editor on Windows; Cmd+Enter is the macOS equivalent.</summary>
+    internal static bool IsCommandEnterCommit(KeyEventArgs e) =>
+        e.Key == Key.Enter &&
+        (e.KeyModifiers == KeyModifiers.Control ||
+         OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Meta);
+
+    /// <summary>Ctrl+wheel zooms on Windows; macOS Office zooms on Cmd+wheel (Ctrl still works).</summary>
+    internal static bool IsWheelZoomModifier(KeyModifiers modifiers) =>
+        modifiers.HasFlag(KeyModifiers.Control) ||
+        OperatingSystem.IsMacOS() && modifiers.HasFlag(KeyModifiers.Meta);
+
     private bool ShouldHandleEscapeLocallyBeforeFormulaPointMode(Key key) =>
         key == Key.Escape &&
         (_keyboardSelectionMode != ExcelSelectionMode.Normal ||
@@ -63,11 +82,25 @@ public sealed partial class MainWindow
         out KeyboardCommandShortcut shortcut)
     {
         shortcut = default;
-        return TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
+        if (TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
             WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
-            shortcutKey,
-            ToWorkbookShortcutModifiers(modifiers),
-            out shortcut);
+                shortcutKey,
+                ToWorkbookShortcutModifiers(modifiers),
+                out shortcut))
+        {
+            return true;
+        }
+
+        // Excel for Mac documents Cmd+T (alongside Ctrl+T) for Create Table; the shared catalog only
+        // carries the Windows Ctrl chord, so project that one Cmd chord here.
+        if (OperatingSystem.IsMacOS() && key == Key.T && modifiers == KeyModifiers.Meta)
+        {
+            shortcut = KeyboardCommandShortcut.CreateTable;
+            return true;
+        }
+
+        shortcut = default;
+        return false;
     }
 
     private static AvaloniaLocalShortcutRule R(
@@ -117,6 +150,15 @@ public sealed partial class MainWindow
 
     private async Task<bool> TryHandleApplicationOrLocalShortcutAsync(KeyEventArgs args)
     {
+        // WPF handles the Ctrl+F1 ribbon toggle before its text-box focus check, so it also works
+        // while a cell/formula editor has focus.
+        if (IsToggleRibbonVisibilityShortcut(args.Key, args.KeyModifiers))
+        {
+            args.Handled = true;
+            ToggleRibbonVisibility();
+            return true;
+        }
+
         if (TryHandleFocusedEditorShortcut(args))
             return true;
 
@@ -258,6 +300,9 @@ public sealed partial class MainWindow
                 break;
             case KeyboardCommandShortcut.InsertEmbeddedChart:
                 InsertChartFromSelection(ChartType.Column);
+                break;
+            case KeyboardCommandShortcut.ToggleRibbonVisibility:
+                ToggleRibbonCollapsed();
                 break;
             case KeyboardCommandShortcut.InsertChartSheet:
                 InsertChartSheetFromSelection();

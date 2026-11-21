@@ -84,6 +84,40 @@ public static class DocumentParagraphPaginationPlanner
         return true;
     }
 
+    /// <summary>
+    /// True when a paragraph whose mark is a tracked deletion has nothing left to show in the Final / No
+    /// Markup views (<paramref name="deletedTextVisible"/> false): every run is deleted text or empty, so Word
+    /// merges the paragraph into the next one and it takes no vertical space and draws no bullet or number.
+    /// </summary>
+    public static bool IsFullyDeletedParagraphCollapsedInFinalView(Paragraph paragraph, bool deletedTextVisible)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+
+        if (deletedTextVisible
+            || paragraph.MarkRevision != RevisionKind.Deleted
+            || paragraph.SectionBreak is not null
+            || paragraph.DropCap is not null)
+            return false;
+
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.IsPageBreak || run.IsColumnBreak)
+                return false;
+            if (run.Revision == RevisionKind.Deleted)
+                continue;
+            var bare = string.IsNullOrEmpty(run.Text)
+                && run.Image is null && run.Equation is null && run.Shape is null && run.WordArt is null
+                && run.Chart is null && run.EmbeddedObject is null && run.SmartArt is null
+                && run.PreservedDrawing is null && run.DrawingGroup is null
+                && run.FootnoteId is null && run.EndnoteId is null
+                && run.FieldKind == RunFieldKind.None && run.ComplexField is null && run.Control is null;
+            if (!bare)
+                return false;
+        }
+
+        return true;
+    }
+
     /// <summary>True when Word applies widow/orphan control to the paragraph (omitted = default on).</summary>
     public static bool IsWidowControlEffective(ParagraphFormatting formatting)
     {

@@ -626,6 +626,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         appSource.Should().Contain("Name = ApplicationTitle;");
         source.Should().Contain("private void InstallNativeMenu(NativeMenu menu)");
         source.Should().Contain("NativeDock.SetMenu(app, menu);");
+        source.Should().Contain("NativeDock.GetMenu(app) is not null");
         source.Should().Contain("NativeMenu.SetMenu(this, menu);");
         source.Should().Contain("InstallNativeMenu(_nativeMenu);");
         source.Should().Contain("private NativeMenu CreateNativeFileMenu()");

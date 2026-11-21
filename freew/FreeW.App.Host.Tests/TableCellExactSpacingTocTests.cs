@@ -102,6 +102,34 @@ public sealed class TableCellExactSpacingTocTests
     }
 
     [Fact]
+    public void LeadingContentEstimate_ReservesTheNoteBandOnlyForAPageThatCarriesANoteReference()
+    {
+        static TextDocument Build(bool referenceOnTablePage)
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Footnotes[1] = new Footnote(1, "a note");
+            var earlier = new Paragraph("an earlier page with a note");
+            earlier.Runs.Add(new Run("1") { FootnoteId = 1 });
+            doc.Blocks.Add(earlier);
+            var heading = new Paragraph("Contents");
+            heading.Runs.Insert(0, new Run(string.Empty) { IsPageBreak = true });
+            if (referenceOnTablePage)
+                heading.Runs.Add(new Run("1") { FootnoteId = 1 });
+            doc.Blocks.Add(heading);
+            doc.Blocks.Add(Table.Create(1, 1));
+            return doc;
+        }
+
+        var without = DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(Build(false), 2);
+        var with = DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(Build(true), 2);
+
+        // The 80 DIP band belongs to a page that has a note; a footnoted document's note-free table page
+        // must not lose it (that pushed the last rows of a table onto an extra page).
+        (with - without).Should().BeApproximately(80, 0.01);
+    }
+
+    [Fact]
     public void LeadingContentEstimate_RestartsAfterAPageTypeSectionBreak()
     {
         var doc = TextDocument.CreateEmpty();

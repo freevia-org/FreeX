@@ -170,6 +170,7 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } selectedRange) return;
         var prefill = HyperlinkDialogPrefill.FromCell(_workbook.GetSheet(_currentSheetId), selectedRange.Start);
         var dialog = new HyperlinkDialog(prefill.Target, prefill.DisplayText, _currentFilePath) { Owner = this };
+        dialog.ApplyPrefill(prefill, _workbook);
         if (dialog.ShowDialog() != true) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Insert Link",

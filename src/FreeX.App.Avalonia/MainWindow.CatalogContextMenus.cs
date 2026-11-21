@@ -154,10 +154,21 @@ public sealed partial class MainWindow
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, command.AutomationId);
         AutomationProperties.SetName(button, UiText.Get(command.TitleResourceKey));
-        ToolTip.SetTip(button, UiText.Get(command.TitleResourceKey));
+        ApplyAvaloniaQuickAccessTooltip(
+            button,
+            UiText.Get(command.TitleResourceKey),
+            UiText.Get(command.DescriptionResourceKey),
+            keyTip);
         button.Click += (_, args) => ExecuteAvaloniaQuickAccessCommand(command, button, args);
         AttachAvaloniaQuickAccessCustomization(button, command.Id);
         return button;
+    }
+
+    // WPF CreateQuickAccessToolbarButton: RibbonTooltip title, description and QAT key tip.
+    internal static void ApplyAvaloniaQuickAccessTooltip(Control button, string title, string? description, string? keyTip)
+    {
+        ToolTip.SetTip(button, AvaloniaRibbonRenderer.CreateRibbonTooltipContent(title, description, keyTip));
+        ToolTip.SetShowDelay(button, 500);
     }
 
     private const double AvaloniaQuickAccessDisabledOpacity = 0.42;
@@ -221,6 +232,12 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(
             button,
             UiText.Format("QuickAccessToolbar_HistoryAutomationNameFormat", command.CommandName));
+        var commandTitle = UiText.Get(command.TitleResourceKey);
+        ApplyAvaloniaQuickAccessTooltip(
+            button,
+            UiText.Format("QuickAccessToolbar_HistoryAutomationNameFormat", commandTitle),
+            UiText.Format("QuickAccessToolbar_HistoryDescriptionFormat", commandTitle.ToLowerInvariant()),
+            keyTip: null);
         var menu = AvaloniaManagedContextMenu.Attach(
             button,
             () => AvaloniaQuickAccessToolbarContextMenu.BuildHistoryItems(

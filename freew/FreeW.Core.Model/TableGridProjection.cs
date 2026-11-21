@@ -36,7 +36,7 @@ public static class TableGridProjection
     {
         ArgumentNullException.ThrowIfNull(row);
         var cells = new List<TableGridCellProjection>(row.Cells.Count);
-        var startColumn = 0;
+        var startColumn = NormalizeGridSkip(row.GridBefore);
         for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
             var cell = row.Cells[cellIndex];
@@ -51,8 +51,11 @@ public static class TableGridProjection
     public static int RowWidth(TableRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
-        return row.Cells.Sum(cell => NormalizeSpan(cell.GridSpan));
+        return NormalizeGridSkip(row.GridBefore) + row.Cells.Sum(cell => NormalizeSpan(cell.GridSpan));
     }
+
+    /// <summary>Clamps a <c>w:gridBefore</c> / <c>w:gridAfter</c> count to a sane, non-negative range.</summary>
+    public static int NormalizeGridSkip(int count) => Math.Clamp(count, 0, MaximumGridSpan);
 
     public static int TableWidth(Table table)
     {
@@ -66,7 +69,7 @@ public static class TableGridProjection
         if (cellIndex < 0 || cellIndex >= row.Cells.Count)
             return -1;
 
-        var startColumn = 0;
+        var startColumn = NormalizeGridSkip(row.GridBefore);
         for (var index = 0; index < cellIndex; index++)
             startColumn += NormalizeSpan(row.Cells[index].GridSpan);
         return startColumn;
@@ -78,7 +81,7 @@ public static class TableGridProjection
         if (gridColumn < 0)
             return null;
 
-        var startColumn = 0;
+        var startColumn = NormalizeGridSkip(row.GridBefore);
         for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
             var cell = row.Cells[cellIndex];
@@ -106,7 +109,7 @@ public static class TableGridProjection
         if (gridColumn < 0)
             return null;
 
-        var startColumn = 0;
+        var startColumn = NormalizeGridSkip(row.GridBefore);
         for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
             var cell = row.Cells[cellIndex];
@@ -129,7 +132,7 @@ public static class TableGridProjection
     {
         ArgumentNullException.ThrowIfNull(row);
 
-        var startColumn = 0;
+        var startColumn = NormalizeGridSkip(row.GridBefore);
         for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
         {
             if (startColumn >= gridColumn)

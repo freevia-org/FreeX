@@ -791,6 +791,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public PreservedDrawing? PreservedDrawing { get; set; }
 
+    /// <summary>
+    /// The picture Word stores beside a verbatim-preserved drawing that older consumers show instead of it
+    /// (the <c>mc:Fallback</c> of a <c>chartex</c> chart). View-only: renderers draw it in the preserved
+    /// drawing's place so the page keeps its size; the writer still re-emits <see cref="PreservedDrawing"/>.
+    /// </summary>
+    public InlineImage? PreservedDrawingPreview { get; set; }
+
     /// <summary>Creates a run that re-emits a verbatim-preserved inline drawing instead of text.</summary>
     public static Run FromPreservedDrawing(PreservedDrawing drawing) =>
         new(string.Empty) { PreservedDrawing = drawing };
@@ -2938,6 +2945,19 @@ public sealed class TableRow
     public List<TableCell> Cells { get; } = [];
 
     /// <summary>
+    /// Number of grid columns skipped before the first cell of the row (<c>tr/trPr/w:gridBefore</c>). The
+    /// skipped area stays empty (no cells, no borders), so the row's cells start further right than the
+    /// first grid column. Zero (the default) emits no element.
+    /// </summary>
+    public int GridBefore { get; set; }
+
+    /// <summary>
+    /// Number of grid columns left unused after the last cell of the row (<c>tr/trPr/w:gridAfter</c>). The
+    /// trailing area stays empty, as in Word. Zero (the default) emits no element.
+    /// </summary>
+    public int GridAfter { get; set; }
+
+    /// <summary>
     /// Explicit row height in points (<c>tr/trPr/w:trHeight/@w:val</c>), interpreted per <see cref="HeightRule"/>.
     /// Null (the default) means automatic height, so no <c>w:trHeight</c> is emitted and existing rows are
     /// unaffected.
@@ -3567,7 +3587,11 @@ public enum PageNumberFormat
     /// <summary>Lower-case letters: a, b, c (w:fmt="lowerLetter").</summary>
     LowerLetter,
     /// <summary>Upper-case letters: A, B, C (w:fmt="upperLetter").</summary>
-    UpperLetter
+    UpperLetter,
+    /// <summary>Arabic abjad letters: أ, ب, ج, ... (w:fmt="arabicAbjad").</summary>
+    ArabicAbjad,
+    /// <summary>Arabic alphabetical letters: أ, ب, ت, ... (w:fmt="arabicAlpha").</summary>
+    ArabicAlpha
 }
 
 /// <summary>
@@ -4211,6 +4235,28 @@ public sealed class TextDocument
     /// is omitted from newly authored packages; true preserves the original image fidelity across saves.
     /// </summary>
     public bool DoNotAutoCompressPictures { get; set; }
+
+    /// <summary>Word 2013+ (the current) layout compatibility mode; the default for documents FreeW authors.</summary>
+    public const int CurrentCompatibilityMode = 15;
+
+    /// <summary>
+    /// The Word layout compatibility mode (<c>w:settings/w:compat/w:compatSetting[@w:name="compatibilityMode"]/@w:val</c>):
+    /// 11 = Word 2003, 12 = Word 2007, 14 = Word 2010, 15 = Word 2013 and later. A <c>w:compat</c> element without the
+    /// setting, and a package with no settings part at all, is Word 2007 (12) when read - Word's own rule. A newly
+    /// created document starts at <see cref="CurrentCompatibilityMode"/>. The settings part itself is preserved
+    /// verbatim on save, so this is read-only data for the renderer; a freshly authored document writes the setting
+    /// only for a mode other than 12 and 15 (or beside legacy flags).
+    /// </summary>
+    public int CompatibilityMode { get; set; } = CurrentCompatibilityMode;
+
+    /// <summary>Whether Word lays this document out in a pre-2013 compatibility mode (below 15).</summary>
+    public bool UsesLegacyCompatibilityLayout => CompatibilityMode < CurrentCompatibilityMode;
+
+    /// <summary>
+    /// Local names of the enabled boolean <c>w:compat</c> flags (for example <c>doNotUseHTMLParagraphAutoSpacing</c>),
+    /// in document order, so the renderer can honour legacy layout flags. Authored documents write them back verbatim.
+    /// </summary>
+    public List<string> CompatibilityFlags { get; } = [];
 
     /// <summary>
     /// Whether common system fonts should be included when fonts are embedded for this document.

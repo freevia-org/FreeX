@@ -50,6 +50,10 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
 
     public List<string> SpellCheckCustomDictionaryWords { get; set; } = [];
 
+    // Advanced — Excel's "Edit Custom Lists": user-defined sequences the fill handle continues
+    // (for example Small, Medium, Large) and Sort can order by.
+    public List<List<string>> CustomLists { get; set; } = [];
+
     public bool AutoCalculate { get; set; } = true;
     public bool UseR1C1ReferenceStyle { get; set; }
 
@@ -127,6 +131,7 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
         ShowScreenTips = source.ShowScreenTips;
         AppLanguage = source.AppLanguage;
         SpellCheckCustomDictionaryWords = source.SpellCheckCustomDictionaryWords.ToList();
+        CustomLists = source.CustomLists.Select(list => list.ToList()).ToList();
         AutoCalculate = source.AutoCalculate;
         UseR1C1ReferenceStyle = source.UseR1C1ReferenceStyle;
         GenerateGetPivotData = source.GenerateGetPivotData;
@@ -180,6 +185,7 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
         DefaultSheetCount = NormalizeDefaultSheetCount(DefaultSheetCount);
         UserName = NormalizeUserName(UserName);
         SpellCheckCustomDictionaryWords = NormalizeSpellCheckCustomDictionaryWords(SpellCheckCustomDictionaryWords);
+        CustomLists = NormalizeCustomLists(CustomLists);
         QuickAccessToolbarCommands = NormalizeQuickAccessToolbarCommands(QuickAccessToolbarCommands);
     }
 
@@ -227,6 +233,26 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
 
         normalized.Sort(StringComparer.OrdinalIgnoreCase);
         return normalized;
+    }
+
+    /// <summary>Trims entries, drops blanks, and drops lists with fewer than two entries or that repeat an earlier list.</summary>
+    public static List<List<string>> NormalizeCustomLists(IEnumerable<IEnumerable<string>?>? lists)
+    {
+        var result = new List<List<string>>();
+        if (lists is null)
+            return result;
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var list in lists)
+        {
+            var entries = (list ?? []).Select(e => e?.Trim() ?? "").Where(e => e.Length > 0).ToList();
+            if (entries.Count < 2 || !seen.Add(string.Join("", entries)))
+                continue;
+
+            result.Add(entries);
+        }
+
+        return result;
     }
 
     public static string? NormalizeSpellCheckCustomDictionaryWord(string? word)

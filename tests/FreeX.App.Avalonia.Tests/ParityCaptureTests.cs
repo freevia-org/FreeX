@@ -636,7 +636,8 @@ public sealed class ParityCaptureTests
                 var pngPath = Path.Combine(outputDirectory, dialog.PngFileName);
                 new FileInfo(pngPath).Length.Should().BeGreaterThan(2_048,
                     "the Go To Special capture should contain the rendered controls");
-                ReadPngDimensions(pngPath).Should().Be((430, 438),
+                // The WPF 430x438 outer window minus the measured 16x39 frame (8f3e6b9f55).
+                ReadPngDimensions(pngPath).Should().Be((430 - 16, 438 - 39),
                     "the fixed-size dialog client area should be captured without edge clipping");
 
                 var image = PngCodec.DecodeFile(pngPath);
@@ -660,7 +661,8 @@ public sealed class ParityCaptureTests
                 CountExactColorOnRow(image, borderBottom, red: 213, green: 223, blue: 229)
                     .Should().BeGreaterThan(300,
                         "the bottom value-type border should remain at the WPF-aligned action-row separation");
-                var accentRows = FindAccentRows(image, minimumY: 350, maximumY: 405, minimumPixels: 20);
+                // The action row is bottom-anchored, so it moved up with the 39px shorter client area.
+                var accentRows = FindAccentRows(image, minimumY: 311, maximumY: image.Height - 1, minimumPixels: 20);
                 accentRows.Should().HaveCount(2,
                     "the default action button should render its top and bottom accent borders");
                 (accentRows[1] - accentRows[0]).Should().Be(19,
@@ -714,7 +716,8 @@ public sealed class ParityCaptureTests
                 dialog.Captured.Should().BeTrue(dialog.Note);
                 AssertCapturedPng(outputDirectory, dialog);
                 ReadPngDimensions(Path.Combine(outputDirectory, dialog.PngFileName))
-                    .Should().Be((380, 390));
+                    // The WPF 380x390 outer window minus the measured 16x39 frame (8f3e6b9f55).
+                    .Should().Be((380 - 16, 390 - 39));
 
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
 

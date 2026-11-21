@@ -36,7 +36,7 @@ public sealed class AvaloniaFindReplaceSurfaceTests
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,*,Auto,Auto\")");
         source.Should().Contain("resultsBorder.MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight");
         source.Should().Contain("Width = FindReplaceDialogPlanner.WpfCompactWidth - WpfResizableFrameWidth");
-        source.Should().Contain("MaxHeight = FindReplaceDialogPlanner.WpfCompactMaximumHeight - WpfResizableFrameHeight");
+        source.Should().Contain("SizeToContent = SizeToContent.Height");
         source.Should().NotContain("DockPanel.SetDock(resultsBorder");
     }
 }

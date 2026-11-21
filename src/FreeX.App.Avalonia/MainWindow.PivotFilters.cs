@@ -620,7 +620,10 @@ public sealed partial class MainWindow
         var kindBox = new ComboBox();
         foreach (var (label, _) in PivotFieldFilterPlanner.LabelFilterKinds)
             kindBox.Items.Add(label);
-        kindBox.SelectedIndex = PivotFieldFilterPlanner.FindLabelKindIndex(existing?.Kind ?? PivotLabelFilterKind.Equals);
+        // WPF PivotLabelFilterDialog.LoadFilter: a new filter starts on the planner default kind.
+        kindBox.SelectedIndex = existing is null
+            ? PivotFieldFilterPlanner.DefaultLabelKindIndex
+            : PivotFieldFilterPlanner.FindLabelKindIndex(existing.Kind);
         ApplyPivotComboBoxChrome(kindBox);
         AutomationProperties.SetAutomationId(kindBox, "PivotLabelFilterKindBox");
         AutomationProperties.SetName(kindBox, UiText.Get("PivotFieldFilter_LabelFilterKindAutomationName"));
@@ -739,7 +742,10 @@ public sealed partial class MainWindow
         var kindBox = new ComboBox();
         foreach (var (label, _) in PivotFieldFilterPlanner.ValueFilterKinds)
             kindBox.Items.Add(label);
-        kindBox.SelectedIndex = PivotFieldFilterPlanner.FindValueKindIndex(existing?.Kind ?? PivotValueFilterKind.GreaterThan);
+        // WPF PivotValueFilterDialog.LoadFilter: a new filter starts on the planner default kind with "0".
+        kindBox.SelectedIndex = existing is null
+            ? PivotFieldFilterPlanner.DefaultValueKindIndex
+            : PivotFieldFilterPlanner.FindValueKindIndex(existing.Kind);
         ApplyPivotComboBoxChrome(kindBox);
         AutomationProperties.SetAutomationId(kindBox, "PivotValueFilterKindBox");
         AutomationProperties.SetName(kindBox, UiText.Get("PivotFieldFilter_ValueFilterKindAutomationName"));
@@ -754,7 +760,9 @@ public sealed partial class MainWindow
 
         var primary = new TextBox
         {
-            Text = PivotFieldFilterPlanner.PrimaryInputText(existing),
+            Text = existing is null
+                ? PivotFieldFilterPlanner.DefaultValueFilterPrimaryText
+                : PivotFieldFilterPlanner.PrimaryInputText(existing),
         };
         ApplyPivotTextBoxChrome(primary);
         AutomationProperties.SetAutomationId(primary, "PivotValueFilterPrimaryBox");

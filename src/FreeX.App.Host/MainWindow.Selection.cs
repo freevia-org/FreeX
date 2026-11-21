@@ -682,18 +682,9 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    private bool _ribbonContentCollapsed;
-
-    private void ToggleRibbonVisibility()
-    {
-        RibbonTabs.ApplyTemplate();
-        if (RibbonTabs.Template.FindName("PART_SelectedContentHost", RibbonTabs) is not ContentPresenter contentHost)
-            return;
-
-        _ribbonContentCollapsed = !_ribbonContentCollapsed;
-        contentHost.Visibility = _ribbonContentCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        RibbonTabs.MinHeight = _ribbonContentCollapsed ? 0 : 132;
-    }
+    // Ctrl+F1: the shared ribbon display state (see MainWindow.RibbonDisplay.cs) owns collapsing, so the
+    // tab double-click and the temporary show after a tab click stay in step with the shortcut.
+    private void ToggleRibbonVisibility() => ToggleRibbonCollapsed();
 
     private bool TryHandleShowKeyTipsPreview(System.Windows.Input.KeyEventArgs e, object sender)
     {

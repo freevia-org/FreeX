@@ -430,6 +430,11 @@ internal static class PaginationEngine
                 }
             }
 
+            // Word recalculates PAGEREF results (a TOC's page numbers) against the pagination it just laid
+            // out; the printed pages should show the same numbers, not the last-saved cache.
+            if (segmentPaginations is { Count: > 0 })
+                ApplyPrintPageReferences(editor.Model, scratchBlocks, assignment, totalPageCount, segmentPaginations);
+
             // The scratch clone's effect runs carry the brushes TagTextEffectsForPrint gave them; hand the
             // plans to every segment so the section-aware print path can paint outline/shadow/glow/reflection.
             if (segmentPaginations is { Count: > 0 } && TextEffectsPrintPaginator.TryGetPlans(flow) is { } effectPlans)
@@ -447,6 +452,49 @@ internal static class PaginationEngine
         }
 
         return assignment;
+    }
+
+    /// <summary>
+    /// Refreshes the displayed PAGEREF numbers of the laid-out print flows from the page assignment, and
+    /// keeps the refresh only when it leaves every segment's page count as it was (a number's width must
+    /// never move the pagination the numbers were derived from, nor loop).
+    /// </summary>
+    private static void ApplyPrintPageReferences(
+        TextDocument model,
+        System.Windows.Documents.Block[] scratchBlocks,
+        int[] assignment,
+        int totalPageCount,
+        List<SegmentPagination> segmentPaginations)
+    {
+        List<(System.Windows.Documents.Run Run, string Previous)> changed;
+        try
+        {
+            var resolve = FreeW.App.Presentation.DocumentView.PrintPageReferencePlanner.Build(model, assignment, totalPageCount);
+            changed = DocumentView.RefreshPrintPageReferences(scratchBlocks, resolve);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+        {
+            return;
+        }
+
+        if (changed.Count == 0)
+            return;
+
+        var stable = true;
+        foreach (var segment in segmentPaginations)
+        {
+            segment.Paginator.ComputePageCount();
+            if (segment.Paginator.PageCount != segment.PageCount)
+                stable = false;
+        }
+
+        if (stable)
+            return;
+
+        foreach (var (run, previous) in changed)
+            run.Text = previous;
+        foreach (var segment in segmentPaginations)
+            segment.Paginator.ComputePageCount();
     }
 
     /// <summary>
@@ -587,6 +635,7 @@ internal static class PaginationEngine
             document, segment.Page, runningHeader, runningFooter);
         top += topInsetDip;
         bottom += bottomInsetDip;
+        ApplyFirstPageHeaderInset(scratchBlocks[segment.Start], document, segment.Page, topInsetDip);
 
         // Mirror PrintLayout.BuildPaginatedDocument's footnote body-reserve: when the model has
         // footnotes, PrintLayout shrinks the body's usable height by the estimated rendered height
@@ -776,7 +825,7 @@ internal static class PaginationEngine
             {
                 PageWidth = pageSize.Width,
                 PageHeight = pageSize.Height,
-                PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip),
+                PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip - LastLineLeadingAllowanceDip),
                 FontFamily = sourceFlow.FontFamily,
                 FontSize = sourceFlow.FontSize
             };
@@ -854,36 +903,12 @@ internal static class PaginationEngine
 
         // The notes a page carries are those whose reference mark lands on it (Word keeps a reference and
         // its note together), not every note of a paragraph that merely starts on the page.
-        List<int> NoteIdsOnFirstPage(int blockCount)
-        {
-            var ids = new List<int>();
-            foreach (var entry in pending.Take(blockCount))
-            {
-                var markers = DocumentView.CollectFootnoteMarkers([entry.Block]);
-                if (markers.Count == 0)
-                {
-                    if (!entry.IsContinuation)
-                        ids.AddRange(FootnoteIdsInModelBlock(modelBlocks[entry.ModelIndex]));
-                    continue;
-                }
-
-                foreach (var marker in markers)
-                {
-                    int markerPage;
-                    try
-                    {
-                        markerPage = dynamicWork.GetPageNumber(marker.Position);
-                    }
-                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
-                    {
-                        markerPage = 0;
-                    }
-                    if (markerPage <= 0)
-                        ids.Add(marker.FootnoteId);
-                }
-            }
-            return ids.Distinct().ToList();
-        }
+        List<int> NoteIdsOnFirstPage(int blockCount) =>
+            ResolveNoteIdsOnFirstPage(
+                pending.Take(blockCount).Select(entry => (entry.Block, entry.ModelIndex, entry.IsContinuation)),
+                pending.Select(entry => (entry.Block, entry.ModelIndex)).ToList(),
+                modelIndex => modelBlocks[modelIndex],
+                dynamicWork);
 
         double NoteDemandFor(int blockCount)
         {
@@ -923,22 +948,51 @@ internal static class PaginationEngine
             var demand = NoteDemandFor(blockCount);
             return demand <= 0
                 ? 0
-                : ClampFootnoteReserveDip(Math.Min(demand, bodyHeightDip) + footnoteFrameClearanceDip, segment.Page);
+                : ClampFootnoteReserveDip(
+                    Math.Min(demand + FootnoteMarkLineExtraDip * NoteIdsOnFirstPage(blockCount).Count, bodyHeightDip)
+                        + footnoteFrameClearanceDip,
+                    segment.Page);
         }
 
         void SetReserve(double reserveDip) =>
-            work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
+            work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip - LastLineLeadingAllowanceDip);
 
-        // The last of the first blockCount entries that carries its own footnote reference, or -1.
+        // The last of the first blockCount entries that carries its own footnote reference, or -1. Evaluated
+        // under the reserve currently set (callers use none): the entry's last reference mark that sits on
+        // the first page is remembered so that "is the reference still kept?" is judged at the line of the
+        // mark, not just at the start of its paragraph -- a long paragraph can stay on the page while the
+        // line holding its mark (and so its note) is pushed to the next one.
+        TextPointer? lastReferenceMark = null;
         int LastReferencingEntry(int blockCount)
         {
+            lastReferenceMark = null;
             for (var index = Math.Min(blockCount, pending.Count) - 1; index >= 0; index--)
             {
-                if (!pending[index].IsContinuation
-                    && FootnoteIdsInModelBlock(modelBlocks[pending[index].ModelIndex]).Any())
-                    return index;
+                if (pending[index].IsContinuation
+                    || !FootnoteIdsInModelBlock(modelBlocks[pending[index].ModelIndex]).Any())
+                    continue;
+                var markers = DocumentView.CollectFootnoteMarkers([pending[index].Block], includeAutomationIdMarks: true);
+                foreach (var marker in markers)
+                {
+                    int markerPage;
+                    try { markerPage = dynamicWork.GetPageNumber(marker.Position); }
+                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { markerPage = 0; }
+                    if (markerPage <= 0)
+                        lastReferenceMark = marker.Position;
+                }
+                return index;
             }
             return -1;
+        }
+
+        bool ReferenceStaysOnFirstPage(int lastReferencing)
+        {
+            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+                return false;
+            if (lastReferenceMark is null)
+                return true;
+            try { return dynamicWork.GetPageNumber(lastReferenceMark) <= 0; }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { return true; }
         }
 
         // The largest band (at most upperDip) under which entry lastReferencing still starts on the page,
@@ -947,7 +1001,7 @@ internal static class PaginationEngine
         {
             var minimumDip = Math.Min(upperDip, minimumSplitBandDip);
             SetReserve(minimumDip);
-            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+            if (!ReferenceStaysOnFirstPage(lastReferencing))
                 return 0;
 
             var low = minimumDip;
@@ -956,7 +1010,7 @@ internal static class PaginationEngine
             {
                 var middle = (low + high) / 2;
                 SetReserve(middle);
-                if (CountBlocksStartingOnFirstPage() > lastReferencing)
+                if (ReferenceStaysOnFirstPage(lastReferencing))
                     low = middle;
                 else
                     high = middle;
@@ -976,19 +1030,36 @@ internal static class PaginationEngine
             // reserve fewer blocks fit, so try the smaller reserve they need and keep it only if it
             // still covers the page it produces.
             SetReserve(0);
+            var bandSplitsNote = false;
             var countWithoutReserve = CountBlocksStartingOnFirstPage();
+            var lastReferencing = LastReferencingEntry(countWithoutReserve);
             var reserveDip = ReserveFor(countWithoutReserve);
             if (reserveDip > 0)
             {
                 SetReserve(reserveDip);
-                var lastReferencing = LastReferencingEntry(countWithoutReserve);
-                if (lastReferencing >= 0 && CountBlocksStartingOnFirstPage() <= lastReferencing)
+                if (lastReferencing >= 0 && !ReferenceStaysOnFirstPage(lastReferencing))
                 {
                     // Word keeps a note with its reference line: when the whole note band would push the
                     // referencing text off the page, the band shrinks to what still leaves that reference
                     // on the page and the rest of the note continues on the next page. Only when not even
                     // the separator and a first note line fit does the reference move on.
-                    var keptReserve = LargestReserveKeeping(lastReferencing, reserveDip);
+                    // Word moves the last reference lines (with their notes) to the next page before it splits a
+                    // note, so first look for the most blocks whose own notes fit beside them.
+                    var movedReserve = 0.0;
+                    for (var k = countWithoutReserve; k >= 1 && movedReserve <= 0; k--)
+                    {
+                        var candidate = ReserveFor(k);
+                        if (candidate <= 0)
+                            break;
+                        SetReserve(candidate);
+                        var blocksNow = CountBlocksStartingOnFirstPage();
+                        var lastKept = LastReferencingEntry(blocksNow);
+                        if (lastKept >= 0 && ReferenceStaysOnFirstPage(lastKept) && ReserveFor(blocksNow) <= candidate + 0.01)
+                            movedReserve = candidate;
+                    }
+                    SetReserve(reserveDip);
+                    var keptReserve = movedReserve > 0 ? movedReserve : LargestReserveKeeping(lastReferencing, reserveDip);
+                    bandSplitsNote = movedReserve <= 0;
                     if (keptReserve > 0)
                     {
                         reserveDip = keptReserve;
@@ -1010,6 +1081,22 @@ internal static class PaginationEngine
             // Find where the second page begins, by page number rather than by hit-testing the page
             // (DynamicDocumentPaginator.GetPagePosition probes the page's top-left corner, which in
             // right-to-left text is the END of the first line, not its start).
+            // A paragraph ending the page with its note reference needs its space after as well beside the band
+            // (Word keeps the reference line off a page that cannot also hold the gap that follows it).
+            var lastOnPage = CountBlocksStartingOnFirstPage() - 1;
+            if (!bandSplitsNote && reserveDip > 0 && lastOnPage >= 0 && lastOnPage < pending.Count
+                && !pending[lastOnPage].IsContinuation
+                && pending[lastOnPage].Block is System.Windows.Documents.Paragraph closing
+                && closing.Margin.Bottom > 0.5
+                && FootnoteIdsInModelBlock(modelBlocks[pending[lastOnPage].ModelIndex]).Any()
+                && dynamicWork.GetPageNumber(closing.ContentEnd) <= 0)
+            {
+                SetReserve(reserveDip + closing.Margin.Bottom);
+                if (dynamicWork.GetPageNumber(closing.ContentEnd) > 0)
+                    reserveDip += closing.Margin.Bottom;
+                else
+                    SetReserve(reserveDip);
+            }
             var take = pending.Count;
             for (var index = 0; index < pending.Count; index++)
             {
@@ -1365,6 +1452,53 @@ internal static class PaginationEngine
         return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<int>)kv.Value);
     }
 
+    /// <summary>
+    /// The notes a page carries: those whose reference mark lands on its first page (Word keeps a
+    /// reference and its note together), not every note of a paragraph that merely starts there -- a
+    /// paragraph split across the page cut places its reference on the page the tail lands on. Marks are
+    /// found through <see cref="DocumentView.CollectFootnoteMarkers"/>; a block whose flow carries no mark
+    /// (and whose split-off tail carries none either) falls back to its model block's notes.
+    /// </summary>
+    internal static List<int> ResolveNoteIdsOnFirstPage(
+        IEnumerable<(System.Windows.Documents.Block Block, int ModelKey, bool IsContinuation)> entries,
+        IReadOnlyList<(System.Windows.Documents.Block Block, int ModelKey)> allPending,
+        Func<int, FreeW.Core.Model.Block> modelOf,
+        DynamicDocumentPaginator work)
+    {
+        var ids = new List<int>();
+        foreach (var entry in entries)
+        {
+            var markers = DocumentView.CollectFootnoteMarkers([entry.Block], includeAutomationIdMarks: true);
+            if (markers.Count == 0)
+            {
+                // A paragraph whose tail (and so its reference) was split off carries none itself.
+                var tailCarriesMarkers = allPending.Any(other =>
+                    other.ModelKey == entry.ModelKey
+                    && !ReferenceEquals(other.Block, entry.Block)
+                    && DocumentView.CollectFootnoteMarkers([other.Block], includeAutomationIdMarks: true).Count > 0);
+                if (!entry.IsContinuation && !tailCarriesMarkers)
+                    ids.AddRange(FootnoteIdsInModelBlock(modelOf(entry.ModelKey)));
+                continue;
+            }
+
+            foreach (var marker in markers)
+            {
+                int markerPage;
+                try
+                {
+                    markerPage = work.GetPageNumber(marker.Position);
+                }
+                catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+                {
+                    markerPage = 0;
+                }
+                if (markerPage <= 0)
+                    ids.Add(marker.FootnoteId);
+            }
+        }
+        return ids.Distinct().ToList();
+    }
+
     internal static IEnumerable<int> FootnoteIdsInModelBlock(FreeW.Core.Model.Block block)
     {
         switch (block)
@@ -1396,6 +1530,19 @@ internal static class PaginationEngine
     /// means very long footnotes overflow their region instead of failing print and print preview.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// Word sets a line that carries a footnote reference mark 0.5-0.9 pt (about 0.8 dip) taller than its
+    /// neighbours; a page's note band is charged that much per note so pages fill as Word's do.
+    /// </summary>
+    internal const double FootnoteMarkLineExtraDip = 0.8;
+
+    /// <summary>
+    /// Word does not need the trailing line-spacing leading of the last line on a page to fit above the
+    /// bottom limit (its descender may touch the limit), while WPF's line box does; the per-page flows give
+    /// that sliver back so the last line lands where Word puts it.
+    /// </summary>
+    internal const double LastLineLeadingAllowanceDip = 0.7;
+
     internal static double ClampFootnoteReserveDip(double reserveDip, PageSettings page)
     {
         if (reserveDip <= 0)
@@ -1515,6 +1662,86 @@ internal static class PaginationEngine
     }
 
     internal readonly record struct PageSegment(int Start, int End, PageSettings Page);
+
+    /// <summary>
+    /// A section whose first page carries its own (taller) header -- w:titlePg with a first-page header of
+    /// several lines, the usual chapter-opening page -- starts its body lower on that page than on the
+    /// rest. A segment's flow has a single page box, so the extra first-page inset is added as leading
+    /// space on the segment's first block, which lies at the top of that first page.
+    /// </summary>
+    internal static void ApplyFirstPageHeaderInset(
+        System.Windows.Documents.Block firstBlock,
+        TextDocument document,
+        PageSettings page,
+        double runningTopInsetDip)
+    {
+        var extraDip = ResolveFirstPageExtraTopInsetDip(document, page, runningTopInsetDip);
+        var target = firstBlock;
+        if (target is System.Windows.Documents.Section { Blocks.Count: > 0 } section)
+            target = section.Blocks.FirstBlock;
+
+        // WPF drops a first block's top margin at the head of a page, so the space is carried as padding
+        // (inside the block). A table has no padding; a leading table keeps the running inset.
+        if (target is not System.Windows.Documents.Paragraph paragraph)
+            return;
+
+        // The same scratch block can be laid out again (an incremental re-layout), so the extra space is
+        // tracked per block and swapped rather than accumulated.
+        var applied = AppliedFirstPageInsets.TryGetValue(paragraph, out var box) ? box.Value : 0.0;
+        if (extraDip <= 0.5)
+            extraDip = 0;
+        if (Math.Abs(applied - extraDip) < 0.01)
+            return;
+
+        paragraph.Padding = new Thickness(
+            paragraph.Padding.Left,
+            Math.Max(0, paragraph.Padding.Top - applied + extraDip),
+            paragraph.Padding.Right,
+            paragraph.Padding.Bottom);
+        AppliedFirstPageInsets.Remove(paragraph);
+        if (extraDip > 0)
+            AppliedFirstPageInsets.Add(paragraph, new System.Runtime.CompilerServices.StrongBox<double>(extraDip));
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        System.Windows.Documents.Block, System.Runtime.CompilerServices.StrongBox<double>> AppliedFirstPageInsets = new();
+
+    internal static double ResolveFirstPageExtraTopInsetDip(
+        TextDocument document,
+        PageSettings page,
+        double runningTopInsetDip)
+    {
+        if (!page.DifferentFirstPage)
+            return 0;
+
+        var sections = document.Sections;
+        var index = -1;
+        for (var i = 0; i < sections.Count; i++)
+        {
+            if (ReferenceEquals(sections[i].Page, page))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        // Only a section that begins on a fresh page opens with its first-page header; a continuous
+        // section starts mid-page under the previous page's header.
+        if (index < 0 || (index > 0 && !IsPageTypeSectionBreak(sections[index - 1])))
+            return 0;
+
+        HeaderFooter? firstHeader = null;
+        for (var i = index; i >= 0 && firstHeader is null; i--)
+            firstHeader = sections[i].HeadersFooters.FirstHeader;
+        if (firstHeader is null || !HeaderFooterBandRenderer.HasLayoutContent(firstHeader))
+            return 0;
+
+        var (firstTopInsetDip, _) = HeaderFooterBandRenderer.ResolveBodyInsetsDip(
+            document, page, firstHeader, null, includeEmptyParagraphs: true);
+        var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        firstTopInsetDip = Math.Min(firstTopInsetDip, Math.Max(0, contentHeightDip - 72));
+        return Math.Max(0, firstTopInsetDip - runningTopInsetDip);
+    }
 
     internal static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {

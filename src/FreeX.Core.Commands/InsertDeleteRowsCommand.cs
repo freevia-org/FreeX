@@ -40,6 +40,13 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
 
     public string Label => $"Insert {_count} Row(s)";
 
+    public SheetId SheetId => _sheetId;
+
+    /// <summary>The first inserted row.</summary>
+    public uint BeforeRow => _beforeRow;
+
+    public uint Count => _count;
+
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     /// <inheritdoc/>

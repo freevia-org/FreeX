@@ -37,7 +37,7 @@ public static class HomeRibbonDefinition
                 .ComboBox("Font Size", "Font Size", c => c with
                 {
                     Width = 44,
-                    Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24" }
+                    Items = new[] { "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72" }
                 })
                 .Icon("Increase Font Size", "Increase Font Size", Ico.Font, "FG")
                 .Icon("Decrease Font Size", "Decrease Font Size", Ico.Font, "FK")

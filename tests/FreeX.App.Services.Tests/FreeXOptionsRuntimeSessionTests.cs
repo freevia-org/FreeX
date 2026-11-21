@@ -4,6 +4,7 @@ using FreeX.App.Services.Ribbon;
 
 namespace FreeX.App.Services.Tests;
 
+[Collection("AutoFillCustomLists")]
 public sealed class FreeXOptionsRuntimeSessionTests
 {
     [Fact]
@@ -188,6 +189,35 @@ public sealed class FreeXOptionsRuntimeSessionTests
         result.Options.EnableFillHandleAndCellDragAndDrop.Should().BeFalse();
         result.Options.EnableAutoCompleteForCellValues.Should().BeFalse();
         result.Options.FormulaBarExpanded.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DialogSession_PersistsEditedCustomLists_AndKeepsThemWhenUntouched()
+    {
+        var open = new AppOptions { CustomLists = [["A", "B"]] };
+        AppOptions? saved = null;
+        var runtime = new FreeXOptionsRuntimeSession(
+            open,
+            load: () => new AppOptions { CustomLists = [["A", "B"]] },
+            save: options => { saved = options; return true; });
+
+        var untouched = runtime.BeginDialog(open);
+        untouched.Commit(BuildInput(open, open.ShowGridlines), true, true, false)
+            .Options.CustomLists.Should().BeEquivalentTo(new[] { new[] { "A", "B" } });
+
+        var dialog = runtime.BeginDialog(open);
+        dialog.EditedCustomLists = CustomListsTextPlanner.Parse("Small, Medium, Large\nX").Select(l => (IReadOnlyList<string>)l).ToList();
+        var result = dialog.Commit(BuildInput(open, open.ShowGridlines), true, true, false);
+
+        saved.Should().NotBeNull();
+        result.Options.CustomLists.Should().BeEquivalentTo(new[] { new[] { "Small", "Medium", "Large" } });
+    }
+
+    [Fact]
+    public void CustomListsText_RoundTripsOneListPerLine()
+    {
+        var text = CustomListsTextPlanner.Format([["Low", "High"], ["Mon", "Tue", "Wed"]]);
+        CustomListsTextPlanner.Parse(text).Should().BeEquivalentTo(new[] { new[] { "Low", "High" }, new[] { "Mon", "Tue", "Wed" } });
     }
 
     private static OptionsDialogPlanner.OptionsDialogInput BuildInput(

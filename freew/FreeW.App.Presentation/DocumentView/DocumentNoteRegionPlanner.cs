@@ -13,7 +13,32 @@ public sealed record DocumentNoteRegionRow(
     int SequenceIndex,
     string Label,
     string Text,
-    double EstimatedHeightDip);
+    double EstimatedHeightDip)
+{
+    /// <summary>
+    /// The note paragraph's own text layout. Notes of one page need not share a style (a document can mix
+    /// "footnote text" and a custom note style, each with its own size, line pitch and indent), so each row
+    /// carries its own; a zero/NaN value means "the region's".
+    /// </summary>
+    public NoteRowLayout Layout { get; init; } = NoteRowLayout.Unspecified;
+}
+
+/// <summary>One note paragraph's resolved text layout (sizes in points, distances in device-independent pixels).</summary>
+public readonly record struct NoteRowLayout(
+    double FontSizePt,
+    string? FontFamily,
+    double LineHeightDip,
+    double CharWidthDip,
+    double GapAfterDip,
+    double ExactLineHeightDip,
+    double IndentDip,
+    double HangingDip,
+    bool Justified)
+{
+    public static NoteRowLayout Unspecified { get; } = new(0, null, 0, 0, double.NaN, 0, 0, 0, false);
+
+    public bool IsSpecified => FontSizePt > 0;
+}
 
 public sealed record DocumentNoteRegionPlan(
     DocumentNoteRegionKind Kind,
@@ -40,6 +65,25 @@ public sealed record DocumentNoteRegionPlan(
 
     /// <summary>Vertical gap after each note row (the footnote paragraph's space after).</summary>
     public double RowGapDip { get; init; } = DocumentNoteRegionPlanner.DefaultRowGapDip;
+
+    /// <summary>
+    /// The note paragraph's exact line pitch when its style fixes one (Word's "Exactly" spacing); zero when
+    /// the lines take the font's natural pitch. Renderers must draw the lines at this pitch so the drawn
+    /// band matches the height the pagination reserved for it.
+    /// </summary>
+    public double ExactLineHeightDip { get; init; }
+
+    /// <summary>Left indent of the note paragraph's text column (where wrapped lines start).</summary>
+    public double TextIndentDip { get; init; }
+
+    /// <summary>
+    /// How far the first line's reference mark hangs left of <see cref="TextIndentDip"/>; the note text starts
+    /// at the indent (Word's number + tab hanging layout). Zero for a flush paragraph.
+    /// </summary>
+    public double HangingDip { get; init; }
+
+    /// <summary>The note paragraph is justified.</summary>
+    public bool Justified { get; init; }
 }
 
 /// <summary>Whether a footnote fragment begins a region, continues an earlier page, or needs no rule.</summary>
@@ -58,7 +102,11 @@ public sealed record DocumentFootnoteContinuationFragment(
     string Text,
     bool StartsNote,
     bool EndsNote,
-    double EstimatedHeightDip);
+    double EstimatedHeightDip)
+{
+    /// <summary>The layout of the note this fragment belongs to (unspecified: the region's).</summary>
+    public NoteRowLayout Layout { get; init; } = NoteRowLayout.Unspecified;
+}
 
 /// <summary>Footnote fragments assigned to one physical page before the following body content is laid out.</summary>
 public sealed record DocumentFootnoteContinuationPagePlan(
@@ -151,6 +199,10 @@ public static class DocumentNoteRegionPlanner
             TextFontFamily = metrics.FontFamily,
             SeparatorHeightDip = metrics.SeparatorHeightDip,
             RowGapDip = metrics.RowGapDip,
+            ExactLineHeightDip = metrics.ExactLineDip,
+            TextIndentDip = metrics.IndentLeftDip,
+            HangingDip = metrics.HangingDip,
+            Justified = metrics.Justified,
         };
     }
 
@@ -174,7 +226,6 @@ public static class DocumentNoteRegionPlanner
         foreach (var (ids, bandHeightDip, pageNumber) in pages)
         {
             var metrics = ResolveFootnoteTextMetrics(document, ids.Count > 0 ? ids : carried.Select(s => s.Row.NoteId).ToList());
-            var charsPerLine = ApproximateCharsPerLine(contentWidthDip, metrics.CharWidthDip);
             var queue = carried
                 .Concat(BuildRows(document, ids, isFootnote: true, contentWidthDip, metrics)
                     .Select(row => new FootnoteFragmentState(
@@ -191,21 +242,27 @@ public static class DocumentNoteRegionPlanner
                 ? DocumentFootnoteSeparatorKind.Continuation
                 : DocumentFootnoteSeparatorKind.Initial;
             // A page with nothing reserved still shows the first line of each note it references.
-            var available = Math.Max(bandHeightDip, metrics.SeparatorHeightDip + metrics.LineHeightDip);
+            var available = Math.Max(
+                bandHeightDip,
+                metrics.SeparatorHeightDip + MetricsOf(queue[0].Row.Layout, metrics).LineHeightDip);
             var remaining = available - metrics.SeparatorHeightDip;
             var fragments = new List<DocumentFootnoteContinuationFragment>();
             var index = 0;
-            while (index < queue.Count && remaining >= metrics.LineHeightDip - 0.5)
+            while (index < queue.Count
+                && remaining >= MetricsOf(queue[index].Row.Layout, metrics).LineHeightDip - 0.5)
             {
                 var state = queue[index];
-                var maxLines = Math.Max(1, (int)Math.Floor((remaining + 0.5) / metrics.LineHeightDip));
+                // Each note wraps and stacks by its own paragraph's metrics (notes of one page can differ).
+                var noteMetrics = MetricsOf(state.Row.Layout, metrics);
+                var charsPerLine = ApproximateCharsPerLine(contentWidthDip - noteMetrics.IndentLeftDip, noteMetrics.CharWidthDip);
+                var maxLines = Math.Max(1, (int)Math.Floor((remaining + 0.5) / noteMetrics.LineHeightDip));
                 var wordCount = state.RemainingWords.Count == 0
                     ? 0
                     : WordsThatFit(state.RemainingWords, maxLines * charsPerLine);
                 var text = string.Join(" ", state.RemainingWords.Take(wordCount));
                 state.RemainingWords.RemoveRange(0, wordCount);
                 var lines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
-                var height = lines * metrics.LineHeightDip;
+                var height = lines * noteMetrics.LineHeightDip;
                 var endsNote = state.RemainingWords.Count == 0;
                 fragments.Add(new DocumentFootnoteContinuationFragment(
                     state.Row.NoteId,
@@ -214,9 +271,12 @@ public static class DocumentNoteRegionPlanner
                     text,
                     state.StartsNote,
                     endsNote,
-                    height));
+                    height)
+                {
+                    Layout = state.Row.Layout,
+                });
                 state.StartsNote = false;
-                remaining -= height + (endsNote ? metrics.RowGapDip : 0);
+                remaining -= height + (endsNote ? noteMetrics.RowGapDip : 0);
                 if (!endsNote)
                     break;
                 index++;
@@ -251,7 +311,11 @@ public static class DocumentNoteRegionPlanner
         double LineHeightDip,
         double CharWidthDip,
         double RowGapDip,
-        double SeparatorHeightDip)
+        double SeparatorHeightDip,
+        double ExactLineDip = 0,
+        double IndentLeftDip = 0,
+        double HangingDip = 0,
+        bool Justified = false)
     {
         public static NoteTextMetrics Default { get; } = new(
             NoteTextFontSizePt,
@@ -262,12 +326,51 @@ public static class DocumentNoteRegionPlanner
             DefaultSeparatorHeightDip);
     }
 
+    private static NoteRowLayout LayoutOf(NoteTextMetrics metrics) => new(
+        metrics.FontSizePt,
+        metrics.FontFamily,
+        metrics.LineHeightDip,
+        metrics.CharWidthDip,
+        metrics.RowGapDip,
+        metrics.ExactLineDip,
+        metrics.IndentLeftDip,
+        metrics.HangingDip,
+        metrics.Justified);
+
+    /// <summary>The metrics a row was laid out with: its own when it carries them, else the region's.</summary>
+    private static NoteTextMetrics MetricsOf(NoteRowLayout layout, NoteTextMetrics fallback) =>
+        !layout.IsSpecified
+            ? fallback
+            : new NoteTextMetrics(
+                layout.FontSizePt,
+                layout.FontFamily,
+                layout.LineHeightDip,
+                layout.CharWidthDip,
+                double.IsNaN(layout.GapAfterDip) ? fallback.RowGapDip : layout.GapAfterDip,
+                fallback.SeparatorHeightDip,
+                layout.ExactLineHeightDip,
+                layout.IndentDip,
+                layout.HangingDip,
+                layout.Justified);
+
     private static NoteTextMetrics ResolveFootnoteTextMetrics(TextDocument document, IReadOnlyList<int> footnoteIds)
     {
         foreach (var id in footnoteIds)
         {
+            var metrics = ResolveSingleFootnoteMetrics(document, id);
+            if (metrics is { } resolved)
+                return resolved;
+        }
+
+        return NoteTextMetrics.Default;
+    }
+
+    /// <summary>The metrics of one footnote (its first paragraph with text); null when it has none to read.</summary>
+    private static NoteTextMetrics? ResolveSingleFootnoteMetrics(TextDocument document, int id)
+    {
+        {
             if (!document.Footnotes.TryGetValue(id, out var footnote))
-                continue;
+                return null;
             foreach (var paragraph in footnote.Content)
             {
                 var textRun = paragraph.Runs
@@ -290,10 +393,15 @@ public static class DocumentNoteRegionPlanner
                     && paragraphFormatting.LineSpacing > 0
                         ? paragraphFormatting.LineSpacing
                         : 1.0;
-                var lineHeightDip = paragraphFormatting.LineRule == LineSpacingRule.Exact
-                    && paragraphFormatting.LineHeightPt > 0
-                        ? paragraphFormatting.LineHeightPt * PxPerPoint
-                        : sizePt * PxPerPoint * NaturalLineRatio(run.FontFamily) * multiple;
+                var exactLine = paragraphFormatting.LineRule == LineSpacingRule.Exact
+                    && paragraphFormatting.LineHeightPt > 0;
+                var indentLeftDip = Math.Max(0, paragraphFormatting.IndentLeftPt) * PxPerPoint;
+                var hangingDip = paragraphFormatting.FirstLineIndentPt < 0
+                    ? Math.Min(indentLeftDip, -paragraphFormatting.FirstLineIndentPt * PxPerPoint)
+                    : 0;
+                var lineHeightDip = exactLine
+                    ? paragraphFormatting.LineHeightPt * PxPerPoint
+                    : sizePt * PxPerPoint * NaturalLineRatio(run.FontFamily) * multiple;
                 var rowGapDip = paragraphFormatting.SpaceAfterIsSet
                     ? Math.Max(0, paragraphFormatting.SpaceAfterPt) * PxPerPoint
                     : DefaultRowGapDip;
@@ -309,11 +417,15 @@ public static class DocumentNoteRegionPlanner
                     lineHeightDip,
                     sizePt * PxPerPoint * AverageCharacterEm(run.FontFamily),
                     rowGapDip,
-                    separatorHeightDip);
+                    separatorHeightDip,
+                    exactLine ? lineHeightDip : 0,
+                    indentLeftDip,
+                    hangingDip,
+                    paragraphFormatting.Alignment == TextAlignment.Justify);
             }
         }
 
-        return NoteTextMetrics.Default;
+        return null;
     }
 
     private static bool StyleChainSetsFontSize(TextDocument document, string? styleId)
@@ -801,12 +913,21 @@ public static class DocumentNoteRegionPlanner
             var label = HasAutomaticReferenceMark(document, id, isFootnote)
                 ? ComputeDisplayNumber(sequence, options)
                 : string.Empty;
+            // A footnote takes the layout of its own paragraph style; endnotes (and a footnote with nothing
+            // authored to read) keep the region's metrics.
+            var perNote = isFootnote && metrics is not null;
+            var rowMetrics = perNote
+                ? ResolveSingleFootnoteMetrics(document, id) ?? NoteTextMetrics.Default
+                : textMetrics;
             rows.Add(new DocumentNoteRegionRow(
                 id,
                 sequence,
                 label,
                 text,
-                EstimateRowHeight(text, contentWidthDip, textMetrics)));
+                EstimateRowHeight(text, contentWidthDip, rowMetrics))
+            {
+                Layout = perNote ? LayoutOf(rowMetrics) : NoteRowLayout.Unspecified,
+            });
         }
 
         return rows;
@@ -889,15 +1010,19 @@ public static class DocumentNoteRegionPlanner
             height += (NoteTextFontSizePt + 2) * PxPerPoint + 10;
         if (hasSeparator)
             height += textMetrics.SeparatorHeightDip;
-        height += rows.Sum(r => r.EstimatedHeightDip + textMetrics.RowGapDip);
-        return Math.Ceiling(height);
+        height += rows.Sum(r => r.EstimatedHeightDip + MetricsOf(r.Layout, textMetrics).RowGapDip);
+        return height;
     }
 
     private static double EstimateRowHeight(string text, double contentWidthDip, NoteTextMetrics metrics)
     {
-        var approxCharsPerLine = ApproximateCharsPerLine(contentWidthDip, metrics.CharWidthDip);
-        var normalized = text.ReplaceLineEndings(" ");
-        var lines = Math.Max(1, (int)Math.Ceiling(normalized.Length / (double)approxCharsPerLine));
+        var approxCharsPerLine = ApproximateCharsPerLine(contentWidthDip - metrics.IndentLeftDip, metrics.CharWidthDip);
+        // Each paragraph of a note starts a line of its own, an empty one (Word keeps a trailing blank note
+        // paragraph) still takes a whole line.
+        var lines = 0;
+        foreach (var paragraph in text.ReplaceLineEndings("\n").Split('\n'))
+            lines += Math.Max(1, (int)Math.Ceiling(paragraph.Length / (double)approxCharsPerLine));
+        lines = Math.Max(1, lines);
         return metrics.FontFamily is null
             ? Math.Ceiling(lines * metrics.LineHeightDip)
             : lines * metrics.LineHeightDip;

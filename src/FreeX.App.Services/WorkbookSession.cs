@@ -14,7 +14,7 @@ using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Services;
 
-public sealed class WorkbookSession : IDisposable
+public sealed partial class WorkbookSession : IDisposable
 {
     private sealed class ReplaceSubtotalRowsCommand : IWorkbookCommand
     {
@@ -835,8 +835,34 @@ public sealed class WorkbookSession : IDisposable
 
     public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
 
+    private long _lastPasteUndoVersion = -1;
+
+    /// <summary>
+    /// The undo-stack version right after the most recent successful paste of cells, so the shells
+    /// can show Excel's Paste Options button for exactly that paste (external text pastes are
+    /// recorded as plain cell edits, so the undo label alone cannot tell).
+    /// </summary>
+    public long LastPasteUndoVersion => _lastPasteUndoVersion;
+
+    private WorkbookCellEditResult RecordPaste(WorkbookCellEditResult result)
+    {
+        if (result.Success && !result.IsNoOp)
+            _lastPasteUndoVersion = UndoStackVersion;
+
+        return result;
+    }
+
     public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(int maxCount) =>
         _cellEditService.GetUndoHistory(Workbook.Id, maxCount);
+
+    /// <summary>The command the next Undo would revert, or null.</summary>
+    public IWorkbookCommand? PeekUndoCommand() => _cellEditService.PeekUndoCommand(Workbook.Id);
+
+    /// <summary>Entries on the undo stack; grows when a command runs or is redone.</summary>
+    public int UndoStackDepth => _cellEditService.GetUndoStackDepth(Workbook.Id);
+
+    /// <summary>Changes whenever the undo stack changes.</summary>
+    public long UndoStackVersion => _cellEditService.GetUndoStackVersion(Workbook.Id);
 
     public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(int maxCount) =>
         _cellEditService.GetRedoHistory(Workbook.Id, maxCount);
@@ -4025,6 +4051,14 @@ public sealed class WorkbookSession : IDisposable
         bool preserveText = false,
         bool clipboardReadFailed = false,
         string? html = null,
+        string? clipboardMarker = null) =>
+        RecordPaste(PasteClipboardTextAtActiveCellCore(text: text, preserveText: preserveText, clipboardReadFailed: clipboardReadFailed, html: html, clipboardMarker: clipboardMarker));
+
+    private WorkbookCellEditResult PasteClipboardTextAtActiveCellCore(
+        string? text,
+        bool preserveText = false,
+        bool clipboardReadFailed = false,
+        string? html = null,
         string? clipboardMarker = null)
     {
         // Paste Special > Text / Unicode Text (preserveText: true — Excel semantics: paste the
@@ -4072,6 +4106,15 @@ public sealed class WorkbookSession : IDisposable
     }
 
     public WorkbookCellEditResult PasteSpecialClipboardAtActiveCell(
+        string? text,
+        PasteCellsMode mode,
+        PasteSpecialOptions options,
+        bool keepSourceColumnWidths = false,
+        bool clipboardReadFailed = false,
+        string? html = null) =>
+        RecordPaste(PasteSpecialClipboardAtActiveCellCore(text: text, mode: mode, options: options, keepSourceColumnWidths: keepSourceColumnWidths, clipboardReadFailed: clipboardReadFailed, html: html));
+
+    private WorkbookCellEditResult PasteSpecialClipboardAtActiveCellCore(
         string? text,
         PasteCellsMode mode,
         PasteSpecialOptions options,
@@ -4156,7 +4199,10 @@ public sealed class WorkbookSession : IDisposable
         return PasteInternalClipboardAtActiveCell(internalClipboard, mode, options, keepSourceColumnWidths);
     }
 
-    public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text)
+    public WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCell(string? text) =>
+        RecordPaste(PasteColumnWidthsFromClipboardAtActiveCellCore(text: text));
+
+    private WorkbookCellEditResult PasteColumnWidthsFromClipboardAtActiveCellCore(string? text)
     {
         if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -4192,7 +4238,10 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false)
+    public WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCell(string? text, bool transpose = false) =>
+        RecordPaste(PasteCommentsFromClipboardAtActiveCellCore(text: text, transpose: transpose));
+
+    private WorkbookCellEditResult PasteCommentsFromClipboardAtActiveCellCore(string? text, bool transpose = false)
     {
         if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -4246,7 +4295,10 @@ public sealed class WorkbookSession : IDisposable
         return result;
     }
 
-    public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false)
+    public WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCell(string? text, bool transpose = false) =>
+        RecordPaste(PasteDataValidationFromClipboardAtActiveCellCore(text: text, transpose: transpose));
+
+    private WorkbookCellEditResult PasteDataValidationFromClipboardAtActiveCellCore(string? text, bool transpose = false)
     {
         if (_workbookClipboardSession.Content is not { } internalClipboard ||
             (text is not null && !string.Equals(internalClipboard.Text, text, StringComparison.Ordinal)))
@@ -4383,6 +4435,12 @@ public sealed class WorkbookSession : IDisposable
     }
 
     public WorkbookCellEditResult PasteLinkFromClipboardAtActiveCell(
+        string? text,
+        bool transpose = false,
+        bool keepSourceColumnWidths = false) =>
+        RecordPaste(PasteLinkFromClipboardAtActiveCellCore(text: text, transpose: transpose, keepSourceColumnWidths: keepSourceColumnWidths));
+
+    private WorkbookCellEditResult PasteLinkFromClipboardAtActiveCellCore(
         string? text,
         bool transpose = false,
         bool keepSourceColumnWidths = false)
@@ -4559,6 +4617,10 @@ public sealed class WorkbookSession : IDisposable
     /// preserve identical table and cell-text semantics.
     /// </summary>
     public WorkbookCellEditResult PasteExternalTextAtActiveCell(
+        string text, bool preserveText, PasteSpecialOptions options, string? html) =>
+        RecordPaste(PasteExternalTextAtActiveCellCore(text: text, preserveText: preserveText, options: options, html: html));
+
+    private WorkbookCellEditResult PasteExternalTextAtActiveCellCore(
         string text, bool preserveText, PasteSpecialOptions options, string? html)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -4928,6 +4990,20 @@ public sealed class WorkbookSession : IDisposable
     }
 
     /// <summary>
+    /// Turns the AutoFilter on over the current region around the active cell, whatever the
+    /// selection, for Excel's "Filter by Selected Cell's Value" on a sheet with no AutoFilter yet.
+    /// </summary>
+    public WorkbookCellEditResult EnableAutoFilterAroundActiveCell()
+    {
+        if (ActiveSheetHasAutoFilter)
+            return SuccessfulNoOpEditResult();
+
+        var range = AutoFilterToggleRangePlanner.Create(ActiveSheet, new GridRange(ActiveCell, ActiveCell));
+        return ExecuteRepeatableCommandPreservingSelection(
+            () => new ToggleWorksheetAutoFilterCommand(ActiveSheet.Id, range));
+    }
+
+    /// <summary>
     /// R127-services-sort-multiarea-1: real Excel refuses Sort outright on a Ctrl+click multi-area
     /// selection ("This operation is not allowed on multiple selections. Select a single range and
     /// click the command again."). Both SortSelectedRange overloads previously read only
@@ -5167,6 +5243,8 @@ public sealed class WorkbookSession : IDisposable
             return result;
 
         ApplySuccessfulRangeEditResult(result, completedSelection);
+        if (!result.IsNoOp)
+            NoteAutofill(sourceRange, fillRange, ctrlHeld);
         return result;
     }
 
@@ -5188,6 +5266,19 @@ public sealed class WorkbookSession : IDisposable
 
         ApplySuccessfulRangeEditResult(result, targetRange);
         return result;
+    }
+
+    /// <summary>Shift+drag of a selection border: inserts the moved cells at the target and shifts the existing ones.</summary>
+    public WorkbookCellEditResult InsertMovedRangeAt(GridRange sourceRange, GridRange targetRange)
+    {
+        if (!sourceRange.Start.Sheet.Equals(ActiveSheet.Id) || !targetRange.Start.Sheet.Equals(ActiveSheet.Id))
+            return new WorkbookCellEditResult(false, "Move source and destination must be on the active sheet.", [], RecalcReport: null);
+
+        var command = FreeX.App.Presentation.Editing.ShiftDragInsertPlanner.CreateCommand(Workbook, ActiveSheet.Id, sourceRange, targetRange);
+        if (command is null)
+            return new WorkbookCellEditResult(true, null, [], RecalcReport: null, IsNoOp: true);
+
+        return ExecuteReviewCommand(command, fallbackAddress: targetRange.Start);
     }
 
     public WorkbookCellEditResult FlashFillSelectedRange()
@@ -5404,6 +5495,32 @@ public sealed class WorkbookSession : IDisposable
     {
         var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset, Workbook.Theme);
         return ApplySelectedRangeStyle(diff);
+    }
+
+    /// <summary>Excel's New Cell Style: captures the active cell's formatting as a named style.</summary>
+    public WorkbookCellEditResult DefineCustomCellStyleFromActiveCell(string name, CustomCellStyleParts parts)
+    {
+        if (!CustomCellStylePlanner.IsValidNewName(name, out var error))
+            return new WorkbookCellEditResult(false, error, [], RecalcReport: null);
+
+        var style = Workbook.GetStyle(GetCellStyleId(ActiveSheet, ActiveCell));
+        return ExecuteReviewCommand(
+            new DefineCustomCellStyleCommand(new CustomCellStyle(name.Trim(), style, parts)),
+            fallbackAddress: ActiveCell);
+    }
+
+    /// <summary>The style of a cell, including an empty cell that only carries formatting.</summary>
+    public static StyleId GetCellStyleId(Sheet sheet, CellAddress address) =>
+        sheet.GetCell(address)?.StyleId ?? sheet.GetStyleOnly(address.Row, address.Col) ?? StyleId.Default;
+
+    /// <summary>Applies a user-defined named style to the current selection.</summary>
+    public WorkbookCellEditResult ApplyCustomCellStyle(string name)
+    {
+        var style = Workbook.CustomCellStyles.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (style is null)
+            return new WorkbookCellEditResult(false, "That cell style no longer exists.", [], RecalcReport: null);
+
+        return ApplySelectedRangeStyle(CustomCellStylePlanner.BuildDiff(style));
     }
 
     // R128-services-multiarea-compactformat-1: a Ctrl+click multi-area selection (SelectedRanges) must

@@ -700,24 +700,91 @@ public static class DocumentViewLayoutPlanner
         if (sourceBlockIndex <= 0)
             return 0;
 
-        var dipPerPoint = PageLayout.PointsToDip(1);
-        var defaultFontSizeDip = Math.Max(8, document.DefaultRun.FontSizePt ?? 11) * dipPerPoint;
-        var columnCount = Math.Max(1, document.Page.ColumnCount);
-        var charsPerColumnLine = columnCount == 1
-            ? 92
-            : Math.Max(
-                16,
-                (int)Math.Floor(
-                    BuildColumnPlan(
-                        document.Page,
-                        PageLayout.ContentAreaDip(document.Page).Width,
-                        usePageColumns: true).WidthDip
-                    / Math.Max(4.5, defaultFontSizeDip * 0.50)));
+        var context = LeadingHeightContext.Create(document);
         var height = 0.0;
+        var pageHasNote = false;
         foreach (var block in document.Blocks.Take(sourceBlockIndex))
         {
-            if (block is not Paragraph paragraph)
-                continue;
+            if (block is Paragraph paragraph)
+                context.Accumulate(paragraph, ref height, ref pageHasNote);
+        }
+
+        return context.Finish(height, pageHasNote
+            || (sourceBlockIndex < document.Blocks.Count && LeadingHeightContext.HasNoteReference(document.Blocks[sourceBlockIndex])));
+    }
+
+    /// <summary>
+    /// <see cref="EstimateLeadingContentHeightDip"/> for every block index at once (element <c>i</c> equals the
+    /// estimate for block <c>i</c>; the array has one extra trailing element), in a single pass over the
+    /// document instead of one pass per table.
+    /// </summary>
+    public static double[] EstimateLeadingContentHeightsDip(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var result = new double[document.Blocks.Count + 1];
+        var context = LeadingHeightContext.Create(document);
+        var height = 0.0;
+        var pageHasNote = false;
+        for (var index = 1; index < result.Length; index++)
+        {
+            if (document.Blocks[index - 1] is Paragraph paragraph)
+                context.Accumulate(paragraph, ref height, ref pageHasNote);
+            result[index] = context.Finish(
+                height,
+                pageHasNote || (index < document.Blocks.Count && LeadingHeightContext.HasNoteReference(document.Blocks[index])));
+        }
+
+        return result;
+    }
+
+    private readonly struct LeadingHeightContext
+    {
+        private readonly double _dipPerPoint;
+        private readonly double _defaultFontSizeDip;
+        private readonly int _charsPerColumnLine;
+        private readonly bool _hasFootnotes;
+
+        private LeadingHeightContext(double dipPerPoint, double defaultFontSizeDip, int charsPerColumnLine, bool hasFootnotes)
+        {
+            _dipPerPoint = dipPerPoint;
+            _defaultFontSizeDip = defaultFontSizeDip;
+            _charsPerColumnLine = charsPerColumnLine;
+            _hasFootnotes = hasFootnotes;
+        }
+
+        public static LeadingHeightContext Create(TextDocument document)
+        {
+            var dipPerPoint = PageLayout.PointsToDip(1);
+            var defaultFontSizeDip = Math.Max(8, document.DefaultRun.FontSizePt ?? 11) * dipPerPoint;
+            var columnCount = Math.Max(1, document.Page.ColumnCount);
+            var charsPerColumnLine = columnCount == 1
+                ? 92
+                : Math.Max(
+                    16,
+                    (int)Math.Floor(
+                        BuildColumnPlan(
+                            document.Page,
+                            PageLayout.ContentAreaDip(document.Page).Width,
+                            usePageColumns: true).WidthDip
+                        / Math.Max(4.5, defaultFontSizeDip * 0.50)));
+            return new LeadingHeightContext(dipPerPoint, defaultFontSizeDip, charsPerColumnLine, document.Footnotes.Count > 0);
+        }
+
+        /// <summary>True when the block (a paragraph, or a table's cell paragraphs) carries a footnote/endnote reference.</summary>
+        public static bool HasNoteReference(Block block) => block switch
+        {
+            Paragraph paragraph => paragraph.Runs.Any(run => run.FootnoteId is not null || run.EndnoteId is not null),
+            Table table => table.Rows.Any(row => row.Cells.Any(cell =>
+                cell.Paragraphs.Any(paragraph =>
+                    paragraph.Runs.Any(run => run.FootnoteId is not null || run.EndnoteId is not null)))),
+            _ => false,
+        };
+
+        public void Accumulate(Paragraph paragraph, ref double height, ref bool pageHasNote)
+        {
+            var dipPerPoint = _dipPerPoint;
+            var defaultFontSizeDip = _defaultFontSizeDip;
 
             // Only the content on the table's own (first) page counts as leading content: a forced page
             // boundary (page-break-before, a page-break run, or a section break that starts a new page)
@@ -725,11 +792,14 @@ public static class DocumentViewLayoutPlanner
             // table that follows a cover page look like it started with no room left, so it was split far
             // too early and left the page it begins on mostly empty.
             if (paragraph.Formatting.PageBreakBefore)
+            {
                 height = 0;
+                pageHasNote = false;
+            }
 
             var charsPerLine = paragraph.StyleId?.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) == true
-                ? Math.Max(16, (int)Math.Round(charsPerColumnLine * 0.78))
-                : charsPerColumnLine;
+                ? Math.Max(16, (int)Math.Round(_charsPerColumnLine * 0.78))
+                : _charsPerColumnLine;
             var lineCount = Math.Max(1, (int)Math.Ceiling(
                 Math.Max(1, paragraph.PlainText.Length) / (double)charsPerLine));
             var lineHeightDip = paragraph.Formatting.LineRule switch
@@ -748,18 +818,30 @@ public static class DocumentViewLayoutPlanner
             // A page-break run starts the NEXT page at the paragraph's remaining text: restart the tally
             // with this paragraph's own height, since the text after the break lives on the new page.
             // A page-type section break (the break FOLLOWING this paragraph) empties the new page.
+            pageHasNote |= HasNoteReference(paragraph);
             if (paragraph.Runs.Any(run => run.IsPageBreak))
+            {
                 height = lineCount * lineHeightDip + paragraph.Formatting.SpaceAfterPt * dipPerPoint;
+                pageHasNote = HasNoteReference(paragraph);
+            }
             if (paragraph.SectionBreak?.BreakKind is SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage)
+            {
                 height = 0;
+                pageHasNote = false;
+            }
         }
 
-        // The page renderer reserves a bottom band for detached footnote bodies. Keep this shared
-        // pagination contract aligned with that first-page reservation.
-        if (document.Footnotes.Count > 0)
-            height += 80;
+        public double Finish(double height, bool pageHasNote)
+        {
+            // The page renderer reserves a bottom band for detached footnote bodies. Keep this shared
+            // pagination contract aligned with that first-page reservation -- but only for a page that
+            // actually carries a note reference: a page of a footnoted document without one has no band,
+            // and reserving it anyway pushed a table's last rows onto an extra page.
+            if (_hasFootnotes && pageHasNote)
+                height += 80;
 
-        return Math.Max(0, height);
+            return Math.Max(0, height);
+        }
     }
 
     public static DocumentTableLayoutPlan BuildTableLayoutPlan(
@@ -1191,9 +1273,18 @@ public static class DocumentViewLayoutPlanner
 
         var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
         var availableBodyHeightDip = RoundDip(Math.Max(MinimumTableRowHeightDip, contentHeightDip));
+        // The leading estimate is the height of everything since the last forced page boundary, which may
+        // span many pages. It is a crude character-count guess, so once it reaches a whole page it says
+        // nothing reliable about where on its page the table starts. Subtracting it left no room on page 1,
+        // so the first row was planned alone and every later row forced onto a new page even where Word
+        // (and the real layout) fits the table in the page. Treat such a start as unknown (top of page) and
+        // let the real paginator place the table; only a table taller than a page is planned across pages.
+        var leadingOnTablePageDip = Math.Max(0, firstPageLeadingContentHeightDip);
+        if (availableBodyHeightDip > 0 && leadingOnTablePageDip >= availableBodyHeightDip)
+            leadingOnTablePageDip = 0;
         var firstPageAvailableBodyHeightDip = RoundDip(Math.Max(
             MinimumTableRowHeightDip,
-            availableBodyHeightDip - Math.Max(0, firstPageLeadingContentHeightDip)));
+            availableBodyHeightDip - leadingOnTablePageDip));
         // A repeating header can span any number of leading, contiguous rows (e.g. a title row plus a
         // column-labels row), not just row 0: each row's own IsRepeatingHeader flag drives this, with
         // row 0 also honouring the table-level RepeatHeaderRow convenience flag for callers (ribbon/

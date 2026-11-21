@@ -1122,6 +1122,28 @@ public static class ComplexFieldEngine
             sourceRunIndex: sourceRunIndex, sourceParagraph: sourceParagraph);
     }
 
+    /// <summary>
+    /// The text a <c>PAGEREF</c> field with <paramref name="instruction"/> should <em>display</em> given a
+    /// host's page resolvers, without touching the document or any run (a display-only refresh: the stored
+    /// cached result keeps round-tripping untouched). Returns <paramref name="cached"/> when the bookmark
+    /// resolves to no page-attributable target.
+    /// </summary>
+    public static string ResolvePageRefDisplay(
+        TextDocument document,
+        string instruction,
+        string cached,
+        Func<int, int?>? pageOf,
+        Func<int, string?>? pageTextOf)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var name = Argument(instruction ?? string.Empty);
+        if (name.Length == 0)
+            return cached;
+        return BookmarkPageResolution.Find(document, name) is { BlockIndex: >= 0 } target
+            ? BookmarkPageResolution.ResolvePageText(document, target, pageOf, pageTextOf)
+            : cached;
+    }
+
     // PAGEREF: the page number of the referenced bookmark's paragraph, via the shared canonical walk in
     // BookmarkPageResolution (row-aware for a table, and reaching headers/footers/footnotes/endnotes/text
     // boxes too); "1" when no page is known (the pure model has no pagination). A bookmark that resolves

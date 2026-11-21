@@ -16,9 +16,9 @@ public sealed class SheetTabPointerMechanicsSourceTests
         source.Should().Contain("_sheetTabsHost.PointerCaptureLost -= SheetTabDragPointerCaptureLost");
         source.Should().Contain("_session.MoveActiveSheetTo(toIndex)");
         source.Should().Contain("BeginShowActivateSheetDialogFromSheetNav");
-        source.Should().Contain("SelectSheetForContextCommand(sheetId)");
+        source.Should().Contain("HandleSheetTabRightPress(sheetId)");
         source.Should().Contain("if (args.ClickCount >= 2)");
-        source.Should().Contain("RunGuarded(RenameActiveSheetAsync);");
+        source.Should().Contain("BeginInlineSheetTabRename(sheetId);");
 
         var pointerMove = source[
             source.IndexOf("private void SheetTabDragPointerMoved", StringComparison.Ordinal)..

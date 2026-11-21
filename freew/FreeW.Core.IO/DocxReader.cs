@@ -220,9 +220,10 @@ public static partial class DocxReader
             // Word down the page.
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
+            int? prevListNumId = null;
             var spanningField = new SpanningFieldReadState();
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, spanningField);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, ref prevListNumId, spanningField);
         }
 
         if (document.Blocks.Count == 0)
@@ -346,10 +347,15 @@ public static partial class DocxReader
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
     /// autoHyphenation leaves it disabled.
     /// </summary>
+    private const int LegacyDefaultCompatibilityMode = 12;
+
     private static void ReadSettings(ZipArchive archive, TextDocument document)
     {
         var settingsXml = LoadPart(archive, ResolveSettingsPartPath(archive) ?? "word/settings.xml");
         var root = settingsXml?.Root;
+        // Word opens a package without a compatibilityMode setting (no settings part, or no w:compat) as a
+        // Word 2007 (12) document, so that is what the renderer must assume; w:compat below may refine it.
+        document.CompatibilityMode = LegacyDefaultCompatibilityMode;
         if (root is null)
             return;
 
@@ -438,6 +444,33 @@ public static partial class DocxReader
         // Do not automatically compress pictures (w:doNotAutoCompressPictures): an empty element or any
         // valid on token requires consuming applications to retain the embedded image data when saving.
         document.DoNotAutoCompressPictures = ReadToggle(root, "doNotAutoCompressPictures");
+
+        // Layout compatibility (w:compat): the compatibilityMode compatSetting plus the enabled legacy flags. The
+        // settings element itself stays preserved verbatim for the writer.
+        if (root.Element(W + "compat") is { } compat)
+        {
+            var compatMode = LegacyDefaultCompatibilityMode;
+            foreach (var child in compat.Elements())
+            {
+                if (child.Name == W + "compatSetting")
+                {
+                    if (child.Attribute(W + "name")?.Value == "compatibilityMode"
+                        && int.TryParse(child.Attribute(W + "val")?.Value,
+                            System.Globalization.NumberStyles.Integer,
+                            System.Globalization.CultureInfo.InvariantCulture, out var parsedMode)
+                        && parsedMode > 0)
+                    {
+                        compatMode = parsedMode;
+                    }
+                }
+                else if (child.Name.Namespace == W
+                    && ReadOnOffValue(child.Attribute(W + "val")?.Value, defaultValue: true))
+                {
+                    document.CompatibilityFlags.Add(child.Name.LocalName);
+                }
+            }
+            document.CompatibilityMode = compatMode;
+        }
 
         // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
         if (root.Element(W + "footnotePr") is { } footnotePr)
@@ -1613,8 +1646,17 @@ public static partial class DocxReader
                 .ToList();
             foreach (var run in watermarkRuns)
                 run.Remove();
-            if (!preservedParagraph.Descendants(W + "r").Any())
+            var authoredEmpty = !p.Descendants(W + "r").Any();
+            if (!preservedParagraph.Descendants(W + "r").Any() && !authoredEmpty)
                 continue;
+            // The empty paragraph Word keeps after a layout table in a text box is not part of the table's
+            // rows: for a bottom-anchored table frame it would lift the text off the rule.
+            if (legacyFrame is { TableRuleOffsetPt: > 0, TextAnchor: LegacyFrameTextAnchor.Bottom }
+                && authoredEmpty
+                && !p.Ancestors(W + "tbl").Any(table => table.Ancestors(W + "txbxContent").Any()))
+            {
+                continue;
+            }
 
             var storyParagraph = ReadParagraph(
                 preservedParagraph,
@@ -1628,6 +1670,12 @@ public static partial class DocxReader
             storyParagraph.LegacyTextBoxFrame = legacyFrame;
             result.Paragraphs.Add(storyParagraph);
         }
+
+        // A run-less paragraph is a real line in Word (a trailing empty Footer-style paragraph under a
+        // page-number shape sets how far the footer pushes the body up). A part made only of empty
+        // paragraphs still has no visible content (HeaderFooter.IsEmpty), but its blank lines keep their
+        // place: a chapter-opening first-page header of three empty paragraphs pushes the body down by
+        // three lines, and layout needs those paragraphs to measure it.
         return result;
     }
 
@@ -1648,6 +1696,52 @@ public static partial class DocxReader
         if (!cache.TryGetValue(shape, out var frame))
             cache[shape] = frame = ReadLegacyTextBoxFrame(shape, textBox);
         return frame;
+    }
+
+    /// <summary>
+    /// A layout table that fills a legacy text box (the header text box of UN documents: one exact-height row,
+    /// bottom-aligned cells, a rule under it) loses its geometry when the story is flattened to paragraphs.
+    /// Recovers what the flattening drops: whether every cell is bottom-aligned, the table's exact height
+    /// (where its rule sits) and the bottom rule itself.
+    /// </summary>
+    private static (bool BottomAnchored, double RuleOffsetPt, double RuleWidthPt, string? RuleColorHex)
+        ReadWrappedTableChrome(XElement textBox)
+    {
+        var table = textBox.Element(W + "txbxContent")?.Elements(W + "tbl").FirstOrDefault();
+        if (table is null)
+            return (false, 0, 0, null);
+
+        var cells = table.Elements(W + "tr").SelectMany(row => row.Elements(W + "tc")).ToList();
+        var bottomAnchored = cells.Count > 0 && cells.All(cell =>
+            string.Equals(cell.Element(W + "tcPr")?.Element(W + "vAlign")?.Attribute(W + "val")?.Value, "bottom", StringComparison.Ordinal));
+
+        var heightPt = 0.0;
+        foreach (var row in table.Elements(W + "tr"))
+        {
+            var rowHeight = row.Element(W + "trPr")?.Element(W + "trHeight");
+            if (rowHeight is null
+                || rowHeight.Attribute(W + "hRule")?.Value != "exact"
+                || !double.TryParse(rowHeight.Attribute(W + "val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var twips)
+                || twips <= 0)
+            {
+                return (bottomAnchored, 0, 0, null);
+            }
+
+            heightPt += twips / 20.0;
+        }
+
+        var bottom = table.Element(W + "tblPr")?.Element(W + "tblBorders")?.Element(W + "bottom");
+        var style = bottom?.Attribute(W + "val")?.Value;
+        if (bottom is null || style is null or "nil" or "none"
+            || !double.TryParse(bottom.Attribute(W + "sz")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var eighths)
+            || eighths <= 0)
+        {
+            return (bottomAnchored, heightPt, 0, null);
+        }
+
+        var color = bottom.Attribute(W + "color")?.Value;
+        var colorHex = color is { Length: 6 } && color.All(Uri.IsHexDigit) ? "#" + color.ToUpperInvariant() : null;
+        return (bottomAnchored, heightPt, eighths / 8.0, colorHex);
     }
 
     private static LegacyTextBoxFrame? ReadLegacyTextBoxFrame(XElement shape, XElement textBox)
@@ -1739,7 +1833,8 @@ public static partial class DocxReader
         double Inset(int index, double fallback) =>
             index < insets.Length && ParseVmlLengthPt(insets[index]) is { } value ? value : fallback;
 
-        return new LegacyTextBoxFrame(
+        var wrappedTable = ReadWrappedTableChrome(textBox);
+        var frame = new LegacyTextBoxFrame(
             shape.Name == V + "oval",
             widthPt,
             heightPt,
@@ -1757,7 +1852,22 @@ public static partial class DocxReader
             Inset(0, 7.2),
             Inset(1, 3.6),
             Inset(2, 7.2),
-            Inset(3, 3.6));
+            Inset(3, 3.6))
+        {
+            TableRuleOffsetPt = wrappedTable.RuleOffsetPt,
+            TableRuleWidthPt = wrappedTable.RuleWidthPt,
+            TableRuleColorHex = wrappedTable.RuleColorHex,
+        };
+        // The wrapped table's rows end where its rule sits; the trailing paragraph Word adds after a table in
+        // a text box makes the box taller. Bottom-aligned cells put the text on that rule, so size the frame
+        // to the table.
+        if (!wrappedTable.BottomAnchored)
+            return frame;
+        return frame with
+        {
+            TextAnchor = LegacyFrameTextAnchor.Bottom,
+            HeightPt = wrappedTable.RuleOffsetPt > 0 ? Math.Min(frame.HeightPt, wrappedTable.RuleOffsetPt) : frame.HeightPt,
+        };
     }
 
     /// <summary>Parses a VML/CSS length ("1pt", "0.05in", "2mm", "12px", "0") into points.</summary>
@@ -1925,6 +2035,9 @@ public static partial class DocxReader
 
         public bool IsActive => _stack.Count > 0;
 
+        /// <summary>The innermost open field is past its separator, so runs now are its cached result.</summary>
+        public bool IsInResult => _stack.Count > 0 && _stack[^1].PastSeparate;
+
         public bool TryConsumeRun(XElement run, out CompletedComplexFieldRead? completed)
         {
             completed = null;
@@ -2081,6 +2194,30 @@ public static partial class DocxReader
             else if (child.Name == W + "commentRangeEnd")
             {
                 activeCommentId = null;
+            }
+            else if (child.Name == W + "r"
+                     && fieldAccumulator.IsInResult
+                     && child.Element(W + "object") is not null)
+            {
+                // An embedded OLE object (Word's icon form of a linked or embedded file) inside a field's result,
+                // typically a HYPERLINK, is not result text: collapsing the field kept only text and dropped the
+                // object, leaving the page without its icon. Read it as the ordinary run it is.
+                AddParagraphContentElement(
+                    paragraph,
+                    child,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    numbering,
+                    activeCommentId,
+                    revision: default,
+                    control: inheritedControl,
+                    hyperlinkUrl: null,
+                    hyperlinkAnchor: null,
+                    hyperlinkTooltip: null,
+                    preservedDrawingTarget,
+                    preservedDrawingRelationshipTargets,
+                    subDocumentRelationships);
             }
             else if (child.Name == W + "r"
                      && fieldAccumulator.TryConsumeRun(child, out var completedField))
@@ -2321,6 +2458,7 @@ public static partial class DocxReader
         NumberingRestartState startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
+        ref int? prevListNumId,
         SpanningFieldReadState spanningField,
         ContentControl? inheritedControl = null,
         BlockContentControl? inheritedBlockContentControl = null,
@@ -2377,11 +2515,19 @@ public static partial class DocxReader
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+            var currentListNumId = ReadBodyListNumId(element);
             if (prevPara is not null && prevAfterAuto && beforeAuto)
             {
-                prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
+                // Between two items of ONE list Word draws no automatic space. Where a list meets a
+                // non-list paragraph (or another list) the two automatic spaces collapse into a single one,
+                // so the list keeps its space before the first and after the last item.
+                var joinsOneBlock = (prevListNumId is null && currentListNumId is null)
+                    || (prevListNumId is not null && prevListNumId == currentListNumId);
+                if (joinsOneBlock)
+                    prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
                 para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
             }
+            prevListNumId = currentListNumId;
             prevPara = para;
             prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
         }
@@ -2449,6 +2595,7 @@ public static partial class DocxReader
                     startOverrides,
                     ref prevPara,
                     ref prevAfterAuto,
+                    ref prevListNumId,
                     spanningField,
                     inheritedControl,
                     blockControl,
@@ -2476,6 +2623,7 @@ public static partial class DocxReader
                     startOverrides,
                     ref prevPara,
                     ref prevAfterAuto,
+                    ref prevListNumId,
                     spanningField,
                     inheritedControl,
                     inheritedBlockContentControl,
@@ -2952,9 +3100,12 @@ public static partial class DocxReader
             LineRule = line.LineRule,
             LineHeightPt = line.LineHeightPt,
             LineSpacingIsSet = direct.LineSpacingIsSet || inherited.LineSpacingIsSet,
-            IndentLeftPt = direct.IndentLeftPt != defaults.IndentLeftPt ? direct.IndentLeftPt : inherited.IndentLeftPt,
-            IndentRightPt = direct.IndentRightPt != defaults.IndentRightPt ? direct.IndentRightPt : inherited.IndentRightPt,
-            FirstLineIndentPt = direct.FirstLineIndentPt != defaults.FirstLineIndentPt ? direct.FirstLineIndentPt : inherited.FirstLineIndentPt,
+            IndentLeftPt = direct.IndentLeftIsSet || direct.IndentLeftPt != defaults.IndentLeftPt ? direct.IndentLeftPt : inherited.IndentLeftPt,
+            IndentRightPt = direct.IndentRightIsSet || direct.IndentRightPt != defaults.IndentRightPt ? direct.IndentRightPt : inherited.IndentRightPt,
+            FirstLineIndentPt = direct.FirstLineIndentIsSet || direct.FirstLineIndentPt != defaults.FirstLineIndentPt ? direct.FirstLineIndentPt : inherited.FirstLineIndentPt,
+            IndentLeftIsSet = direct.IndentLeftIsSet || inherited.IndentLeftIsSet,
+            IndentRightIsSet = direct.IndentRightIsSet || inherited.IndentRightIsSet,
+            FirstLineIndentIsSet = direct.FirstLineIndentIsSet || inherited.FirstLineIndentIsSet,
             Border = direct.Border ?? inherited.Border,
             ShadingColorHex = direct.ShadingColorHex ?? inherited.ShadingColorHex,
             ShadingPattern = direct.ShadingColorHex is not null ? direct.ShadingPattern : inherited.ShadingPattern
@@ -4660,6 +4811,12 @@ public static partial class DocxReader
             && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } preservedDrawing)
         {
             var drawingRun = new Run(string.Empty) { PreservedDrawing = preservedDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            if (r.Descendants(W + "drawing").Select(drawing => drawing.Annotation<DrawingFallbackAnnotation>())
+                    .FirstOrDefault(annotation => annotation is not null) is { } fallbackAnnotation)
+            {
+                drawingRun.PreservedDrawingPreview = ReadImage(
+                    new XElement(W + "r", fallbackAnnotation.Drawing), archive, imageRelationships);
+            }
             ApplyRevision(drawingRun);
             paragraph.Runs.Add(drawingRun);
             return;
@@ -4819,14 +4976,34 @@ public static partial class DocxReader
         return (((char)code).ToString(), string.IsNullOrWhiteSpace(font) ? null : font);
     }
 
+    private sealed record DrawingFallbackAnnotation(XElement Drawing);
+
     private static void ResolveAlternateContent(XElement run)
     {
         foreach (var alternateContent in run.Elements(Mc + "AlternateContent").ToList())
         {
-            var replacement = alternateContent.Elements(Mc + "Choice").FirstOrDefault()?.Nodes().ToList()
-                ?? alternateContent.Element(Mc + "Fallback")?.Nodes().ToList();
-            if (replacement is not null)
-                alternateContent.ReplaceWith(replacement);
+            var choice = alternateContent.Elements(Mc + "Choice").FirstOrDefault();
+            var fallback = alternateContent.Element(Mc + "Fallback");
+            var replacement = choice?.Nodes().ToList() ?? fallback?.Nodes().ToList();
+            if (replacement is null)
+                continue;
+            // Detach the kept nodes first: re-parenting a node that still has a parent clones it, which would
+            // drop the annotation added below.
+            var fallbackDrawingSource = choice is not null ? fallback?.Descendants(W + "drawing").FirstOrDefault() : null;
+            fallbackDrawingSource = fallbackDrawingSource is null ? null : new XElement(fallbackDrawingSource);
+            foreach (var node in replacement)
+                node.Remove();
+
+            // The drawing kept from the Choice may be one FreeW only preserves verbatim (a chartex chart); its
+            // fallback picture is what the page shows meanwhile, so keep it beside the drawing.
+            if (fallbackDrawingSource is { } fallbackDrawing
+                && replacement.OfType<XElement>().Select(element => element.DescendantsAndSelf(W + "drawing").FirstOrDefault())
+                    .FirstOrDefault(drawing => drawing is not null) is { } choiceDrawing)
+            {
+                choiceDrawing.AddAnnotation(new DrawingFallbackAnnotation(new XElement(fallbackDrawing)));
+            }
+
+            alternateContent.ReplaceWith(replacement);
         }
     }
 
@@ -5028,6 +5205,9 @@ public static partial class DocxReader
             if (trPr is not null)
             {
                 row.AllowBreakAcrossPages = !ReadToggle(trPr, "cantSplit");
+                // w:gridBefore / w:gridAfter: grid columns left empty before / after the row's cells.
+                row.GridBefore = ReadRowGridSkip(trPr, "gridBefore");
+                row.GridAfter = ReadRowGridSkip(trPr, "gridAfter");
                 // Word allows any number of leading, contiguous rows to carry w:tblHeader to build a
                 // multi-row repeating header (e.g. a title row plus a column-labels row). Read the flag
                 // per row rather than only on the first row so a two- or three-row header round-trips
@@ -6215,6 +6395,8 @@ public static partial class DocxReader
                 if (long.TryParse(ln.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
                     shape.OutlineWidthPt = widthEmu / 12700.0;
                 shape.OutlineDash = ln.Element(A + "prstDash")?.Attribute("val")?.Value;
+                if (ln.Attribute("cmpd")?.Value is { Length: > 0 } compound && compound != "sng")
+                    shape.OutlineCompound = compound;
             }
 
             shape.HeadEnd = ReadShapeLineEnd(ln.Element(A + "headEnd"));
@@ -7668,10 +7850,17 @@ public static partial class DocxReader
         int? listStartOverride = null;
         string? listMarkerText = null;
         var listNumberFormat = ListNumberFormat.Decimal;
+        double? levelIndentLeft = null, levelIndentFirst = null;
         var numPr = pPr.Element(W + "numPr");
         if (numPr is not null)
         {
             var numId = ParseInt(numPr.Element(W + "numId")?.Attribute(W + "val")?.Value);
+            // The level's own indent applies to every numbered paragraph, including the ones whose numbering
+            // definition FreeW preserves rather than maps (they render a display-only marker).
+            if (numbering is NumberingLookup indentLookup
+                && indentLookup.LevelIndents.TryGetValue(
+                    (numId, ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value)), out var levelIndent))
+                (levelIndentLeft, levelIndentFirst) = levelIndent;
             if (numbering.TryGetValue(numId, out var kind) && kind != ListKind.None)
             {
                 listKind = kind;
@@ -7786,13 +7975,17 @@ public static partial class DocxReader
             {
                 "center" => TextAlignment.Center,
                 "right" or "end" => TextAlignment.Right,
-                "both" or "justify" => TextAlignment.Justify,
+                "both" or "justify" or "lowKashida" or "mediumKashida" or "highKashida" => TextAlignment.Justify,
                 _ => TextAlignment.Left
             },
             // An explicit w:jc="left"/"start" must be able to override a justified style.
             AlignmentIsSet = jc is "left" or "start",
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
+            // An explicit w:ind attribute (even 0) must beat the paragraph style's indent in the cascade.
+            IndentLeftIsSet = (indent?.Attribute(W + "left") ?? indent?.Attribute(W + "start")) is not null,
+            IndentRightIsSet = (indent?.Attribute(W + "right") ?? indent?.Attribute(W + "end")) is not null,
+            FirstLineIndentIsSet = indent?.Attribute(W + "hanging") is not null || indent?.Attribute(W + "firstLine") is not null,
             // w:hanging (a positive twips value) is mutually exclusive with w:firstLine in OOXML; the model
             // represents a hanging indent as a NEGATIVE FirstLineIndentPt so callers can distinguish the two.
             FirstLineIndentPt = indent?.Attribute(W + "hanging") is { } hangAttr
@@ -7803,6 +7996,8 @@ public static partial class DocxReader
             ListStartOverride = listStartOverride,
             ListMarkerText = listMarkerText,
             ListNumberFormat = listNumberFormat,
+            ListLevelIndentLeftPt = levelIndentLeft,
+            ListLevelFirstLineIndentPt = levelIndentFirst,
             TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
     }
@@ -7991,6 +8186,8 @@ public static partial class DocxReader
         "upperRoman" => PageNumberFormat.UpperRoman,
         "lowerLetter" => PageNumberFormat.LowerLetter,
         "upperLetter" => PageNumberFormat.UpperLetter,
+        "arabicAbjad" => PageNumberFormat.ArabicAbjad,
+        "arabicAlpha" => PageNumberFormat.ArabicAlpha,
         _ => PageNumberFormat.Decimal
     };
 
@@ -8173,6 +8370,23 @@ public static partial class DocxReader
     {
         public Dictionary<int, string?> MarkerTextByNumId { get; } = [];
         public Dictionary<int, ListNumberFormat> NumberFormatByNumId { get; } = [];
+
+        /// <summary>(numId, ilvl) -> the level's w:pPr/w:ind (left, firstLine; hanging stored negative), in points.</summary>
+        public Dictionary<(int NumId, int Level), (double? Left, double? FirstLine)> LevelIndents { get; } = [];
+    }
+
+    /// <summary>Reads a numbering level's <c>w:pPr/w:ind</c> as (left, first-line) points; hanging becomes a negative first line.</summary>
+    private static (double? Left, double? FirstLine) ReadLevelIndent(XElement level)
+    {
+        var ind = level.Element(W + "pPr")?.Element(W + "ind");
+        if (ind is null)
+            return (null, null);
+        var leftText = ind.Attribute(W + "left")?.Value ?? ind.Attribute(W + "start")?.Value;
+        double? left = leftText is null ? null : DxaToPoints(leftText);
+        double? first = ind.Attribute(W + "hanging") is { } hang
+            ? -DxaToPoints(hang.Value)
+            : ind.Attribute(W + "firstLine") is { } fl ? DxaToPoints(fl.Value) : null;
+        return (left, first);
     }
 
     /// <summary>
@@ -8194,6 +8408,13 @@ public static partial class DocxReader
             ? lvlText is null or "•"
             : format == ListNumberFormat.Decimal && lvlText is null or "%1.";
         return (isDefaultShape ? null : lvlText, format);
+    }
+
+    /// <summary>The paragraph's direct <c>w:numPr/w:numId</c> (a real list, not 0), or null for a non-list paragraph.</summary>
+    private static int? ReadBodyListNumId(XElement paragraph)
+    {
+        var numId = ParseInt(paragraph.Element(W + "pPr")?.Element(W + "numPr")?.Element(W + "numId")?.Attribute(W + "val")?.Value);
+        return numId > 0 ? numId : null;
     }
 
     private static (NumberingLookup KindByNumId, NumberingRestartState RestartState) ReadNumbering(
@@ -8228,6 +8449,7 @@ public static partial class DocxReader
         // capture their own per-level lvlText/numFmt above and don't need this.
         var abstractMarkerTexts = new Dictionary<int, string?>();
         var abstractNumberFormats = new Dictionary<int, ListNumberFormat>();
+        var abstractLevelIndents = new Dictionary<int, Dictionary<int, (double? Left, double? FirstLine)>>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
@@ -8257,9 +8479,12 @@ public static partial class DocxReader
                 : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
 
             var levelStarts = new Dictionary<int, int>();
+            var levelIndents = new Dictionary<int, (double? Left, double? FirstLine)>();
+            abstractLevelIndents[abstractNumId] = levelIndents;
             foreach (var level in levels)
             {
                 var ilvl = ParseInt(level.Attribute(W + "ilvl")?.Value);
+                levelIndents[ilvl] = ReadLevelIndent(level);
                 levelStarts[ilvl] = int.TryParse(
                     level.Element(W + "start")?.Attribute(W + "val")?.Value,
                     System.Globalization.NumberStyles.Integer,
@@ -8279,6 +8504,11 @@ public static partial class DocxReader
         {
             var numId = ParseInt(num.Attribute(W + "numId")?.Value);
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
+            if (abstractLevelIndents.TryGetValue(abstractNumId, out var indentsForAbstract))
+            {
+                foreach (var (indentLevel, indent) in indentsForAbstract)
+                    map.LevelIndents[(numId, indentLevel)] = indent;
+            }
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
             {
                 // A document can define more than one INDEPENDENT multilevel/outline numbering
@@ -8336,6 +8566,7 @@ public static partial class DocxReader
                 var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
                 if (lvlOverride.Element(W + "lvl") is { } overriddenLvl)
                 {
+                    map.LevelIndents[(numId, level)] = ReadLevelIndent(overriddenLvl);
                     if (level == 0 && kind is ListKind.Bullet or ListKind.Number)
                     {
                         (map.MarkerTextByNumId[numId], map.NumberFormatByNumId[numId]) = NormalizeFlatListMarker(
@@ -8625,6 +8856,23 @@ public static partial class DocxReader
         }
     }
 
+    private static int ReadCharacterScalePercent(XElement rPr)
+    {
+        var raw = rPr.Element(W + "w")?.Attribute(W + "val")?.Value?.Trim().TrimEnd('%');
+        return int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var percent)
+            && percent is >= 1 and <= 600
+                ? percent
+                : 0;
+    }
+
+    private static int ReadRowGridSkip(XElement trPr, string elementName)
+    {
+        var raw = trPr.Element(W + elementName)?.Attribute(W + "val")?.Value;
+        return int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var count)
+            ? Math.Clamp(count, 0, TableGridProjection.MaximumGridSpan)
+            : 0;
+    }
+
     internal static RunFormatting ReadRunFormatting(XElement? rPr, ThemeFontResolution? themeFonts = null)
     {
         if (rPr is null)
@@ -8743,6 +8991,7 @@ public static partial class DocxReader
         {
             ExplicitlyOff = explicitlyOff,
             Bold = ReadToggle(rPr, "b"),
+            ComplexScriptBold = ReadToggle(rPr, "bCs"),
             Italic = ReadToggle(rPr, "i"),
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
             Strikethrough = ReadToggle(rPr, "strike"),
@@ -8781,6 +9030,8 @@ public static partial class DocxReader
             },
             // w:spacing is in dxa (twentieths of a point); 0 / absent means no advanced spacing.
             CharacterSpacingPt = spacing is null ? 0 : DxaToPoints(spacing),
+            // w:w is a percentage (1..600) of the normal glyph width; absent means inherit (0).
+            CharacterScalePercent = ReadCharacterScalePercent(rPr),
             // w:kern is in half-points; absent means no kerning threshold (null).
             KerningMinSizePt = kern is null ? null : HalfPointsToPoints(kern),
             // w:position is in half-points, signed; 0 / absent means baseline.
@@ -9204,6 +9455,9 @@ public static partial class DocxReader
                 CharacterSpacingPt = defaultRun.CharacterSpacingPt != 0
                     ? defaultRun.CharacterSpacingPt
                     : document.DefaultRun.CharacterSpacingPt,
+                CharacterScalePercent = defaultRun.CharacterScalePercent != 0
+                    ? defaultRun.CharacterScalePercent
+                    : document.DefaultRun.CharacterScalePercent,
                 KerningMinSizePt = defaultRun.KerningMinSizePt ?? document.DefaultRun.KerningMinSizePt,
                 PositionPt = defaultRun.PositionPt != 0
                     ? defaultRun.PositionPt

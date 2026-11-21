@@ -227,7 +227,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(targetBox, targetField.AutomationId);
         AutomationProperties.SetHelpText(targetBox, UiText.Get(targetField.HelpResourceKey!));
 
-        var dialog = NewChartDialog(UiText.Get("MoveChart_Title"), ChartMovePlanner.DialogAutomationId);
+        var dialog = NewChartDialog(UiText.Get("MoveChart_Title"), ChartMovePlanner.DialogAutomationId, objectRadio);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("MoveChart");
         okButton.Click += (_, _) =>
@@ -395,7 +395,7 @@ public sealed partial class MainWindow
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         // WPF ChartAreaLegendDialog focuses the chart-area fill editor on load. Use the matching
         // Avalonia color control explicitly so nested scroll content does not lose the initial focus.
-        var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog", chartAreaEditor.Picker);
+        var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog", chartAreaEditor.Box);
         // Shared explicit size so the headless parity capture (which reads dialog.Bounds verbatim) matches
         // the WPF chart-area dialog contract.
         dialog.SizeToContent = SizeToContent.Manual;

@@ -183,6 +183,12 @@ public sealed partial class MainWindow
             ChartTypeChangePlanner.PickerButtonWidth);
         okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
         cancelButton.Click += (_, _) => dialog.Close((ChartType?)null);
+        // WPF ChangeChartTypeDialog accepts the dialog on a double-click in the subtype gallery.
+        subtypeGallery.DoubleTapped += (_, args) =>
+        {
+            args.Handled = true;
+            dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);
+        };
         buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
         // WPF "Choose a chart type" heading.
@@ -1001,7 +1007,7 @@ public sealed partial class MainWindow
         var yAxisBox = CreateChartTextBox(yAxisTitle, 260);
         AutomationProperties.SetAutomationId(yAxisBox, "ChartYAxisTitleBox");
 
-        var dialog = NewChartDialog(UiText.Get("ChartTitles_Title"), "ChartTitlesDialog");
+        var dialog = NewChartDialog(UiText.Get("ChartTitles_Title"), "ChartTitlesDialog", chartTitleBox);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartTitles");
         okButton.Click += (_, _) => dialog.Close(((string, string, string)?)(

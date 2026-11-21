@@ -22,6 +22,7 @@ public sealed class FreeXOptionsDialogSession
             openSnapshot.QuickAccessToolbarBelowRibbon);
         CustomDictionary = new CustomDictionaryEditorSession(
             openSnapshot.SpellCheckCustomDictionaryWords);
+        EditedCustomLists = openSnapshot.CustomLists.Select(l => (IReadOnlyList<string>)l.ToList()).ToList();
     }
 
     public AppOptions OpenSnapshot { get; }
@@ -29,6 +30,9 @@ public sealed class FreeXOptionsDialogSession
     public QuickAccessToolbarOptionsSession QuickAccessToolbar { get; }
 
     public CustomDictionaryEditorSession CustomDictionary { get; }
+
+    /// <summary>The user's Custom Lists as edited in this dialog; starts as the open snapshot's lists.</summary>
+    public IReadOnlyList<IReadOnlyList<string>> EditedCustomLists { get; set; } = [];
 
     public FreeXOptionsPersistenceResult Commit(
         OptionsDialogPlanner.OptionsDialogInput input,
@@ -51,6 +55,7 @@ public sealed class FreeXOptionsDialogSession
                 CustomDictionary.Model.Words,
                 formulaBarExpanded));
 
+        edited.CustomLists = AppOptions.NormalizeCustomLists(EditedCustomLists);
         return _runtimeSession.CommitDialog(OpenSnapshot, edited);
     }
 }

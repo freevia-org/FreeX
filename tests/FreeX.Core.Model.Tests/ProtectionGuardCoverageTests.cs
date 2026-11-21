@@ -227,6 +227,7 @@ public class ProtectionGuardCoverageTests
         ["DefineNamedFormulaCommand"] = "Workbook/sheet-scoped named-formula metadata edit; not cell content, not protection-blocked.",
         ["SetIterativeCalculationOptionsCommand"] = "Workbook-global calc setting (iterative calc); not protection-blocked.",
         ["SetWorkbookThemeCommand"] = "Workbook theme; not protection-blocked.",
+        ["DefineCustomCellStyleCommand"] = "Workbook-level named cell style definition; not cell content, not protection-blocked.",
         ["SetWorkbookWindowArrangementCommand"] = "Window layout metadata; not protection-blocked.",
         ["SetWorksheetViewModeCommand"] = "View mode; not protection-blocked.",
         ["SetWorksheetViewOptionsCommand"] = "View options; not protection-blocked.",
@@ -426,6 +427,9 @@ public class ProtectionGuardCoverageTests
             // ---- Cell content writes ----
             ["EditCellsCommand"] = (wb, sheet) =>
                 EditCellsCommand.ForValue(sheet.Id, new CellAddress(sheet.Id, 1, 1), new TextValue("x")),
+
+            ["InsertedBandFormatCommand"] = (wb, sheet) =>
+                new InsertedBandFormatCommand(sheet.Id, rows: true, start: 2, count: 1, InsertedBandFormat.Clear),
 
             ["GroupedEditCellsCommand"] = (wb, sheet) =>
             {
