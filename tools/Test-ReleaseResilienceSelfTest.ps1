@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param()
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 # Live self-test of the release publish resilience helpers, run by the full-release.yml dry run when
