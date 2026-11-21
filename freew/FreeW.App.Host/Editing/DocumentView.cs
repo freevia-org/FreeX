@@ -12861,6 +12861,38 @@ public sealed partial class DocumentView : RichTextBox
         && !run.IsPageBreak
         && !run.IsColumnBreak;
 
+    /// <summary>
+    /// Whether <paramref name="run"/> contributes visible text to the segment that follows a tab. Besides plain
+    /// text this admits field results (the PAGEREF page number that ends every TOC entry): a right-aligned tab
+    /// must reserve the width of that cached result, or the leader runs the full distance to the stop and the
+    /// number wraps onto a line of its own, doubling the entry's height.
+    /// </summary>
+    private static bool IsTabFollowingTextRun(ModelRun run, bool isTabRun)
+    {
+        if (isTabRun)
+            return IsPlainTextRun(run);
+        if (IsPlainTextRun(run))
+            return true;
+        return run.Image is null
+            && run.Shape is null
+            && run.Chart is null
+            && run.WordArt is null
+            && run.Equation is null
+            && run.SmartArt is null
+            && run.EmbeddedObject is null
+            && run.PreservedDrawing is null
+            && run.DrawingGroup is null
+            && run.FootnoteId is null
+            && run.EndnoteId is null
+            && run.TableFormula is null
+            && run.Citation is null
+            && !run.IsCommentReference
+            && !run.IsPageBreak
+            && !run.IsColumnBreak
+            && (run.ComplexField is null || !run.ComplexField.ShowCode)
+            && (run.CrossReference is not null || run.ComplexField is not null || run.FieldKind != RunFieldKind.None);
+    }
+
     private static TabFollowingSegmentMetrics MeasureFollowingTabSegment(
         IReadOnlyList<ModelRun> runs,
         int runIndex,
@@ -12874,7 +12906,7 @@ public sealed partial class DocumentView : RichTextBox
         for (var i = runIndex; i < runs.Count; i++)
         {
             var run = runs[i];
-            if (!IsPlainTextRun(run))
+            if (!IsTabFollowingTextRun(run, isTabRun: i == runIndex))
                 break;
 
             var text = run.Text;
