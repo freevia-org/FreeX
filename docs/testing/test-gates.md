@@ -88,6 +88,97 @@ These are execution optimizations only: conflict markers, line endings, path col
 normalization, script syntax, platform-specific APIs, generated freshness, and project references
 remain covered.
 
+## Measured Runner Time (2026-11-21)
+
+Source: `gh run view <id> --json jobs` for the runs below, plus the per-leg job logs of CI run
+44916523212. Job-minutes are `completedAt - startedAt` per job. The repository is public, so hosted
+minutes are not billed; the scarce resources are the ~20 concurrent runner slots (windows ~10-11,
+linux ~6, macOS 5) and wall-clock.
+
+| Workflow / run | Jobs | Job-min | Wall | Gate step (build + test) | Setup, cache, upload, preflight |
+| --- | --- | --- | --- | --- | --- |
+| `ci.yml` push 44916523212 / 44913151638 / 44911864096 | 23 | 90.8 / 90.5 / 93.8 | 8.8 / 10.0 / 7.9 min | 68.9 / 68.4 / 71.1 | 18.6 / 18.5 / 18.9 (+2.6-3.1 platform preflight) |
+| `release-readiness.yml` dispatch 44911915670 | 23 | 115.2 | 17.4 min | 95.6 | 18.8 |
+| `full-release.yml` real 44885755819 (release tests ran) | 49 | 212.6 | 22.3 min | 100.7 (18 release-test legs) | 17.1 |
+| `full-release.yml` dry run 44913445758 (release tests skipped) | 30 | 82.5 | 13.4 min | n/a | n/a |
+
+Where the job-minutes go (CI run 44916523212, 19 matrix legs): windows 11 jobs 55.8 min, linux 6 jobs
+27.4 min, macOS 2 jobs 6.8 min. In the 12 legs whose logs were read, the gate step is 52.6 min of which
+test execution is 25.2 min (48%) and restore plus compile 27.4 min (52%); fixed per-job overhead
+(provisioning, checkout 6-36 s, `setup-dotnet` 6-30 s, NuGet and obj cache restore, upload) is about
+1 min per job. The full-release real run spends 117.8 min in release tests, 59.0 in the 15 app package
+legs, 12.2 in the five suite package legs, and 19.4 in the early-abort watcher (one ubuntu slot held
+for the whole run; 12.4 min in the dry run), which is the price of stopping a doomed release early.
+
+Per gate, one SHA (test duration is the sum of the `Passed!` durations in the leg log; the rest of
+the leg is restore, compile and runner startup):
+
+| Gate (platform) | Wall per leg | Test time | Notes |
+| --- | --- | --- | --- |
+| `freex-avalonia` windows 1of2 / 2of2 | 481 / 413 s | 254 / 183 s | critical path of the push; includes full-history checkout (36 s) |
+| `freex-avalonia` linux 1of2 / 2of2 | 339 / 355 s | 194 / ~190 s | |
+| `freex-portable-unix` linux 1of2 / 2of2 | 347 / 252 s | 82 / 79 s | compile of the Core stack is >50% of the leg |
+| `freex-core-portable` windows 1of2 / 2of2 | 220 / 310 s | 37 / 121 s | each leg rebuilds the Core stack |
+| `freex-contract` windows | 196 s | 33 s | |
+| `freex-tools` windows | 264 s | 132 s | |
+| `freew-desktop` windows | 394-554 s | 204 s | serial: two builds, then Host and Avalonia tests; critical path in some runs |
+| `freep-avalonia-desktop` / `freep-wpf-desktop` windows | 386 / 299 s | 101 / 93 s | |
+| `freew-core-portable`, `freep-core-portable` x3 OS | 139-239 s, 172-210 s | n/a | one platform preflight owner per OS inside |
+| release: `freex-wpf-host-batch1..7` windows | 223-452 s | n/a | seven batch assemblies |
+| release: `freex-render-evidence-a/b` x3 OS | 294-520 s | n/a | seven capture assemblies, same ~22 shared files compiled once per assembly |
+| release: `freex-portable-unix-macos` 1of2/2of2, `freex-avalonia-macos` 1of2/2of2 | 348/348, 370/295 s | n/a | macOS slots (5) are the binding limit |
+
+Same project executed more than once per SHA. `Free.Shared.AppServices`, `FreeX.Core.Formula/IO/Model`,
+`FreeX.App.Localization/Presentation/Services`, `FreeX.Integration` and `FreeX.ParityCompare` tests run
+three times (windows in `freex-core-portable`/`freex-contract`, linux in `freex-portable-unix`, macOS in
+the release-only `freex-portable-unix-macos`); `FreeX.App.Avalonia.Tests` and
+`Free.Shared.Shell.Avalonia.Tests` run on windows and linux in the push gate and on macOS in
+`freex-avalonia-macos`; the FreeW and FreeP core-portable projects run on all three OS in the push gate.
+A script over `eng/test-gates.json` finds 93 (project, platform) executions of 49 projects and NO project
+that runs twice on the same platform for one SHA, in the push gate or between the push gate and the
+release gates. Every repeat above is therefore a different operating system. Across workflows,
+`Full Signed Release` already reuses a readiness run on the exact SHA instead of re-running its release
+tests (`Resolve-ReleaseGateEvidence.ps1`), and skips them for dry runs.
+
+Rejected as not provably safe or not worth it, with the evidence:
+
+- Dropping a repeated cross-OS execution: the suites read paths, culture, line endings and process
+  behaviour (the `.NET` `ApplicationData`/`LocalApplicationData` split already surfaced a Linux-only
+  failure), so a Windows pass does not prove the Linux or macOS result. The pure-calculation suites
+  are already single-platform (`platformProjects.linux`).
+- Merging `freex-core-portable` windows 2 partitions into 1: 530/500/565 s of leg time becomes about
+  400-440 s (saves ~2 job-min and one windows slot per push) but that equals the windows
+  critical path (400-480 s), so wall could grow; the 3 to 2 retune in `a24671e64f` measured the same
+  trade-off. Not taken.
+- Rebalancing `freex-avalonia` windows partitions (254 s vs 183 s of test time): the split is by static
+  test count, not time; a better cut needs per-class timings that move between runs. At most ~30 s of
+  wall, not taken.
+- One shared build artifact for the legs of a gate: `bin/` is ~2 GB per leg against a 10 GB repository
+  cache, so transfer costs more than the ~1 min recompile (`obj/` is already cached per gate, and the
+  timestamps script keeps that cache honest).
+- One compile for the seven capture or host batch assemblies: each is a separate assembly by design
+  (per-process isolation of Avalonia headless state); sharing needs a test-structure change with no
+  proof of equivalence.
+- Trimming `setup-dotnet` or the full-history checkout: the SDK pin cannot be proven preinstalled on
+  every image, and the history-dependent tests are not enumerated.
+- Skipping the daily scheduled `ci.yml` run when a push already ran full on the head SHA (3 of the 3
+  sampled days): saves at most ~90 job-min per day (about 1% of push CI) and needs a new coverage mode
+  that the release attestation reader would have to understand. Not taken.
+- Replacing the early-abort watcher (one ubuntu slot for the release duration) by per-job failure
+  steps: the classifier needs the whole run state, and the path cannot be exercised without dispatching
+  a release.
+
+Change made from this data: `release-readiness.yml` no longer re-executes an unchanged commit that
+already failed its full gates twice. Measured 2026-11-12 to 2026-11-21: nine of about 25 scheduled
+readiness runs executed an already-red SHA (`c1af1fb4` six times, `54e0cdc7` three times), each
+about 100 job-minutes including six macOS jobs. The guard keeps one retry (so a flake still gets a
+second look) and skips later runs for seven days; the summary job still fails with the reason, so the
+red signal is unchanged and only the re-execution is saved. Failures whose README-freshness check
+failed do not count, because that check reads the newest published release and can flip without a
+commit. That rule would have skipped five of those nine runs: about 500 job-minutes, of which about
+190 are macOS minutes, in ten days. `ReleaseAutomationWorkflowTests` pins the guard and the
+still-red summary.
+
 ## Impact-Based CI Coverage
 
 A push to `main` pays for what it can affect, and nothing is guessed. `tools/Select-CiCoverage.ps1`
