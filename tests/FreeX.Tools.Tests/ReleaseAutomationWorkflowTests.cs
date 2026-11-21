@@ -92,6 +92,28 @@ public sealed class ReleaseAutomationWorkflowTests
     }
 
     [Fact]
+    public void ReleaseReadinessWorkflow_SkipsRepeatsOfARedShaButStillReportsRed()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "release-readiness.yml");
+        var guard = ExtractWorkflowJob(workflow, "guard");
+        var summary = ExtractWorkflowJob(workflow, "summary");
+
+        // Re-testing an unchanged SHA that already failed its full gates twice teaches nothing, so the
+        // scheduled run skips it. Only failed runs whose README check passed count (that check reads
+        // state outside the repository), and only the schedule is ever skipped.
+        guard.Should().Contain("known_red: ${{ steps.decide.outputs.known_red }}");
+        guard.Should().Contain("-f status=failure");
+        guard.Should().Contain("-contains \"README download links`tsuccess\"");
+        guard.Should().Contain("$failedFull -ge 2");
+        guard.Should().Contain("if ($env:EVENT_NAME -eq 'schedule')");
+        guard.Should().Contain("\"known_red=$knownRed\"");
+
+        // The skip must never turn a red SHA green: the summary fails for a known-red skip.
+        summary.Should().Contain("$guardKnownRed = \"${{ needs.guard.outputs.known_red }}\"");
+        summary.Should().MatchRegex(@"(?s)\$guardSkip -eq 'true' -and \$guardKnownRed -eq 'true'\)\s*\{\s*throw");
+    }
+
+    [Fact]
     public void FullReleaseWorkflow_SkipsReleaseTestsOnlyForDryRunsAndStillRequiresThemForRealReleases()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "full-release.yml");
