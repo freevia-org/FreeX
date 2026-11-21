@@ -14753,8 +14753,38 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool MatchCase() => options.MatchCaseBox.IsChecked == true;
         bool MatchEntire() => options.MatchEntireCellBox.IsChecked == true;
 
+        // WPF: a blank "Find what" is allowed only when a Format criterion narrows the search; otherwise an
+        // owned warning titled with the dialog is shown and focus returns to the search box.
+        bool BlankSearchBlocked()
+        {
+            if (!string.IsNullOrEmpty(CurrentFindText()) || findFormat is not null)
+                return false;
+
+            RunGuarded(() => ShowFindWhatRequiredAsync());
+            return true;
+        }
+
+        async Task ShowFindWhatRequiredAsync()
+        {
+            try
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    Fr(FindReplaceDialogText.FindWhatRequired),
+                    dialog.Title ?? string.Empty);
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            if (dialog.IsVisible)
+                FocusSearchBox();
+        }
+
         void DoFindNext()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             // WPF HideFindAllResults: Find Next collapses the Find All list.
             resultsList.ItemsSource = null;
@@ -14775,6 +14805,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void DoFindAll()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             var search = new FindDialogResult(CurrentFindText(), FindDialogAction.FindAll, BuildOptions(), MatchCase(), MatchEntire());
             var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
@@ -14793,6 +14824,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void DoReplace()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
@@ -14814,6 +14846,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void DoReplaceAll()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
@@ -16273,10 +16306,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     out var plan,
                     out var validationError))
             {
-                validationText.Text = GetHyperlinkValidationErrorText(validationError);
-                validationText.IsVisible = true;
-                targetBox.Focus();
-                targetBox.SelectAll();
+                RunGuarded(() => ShowDialogWarningAndFocusAsync(dialog, GetHyperlinkValidationErrorText(validationError), targetBox));
                 return;
             }
 
@@ -18621,11 +18651,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsVisible = false,
         };
 
-        void ShowFormatCellsError(string message, Control? target = null)
+        TabControl? formatCellsTabStrip = null;
+
+        // WPF ShowPlannerValidation: select the tab that owns the field, then an owned modal warning
+        // titled with the dialog, then focus the offending field.
+        void ShowFormatCellsError(string message, Control? target = null, FormatCellsDialogPlannerTab? tab = null)
         {
-            errorText.Text = message;
-            errorText.IsVisible = true;
-            target?.Focus();
+            errorText.IsVisible = false;
+            if (formatCellsTabStrip is not null && tab is { } plannerTab)
+            {
+                formatCellsTabStrip.SelectedIndex = plannerTab switch
+                {
+                    FormatCellsDialogPlannerTab.Alignment => 1,
+                    FormatCellsDialogPlannerTab.Font => 2,
+                    FormatCellsDialogPlannerTab.Border => 3,
+                    FormatCellsDialogPlannerTab.Fill => 4,
+                    FormatCellsDialogPlannerTab.Protection => 5,
+                    _ => 0,
+                };
+            }
+
+            RunGuarded(() => ShowDialogWarningAndFocusAsync(dialog, message, target));
         }
 
         void Accept()
@@ -18710,7 +18756,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     FormatCellsDialogValidationTarget.TextRotation => textRotationBox,
                     _ => null,
                 };
-                ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);
+                ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target, validation.Tab);
                 return;
             }
 
@@ -19344,6 +19390,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 protectionTab,
             },
         };
+        formatCellsTabStrip = tabStrip;
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
         // WPF FormatCellsDialog.xaml: plain TabItems sized to their header text (no minimum width).
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
@@ -19442,6 +19489,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    private static async Task ShowDialogWarningAndFocusAsync(Window dialog, string message, Control? target)
+    {
+        try
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(dialog, message, dialog.Title ?? string.Empty);
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        if (dialog.IsVisible)
+        {
+            target?.Focus();
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+        }
     }
 
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)
