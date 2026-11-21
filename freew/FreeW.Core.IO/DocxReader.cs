@@ -5103,7 +5103,17 @@ public static partial class DocxReader
             var isWindowAutoFit = string.Equals(tblW?.Attribute(W + "type")?.Value, "pct", StringComparison.OrdinalIgnoreCase);
             table.AutoFit = isWindowAutoFit ? AutoFitMode.Window : AutoFitMode.Contents;
             if (isWindowAutoFit)
+            {
                 table.PreferredWidthPt = TableLayoutOperations.DefaultAutoFitWindowWidthPt;
+                // w:tblW pct is in fiftieths of a percent (5000 = 100%); keep the authored share so it
+                // survives a save and the renderer can size the table by it. A "50%" style value (strict
+                // ST_MeasurementOrPercent) is not a fiftieths count and is left to the default.
+                var rawWidth = tblW!.Attribute(W + "w")?.Value;
+                if (double.TryParse(rawWidth, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var rawPct)
+                    && double.IsFinite(rawPct) && rawPct > 0 && rawPct <= 50000)
+                    table.PreferredWidthPercent = rawPct / 50.0;
+            }
         }
 
         // Table alignment (w:jc); absent → Left.

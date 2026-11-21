@@ -1221,6 +1221,7 @@ public static class DocumentCompare
             TableStyleId = revised.TableStyleId,
             Borders = revised.Borders,
             PreferredWidthPt = revised.PreferredWidthPt,
+            PreferredWidthPercent = revised.PreferredWidthPercent,
             Alignment = revised.Alignment,
             IndentFromLeftPt = revised.IndentFromLeftPt,
             FloatingPosition = revised.FloatingPosition,

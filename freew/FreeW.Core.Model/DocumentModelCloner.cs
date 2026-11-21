@@ -446,6 +446,7 @@ public static class DocumentModelCloner
             TableStyleId = source.TableStyleId,
             Borders = source.Borders,
             PreferredWidthPt = source.PreferredWidthPt,
+            PreferredWidthPercent = source.PreferredWidthPercent,
             Alignment = source.Alignment,
             IndentFromLeftPt = source.IndentFromLeftPt,
             FloatingPosition = source.FloatingPosition,

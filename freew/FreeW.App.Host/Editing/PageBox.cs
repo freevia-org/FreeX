@@ -731,6 +731,11 @@ internal sealed class PageBox : Border
         var wrapper = TextDocument.CreateEmpty();
         wrapper.DefaultRun       = sourceModel.DefaultRun;
         wrapper.DefaultParagraph = sourceModel.DefaultParagraph;
+        // The cascade-root flags decide whether an omitted w:line means Word's 1.15 application default or the
+        // single-line specification default; a wrapper left at the model default (1.15) would space a
+        // package-authored header/footer wider than the body that shares its styles.
+        wrapper.UseWordApplicationDefaultLineSpacing = sourceModel.UseWordApplicationDefaultLineSpacing;
+        wrapper.UseWordApplicationDefaultRunFormatting = sourceModel.UseWordApplicationDefaultRunFormatting;
         if (inheritSourceStyles)
         {
             // Print composition resolves the slot's paragraphs against the real style catalog, so the
