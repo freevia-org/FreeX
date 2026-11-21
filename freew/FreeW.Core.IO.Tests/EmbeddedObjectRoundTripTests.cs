@@ -61,6 +61,48 @@ public class EmbeddedObjectRoundTripTests
         return doc;
     }
 
+    [Fact]
+    public void EmbeddedObject_InsideAHyperlinkFieldResult_IsStillRead()
+    {
+        // Word writes a hyperlinked file icon as: begin / HYPERLINK instruction / separate / the w:object run / end.
+        var docx = WriteBytes(ExcelObjectDocument());
+        using var input = new MemoryStream(docx);
+        using var output = new MemoryStream();
+        using (var source = new ZipArchive(input, ZipArchiveMode.Read))
+        using (var target = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in source.Entries)
+            {
+                var copy = target.CreateEntry(entry.FullName);
+                using var from = entry.Open();
+                using var to = copy.Open();
+                if (entry.FullName != "word/document.xml")
+                {
+                    from.CopyTo(to);
+                    continue;
+                }
+
+                var xml = XDocument.Load(from);
+                var objectRun = xml.Descendants(W + "object").Single().Parent!;
+                XElement FieldRun(XElement content) => new(W + "r", content);
+                objectRun.AddBeforeSelf(
+                    FieldRun(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
+                    FieldRun(new XElement(W + "instrText", "HYPERLINK \"file.doc\"")),
+                    FieldRun(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+                objectRun.AddAfterSelf(FieldRun(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+                xml.Save(to);
+            }
+        }
+
+        output.Position = 0;
+        var document = DocxReader.Read(output);
+
+        document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().Contain(run => run.EmbeddedObject != null && run.EmbeddedObject.ProgId == "Excel.Sheet.12",
+                "the icon sits in the hyperlink field's result but is an object, not result text");
+    }
+
     /// <summary>Moves a writer-authored OLE object and its two relationships from document.xml into header1.xml.</summary>
     private static byte[] AuthorHeaderEmbeddedObjectPackage()
     {
