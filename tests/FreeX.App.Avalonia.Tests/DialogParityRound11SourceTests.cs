@@ -117,7 +117,8 @@ public sealed class DialogParityRound11SourceTests
         main.Should().Contain("new(\"Fill\", CellHAlign.Fill)");
         main.Should().Contain("new(\"Center\", CellVAlign.Center)");
         main.Should().NotContain("new(\"Middle\", CellVAlign.Center)");
-        main.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(\n                    dialog,\n                    UiText.Get(\"GoTo_ReferenceIsNotValid\")".Replace("\n", Environment.NewLine));
+        // Sources are LF-only (.gitattributes eol=lf); normalise so the match holds on Windows checkouts too.
+        main.Replace("\r\n", "\n").Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(\n                    dialog,\n                    UiText.Get(\"GoTo_ReferenceIsNotValid\")");
         main.Should().Contain("_session.TryResolveReferenceRange(inputBox.Text");
         main.Should().Contain("var findBox = new TextBox { Text = string.Empty");
         main.Should().NotContain("if (OnReplaceTab()) DoReplace(); else DoFindNext();");
