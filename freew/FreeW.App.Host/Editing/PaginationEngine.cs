@@ -1124,11 +1124,14 @@ internal static class PaginationEngine
                 {
                     take = index; // no text of it fits on this page after all
                 }
-                else if (block is System.Windows.Documents.Table straddlingTable
+                else if (segmentPaginations is not null
+                    && block is System.Windows.Documents.Table straddlingTable
                     && SplitTableAtFirstOverflowRow(dynamicWork, straddlingTable) is { } tableRemainder)
                 {
-                    // The rows that do not fit continue on the next page as a table of their own, like Word, so
-                    // the content after the table follows them instead of starting yet another page.
+                    // Printed/exported pages only (the assignment-only pass the paged editor's incremental session
+                    // mirrors keeps the table whole): the rows that do not fit continue on the next page as a
+                    // table of their own, like Word, so the content after the table follows them instead of
+                    // starting yet another page.
                     work.Blocks.InsertAfter(straddlingTable, tableRemainder);
                     pending.Insert(index + 1, (tableRemainder, pending[index].ModelIndex, true));
                 }
