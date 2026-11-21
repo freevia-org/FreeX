@@ -424,6 +424,7 @@ public sealed partial class XlsxFileAdapter
                 XlsxExternalLinkAuthoringWriter.Save(packageStream, workbook);
             }
             XlsxDefaultCellStyleWriter.Save(packageStream, workbook.GetStyle(StyleId.Default));
+            XlsxNamedCellStyleCodec.Save(packageStream, workbook);
             NormalizeStylesheetForSchema();
             // shared-document-properties F2: this brand-new workbook has no source package for
             // XlsxDocumentPropertiesPreserver.Preserve (inside PreserveSourcePackageParts,
@@ -616,6 +617,7 @@ public sealed partial class XlsxFileAdapter
             XlsxNumberFormatCatalogWriter.RemapPivotTableNumberFormats(packageStream, numberFormatIdMap);
         }
 
+        XlsxNamedCellStyleCodec.Save(packageStream, workbook);
         NormalizeStylesheetForSchema();
         XlsxCustomViewNativeMetadata? customViewMetadata = null;
         if (workbook.CustomViews.Count > 0 && sourcePackage?.SourceSheetIdsByLocalId is { } sourceSheetIds)
