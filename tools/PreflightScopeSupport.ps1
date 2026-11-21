@@ -10,7 +10,7 @@
 #     (an unmapped CHECK always runs on its own; it also fails the contract test)
 #   * a changed path matches a global trigger
 #   * a changed path matches no check, is not declared ignorable (an unmapped PATH)
-# CI (ci.yml), tester-release and a bare Test-RepositoryPreflight.ps1 never pass a base ref, so
+# CI (ci.yml), full-release and a bare Test-RepositoryPreflight.ps1 never pass a base ref, so
 # they keep running every check; -Full forces the same locally.
 
 Set-StrictMode -Version Latest
