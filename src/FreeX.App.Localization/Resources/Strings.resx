@@ -4214,6 +4214,12 @@
   <data name="ShellLoc_PageCouldNotRender" xml:space="preserve">
     <value>This page could not be rendered.</value>
   </data>
+  <data name="TableLoc_ShiftNotInTable" xml:space="preserve">
+    <value>Select a cell inside a table first.</value>
+  </data>
+  <data name="TableLoc_ShiftNeedsBodyCell" xml:space="preserve">
+    <value>This command is not available for the selected part of the table.</value>
+  </data>
   <data name="TableLoc_ConvertToRangeNotInTable" xml:space="preserve">
     <value>Convert to Range: the active cell is not inside a table.</value>
   </data>

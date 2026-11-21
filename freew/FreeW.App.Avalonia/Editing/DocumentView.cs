@@ -20786,6 +20786,7 @@ public sealed partial class DocumentView : Control
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
+            Frame = source.Frame,
             SectionBreak = source.SectionBreak,
             PreservedNumbering = source.PreservedNumbering,
             ParagraphFormatRevision = source.ParagraphFormatRevision

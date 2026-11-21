@@ -14,12 +14,13 @@ internal sealed class StructuredTableColumnDeleteEffects
     internal IReadOnlyCollection<CellAddress> Affected => _affected;
     internal int EstimatedBytes => (int)Math.Min(int.MaxValue, _textBytes + _undo.Count * 256L);
 
-    internal static StructuredTableColumnDeleteEffects Capture(Sheet sheet, uint start, uint count)
+    internal static StructuredTableColumnDeleteEffects Capture(Sheet sheet, uint start, uint count, int? onlyTableId = null)
     {
         var result = new StructuredTableColumnDeleteEffects();
         var end = (ulong)start + count - 1;
         foreach (var table in sheet.StructuredTables)
         {
+            if (onlyTableId is { } only && table.Id != only) continue;
             if ((ulong)table.Range.End.Col < start || table.Range.Start.Col > end) continue;
             // The reader and table model allow a legacy table with no column metadata;
             // structural reconciliation already supplies columns for that state. A

@@ -9940,6 +9940,9 @@ public sealed partial class DocumentView : RichTextBox
         /// <summary>The paragraph authored an explicit start alignment (w:jc="left").</summary>
         public bool AlignmentIsSet { get; init; }
 
+        /// <summary>The paragraph's text-frame properties (w:framePr), carried so they survive an edit/commit cycle.</summary>
+        public ParagraphFrame? Frame { get; init; }
+
         /// <summary>
         /// The one-line height (DIP) BuildParagraph scaled by the Multiple line rule, from the paragraph's
         /// own font. ReadLineSpacing divides by the same basis so the multiple round-trips exactly.
@@ -10224,6 +10227,7 @@ public sealed partial class DocumentView : RichTextBox
             SectionBreak = tag?.SectionBreak,
             BlockContentControl = tag?.BlockContentControl,
             DropCap = tag?.DropCap,
+            Frame = tag?.Frame,
             SpanningFieldStart = tag?.SpanningFieldStart,
             SpanningFieldOwner = tag?.SpanningFieldOwner,
             EndsSpanningField = tag?.EndsSpanningField ?? false,
@@ -12627,6 +12631,85 @@ public sealed partial class DocumentView : RichTextBox
         return false;
     }
 
+    /// <summary>
+    /// Page-only render of a bordered paragraph as part of Word's merged border box: the top edge is drawn only
+    /// by the first paragraph of a run that shares the box and the bottom edge only by the last one, the gap
+    /// between two joined paragraphs stays inside the box (it becomes padding), and a hanging first line is
+    /// enclosed by the left edge instead of sticking out of it.
+    /// </summary>
+    private static void ApplyJoinedBorderBox(
+        WpfParagraph wpf,
+        ModelParagraph paragraph,
+        ParagraphFormatting paraFmt,
+        TextDocument document,
+        int? sourceBlockIndex)
+    {
+        var joinsPrevious = false;
+        var joinsNext = false;
+        if (sourceBlockIndex is { } index && index >= 0 && index < document.Blocks.Count
+            && ReferenceEquals(document.Blocks[index], paragraph))
+        {
+            joinsPrevious = index > 0
+                && document.Blocks[index - 1] is ModelParagraph previous
+                && SharesBorderBox(previous, paragraph, document);
+            joinsNext = index + 1 < document.Blocks.Count
+                && document.Blocks[index + 1] is ModelParagraph next
+                && SharesBorderBox(paragraph, next, document);
+        }
+
+        var thickness = wpf.BorderThickness;
+        var padding = wpf.Padding;
+        var margin = wpf.Margin;
+        if (joinsPrevious)
+        {
+            // A shared edge draws no line and no inner padding; the spacing between the paragraphs stays in the box.
+            padding = new Thickness(padding.Left, margin.Top, padding.Right, padding.Bottom);
+            margin = new Thickness(margin.Left, 0, margin.Right, margin.Bottom);
+            thickness = new Thickness(thickness.Left, 0, thickness.Right, thickness.Bottom);
+        }
+        if (joinsNext)
+        {
+            padding = new Thickness(padding.Left, padding.Top, padding.Right, margin.Bottom);
+            margin = new Thickness(margin.Left, margin.Top, margin.Right, 0);
+            thickness = new Thickness(thickness.Left, thickness.Top, thickness.Right, 0);
+        }
+
+        var hangingDip = Math.Min(Math.Max(0, -wpf.TextIndent), margin.Left);
+        if (hangingDip > 0 && thickness.Left > 0)
+        {
+            margin = new Thickness(margin.Left - hangingDip, margin.Top, margin.Right, margin.Bottom);
+            padding = new Thickness(padding.Left + hangingDip, padding.Top, padding.Right, padding.Bottom);
+        }
+
+        wpf.BorderThickness = thickness;
+        wpf.Padding = padding;
+        wpf.Margin = margin;
+    }
+
+    /// <summary>
+    /// Whether two adjacent body paragraphs are drawn inside one border box (Word's rule): the same box border
+    /// on both, identical indents and frame, neither a list item, and nothing that starts a new page between them.
+    /// </summary>
+    internal static bool SharesBorderBox(ModelParagraph first, ModelParagraph second, TextDocument document)
+    {
+        if (first.SectionBreak is not null || first.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak)
+            || second.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak))
+            return false;
+
+        var a = Resolve(first, document);
+        var b = Resolve(second, document);
+        return a.Border is { BottomOnly: false } borderA
+            && b.Border is { BottomOnly: false } borderB
+            && borderA == borderB
+            && a.ListKind == ListKind.None
+            && b.ListKind == ListKind.None
+            && !b.PageBreakBefore
+            && a.IndentLeftPt.Equals(b.IndentLeftPt)
+            && a.IndentRightPt.Equals(b.IndentRightPt)
+            && a.FirstLineIndentPt.Equals(b.FirstLineIndentPt)
+            && Equals(first.Frame, second.Frame);
+    }
+
     private static WpfParagraph BuildParagraph(
         ModelParagraph paragraph,
         TextDocument document,
@@ -12808,6 +12891,11 @@ public sealed partial class DocumentView : RichTextBox
                 ? new Thickness(0, 0, 0, w)
                 : new Thickness(border.Left ? w : 0, border.Top ? w : 0, border.Right ? w : 0, border.Bottom ? w : 0);
             wpf.Padding = new Thickness(2);
+            // Word draws one box around consecutive paragraphs that share the same border and indents (a
+            // text frame's paragraphs, a boxed callout) and lets a hanging first line stand inside the
+            // box. WPF draws a box per paragraph, so a page-only render (never read back) joins them.
+            if (_renderJoinSlashes && !border.BottomOnly && !inTableCell)
+                ApplyJoinedBorderBox(wpf, paragraph, paraFmt, document, sourceBlockIndex);
             // A thick horizontal rule (o:hr shape of several points) sits ON its paragraph's line in Word,
             // so the paragraph is one text line tall. Drawn as a bottom border it would stack the border and
             // padding below that line; shrink the line to leave the same total height.
@@ -12872,6 +12960,7 @@ public sealed partial class DocumentView : RichTextBox
             paragraph.PreservedNumbering)
         {
             AlignmentIsSet = paraFmt.AlignmentIsSet,
+            Frame = paragraph.Frame,
             MultipleLineBasisPx = multipleLineBasisPx
         };
 
@@ -13270,8 +13359,13 @@ public sealed partial class DocumentView : RichTextBox
         // it reports a narrower advance than the line actually takes. A right-aligned tab stop sized from
         // that narrower width overshoots the line by the kerning delta and pushes the text after the tab
         // (a TOC/TOA page number, a dot leader) onto a line of its own.
+        // Expanded/condensed character spacing (w:spacing) adds a fixed advance after every character, so
+        // the tab-stop width must carry it too (only a page-only render paints the spacing, see BuildRun).
+        var spacingDip = _renderJoinSlashes ? RunCharacterSpacingPlanner.ResolveAdvanceDip(fmt, PxPerPoint) : 0;
+        var spacingTotalDip = spacingDip == 0 ? 0 : spacingDip * RunCharacterSpacingPlanner.CountSpacedElements(displayText);
+
         if (!RunKerningPlanner.IsKerningEnabled(fmt, DefaultFontSizePt))
-            return MeasureUnkernedTextWidth(displayText, typeface, fontSizePx, flowDirection);
+            return Math.Max(0, MeasureUnkernedTextWidth(displayText, typeface, fontSizePx, flowDirection) + spacingTotalDip);
 
         var formatted = new FormattedText(
             displayText,
@@ -13281,7 +13375,7 @@ public sealed partial class DocumentView : RichTextBox
             fontSizePx,
             Brushes.Black,
             1.0);
-        return formatted.WidthIncludingTrailingWhitespace;
+        return Math.Max(0, formatted.WidthIncludingTrailingWhitespace + spacingTotalDip);
     }
 
     private static double MeasureUnkernedTextWidth(
@@ -13739,6 +13833,14 @@ public sealed partial class DocumentView : RichTextBox
             content = ScaleInlineWidth(content, fmt.CharacterScalePercent / 100.0, fontSizePx);
         }
 
+        // Expanded/condensed character spacing (w:spacing) has no WPF text property either: a page-only render
+        // paints it with per-word spaced text boxes (SpacedTextBlock), so line breaks and pages move as in Word.
+        if (_renderJoinSlashes && !IsTextHiddenInCurrentView(fmt)
+            && RunCharacterSpacingPlanner.ResolveAdvanceDip(fmt, PxPerPoint) is var spacingAdvanceDip and not 0)
+        {
+            content = SpaceInlineCharacters(content, spacingAdvanceDip, fontSizePx);
+        }
+
         if (run.HyperlinkUrl is { Length: > 0 } url)
             return HideTextInlineWhenNeeded(BuildHyperlink(content, url, run.HyperlinkTooltip), fmt);
         if (run.HyperlinkAnchor is { Length: > 0 } anchor)
@@ -13835,6 +13937,63 @@ public sealed partial class DocumentView : RichTextBox
                 FlowDirection = source.FlowDirection,
                 Language = source.Language,
                 LayoutTransform = new ScaleTransform(scale, 1)
+            };
+            Typography.SetCapitals(box, Typography.GetCapitals(source));
+            Typography.SetKerning(box, Typography.GetKerning(source));
+            result.Inlines.Add(new InlineUIContainer(box) { BaselineAlignment = BaselineAlignment.Baseline });
+        }
+
+        return result.Inlines.Count == 0 ? inline : result;
+    }
+
+    /// <summary>
+    /// Replaces the text runs of <paramref name="inline"/> by inline <see cref="SpacedTextBlock"/>s that add
+    /// <paramref name="advanceDip"/> after every character (Word's expanded/condensed spacing, w:spacing). A
+    /// box per word keeps the line-breaking points. Runs with tabs, line breaks, right-to-left text or text
+    /// effects are left as plain runs. Page-only renders (never read back into the model).
+    /// </summary>
+    internal static Inline SpaceInlineCharacters(Inline inline, double advanceDip, double fallbackFontSizePx)
+    {
+        if (inline is Span span)
+        {
+            for (var i = 0; i < span.Inlines.Count; i++)
+            {
+                var child = span.Inlines.ElementAt(i);
+                var replaced = SpaceInlineCharacters(child, advanceDip, fallbackFontSizePx);
+                if (!ReferenceEquals(replaced, child))
+                {
+                    span.Inlines.InsertAfter(child, replaced);
+                    span.Inlines.Remove(child);
+                }
+            }
+            return span;
+        }
+
+        if (inline is not WpfRun { Text.Length: > 0 } source
+            || source.TextEffects.Count > 0
+            || source.FlowDirection == System.Windows.FlowDirection.RightToLeft
+            || !RunCharacterSpacingPlanner.CanPaintSpaced(source.Text))
+            return inline;
+
+        var size = source.ReadLocalValue(WpfRun.FontSizeProperty) != DependencyProperty.UnsetValue
+            ? source.FontSize
+            : fallbackFontSizePx;
+        var result = new Span { Tag = source.Tag };
+        foreach (System.Text.RegularExpressions.Match word in System.Text.RegularExpressions.Regex.Matches(
+                     source.Text, @"\S+\s*|\s+"))
+        {
+            var box = new SpacedTextBlock
+            {
+                Text = word.Value,
+                CharacterAdvance = advanceDip,
+                FontFamily = source.FontFamily,
+                FontSize = size,
+                FontWeight = source.FontWeight,
+                FontStyle = source.FontStyle,
+                Foreground = source.Foreground,
+                Background = source.Background,
+                TextDecorations = source.TextDecorations,
+                Language = source.Language
             };
             Typography.SetCapitals(box, Typography.GetCapitals(source));
             Typography.SetKerning(box, Typography.GetKerning(source));
