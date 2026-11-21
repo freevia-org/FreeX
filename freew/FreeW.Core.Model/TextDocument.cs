@@ -2945,6 +2945,19 @@ public sealed class TableRow
     public List<TableCell> Cells { get; } = [];
 
     /// <summary>
+    /// Number of grid columns skipped before the first cell of the row (<c>tr/trPr/w:gridBefore</c>). The
+    /// skipped area stays empty (no cells, no borders), so the row's cells start further right than the
+    /// first grid column. Zero (the default) emits no element.
+    /// </summary>
+    public int GridBefore { get; set; }
+
+    /// <summary>
+    /// Number of grid columns left unused after the last cell of the row (<c>tr/trPr/w:gridAfter</c>). The
+    /// trailing area stays empty, as in Word. Zero (the default) emits no element.
+    /// </summary>
+    public int GridAfter { get; set; }
+
+    /// <summary>
     /// Explicit row height in points (<c>tr/trPr/w:trHeight/@w:val</c>), interpreted per <see cref="HeightRule"/>.
     /// Null (the default) means automatic height, so no <c>w:trHeight</c> is emitted and existing rows are
     /// unaffected.

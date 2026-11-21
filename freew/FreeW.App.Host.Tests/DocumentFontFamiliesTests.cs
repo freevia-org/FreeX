@@ -59,6 +59,18 @@ public sealed class DocumentFontFamiliesTests
         Assert.False(DocumentFontFamilies.IsAvailable("Definitely Not An Installed Face 7731"));
     }
 
+    [StaFact]
+    public void MissingFace_IsDrawnInTimesNewRoman_AsWordSubstitutesIt_AndMapsBackToItsOwnName()
+    {
+        const string missing = "Definitely Not An Installed Face 7731";
+
+        var family = DocumentFontFamilies.Create(missing);
+
+        Assert.Contains("Times New Roman", family.Source, StringComparison.Ordinal);
+        Assert.Equal(missing, DocumentFontFamilies.ModelName(family));
+        Assert.Equal(new FontFamily("Times New Roman").LineSpacing, family.LineSpacing, 3);
+    }
+
     /// <summary>
     /// Word sizes a "multiple" line of right-to-left text by the face and size the text is drawn in --
     /// its w:cs font at w:szCs -- not by the run's Latin pair.

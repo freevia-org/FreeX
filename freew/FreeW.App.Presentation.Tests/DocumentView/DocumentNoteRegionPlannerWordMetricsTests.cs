@@ -89,4 +89,74 @@ public sealed class DocumentNoteRegionPlannerWordMetricsTests
         var words = string.Join(" ", bands.SelectMany(band => band.Fragments).Where(f => f.NoteId == 1).Select(f => f.Text));
         words.Should().Be(longNote, "every word of the note appears once, in order");
     }
+
+    [Fact]
+    public void FootnoteRegion_CarriesTheNoteParagraphsExactPitchHangingIndentAndJustification()
+    {
+        // stress008's "Fussnote" style: exact 9pt lines, hanging 14.2pt, justified, 10pt text.
+        var document = DocumentWithFootnoteStyle("A short note");
+        document.Styles["FootnoteText"].Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceAfterPt = 0,
+                SpaceAfterIsSet = true,
+                LineRule = LineSpacingRule.Exact,
+                LineHeightPt = 9,
+                LineSpacingIsSet = true,
+                IndentLeftPt = 14.2,
+                FirstLineIndentPt = -14.2,
+                Alignment = TextAlignment.Justify,
+            };
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, [1], 1, 600);
+
+        plan.ExactLineHeightDip.Should().BeApproximately(9 * PxPerPoint, 0.01);
+        plan.TextIndentDip.Should().BeApproximately(14.2 * PxPerPoint, 0.01);
+        plan.HangingDip.Should().BeApproximately(14.2 * PxPerPoint, 0.01);
+        plan.Justified.Should().BeTrue();
+        plan.Rows.Should().ContainSingle().Which.EstimatedHeightDip.Should().BeApproximately(9 * PxPerPoint, 0.01);
+    }
+
+    [Fact]
+    public void FootnoteRegion_WithoutIndentOrExactPitch_ReportsAFlushNaturalLayout()
+    {
+        var document = DocumentWithFootnoteStyle("A short note");
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, [1], 1, 600);
+
+        plan.ExactLineHeightDip.Should().Be(0);
+        plan.TextIndentDip.Should().Be(0);
+        plan.HangingDip.Should().Be(0);
+        plan.Justified.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FootnoteRegion_LaysEachNoteOutByItsOwnParagraphStyle_WhenNotesOfOnePageDiffer()
+    {
+        // stress008 mixes "footnote text" (10pt, natural single line) with a custom note style (exact 9pt lines).
+        var document = DocumentWithFootnoteStyle("Natural note", "Exact note");
+        document.Styles["FootnoteExact"] = new DocumentStyle
+        {
+            Id = "FootnoteExact",
+            Name = "Fussnote",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                SpaceAfterPt = 0,
+                SpaceAfterIsSet = true,
+                LineRule = LineSpacingRule.Exact,
+                LineHeightPt = 9,
+                LineSpacingIsSet = true,
+            },
+            Run = new RunFormatting { FontFamily = "Times New Roman", FontSizePt = 10 },
+        };
+        document.Footnotes[2].Content[0].StyleId = "FootnoteExact";
+
+        var plan = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, [1, 2], 1, 600);
+
+        plan.Rows[0].Layout.ExactLineHeightDip.Should().Be(0);
+        plan.Rows[0].EstimatedHeightDip.Should().BeApproximately(10 * PxPerPoint * 1.15, 0.01);
+        plan.Rows[1].Layout.ExactLineHeightDip.Should().BeApproximately(9 * PxPerPoint, 0.01);
+        plan.Rows[1].EstimatedHeightDip.Should().BeApproximately(9 * PxPerPoint, 0.01);
+        plan.EstimatedHeightDip.Should().Be(Math.Ceiling(
+            plan.SeparatorHeightDip + 10 * PxPerPoint * 1.15 + 9 * PxPerPoint));
+    }
 }
