@@ -1772,10 +1772,19 @@ internal sealed class PagedLayoutSession
         const double footnoteFrameClearanceDip = 0.0;
         const double minimumSplitBandDip = 36.0;
         var (contentWidthDip, _) = PageLayout.ContentAreaDip(segment.Page);
-        var work = newFlow(0);
+        FlowDocument NewPageFlow(double reserveDip)
+        {
+            var flow = newFlow(reserveDip);
+            flow.PagePadding = new Thickness(
+                flow.PagePadding.Left, flow.PagePadding.Top, flow.PagePadding.Right,
+                flow.PagePadding.Bottom - PaginationEngine.LastLineLeadingAllowanceDip);
+            return flow;
+        }
+
+        var work = NewPageFlow(0);
         var padding = work.PagePadding;
         var pageSize = new Size(work.PageWidth, work.PageHeight);
-        var bodyHeightDip = Math.Max(0, pageSize.Height - padding.Top - padding.Bottom);
+        var bodyHeightDip = Math.Max(0, pageSize.Height - padding.Top - padding.Bottom + PaginationEngine.LastLineLeadingAllowanceDip);
         var workPaginator = ((IDocumentPaginatorSource)work).DocumentPaginator;
         workPaginator.PageSize = pageSize;
         var dynamicWork = (DynamicDocumentPaginator)workPaginator;
@@ -1959,7 +1968,10 @@ internal sealed class PagedLayoutSession
             var demand = NoteDemandFor(blockCount);
             return demand <= 0
                 ? 0
-                : PaginationEngine.ClampFootnoteReserveDip(Math.Min(demand, bodyHeightDip) + footnoteFrameClearanceDip, segment.Page);
+                : PaginationEngine.ClampFootnoteReserveDip(
+                    Math.Min(demand + PaginationEngine.FootnoteMarkLineExtraDip * NoteIdsOnFirstPage(blockCount).Count, bodyHeightDip)
+                        + footnoteFrameClearanceDip,
+                    segment.Page);
         }
 
         void SetReserve(double reserveDip) =>
@@ -2094,6 +2106,7 @@ internal sealed class PagedLayoutSession
                 EnsureSafe();
                 // Mid-pass yield (no progress to report): keeps one step of background work short.
                 yield return false;
+                var bandSplitsNote = false;
                 var countWithoutReserve = CountBlocksStartingOnFirstPage();
                 var lastReferencing = LastReferencingEntry(countWithoutReserve);
                 var reserveDip = ReserveFor(countWithoutReserve);
@@ -2102,7 +2115,23 @@ internal sealed class PagedLayoutSession
                     SetReserve(reserveDip);
                     if (lastReferencing >= 0 && !ReferenceStaysOnFirstPage(lastReferencing))
                     {
-                        var keptReserve = LargestReserveKeeping(lastReferencing, reserveDip);
+                        // Word moves the last reference lines (with their notes) to the next page before it splits
+                        // a note, so first look for the most blocks whose own notes fit beside them.
+                        var movedReserve = 0.0;
+                        for (var k = countWithoutReserve; k >= 1 && movedReserve <= 0; k--)
+                        {
+                            var candidate = ReserveFor(k);
+                            if (candidate <= 0)
+                                break;
+                            SetReserve(candidate);
+                            var blocksNow = CountBlocksStartingOnFirstPage();
+                            var lastKept = LastReferencingEntry(blocksNow);
+                            if (lastKept >= 0 && ReferenceStaysOnFirstPage(lastKept) && ReserveFor(blocksNow) <= candidate + 0.01)
+                                movedReserve = candidate;
+                        }
+                        SetReserve(reserveDip);
+                        var keptReserve = movedReserve > 0 ? movedReserve : LargestReserveKeeping(lastReferencing, reserveDip);
+                        bandSplitsNote = movedReserve <= 0;
                         if (keptReserve > 0)
                         {
                             reserveDip = keptReserve;
@@ -2119,6 +2148,23 @@ internal sealed class PagedLayoutSession
                         }
                         SetReserve(reserveDip);
                     }
+                }
+
+                // A paragraph ending the page with its note reference needs its space after as well beside the
+                // band (Word keeps the reference line off a page that cannot also hold the gap that follows it).
+                var lastOnPage = CountBlocksStartingOnFirstPage() - 1;
+                if (!bandSplitsNote && reserveDip > 0 && lastOnPage >= 0 && lastOnPage < pending.Count
+                    && !pending[lastOnPage].IsContinuation
+                    && pending[lastOnPage].Block is WpfParagraph closing
+                    && closing.Margin.Bottom > 0.5
+                    && PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(pending[lastOnPage].Rendered)).Any()
+                    && dynamicWork.GetPageNumber(closing.ContentEnd) <= 0)
+                {
+                    SetReserve(reserveDip + closing.Margin.Bottom);
+                    if (dynamicWork.GetPageNumber(closing.ContentEnd) > 0)
+                        reserveDip += closing.Margin.Bottom;
+                    else
+                        SetReserve(reserveDip);
                 }
 
                 var take = pending.Count;
@@ -2158,7 +2204,7 @@ internal sealed class PagedLayoutSession
                 yield return false;
                 var chunkFootnoteIds = NoteIdsOnFirstPage(take);
                 UpdateCarry(chunkFootnoteIds, Math.Max(0, reserveDip - footnoteFrameClearanceDip), take);
-                var chunk = newFlow(reserveDip);
+                var chunk = NewPageFlow(reserveDip);
                 for (var i = 0; i < take; i++)
                 {
                     work.Blocks.Remove(pending[i].Block);

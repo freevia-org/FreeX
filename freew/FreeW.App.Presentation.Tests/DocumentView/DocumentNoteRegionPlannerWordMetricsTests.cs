@@ -52,7 +52,7 @@ public sealed class DocumentNoteRegionPlannerWordMetricsTests
         var line = 10 * PxPerPoint * 1.15;
         plan.Rows.Should().AllSatisfy(row => row.EstimatedHeightDip.Should().BeApproximately(line, 0.01));
         plan.SeparatorHeightDip.Should().BeApproximately(11 * PxPerPoint * 1.22, 0.01);
-        plan.EstimatedHeightDip.Should().Be(Math.Ceiling(plan.SeparatorHeightDip + 2 * line));
+        plan.EstimatedHeightDip.Should().BeApproximately(plan.SeparatorHeightDip + 2 * line, 0.0001, "the band is not rounded up to whole dips");
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class DocumentNoteRegionPlannerWordMetricsTests
         plan.Rows[0].EstimatedHeightDip.Should().BeApproximately(10 * PxPerPoint * 1.15, 0.01);
         plan.Rows[1].Layout.ExactLineHeightDip.Should().BeApproximately(9 * PxPerPoint, 0.01);
         plan.Rows[1].EstimatedHeightDip.Should().BeApproximately(9 * PxPerPoint, 0.01);
-        plan.EstimatedHeightDip.Should().Be(Math.Ceiling(
-            plan.SeparatorHeightDip + 10 * PxPerPoint * 1.15 + 9 * PxPerPoint));
+        plan.EstimatedHeightDip.Should().BeApproximately(
+            plan.SeparatorHeightDip + 10 * PxPerPoint * 1.15 + 9 * PxPerPoint, 0.0001);
     }
 }

@@ -2035,6 +2035,9 @@ public static partial class DocxReader
 
         public bool IsActive => _stack.Count > 0;
 
+        /// <summary>The innermost open field is past its separator, so runs now are its cached result.</summary>
+        public bool IsInResult => _stack.Count > 0 && _stack[^1].PastSeparate;
+
         public bool TryConsumeRun(XElement run, out CompletedComplexFieldRead? completed)
         {
             completed = null;
@@ -2191,6 +2194,30 @@ public static partial class DocxReader
             else if (child.Name == W + "commentRangeEnd")
             {
                 activeCommentId = null;
+            }
+            else if (child.Name == W + "r"
+                     && fieldAccumulator.IsInResult
+                     && child.Element(W + "object") is not null)
+            {
+                // An embedded OLE object (Word's icon form of a linked or embedded file) inside a field's result,
+                // typically a HYPERLINK, is not result text: collapsing the field kept only text and dropped the
+                // object, leaving the page without its icon. Read it as the ordinary run it is.
+                AddParagraphContentElement(
+                    paragraph,
+                    child,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    numbering,
+                    activeCommentId,
+                    revision: default,
+                    control: inheritedControl,
+                    hyperlinkUrl: null,
+                    hyperlinkAnchor: null,
+                    hyperlinkTooltip: null,
+                    preservedDrawingTarget,
+                    preservedDrawingRelationshipTargets,
+                    subDocumentRelationships);
             }
             else if (child.Name == W + "r"
                      && fieldAccumulator.TryConsumeRun(child, out var completedField))
