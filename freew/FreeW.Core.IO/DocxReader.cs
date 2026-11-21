@@ -7878,7 +7878,7 @@ public static partial class DocxReader
             {
                 "center" => TextAlignment.Center,
                 "right" or "end" => TextAlignment.Right,
-                "both" or "justify" => TextAlignment.Justify,
+                "both" or "justify" or "lowKashida" or "mediumKashida" or "highKashida" => TextAlignment.Justify,
                 _ => TextAlignment.Left
             },
             // An explicit w:jc="left"/"start" must be able to override a justified style.
