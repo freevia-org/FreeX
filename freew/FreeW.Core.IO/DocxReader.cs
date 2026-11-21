@@ -220,9 +220,10 @@ public static partial class DocxReader
             // Word down the page.
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
+            int? prevListNumId = null;
             var spanningField = new SpanningFieldReadState();
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, spanningField);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto, ref prevListNumId, spanningField);
         }
 
         if (document.Blocks.Count == 0)
@@ -2360,6 +2361,7 @@ public static partial class DocxReader
         NumberingRestartState startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
+        ref int? prevListNumId,
         SpanningFieldReadState spanningField,
         ContentControl? inheritedControl = null,
         BlockContentControl? inheritedBlockContentControl = null,
@@ -2416,11 +2418,19 @@ public static partial class DocxReader
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+            var currentListNumId = ReadBodyListNumId(element);
             if (prevPara is not null && prevAfterAuto && beforeAuto)
             {
-                prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
+                // Between two items of ONE list Word draws no automatic space. Where a list meets a
+                // non-list paragraph (or another list) the two automatic spaces collapse into a single one,
+                // so the list keeps its space before the first and after the last item.
+                var joinsOneBlock = (prevListNumId is null && currentListNumId is null)
+                    || (prevListNumId is not null && prevListNumId == currentListNumId);
+                if (joinsOneBlock)
+                    prevPara.Formatting = prevPara.Formatting with { SpaceAfterPt = 0 };
                 para.Formatting = para.Formatting with { SpaceBeforePt = 0 };
             }
+            prevListNumId = currentListNumId;
             prevPara = para;
             prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
         }
@@ -2488,6 +2498,7 @@ public static partial class DocxReader
                     startOverrides,
                     ref prevPara,
                     ref prevAfterAuto,
+                    ref prevListNumId,
                     spanningField,
                     inheritedControl,
                     blockControl,
@@ -2515,6 +2526,7 @@ public static partial class DocxReader
                     startOverrides,
                     ref prevPara,
                     ref prevAfterAuto,
+                    ref prevListNumId,
                     spanningField,
                     inheritedControl,
                     inheritedBlockContentControl,
@@ -4702,6 +4714,12 @@ public static partial class DocxReader
             && CaptureUnmodelledChartDrawing(r, archive, preservedDrawingTarget, preservedDrawingRelationshipTargets) is { } preservedDrawing)
         {
             var drawingRun = new Run(string.Empty) { PreservedDrawing = preservedDrawing, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            if (r.Descendants(W + "drawing").Select(drawing => drawing.Annotation<DrawingFallbackAnnotation>())
+                    .FirstOrDefault(annotation => annotation is not null) is { } fallbackAnnotation)
+            {
+                drawingRun.PreservedDrawingPreview = ReadImage(
+                    new XElement(W + "r", fallbackAnnotation.Drawing), archive, imageRelationships);
+            }
             ApplyRevision(drawingRun);
             paragraph.Runs.Add(drawingRun);
             return;
@@ -4861,14 +4879,34 @@ public static partial class DocxReader
         return (((char)code).ToString(), string.IsNullOrWhiteSpace(font) ? null : font);
     }
 
+    private sealed record DrawingFallbackAnnotation(XElement Drawing);
+
     private static void ResolveAlternateContent(XElement run)
     {
         foreach (var alternateContent in run.Elements(Mc + "AlternateContent").ToList())
         {
-            var replacement = alternateContent.Elements(Mc + "Choice").FirstOrDefault()?.Nodes().ToList()
-                ?? alternateContent.Element(Mc + "Fallback")?.Nodes().ToList();
-            if (replacement is not null)
-                alternateContent.ReplaceWith(replacement);
+            var choice = alternateContent.Elements(Mc + "Choice").FirstOrDefault();
+            var fallback = alternateContent.Element(Mc + "Fallback");
+            var replacement = choice?.Nodes().ToList() ?? fallback?.Nodes().ToList();
+            if (replacement is null)
+                continue;
+            // Detach the kept nodes first: re-parenting a node that still has a parent clones it, which would
+            // drop the annotation added below.
+            var fallbackDrawingSource = choice is not null ? fallback?.Descendants(W + "drawing").FirstOrDefault() : null;
+            fallbackDrawingSource = fallbackDrawingSource is null ? null : new XElement(fallbackDrawingSource);
+            foreach (var node in replacement)
+                node.Remove();
+
+            // The drawing kept from the Choice may be one FreeW only preserves verbatim (a chartex chart); its
+            // fallback picture is what the page shows meanwhile, so keep it beside the drawing.
+            if (fallbackDrawingSource is { } fallbackDrawing
+                && replacement.OfType<XElement>().Select(element => element.DescendantsAndSelf(W + "drawing").FirstOrDefault())
+                    .FirstOrDefault(drawing => drawing is not null) is { } choiceDrawing)
+            {
+                choiceDrawing.AddAnnotation(new DrawingFallbackAnnotation(new XElement(fallbackDrawing)));
+            }
+
+            alternateContent.ReplaceWith(replacement);
         }
     }
 
@@ -7710,10 +7748,17 @@ public static partial class DocxReader
         int? listStartOverride = null;
         string? listMarkerText = null;
         var listNumberFormat = ListNumberFormat.Decimal;
+        double? levelIndentLeft = null, levelIndentFirst = null;
         var numPr = pPr.Element(W + "numPr");
         if (numPr is not null)
         {
             var numId = ParseInt(numPr.Element(W + "numId")?.Attribute(W + "val")?.Value);
+            // The level's own indent applies to every numbered paragraph, including the ones whose numbering
+            // definition FreeW preserves rather than maps (they render a display-only marker).
+            if (numbering is NumberingLookup indentLookup
+                && indentLookup.LevelIndents.TryGetValue(
+                    (numId, ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value)), out var levelIndent))
+                (levelIndentLeft, levelIndentFirst) = levelIndent;
             if (numbering.TryGetValue(numId, out var kind) && kind != ListKind.None)
             {
                 listKind = kind;
@@ -7849,6 +7894,8 @@ public static partial class DocxReader
             ListStartOverride = listStartOverride,
             ListMarkerText = listMarkerText,
             ListNumberFormat = listNumberFormat,
+            ListLevelIndentLeftPt = levelIndentLeft,
+            ListLevelFirstLineIndentPt = levelIndentFirst,
             TabStops = ReadTabStops(pPr.Element(W + "tabs"))
         };
     }
@@ -8219,6 +8266,23 @@ public static partial class DocxReader
     {
         public Dictionary<int, string?> MarkerTextByNumId { get; } = [];
         public Dictionary<int, ListNumberFormat> NumberFormatByNumId { get; } = [];
+
+        /// <summary>(numId, ilvl) -> the level's w:pPr/w:ind (left, firstLine; hanging stored negative), in points.</summary>
+        public Dictionary<(int NumId, int Level), (double? Left, double? FirstLine)> LevelIndents { get; } = [];
+    }
+
+    /// <summary>Reads a numbering level's <c>w:pPr/w:ind</c> as (left, first-line) points; hanging becomes a negative first line.</summary>
+    private static (double? Left, double? FirstLine) ReadLevelIndent(XElement level)
+    {
+        var ind = level.Element(W + "pPr")?.Element(W + "ind");
+        if (ind is null)
+            return (null, null);
+        var leftText = ind.Attribute(W + "left")?.Value ?? ind.Attribute(W + "start")?.Value;
+        double? left = leftText is null ? null : DxaToPoints(leftText);
+        double? first = ind.Attribute(W + "hanging") is { } hang
+            ? -DxaToPoints(hang.Value)
+            : ind.Attribute(W + "firstLine") is { } fl ? DxaToPoints(fl.Value) : null;
+        return (left, first);
     }
 
     /// <summary>
@@ -8240,6 +8304,13 @@ public static partial class DocxReader
             ? lvlText is null or "•"
             : format == ListNumberFormat.Decimal && lvlText is null or "%1.";
         return (isDefaultShape ? null : lvlText, format);
+    }
+
+    /// <summary>The paragraph's direct <c>w:numPr/w:numId</c> (a real list, not 0), or null for a non-list paragraph.</summary>
+    private static int? ReadBodyListNumId(XElement paragraph)
+    {
+        var numId = ParseInt(paragraph.Element(W + "pPr")?.Element(W + "numPr")?.Element(W + "numId")?.Attribute(W + "val")?.Value);
+        return numId > 0 ? numId : null;
     }
 
     private static (NumberingLookup KindByNumId, NumberingRestartState RestartState) ReadNumbering(
@@ -8274,6 +8345,7 @@ public static partial class DocxReader
         // capture their own per-level lvlText/numFmt above and don't need this.
         var abstractMarkerTexts = new Dictionary<int, string?>();
         var abstractNumberFormats = new Dictionary<int, ListNumberFormat>();
+        var abstractLevelIndents = new Dictionary<int, Dictionary<int, (double? Left, double? FirstLine)>>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
@@ -8303,9 +8375,12 @@ public static partial class DocxReader
                 : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
 
             var levelStarts = new Dictionary<int, int>();
+            var levelIndents = new Dictionary<int, (double? Left, double? FirstLine)>();
+            abstractLevelIndents[abstractNumId] = levelIndents;
             foreach (var level in levels)
             {
                 var ilvl = ParseInt(level.Attribute(W + "ilvl")?.Value);
+                levelIndents[ilvl] = ReadLevelIndent(level);
                 levelStarts[ilvl] = int.TryParse(
                     level.Element(W + "start")?.Attribute(W + "val")?.Value,
                     System.Globalization.NumberStyles.Integer,
@@ -8325,6 +8400,11 @@ public static partial class DocxReader
         {
             var numId = ParseInt(num.Attribute(W + "numId")?.Value);
             var abstractNumId = ParseInt(num.Element(W + "abstractNumId")?.Attribute(W + "val")?.Value);
+            if (abstractLevelIndents.TryGetValue(abstractNumId, out var indentsForAbstract))
+            {
+                foreach (var (indentLevel, indent) in indentsForAbstract)
+                    map.LevelIndents[(numId, indentLevel)] = indent;
+            }
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
             {
                 // A document can define more than one INDEPENDENT multilevel/outline numbering
@@ -8382,6 +8462,7 @@ public static partial class DocxReader
                 var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
                 if (lvlOverride.Element(W + "lvl") is { } overriddenLvl)
                 {
+                    map.LevelIndents[(numId, level)] = ReadLevelIndent(overriddenLvl);
                     if (level == 0 && kind is ListKind.Bullet or ListKind.Number)
                     {
                         (map.MarkerTextByNumId[numId], map.NumberFormatByNumId[numId]) = NormalizeFlatListMarker(

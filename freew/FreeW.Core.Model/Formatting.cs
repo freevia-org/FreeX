@@ -568,6 +568,20 @@ public sealed record ParagraphFormatting
 
     /// <summary><inheritdoc cref="IndentLeftIsSet"/> (first-line / hanging indent).</summary>
     public bool FirstLineIndentIsSet { get; init; }
+
+    /// <summary>
+    /// The left indent (points) of this paragraph's numbering level (<c>w:lvl/w:pPr/w:ind/@w:left</c>) in the
+    /// source document, or null when the paragraph is not a list item or the level declares none. Render-only
+    /// (the writer regenerates numbering definitions): a list item with no direct <c>w:ind</c> takes its
+    /// level's indent, which is where Word places the bullet/number hanging out to the left of the text.
+    /// </summary>
+    public double? ListLevelIndentLeftPt { get; init; }
+
+    /// <summary>
+    /// The first-line indent (points, negative = hanging) of this paragraph's numbering level; see
+    /// <see cref="ListLevelIndentLeftPt"/>.
+    /// </summary>
+    public double? ListLevelFirstLineIndentPt { get; init; }
     public ListKind ListKind { get; init; } = ListKind.None;
     public int ListLevel { get; init; }
 

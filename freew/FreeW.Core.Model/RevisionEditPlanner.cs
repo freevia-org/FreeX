@@ -286,6 +286,7 @@ public static class RevisionEditPlanner
         EmbeddedObject = source.EmbeddedObject,
         SmartArt = source.SmartArt,
         PreservedDrawing = source.PreservedDrawing,
+        PreservedDrawingPreview = source.PreservedDrawingPreview,
         DrawingGroup = source.DrawingGroup,
         // r163: a run carries its character-style link like any other property; a copier that
         // omits it silently unlinks the run the next time anything reformats the paragraph.

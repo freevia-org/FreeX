@@ -20,6 +20,33 @@ public static class SymbolMarkerFontPlanner
         !string.IsNullOrEmpty(text) && text.Any(ch => ch is >= '' and <= '');
 
     /// <summary>
+    /// The point size the numbering level names for a symbol-font marker (<c>w:lvl/w:rPr/w:sz</c>), or null
+    /// when the marker is not a symbol glyph or no matching level declares one. Word draws a bullet at its
+    /// level's own size (10pt for the gallery bullets), not at the paragraph text size.
+    /// </summary>
+    public static double? ResolveMarkerFontSizePt(TextDocument document, string markerText)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (!ContainsSymbolCodePoint(markerText) || document.Preserved.OriginalNumbering is not { } numbering)
+            return null;
+
+        var trimmed = markerText.Trim();
+        foreach (var level in numbering.Descendants(W + "lvl"))
+        {
+            if (!string.Equals(level.Element(W + "lvlText")?.Attribute(W + "val")?.Value, trimmed, StringComparison.Ordinal))
+                continue;
+            if (double.TryParse(
+                    level.Element(W + "rPr")?.Element(W + "sz")?.Attribute(W + "val")?.Value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var halfPoints) && halfPoints > 0)
+                return halfPoints / 2.0;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// The font for <paramref name="markerText"/>, or null when it holds no symbol-font code point and
     /// the paragraph's own font applies.
     /// </summary>

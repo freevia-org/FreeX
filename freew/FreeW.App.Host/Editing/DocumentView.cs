@@ -6534,6 +6534,11 @@ public sealed partial class DocumentView : RichTextBox
         var preservedNumberingMarkers = context.PreservedNumberingMarkers;
         ModelParagraph? previousBodyParagraph = null;
         WpfParagraph? previousBodyWpfParagraph = null;
+        // The last item of the list block just rendered, while the next block is another list: a restarted
+        // numbering run is a separate WPF List, but Word still drops the contextual/automatic spacing between
+        // its neighbouring items of one paragraph style.
+        ModelParagraph? carriedListParagraph = null;
+        WpfParagraph? carriedListWpfParagraph = null;
         // R132 remediation: these persist across the WHOLE render pass (not per collected run) so a
         // non-list paragraph interrupting a numbered list does NOT restart it — Word continues numbering
         // across intervening body text/preserved-numbering chrome unless a later Number/MultiLevel
@@ -6550,6 +6555,8 @@ public sealed partial class DocumentView : RichTextBox
                 onHidden?.Invoke(visibleCount, blocks[i]);
                 previousBodyParagraph = null;
                 previousBodyWpfParagraph = null;
+                carriedListParagraph = null;
+                carriedListWpfParagraph = null;
                 i++;
                 continue;
             }
@@ -6606,7 +6613,13 @@ public sealed partial class DocumentView : RichTextBox
                     ? markerPlans.Select(plan => plan.MarkerText ?? string.Empty).ToList()
                     : null;
                 if (markers is not null)
+                {
                     list.MarkerStyle = TextMarkerStyle.None;
+                    // The marker is inline text, so the list must not add its own marker gutter: the item's
+                    // indent (numbering level or paragraph) alone places the text, as in Word.
+                    list.MarkerOffset = 0;
+                    list.Padding = new Thickness(0);
+                }
                 // R132 remediation: honor an explicit restart override for Number-kind lists (mirrors the
                 // MultiLevel branch above); otherwise continue from the running count left by the last
                 // Number list, so an interrupting non-list paragraph does not restart numbering at 1.
@@ -6627,7 +6640,7 @@ public sealed partial class DocumentView : RichTextBox
                             ? listReservations
                             : null,
                         suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
-                    PrependMultiLevelMarker(wpfParagraph, markers![0], _model);
+                    PrependMultiLevelMarker(wpfParagraph, markers![0], _model, layout: Resolve(listParagraph.Paragraph, _model));
                     var renderedBlocks = RenderInlineFlowBreakFragmentsForPagination
                         && listParagraph.Paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak)
                             ? SplitParagraphAtInlineFlowBreaks(
@@ -6637,8 +6650,8 @@ public sealed partial class DocumentView : RichTextBox
                     emit(new BodyRenderUnit(unitStart, i, renderedBlocks, BodyRenderUnitKind.Transparent, null));
                     continue;
                 }
-                ModelParagraph? previousListParagraph = null;
-                WpfParagraph? previousListWpfParagraph = null;
+                ModelParagraph? previousListParagraph = carriedListParagraph;
+                WpfParagraph? previousListWpfParagraph = carriedListWpfParagraph;
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
                     var wpfParagraph = BuildParagraph(
@@ -6653,7 +6666,8 @@ public sealed partial class DocumentView : RichTextBox
                         suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
                     if (previousListParagraph is not null
                         && previousListWpfParagraph is not null
-                        && SuppressesContextualSpacing(previousListParagraph, listParagraphs[p].Paragraph, _model))
+                        && (SuppressesContextualSpacing(previousListParagraph, listParagraphs[p].Paragraph, _model)
+                            || SuppressesAutoSpacingBetweenListItems(previousListParagraph, listParagraphs[p].Paragraph, _model)))
                     {
                         previousListWpfParagraph.Margin = new Thickness(
                             previousListWpfParagraph.Margin.Left,
@@ -6666,8 +6680,8 @@ public sealed partial class DocumentView : RichTextBox
                             wpfParagraph.Margin.Right,
                             wpfParagraph.Margin.Bottom);
                     }
-                    if (markers is not null)
-                        PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
+                    if (markers is not null && !IsParagraphMarkHiddenInCurrentView(listParagraphs[p].Paragraph))
+                        PrependMultiLevelMarker(wpfParagraph, markers[p], _model, layout: Resolve(listParagraphs[p].Paragraph, _model));
                     var itemParagraphs = RenderInlineFlowBreakFragmentsForPagination
                         && listParagraphs[p].Paragraph.Runs.Any(run => run.IsPageBreak || run.IsColumnBreak)
                             ? SplitParagraphAtInlineFlowBreakFragments(
@@ -6682,11 +6696,17 @@ public sealed partial class DocumentView : RichTextBox
                     previousListWpfParagraph = itemParagraphs[^1];
                 }
                 emit(new BodyRenderUnit(unitStart, i, [list], BodyRenderUnitKind.Reset, null));
-                previousBodyParagraph = null;
-                previousBodyWpfParagraph = null;
+                // The last list item is also the previous paragraph of whatever follows (a preserved-numbering
+                // item or plain text of the same style), so contextual spacing carries across the boundary.
+                previousBodyParagraph = previousListParagraph;
+                previousBodyWpfParagraph = previousListWpfParagraph;
+                carriedListParagraph = previousListParagraph;
+                carriedListWpfParagraph = previousListWpfParagraph;
             }
             else
             {
+                carriedListParagraph = null;
+                carriedListWpfParagraph = null;
                 // R157: a table's cells are rendered through their OWN freshly-recomputed marker plan
                 // (BuildTableNumberingMarkers, via BuildTable), not through this loop's live
                 // listMarkerSequence. Replay the table's list paragraphs through THIS sequence too (without
@@ -9654,12 +9674,17 @@ public sealed partial class DocumentView : RichTextBox
         WpfParagraph paragraph,
         string markerText,
         TextDocument document,
-        string? fontFamily = null)
+        string? fontFamily = null,
+        ParagraphFormatting? layout = null)
     {
+        // A hanging indent (the numbering level's own, or the paragraph's) puts the marker at the hanging
+        // position and the text at the next tab stop: Word follows the marker with a tab. The advance is
+        // planned here (WPF's native tab ignores the paragraph's tab stops and the hanging indent stop).
+        var hanging = layout is { FirstLineIndentPt: < 0 };
         // Mirrors the footnote/endnote marker convention: a plain run carrying a Tag that ReadInline drops
         // on commit. The marker text is regenerated on every Render, so even if the user edits over it the
         // model is unaffected (the outline definition lives in numbering.xml).
-        var marker = new WpfRun(markerText + ' ')
+        var marker = new WpfRun(hanging ? markerText : markerText + ' ')
         {
             Tag = MultiLevelMarker.Instance
         };
@@ -9675,11 +9700,43 @@ public sealed partial class DocumentView : RichTextBox
             marker.FontSize = firstRun.FontSize;
         else
             marker.FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
+        if (SymbolMarkerFontPlanner.ResolveMarkerFontSizePt(document, markerText) is { } levelSizePt)
+            marker.FontSize = levelSizePt * PxPerPoint;
         // An empty list paragraph (no runs at all) has no FirstInline to insert before.
-        if (paragraph.Inlines.FirstInline is { } firstInline)
+        var firstInline = paragraph.Inlines.FirstInline;
+        if (firstInline is not null)
             paragraph.Inlines.InsertBefore(firstInline, marker);
         else
             paragraph.Inlines.Add(marker);
+
+        if (!hanging || layout is null)
+            return;
+
+        var markerFont = marker.FontFamily ?? firstRun?.FontFamily ?? new FontFamily("Calibri");
+        var markerWidthDip = new FormattedText(
+            markerText,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight,
+            new Typeface(markerFont, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+            marker.FontSize,
+            Brushes.Black,
+            1.0).WidthIncludingTrailingWhitespace;
+        var penDip = (layout.IndentLeftPt + layout.FirstLineIndentPt) * PxPerPoint + markerWidthDip;
+        // The hanging indent position is an implicit tab stop, alongside the paragraph's own.
+        var stops = layout.TabStops.Append(new TabStop(layout.IndentLeftPt));
+        var next = ParagraphTabStopLayoutPlanner.ResolveNextStop(
+            penDip, stops, document.Page.DefaultTabStopPt, PxPerPoint);
+        var advanceDip = Math.Max(ParagraphTabStopLayoutPlanner.MinimumAdvanceDip, next.StopPositionDip - penDip);
+        var gap = new InlineUIContainer(new Border
+        {
+            Width = advanceDip,
+            Height = 1,
+            Focusable = false,
+            IsHitTestVisible = false,
+            Tag = MultiLevelMarker.Instance
+        })
+        { BaselineAlignment = BaselineAlignment.Baseline };
+        paragraph.Inlines.InsertAfter(marker, gap);
     }
 
     /// <summary>
@@ -10207,6 +10264,9 @@ public sealed partial class DocumentView : RichTextBox
                 var tooltip = info?.Tooltip ?? hyperlinkTooltip;
                 foreach (var child in link.Inlines)
                     ReadInline(modelParagraph, child, url, anchor, tooltip);
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: MultiLevelMarker } }:
+                // The gap after a list marker is view-only chrome, like the marker run itself.
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: RenderedBookmarkBoundary marker } }:
                 modelParagraph.BookmarkBoundaries.Add(marker.Boundary with
@@ -12626,7 +12686,9 @@ public sealed partial class DocumentView : RichTextBox
 
         // Word gives an empty paragraph whose mark is hidden no height at all (its mark merges into the
         // next paragraph). Render it as a zero-height line and keep the authored values for commit.
-        if (DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, paragraph))
+        if (DocumentParagraphPaginationPlanner.IsCollapsedHiddenMarkParagraph(document, paragraph)
+            || DocumentParagraphPaginationPlanner.IsFullyDeletedParagraphCollapsedInFinalView(
+                paragraph, _renderReviewDisplayPolicy.IsRevisionTextVisible(RevisionKind.Deleted)))
         {
             wpf.Tag = ((ParagraphTag)wpf.Tag) with
             {
@@ -12723,8 +12785,8 @@ public sealed partial class DocumentView : RichTextBox
 
         SeparateOverlappingParagraphAnchoredWrapFigures(wpf);
 
-        if (!string.IsNullOrWhiteSpace(preservedNumberingMarker))
-            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document, preservedNumberingMarkerFont);
+        if (!string.IsNullOrWhiteSpace(preservedNumberingMarker) && !IsParagraphMarkHiddenInCurrentView(paragraph))
+            PrependMultiLevelMarker(wpf, preservedNumberingMarker, document, preservedNumberingMarkerFont, paraFmt);
 
         return wpf;
     }
@@ -13146,6 +13208,10 @@ public sealed partial class DocumentView : RichTextBox
             }
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
         }
+
+        // A preserved (unmodelled) drawing shows the picture Word stored beside it, so the page keeps its size.
+        if (run.PreservedDrawing is not null && run.PreservedDrawingPreview is { IsFloating: false } preview)
+            return WrapHyperlinkIfNeeded(run, BuildImageRun(preview));
 
         if (run.Shape is { } shape)
         {
@@ -14144,7 +14210,10 @@ public sealed partial class DocumentView : RichTextBox
         string? originalText = null)
     {
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location, originalText) });
-        wpf.Background = new SolidColorBrush(ContentControlShade);
+        // The shade is on-screen chrome: Word never prints or exports it, so a non-interactive (print/PDF) render
+        // draws the field's content plain.
+        if (_renderPageBreakMarkers)
+            wpf.Background = new SolidColorBrush(ContentControlShade);
         wpf.ToolTip = ContentControlInteractionPlanner.Tooltip(control);
         // The shade and tooltip only reach a sighted user. Name the run the same way the shared
         // accessibility projection names the field, so assistive technology reading this document
@@ -19288,6 +19357,15 @@ public sealed partial class DocumentView : RichTextBox
     [ThreadStatic]
     private static DocumentViewMode _renderViewMode;
 
+    /// <summary>
+    /// A tracked-deleted paragraph mark is not part of the document in the Final/No Markup views: Word draws
+    /// no bullet or number for such a paragraph (its mark merges into the next one), so no marker is
+    /// rendered for it there.
+    /// </summary>
+    private static bool IsParagraphMarkHiddenInCurrentView(ModelParagraph paragraph) =>
+        paragraph.MarkRevision == RevisionKind.Deleted
+        && !_renderReviewDisplayPolicy.IsRevisionTextVisible(RevisionKind.Deleted);
+
     private static bool IsTextHiddenInCurrentView(RunFormatting formatting) =>
         formatting.Hidden || (formatting.WebHidden && _renderViewMode == DocumentViewMode.WebLayout);
 
@@ -20392,6 +20470,17 @@ public sealed partial class DocumentView : RichTextBox
         TextDocument document) =>
         string.Equals(previous.StyleId, current.StyleId, StringComparison.OrdinalIgnoreCase)
         && Resolve(current, document).ContextualSpacing is true;
+
+    /// <summary>
+    /// Word draws no automatic (HTML-style) paragraph spacing between two items of a list, whether the
+    /// automatic spacing comes from the paragraphs themselves or from their style (NormalWeb); the space only
+    /// shows before the first and after the last item.
+    /// </summary>
+    private static bool SuppressesAutoSpacingBetweenListItems(
+        ModelParagraph previous,
+        ModelParagraph current,
+        TextDocument document) =>
+        Resolve(previous, document).AfterAutoSpacing && Resolve(current, document).BeforeAutoSpacing;
 
     private static void AddStrikethroughDecorations(TextDecorationCollection decorations, RunFormatting formatting)
     {

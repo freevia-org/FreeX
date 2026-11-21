@@ -280,6 +280,7 @@ public static class DocumentModelCloner
         EmbeddedObject = source.EmbeddedObject?.Clone(),
         Ruby = source.Ruby?.Clone(),
         PreservedDrawing = source.PreservedDrawing?.Duplicate(),
+        PreservedDrawingPreview = source.PreservedDrawingPreview,
         DrawingGroup = source.DrawingGroup is { } drawingGroup
             ? CloneDrawingGroup(drawingGroup, preserveRevisions)
             : null,

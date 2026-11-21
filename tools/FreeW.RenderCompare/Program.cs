@@ -82,7 +82,13 @@ internal static class Program
 
         // Render like the print path (BuildPaginator's view clone): no editor-only separators and the
         // page-only display transforms (slash word joiners, synthesized small capitals).
-        var view = new DocumentView { RenderPageBreakMarkers = false };
+        // A document with an inline page/column break renders the print path's inline-break fragments (the
+        // break splits the paragraph where it occurs, rather than starting the whole paragraph on a new page).
+        var view = new DocumentView
+        {
+            RenderPageBreakMarkers = false,
+            RenderInlineFlowBreakFragmentsForPagination = DocumentView.HasRendererInlineFlowBreakFragments(model),
+        };
         // The Word ground-truth PDFs were exported in Word's Final view (insertions plain, deletions hidden, no
         // balloons). Render the same view; FREEW_RENDER_REVIEW=all compares against an all-markup export instead.
         view.DisplayForReview = string.Equals(

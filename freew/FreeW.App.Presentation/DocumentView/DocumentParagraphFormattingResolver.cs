@@ -13,6 +13,29 @@ public static class DocumentParagraphFormattingResolver
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(paragraph);
 
+        return ApplyNumberingLevelIndent(ResolveCascade(document, paragraph), paragraph.Formatting);
+    }
+
+    /// <summary>
+    /// A list item with no direct <c>w:ind</c> takes its numbering level's indent (Word's cascade is direct
+    /// paragraph &gt; numbering level &gt; paragraph style), which is what hangs the bullet/number out to the
+    /// left of the text.
+    /// </summary>
+    private static ParagraphFormatting ApplyNumberingLevelIndent(ParagraphFormatting resolved, ParagraphFormatting direct)
+    {
+        if (direct.ListLevelIndentLeftPt is null && direct.ListLevelFirstLineIndentPt is null)
+            return resolved;
+        var left = !direct.IndentLeftIsSet && direct.ListLevelIndentLeftPt is { } levelLeft
+            ? levelLeft
+            : resolved.IndentLeftPt;
+        var first = !direct.FirstLineIndentIsSet && direct.ListLevelFirstLineIndentPt is { } levelFirst
+            ? levelFirst
+            : resolved.FirstLineIndentPt;
+        return resolved with { IndentLeftPt = left, FirstLineIndentPt = first };
+    }
+
+    private static ParagraphFormatting ResolveCascade(TextDocument document, Paragraph paragraph)
+    {
         var direct = paragraph.Formatting;
         // A paragraph with no w:pStyle resolves through the document's default paragraph style.
         var style = ResolveStyleChain(

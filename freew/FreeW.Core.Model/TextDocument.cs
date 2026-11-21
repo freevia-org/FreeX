@@ -791,6 +791,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public PreservedDrawing? PreservedDrawing { get; set; }
 
+    /// <summary>
+    /// The picture Word stores beside a verbatim-preserved drawing that older consumers show instead of it
+    /// (the <c>mc:Fallback</c> of a <c>chartex</c> chart). View-only: renderers draw it in the preserved
+    /// drawing's place so the page keeps its size; the writer still re-emits <see cref="PreservedDrawing"/>.
+    /// </summary>
+    public InlineImage? PreservedDrawingPreview { get; set; }
+
     /// <summary>Creates a run that re-emits a verbatim-preserved inline drawing instead of text.</summary>
     public static Run FromPreservedDrawing(PreservedDrawing drawing) =>
         new(string.Empty) { PreservedDrawing = drawing };
