@@ -720,6 +720,36 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildTablePaginationPlan_VerticalMergeContentIsSharedAcrossSpannedRows()
+    {
+        var page = new PageSettings
+        {
+            WidthPt = 612, HeightPt = 792,
+            MarginLeftPt = 72, MarginRightPt = 72, MarginTopPt = 72, MarginBottomPt = 72,
+        };
+
+        TableCell Cell(string text, VerticalMergeState merge = VerticalMergeState.None)
+        {
+            var cell = new TableCell { VerticalMerge = merge };
+            cell.Paragraphs.Add(new Paragraph(text));
+            return cell;
+        }
+
+        // Left cell merges three rows and holds three lines of text; the right cells hold one line each.
+        var table = new Table();
+        var tall = string.Join("\n", "one", "two", "three");
+        var first = new TableRow(); first.Cells.Add(Cell(tall, VerticalMergeState.Restart)); first.Cells.Add(Cell("a"));
+        var second = new TableRow(); second.Cells.Add(Cell("", VerticalMergeState.Continue)); second.Cells.Add(Cell("b"));
+        var third = new TableRow(); third.Cells.Add(Cell("", VerticalMergeState.Continue)); third.Cells.Add(Cell("c"));
+        table.Rows.Add(first); table.Rows.Add(second); table.Rows.Add(third);
+
+        var rows = DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, page).Rows;
+
+        // Three one-line rows (26 dip each) already cover the 3-line merged cell: no row is inflated.
+        rows.Select(r => r.EstimatedHeightDip).Should().OnlyContain(h => h == 26);
+    }
+
+    [Fact]
     public void BuildTablePaginationPlan_UsesAuthoredGridWidthAndCellMarginsForWrapping()
     {
         var page = new PageSettings
