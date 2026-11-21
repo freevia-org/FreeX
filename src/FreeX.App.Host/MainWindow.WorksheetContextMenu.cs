@@ -175,6 +175,9 @@ public partial class MainWindow
     {
         try
         {
+            if (TryExecuteTableStructureContextMenuAction(action, address))
+                return;
+
             if (WorkbookApplicationCommandRouter.TryRouteWorksheetContextMenu(action.ToString(), out var route))
             {
                 await WorkbookApplicationCommands.TryExecuteAsync(route, targetAddress: address);

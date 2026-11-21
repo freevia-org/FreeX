@@ -749,6 +749,18 @@ public class ProtectionGuardCoverageTests
             ["DeleteColumnsCommand"] = (wb, sheet) =>
                 new DeleteColumnsCommand(sheet.Id, startCol: 1),
 
+            ["InsertTableRowsCommand"] = (wb, sheet) =>
+                new InsertTableRowsCommand(sheet.Id, tableId: 1, dataRowIndex: 0),
+
+            ["DeleteTableRowsCommand"] = (wb, sheet) =>
+                new DeleteTableRowsCommand(sheet.Id, tableId: 1, dataRowIndex: 0),
+
+            ["InsertTableColumnsCommand"] = (wb, sheet) =>
+                new InsertTableColumnsCommand(sheet.Id, tableId: 1, columnIndex: 0),
+
+            ["DeleteTableColumnsCommand"] = (wb, sheet) =>
+                new DeleteTableColumnsCommand(sheet.Id, tableId: 1, columnIndex: 0),
+
             ["InsertCellsCommand"] = (wb, sheet) =>
                 new InsertCellsCommand(sheet.Id, new GridRange(
                     new CellAddress(sheet.Id, 1, 1),
