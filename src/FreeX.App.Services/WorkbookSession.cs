@@ -5320,6 +5320,22 @@ public sealed partial class WorkbookSession : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Accepts a live "Automatically Flash Fill" suggestion: runs the same undoable
+    /// <see cref="FlashFillCommand"/> Ctrl+E uses, over the suggestion's rows, as one undo step.
+    /// </summary>
+    public WorkbookCellEditResult AcceptFlashFillSuggestion(FreeX.App.Presentation.Editing.FlashFillSuggestion suggestion)
+    {
+        ArgumentNullException.ThrowIfNull(suggestion);
+
+        var result = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            ToCommand("Flash Fill", [suggestion.CreateAcceptCommand()]));
+        if (result.Success)
+            ApplySuccessfulRangeEditResult(result, suggestion.AffectedRange);
+        return result;
+    }
+
     public bool CaptureFormatPainterSource(bool persistent = false)
     {
         _formatPainterSourceSheetId = ActiveSheet.Id;

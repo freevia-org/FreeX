@@ -144,6 +144,8 @@ public sealed partial class MainWindow
     /// <see cref="ChartTypeChangePlanner"/> so the surface stays in lock-step with the renderer's
     /// authorable families. Returns the chosen <see cref="ChartType"/> or null on cancel.
     /// </summary>
+    private const double ChartPickerRowHeight = 20;
+
     private async Task<ChartType?> ShowChartTypePickerAsync(ChartType currentType)
     {
         // The category list, subtype gallery and preview are the shared All Charts body, which the
@@ -153,19 +155,27 @@ public sealed partial class MainWindow
         // 640x390 dialog. Let the picker fill what is left between them (never more than the WPF
         // panel height) and its lists fill the picker's star row, so nothing is pushed past the
         // bottom edge when the help line wraps.
-        bodyGrid.Height = double.NaN;
+        bodyGrid.Height = ChartTypeChangePlanner.PickerPanelHeight;
         bodyGrid.MaxHeight = ChartTypeChangePlanner.PickerPanelHeight;
         bodyGrid.VerticalAlignment = AvaloniaVerticalAlignment.Top;
+        // WPF's lists have no fixed height: they fill the picker's star row (290 panel minus the
+        // one-line heading/help row and the 24px gap, ~226px = eleven full 20px rows + borders). The
+        // shared 230px PickerListHeight made the Avalonia lists ~4px taller and clipped a partial 12th
+        // row, so here the lists stretch into the star row instead.
         categoryList.Height = double.NaN;
+        categoryList.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
         subtypeGallery.Height = double.NaN;
+        subtypeGallery.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
 
         var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
         // WPF ChangeChartTypeDialog is a 640x390 outer NoResize window; Avalonia sizes the client
         // area, so the measured Windows frame comes off both. The picker body flexes to the height.
         dialog.Width = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;
-        dialog.Height = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        // The WPF capture shows the category list with ten full 20px rows (about 204px tall), which needs
+        // a client area of the planner's full 390 height rather than the frame-reduced one.
+        dialog.Height = ChartTypeChangePlanner.DialogHeight;
         dialog.MinWidth = ChartTypeChangePlanner.DialogWidth - WpfNoResizeFrameWidth;
-        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
         dialog.SizeToContent = SizeToContent.Manual;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
@@ -229,6 +239,15 @@ public sealed partial class MainWindow
                 Converter = new FuncValueConverter<ChartTypePickerCategoryPlan, string>(c => c is null ? string.Empty : UiText.Get(c.NameKey)),
             },
         };
+        // WPF list rows are 20px tall.
+        var pickerRowStyle = new global::Avalonia.Styling.Style(x => global::Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
+        pickerRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
+        categoryList.Styles.Add(pickerRowStyle);
+        // The row style alone left the rows at the compact 18px pitch; the container itself carries the
+        // WPF 20px row so the lists keep the WPF pitch and visible-row count.
+        categoryList.ContainerPrepared += (_, e) => e.Container.MinHeight = ChartPickerRowHeight;
+        var pickerGalleryRowStyle = new global::Avalonia.Styling.Style(x => global::Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
+        pickerGalleryRowStyle.Setters.Add(new global::Avalonia.Styling.Setter(global::Avalonia.Layout.Layoutable.MinHeightProperty, ChartPickerRowHeight));
         AutomationProperties.SetName(categoryList, UiText.Get(panel.CategoryListAutomationNameResourceKey!));
         AutomationProperties.SetAutomationId(categoryList, $"{automationIdPrefix}CategoryList");
 
@@ -243,6 +262,8 @@ public sealed partial class MainWindow
                 Converter = new FuncValueConverter<ChartTypePickerOptionPlan, string>(o => o is null ? string.Empty : UiText.Get(o.DisplayNameKey)),
             },
         };
+        subtypeGallery.Styles.Add(pickerGalleryRowStyle);
+        subtypeGallery.ContainerPrepared += (_, e) => e.Container.MinHeight = ChartPickerRowHeight;
         AutomationProperties.SetName(subtypeGallery, UiText.Get(panel.SubtypeGalleryAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(subtypeGallery, $"{automationIdPrefix}SubtypeGallery");
 
@@ -301,18 +322,17 @@ public sealed partial class MainWindow
                     Text = UiText.Get(panel.HelpResourceKey),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
-                    TextWrapping = TextWrapping.Wrap,
+                    // WPF lays this help line out on one line across all three columns.
+                    TextWrapping = TextWrapping.NoWrap,
                     Foreground = ChartDialogHelpBrush,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
             },
         };
-        // The preview spans both rows and starts 24px below the top of the grid, beside this
-        // heading. Keep the heading over the two list columns so its help line wraps in front of
-        // the preview instead of running underneath the preview border.
-        Grid.SetColumnSpan(pickerHeading, 2);
-        pickerHeading.Margin = new Thickness(0, 0, ChartTypeChangePlanner.PickerColumnGap, 0);
-        bodyGrid.Children.Add(pickerHeading);
+        // WPF spans the heading over all three columns so the help line stays on one line and runs
+        // in front of the preview's top edge; it is added after the preview below for that z-order.
+        Grid.SetColumnSpan(pickerHeading, 3);
+        pickerHeading.IsHitTestVisible = false;
 
         categoryList.Margin = new Thickness(0, ChartTypeChangePlanner.PickerColumnGap * 2, ChartTypeChangePlanner.PickerColumnGap, 0);
         Grid.SetColumn(categoryList, 0);
@@ -328,6 +348,7 @@ public sealed partial class MainWindow
         Grid.SetColumn(preview, 2);
         Grid.SetRowSpan(preview, 2);
         bodyGrid.Children.Add(preview);
+        bodyGrid.Children.Add(pickerHeading);
 
         return new ChartTypePickerBody(bodyGrid, categoryList, subtypeGallery);
     }

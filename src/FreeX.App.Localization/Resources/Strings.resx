@@ -8775,6 +8775,9 @@ Do you want to expand the selection to include the adjacent data, or continue wi
   <data name="Options_EnableAutoCompleteForCellValues" xml:space="preserve">
     <value>Enable _AutoComplete for cell values</value>
   </data>
+  <data name="Options_AutomaticallyFlashFill" xml:space="preserve">
+    <value>Automatically Flash Fi_ll</value>
+  </data>
   <data name="Sort_MoveDown" xml:space="preserve">
     <value>Move Do_wn</value>
   </data>
@@ -16630,6 +16633,15 @@ Continue saving?</value>
   </data>
   <data name="Hyperlink_CurrentFolderLinkLocation" xml:space="preserve">
     <value>Current folder link location</value>
+  </data>
+  <data name="Hyperlink_CurrentFolderHeading" xml:space="preserve">
+    <value>Current Folder</value>
+  </data>
+  <data name="Hyperlink_UseBrowseToChooseAFile" xml:space="preserve">
+    <value>Use Browse... to choose a file</value>
+  </data>
+  <data name="Hyperlink_UseBrowseToChooseAnotherFile" xml:space="preserve">
+    <value>Use Browse... to choose another file</value>
   </data>
   <data name="Hyperlink_LookIn" xml:space="preserve">
     <value>Look _in:</value>

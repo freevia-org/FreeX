@@ -11519,6 +11519,81 @@ public sealed partial class DocumentView : RichTextBox
 
         var totalRows = table.Rows.Count;
         var group = new TableRowGroup();
+        // Source rows in the order this render piece emits them (repeated headers first on later pieces).
+        var renderOrder = new List<(int Row, bool Header)>();
+        if (paginationPage is not null && paginationPage.RenderRows.Count > 0)
+        {
+            foreach (var renderRow in paginationPage.RenderRows)
+            {
+                if (renderRow.SourceRowIndex >= 0 && renderRow.SourceRowIndex < totalRows)
+                    renderOrder.Add((renderRow.SourceRowIndex, renderRow.IsRepeatedHeader));
+            }
+        }
+        else
+        {
+            for (var r = 0; r < totalRows; r++)
+                renderOrder.Add((r, false));
+        }
+
+        int RenderPosition(int rowIndex, bool headerCopy)
+        {
+            for (var i = 0; i < renderOrder.Count; i++)
+            {
+                if (renderOrder[i].Row == rowIndex && renderOrder[i].Header == headerCopy)
+                    return i;
+            }
+            return -1;
+        }
+
+        // Rows (including the restart row) a restart cell covers inside this piece: consecutive rendered
+        // source rows below it whose cell at the same grid column continues the merge.
+        int RenderedMergeSpan(int restartRow, int gridColumn)
+        {
+            var position = RenderPosition(restartRow, false);
+            if (position < 0)
+                position = RenderPosition(restartRow, true);
+            if (position < 0)
+                return 1;
+            var span = 1;
+            var expected = restartRow + 1;
+            for (var i = position + 1; i < renderOrder.Count; i++)
+            {
+                if (renderOrder[i].Header || renderOrder[i].Row != expected)
+                    break;
+                if (TableGridProjection.At(table.Rows[expected], gridColumn)?.Cell.VerticalMerge
+                    != VerticalMergeState.Continue)
+                {
+                    break;
+                }
+                span++;
+                expected++;
+            }
+            return span;
+        }
+
+        // A continuation cell is dropped only when a restart cell in this piece already covers its row.
+        bool IsAbsorbedByRenderedRestart(int rowIndex, int gridColumn)
+        {
+            var position = RenderPosition(rowIndex, false);
+            if (position <= 0 || renderOrder[position].Header)
+                return false;
+            var row = rowIndex - 1;
+            var i = position - 1;
+            while (i >= 0 && !renderOrder[i].Header && renderOrder[i].Row == row + 0)
+            {
+                var cell = TableGridProjection.At(table.Rows[row], gridColumn)?.Cell;
+                if (cell is null)
+                    return false;
+                if (cell.VerticalMerge == VerticalMergeState.Restart)
+                    return true;
+                if (cell.VerticalMerge != VerticalMergeState.Continue)
+                    return false;
+                row--;
+                i--;
+            }
+            return false;
+        }
+
         void AppendRenderedRow(int rowIndex, bool isRepeatedHeader)
         {
             var modelRow = table.Rows[rowIndex];
@@ -11572,23 +11647,21 @@ public sealed partial class DocumentView : RichTextBox
                 // With an authored cell spacing a vertical merge is one detached box spanning the gap
                 // between its rows; only a real RowSpan can paint that. The continuation cells are
                 // absorbed here and re-synthesised by ReadTable from the RowSpan.
+                // Word sizes a vertically merged cell over the rows it spans: its content height is shared
+                // by those rows, not added to the first one. A WPF cell that merely holds the content in the
+                // restart row inflates that row by the whole merged content, so every merged cell now uses a
+                // real RowSpan over the rows of this render piece (continuations are re-synthesised by
+                // ReadTable from the RowSpan, as with cell spacing).
                 var mergedRowSpan = 1;
-                if (flowCellSpacingDip > 0 && modelCell.VerticalMerge != VerticalMergeState.None)
+                if (modelCell.VerticalMerge != VerticalMergeState.None)
                 {
                     if (modelCell.VerticalMerge == VerticalMergeState.Continue
-                        && FindVerticalMergeRestart(table, rowIndex, gridColumn) is not null)
+                        && IsAbsorbedByRenderedRestart(rowIndex, gridColumn))
                     {
                         continue;
                     }
-                    for (var below = rowIndex + 1; below < table.Rows.Count; below++)
-                    {
-                        if (TableGridProjection.At(table.Rows[below], gridColumn)?.Cell.VerticalMerge
-                            != VerticalMergeState.Continue)
-                        {
-                            break;
-                        }
-                        mergedRowSpan++;
-                    }
+                    if (modelCell.VerticalMerge == VerticalMergeState.Restart)
+                        mergedRowSpan = RenderedMergeSpan(rowIndex, gridColumn);
                 }
                 var ordinaryCellMargins = modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
                 // The 4-DIP horizontal inset stands in for Word's default 5.4pt cell margin; an authored

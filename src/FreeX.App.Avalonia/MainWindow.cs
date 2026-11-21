@@ -5614,6 +5614,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(overlay, "WorksheetFormulaReferenceOverlay");
         _formulaReferenceGridOverlay = overlay;
         AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);
+        _flashFillGhostVisuals.Clear();
+        if (_flashFillSuggestionState.Current is { } flashFillSuggestion)
+            AddFlashFillGhostOverlay(overlay, flashFillSuggestion, viewport, showHeadings, zoomFactor);
         return overlay;
     }
 
@@ -9780,7 +9783,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             RefreshFormulaFunctionAutocomplete(editor);
             RefreshFormulaSignatureHelp(editor);
 
-            if (!_formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression())
+            UpdateFlashFillSuggestion(address, _inlineCellEditText);
+            var cellValueAutocompleteSuppressed =
+                _formulaRangeEditingSession.ConsumeCellValueAutocompleteSuppression();
+            // A detected Flash Fill pattern takes priority over plain column AutoComplete.
+            if (!cellValueAutocompleteSuppressed && _flashFillSuggestionState.Current is null)
                 ApplyCellValueAutoCompleteSuggestion(address, editor);
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
@@ -9917,6 +9924,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
     {
+        // "Automatically Flash Fill": Enter/Tab accept the grey ghost suggestion; Esc falls through
+        // to the normal cancel path, which also drops the ghost cells.
+        if (TryAcceptFlashFillSuggestion(args.Key, args.KeyModifiers))
+        {
+            args.Handled = true;
+            return;
+        }
+
         // R92-meta-2: while the function-name AutoComplete popup is open, Up/Down/Tab/Enter/Escape
         // drive the popup instead of their normal formula-editing meaning, exactly as Excel's own
         // popup takes priority over those keys. Checked first, before any other key handling below.
@@ -10146,6 +10161,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ClearInlineCellEditorState()
     {
+        ClearFlashFillSuggestion();
         HideFormulaFunctionAutocomplete();
         HideFormulaSignatureHelp();
         _inlineCellEditor = null;
@@ -16001,6 +16017,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Setters = { new Setter(Visual.OpacityProperty, 1d) },
         });
+        // Fluent's disabled CheckBox template swaps the label to its disabled foreground resources
+        // regardless of Foreground, so pin them to the ink as well (WPF greys only the glyph).
+        checkBox.Foreground = Brushes.Black;
+        // The app-wide compact fallback style fades a disabled CheckBox (Opacity < 1, which also
+        // fades the label). Style setters tie on priority, so pin the opacity as a local value,
+        // which always wins, and only the template's own disabled glyph colours show greyed.
+        checkBox.Opacity = 1d;
+        checkBox.Resources["CheckBoxForegroundDisabled"] = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundUncheckedDisabled"] = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundCheckedDisabled"] = Brushes.Black;
+        checkBox.Resources["CheckBoxForegroundIndeterminateDisabled"] = Brushes.Black;
         AutomationProperties.SetAutomationId(checkBox, automationId);
         return checkBox;
     }
@@ -16100,14 +16127,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
-            // WPF sizes this column to HyperlinkDialogPlanner.LinkTypeColumnWidth, which fits the
-            // four link types in Segoe UI. The macOS fallback face is wider, so the list keeps that
-            // width as its minimum and grows to its longest entry instead of cutting the entries off
-            // (the body grid's first column is Auto for the same reason).
-            MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth,
-            Height = HyperlinkDialogPlanner.LinkTypeListHeight,
+            // WPF HyperlinkDialog: a fixed LinkTypeColumnWidth-wide list (long entries scroll
+            // horizontally) that fills the body row's height (the column docks it under its label),
+            // so the Look-in column starts at the same x as in WPF.
+            Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
         };
-        ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Disabled);
+        ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Auto);
         AvaloniaCompactDialogChrome.ApplyListBox(
             linkTypeBox,
             AvaloniaCompactDialogChrome.WindowsStyle with
@@ -16307,14 +16332,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         //   row 3  OK / Cancel                                        (8px above)
         // Each label/box/button row uses the same three columns: an 88px label column, the
         // stretching editor and a (button + gap)-wide column with the button right-aligned.
-        static AvaloniaGrid CreateHyperlinkFieldRow(Control label, Control editor, Control? trailingButton, Thickness margin)
+        // The "Text to display:" / address rows share one label column that grows past the WPF 88px
+        // when the cross-platform UI font needs more room, so neither label is ever clipped.
+        static AvaloniaGrid CreateHyperlinkFieldRow(Control label, Control editor, Control? trailingButton, Thickness margin, bool sharedLabelColumn = false)
         {
             var row = new AvaloniaGrid
             {
                 Margin = margin,
                 ColumnDefinitions = new ColumnDefinitions
                 {
-                    new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) },
+                    sharedLabelColumn
+                        ? new ColumnDefinition
+                        {
+                            Width = GridLength.Auto,
+                            MinWidth = HyperlinkDialogPlanner.LabelColumnWidth,
+                            SharedSizeGroup = "HyperlinkLabelColumn",
+                        }
+                        : new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) },
                     new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
                     new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.SecondaryButtonWidth + HyperlinkDialogPlanner.ButtonGap) },
                 },
@@ -16342,16 +16376,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_TextToDisplay2")) },
             displayBox,
             screenTipButton,
-            new Thickness(0, 0, 0, 4));
+            new Thickness(0, 0, 0, 4),
+            sharedLabelColumn: true);
 
         var linkToLabel = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("Hyperlink_LinkTo")),
             Margin = new Thickness(0, 0, 0, 4),
         };
-        var linkToColumn = new StackPanel
+        // WPF docks the "Link to:" label above a list that fills the rest of the star body row, so the
+        // list runs down to the Address row like the Look-in list beside it.
+        DockPanel.SetDock(linkToLabel, Dock.Top);
+        linkTypeBox.Height = double.NaN;
+        linkTypeBox.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+        var linkToColumn = new DockPanel
         {
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
             Children =
             {
                 linkToLabel,
@@ -16619,7 +16659,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ColumnDefinitions = new ColumnDefinitions
             {
-                new ColumnDefinition { Width = GridLength.Auto, MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth },
+                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnWidth) },
                 new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnGap) },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
@@ -16629,7 +16669,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bodyGrid.Children.Add(detailArea);
         AvaloniaGrid.SetColumn(detailArea, 2);
 
-        var addressRow = CreateHyperlinkFieldRow(targetLabel, targetBox, bookmarkButton, new Thickness(0, 4, 0, 0));
+        var addressRow = CreateHyperlinkFieldRow(targetLabel, targetBox, bookmarkButton, new Thickness(0, 4, 0, 0), sharedLabelColumn: true);
 
         // The inline validation line (WPF uses a message box) shares the action row, left of OK/Cancel.
         validationText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
@@ -16648,6 +16688,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Margin = new Thickness(HyperlinkDialogPlanner.DialogMargin),
             RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"),
         };
+        AvaloniaGrid.SetIsSharedSizeScope(rootGrid, true);
         rootGrid.Children.Add(headerRow);
         AvaloniaGrid.SetRow(bodyGrid, 1);
         rootGrid.Children.Add(bodyGrid);
@@ -17328,12 +17369,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // 10px margin, ends 24px short of the right edge and 48px short of the bottom edge of that
         // outer size. Avalonia sizes are client sizes, so the frame is subtracted here instead of
         // being re-created as an empty band right of and below OK/Cancel. WPF narrows the other
-        // five tabs to 550x510; this dialog keeps the Border-tab width on every tab because the
-        // Fill and Border editors are measured against that width.
+        // five tabs to 550x510, and this dialog does the same: 550 wide on every tab but Border.
         const double formatCellsFrameWidth = 14;
         const double formatCellsFrameHeight = 38;
-        const double formatCellsDialogWidth = 620 - formatCellsFrameWidth;
-        const double formatCellsDefaultDialogHeight = 540 - formatCellsFrameHeight;
+        const double formatCellsDialogWidth = 550 - formatCellsFrameWidth;
+        const double formatCellsBorderDialogWidth = 620 - formatCellsFrameWidth;
+        // WPF FormatCellsDialog.CompactDialogHeight: the five non-Border tabs are 550x510 outer.
+        const double formatCellsDefaultDialogHeight = 510 - formatCellsFrameHeight;
         const double formatCellsBorderDialogHeight = 596.5 - formatCellsFrameHeight;
 
         FormatCellsCompactDialogPlan? result = null;
@@ -17358,7 +17400,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new FormatCellsDialogWindow
         {
             Title = UiText.Get("FormatCells_Title"),
-            Width = formatCellsDialogWidth,
+            Width = Math.Clamp(initialTabIndex, 0, 5) == 3 ? formatCellsBorderDialogWidth : formatCellsDialogWidth,
             Height = formatCellsDefaultDialogHeight,
             MinWidth = formatCellsDialogWidth,
             MinHeight = formatCellsDefaultDialogHeight,
@@ -17548,8 +17590,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 numberNegativeBox.SelectedIndex);
         }
 
+        // WPF FormatCellsDialog.UpdateNumberPreview: with the General category the sample is the
+        // active cell's own displayed text (empty for a blank cell), not a canned "1234.56".
+        var generalPreviewText = _session.ActiveSheet.GetCell(_session.ActiveCell) is { } previewCell
+            ? FreeX.Core.Formula.NumberFormatter.Format(
+                previewCell.Value,
+                _session.Workbook.GetStyle(previewCell.StyleId).NumberFormat,
+                _session.Workbook.Uses1904DateSystem)
+            : string.Empty;
+
         void RefreshNumberPreview()
         {
+            if (numberCategoryList.SelectedItem is "General")
+            {
+                numberPreview.Text = generalPreviewText;
+                return;
+            }
+
             var typeText = numberFormatBox.SelectedItem as string ?? string.Empty;
             var resolved = ResolveSelectedNumberFormatCode();
             numberPreview.Text = FormatCellsNumberFormatPlanner.PreviewForFormat(
@@ -18245,8 +18302,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Width = 96,
             Height = 64,
             Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
+            // WPF's preview sits on a plain white box with no frame of its own; only the chosen
+            // edges draw (as the Top/Left/Right/Bottom buttons' neighbours).
+            BorderThickness = new Thickness(0),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AutomationProperties.SetAutomationId(borderPreview, "FormatCellsBorderPreview");
@@ -18717,10 +18775,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                             BorderBrush = FormulaBarControlBorder,
                             BorderThickness = new Thickness(1),
                             Padding = new Thickness(8, 6),
-                            Width = 94,
                             Height = 36,
                             Margin = new Thickness(0, 0, 0, 10),
-                            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
                             Child = numberPreview,
                         },
                     },
@@ -19140,11 +19197,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // (read in Accept as borderChoice) is unchanged.
         var borderDetailsGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("80,*,*"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,*"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
             ColumnSpacing = 0,
             RowSpacing = 0,
         };
+        // 80 is the WPF label column; Auto lets a wider UI font grow it instead of clipping.
+        borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;
         void AddDetailHeader(string text, int column)
         {
             var header = new TextBlock
@@ -19291,8 +19350,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var targetHeight = tabStrip.SelectedIndex == 3
                 ? formatCellsBorderDialogHeight
                 : formatCellsDefaultDialogHeight;
-            var targetSize = new Size(formatCellsDialogWidth, targetHeight);
-            dialog.Width = formatCellsDialogWidth;
+            var targetWidth = tabStrip.SelectedIndex == 3
+                ? formatCellsBorderDialogWidth
+                : formatCellsDialogWidth;
+            var targetSize = new Size(targetWidth, targetHeight);
+            dialog.Width = targetWidth;
             dialog.MinHeight = targetHeight;
             dialog.Height = targetHeight;
             // Width/Height update layout constraints, but an already-open non-resizable X11
@@ -21122,17 +21184,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .Select(choice => new SortDialogComboItem<SortDirectionChoice>(choice.Label, choice))
                 .ToList();
 
+        // WPF SortDialog binds the Color / Icon combos straight to the choice Label, so with
+        // Sort On = Cell Values (the single empty choice) the cells show EMPTY, not "None".
         IReadOnlyList<SortDialogComboItem<SortColorChoice>> CreateColorItems(SortDialogLevel level) =>
             level.ColorChoices
                 .Select(choice => new SortDialogComboItem<SortColorChoice>(
-                    string.IsNullOrWhiteSpace(choice.Label) ? UiText.Get("Common_None") : choice.Label,
+                    string.IsNullOrWhiteSpace(choice.Label) && IsColorSort(level) ? UiText.Get("Common_None") : choice.Label,
                     choice))
                 .ToList();
 
         IReadOnlyList<SortDialogComboItem<SortIconChoice>> CreateIconItems(SortDialogLevel level) =>
             level.IconChoices
                 .Select(choice => new SortDialogComboItem<SortIconChoice>(
-                    string.IsNullOrWhiteSpace(choice.Label) ? UiText.Get("Common_None") : choice.Label,
+                    string.IsNullOrWhiteSpace(choice.Label) && IsIconSort(level) ? UiText.Get("Common_None") : choice.Label,
                     choice))
                 .ToList();
 
@@ -21276,14 +21340,77 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return border;
         }
 
-        static TextBlock CreateCellText(string text, bool selected) =>
-            new()
+        static TextBlock CreateCellText(string text, bool selected)
+        {
+            var block = new TextBlock
             {
                 Text = text,
                 Foreground = selected ? Brushes.White : Brushes.Black,
+                // WPF draws the selected row's plain text at normal weight.
+                FontWeight = FontWeight.Normal,
                 FontSize = 12,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
+            // Light text on the selection blue: LCD sub-pixel rendering fattens white strokes well past
+            // WPF's thin grayscale look at the same (normal) weight, so use grayscale anti-aliasing.
+            if (selected)
+                TextOptions.SetTextRenderingMode(block, TextRenderingMode.Antialias);
+            return block;
+        }
+
+        // Selected-row text cell (white on the selection blue) that hands over to its combo box as
+        // the cell editor. The combo stays in the cell so its automation id and selection state
+        // remain reachable; it is only hidden while the cell is not being edited.
+        static Panel CreateSortEditableCell(ComboBox editor, Func<string> getText)
+        {
+            var text = CreateCellText(getText(), selected: true);
+            var host = new Panel
+            {
+                Focusable = true,
+                IsTabStop = true,
+                Background = Brushes.Transparent,
+            };
+            editor.IsVisible = false;
+            host.Children.Add(text);
+            host.Children.Add(editor);
+
+            void BeginEdit()
+            {
+                text.IsVisible = false;
+                editor.IsVisible = true;
+                editor.Focus();
+            }
+
+            void EndEdit()
+            {
+                if (editor.IsDropDownOpen || editor.IsKeyboardFocusWithin)
+                    return;
+
+                text.Text = getText();
+                editor.IsVisible = false;
+                text.IsVisible = true;
+            }
+
+            host.PointerPressed += (_, _) =>
+            {
+                if (!editor.IsVisible)
+                    BeginEdit();
+            };
+            host.KeyDown += (_, e) =>
+            {
+                if (editor.IsVisible || e.Handled)
+                    return;
+                if (e.Key is Key.F2 or Key.Space or Key.Down)
+                {
+                    e.Handled = true;
+                    BeginEdit();
+                }
+            };
+            editor.SelectionChanged += (_, _) => text.Text = getText();
+            editor.LostFocus += (_, _) => EndEdit();
+            editor.DropDownClosed += (_, _) => EndEdit();
+            return host;
+        }
 
         // WPF SortDialog DataGrid rows are 24px: the cell combo boxes keep the 22px WPF default.
         static void ApplySortComboChrome(ComboBox comboBox)
@@ -21461,12 +21588,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         RefreshSortOnDependentControls();
                 };
 
+                // WPF SortDialog: Sort by / Sort On are plain text cells (only Order / Color / Icon
+                // are always combo boxes). The combo is kept in the tree and swapped in as the cell
+                // editor on click / F2 / Space / Down, like the DataGrid's begin-edit.
                 var columnCell = CreateSortCell(
-                    selected ? columnBox : CreateCellText(columnChoices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset)?.Label ?? "", selected),
+                    selected
+                        ? CreateSortEditableCell(
+                            columnBox,
+                            () => (columnBox.SelectedItem as SortDialogComboItem<SortColumnChoice>)?.Label ?? "")
+                        : CreateCellText(columnChoices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset)?.Label ?? "", selected),
                     gridRow,
                     0,
                     selected);
-                var sortOnCell = CreateSortCell(selected ? sortOnBox : CreateCellText(level.SortOn, selected), gridRow, 1, selected);
+                var sortOnCell = CreateSortCell(
+                    selected
+                        ? CreateSortEditableCell(
+                            sortOnBox,
+                            () => (sortOnBox.SelectedItem as SortDialogComboItem<SortOnChoice>)?.Label ?? "")
+                        : CreateCellText(level.SortOn, selected),
+                    gridRow,
+                    1,
+                    selected);
                 var orderLabel = CreateOrderItems(level).FirstOrDefault(choice => choice.Value.Ascending == level.Ascending)?.Label ?? "";
                 var orderCell = CreateSortCell(selected ? orderBox : CreateCellText(orderLabel, selected), gridRow, 2, selected);
                 var colorLabel = string.IsNullOrWhiteSpace(level.TargetColor) ? "" : level.TargetColor;
@@ -21477,6 +21619,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     cell.PointerPressed += (_, _) =>
                     {
+                        // The selected row keeps its controls (and any open cell editor); only a
+                        // click on another row moves the selection.
+                        if (levelIndex == selectedLevelIndex)
+                            return;
+
                         selectedLevelIndex = levelIndex;
                         RebuildLevels();
                     };
@@ -21583,6 +21730,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var levelsFrame = new Border
         {
+            // WPF DataGrid body below the rows is the control-face grey (240,240,240).
+            Background = Brush(240, 240, 240),
             BorderBrush = Brush(80, 130, 190),
             BorderThickness = new Thickness(1),
             Child = levelsGrid,
@@ -22248,10 +22397,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 0,
                 GoalSeekStatusDialogPlanner.SummaryBottomMargin),
             FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            // Space the status lines out vertically to match the Windows dialog,
-            // which renders each line with a blank-line gap between them.
             LineHeight = GoalSeekStatusDialogPlanner.SummaryLineHeight,
+            FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetName(summaryBlock, UiText.CreateAutomationName(UiText.Get("GoalSeekStatus_GoalSeekStatus")));
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
@@ -22369,11 +22516,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Children =
             {
                 summaryBlock,
-                new Border
-                {
-                    Child = buttonRow,
-                    Margin = new Thickness(0, 0, GoalSeekStatusDialogPlanner.ContentMargin, 0),
-                },
+                // WPF right-aligns the row inside the stack's own 16px margin; the row adds none.
+                buttonRow,
             },
         };
         dialog.Opened += (_, _) => defaultButton.Focus();
@@ -23832,7 +23976,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var saveButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Add")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(saveButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.Scenarios.Count == 0);
@@ -23843,7 +23986,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var editButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Edit")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(editButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
@@ -23854,7 +23996,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var showButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Show")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.SelectedScenario is not null);
@@ -23867,7 +24008,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var deleteButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Delete")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
@@ -23880,7 +24020,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var summaryButton = new Button
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Summary")),
-            Width = ScenarioManagerDialogLayout.ActionButtonWidth,
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(summaryButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
@@ -24228,8 +24367,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var fields = new AvaloniaGrid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
-            ColumnDefinitions = new ColumnDefinitions($"{ScenarioManagerDialogLayout.FieldLabelColumnWidth},*"),
+            // Auto (min = the WPF 92 column) so the label never clips in the wider cross-platform font.
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
         };
+        fields.ColumnDefinitions[0].MinWidth = ScenarioManagerDialogLayout.FieldLabelColumnWidth;
 
         AddScenarioManagerField(fields, 0, StripDisplayMnemonic(UiText.Get("ScenarioManager_ScenarioName")), nameBox);
         AddScenarioManagerField(fields, 1, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCells")), changingCellsBox);

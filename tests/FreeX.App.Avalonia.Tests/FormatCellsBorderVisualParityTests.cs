@@ -39,7 +39,8 @@ public sealed class FormatCellsBorderVisualParityTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWpfExpander(borderDetailsExpander)");
         source.Should().Contain("Margin = new Thickness(8)");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"80,*,*\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*,*\")");
+        source.Should().Contain("borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;");
         source.Should().Contain("ListBoxItemMinHeight = 20");
         source.Should().Contain("new Setter(TemplatedControl.BackgroundProperty, selectedItemBackground)");
         source.Should().NotContain("CreateFormatCellsBorderStyleSample");

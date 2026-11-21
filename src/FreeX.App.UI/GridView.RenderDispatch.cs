@@ -29,6 +29,7 @@ public partial class GridView
             RenderHeaders(dc);
             RenderPreSelectionLayersWithCache(dc, skipHeavyLayers, isLiveResizing);
             RenderSelection(dc);
+            RenderFlashFillGhosts(dc);
             RenderPostSelectionLayers(dc, skipHeavyLayers);
         }
         catch (Exception ex)
