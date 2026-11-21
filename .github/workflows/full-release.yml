@@ -58,6 +58,24 @@ on:
         required: false
         default: true
         type: boolean
+      inject_fault:
+        description: >-
+          Fault injection for exercising the release failure-handling paths live. Honoured ONLY when
+          dry_run is true AND this is dispatched from refs/heads/main (the candidate job rejects any
+          other combination). real = a cheap early job fails with an ordinary error (early-abort must
+          cancel the run; auto-retry must not retry). infra = the same job fails in a step the failure
+          classifier treats as infrastructure, on attempt 1 only (auto-retry must re-run it once and
+          attempt 2 must pass). selftest = a cheap job runs Invoke-WithRetry (first attempt fails,
+          second succeeds) and an offline Send-ReleaseAssets resume-plan check; publishes nothing.
+          none changes nothing.
+        required: false
+        default: none
+        type: choice
+        options:
+          - none
+          - real
+          - infra
+          - selftest
       source_sha:
         description: >-
           Optional full 40-character lowercase commit SHA to release instead of the dispatched main
@@ -208,6 +226,30 @@ jobs:
       gate_evidence_reuse: ${{ steps.gate_evidence.outputs.reuse }}
       gate_evidence_run_id: ${{ steps.gate_evidence.outputs.evidence_run_id }}
     steps:
+      # First, before anything is checked out or built: fault injection is a rehearsal tool and must
+      # fail closed. The values reach the script only through the environment, never through script text.
+      - name: Reject fault injection outside a main dry run
+        shell: pwsh
+        env:
+          INJECT_FAULT: ${{ inputs.inject_fault }}
+          INJECT_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          $fault = [string]$env:INJECT_FAULT
+          if ($fault -cnotin @('', 'none', 'real', 'infra', 'selftest')) {
+            throw "inject_fault has an unknown value; refusing to continue."
+          }
+          if ($fault -cin @('', 'none')) {
+            Write-Host "No fault injection requested."
+            return
+          }
+          if ($env:INJECT_DRY_RUN -cne 'true') {
+            throw "inject_fault is only honoured when dry_run is true; refusing to run a real release with a fault injected."
+          }
+          if ($env:GITHUB_REF -cne 'refs/heads/main') {
+            throw "inject_fault is only honoured on a dispatch from refs/heads/main; refusing."
+          }
+          Write-Host "Fault injection '$fault' accepted: dry run from refs/heads/main."
+
       # Checks out the release commit itself (RELEASE_SHA), so the evidence lookup below reads THAT
       # commit's own gate manifest. A source_sha release needs full history for the ancestry proof.
       - name: Checkout
@@ -462,6 +504,50 @@ jobs:
             return
           }
           Write-Warning "The watcher reached its own time limit without seeing the publication gate; it stops watching."
+
+  fault-injection:
+    # Exists only to rehearse the failure-handling paths (early-abort, the real/infrastructure
+    # classifier, release-auto-retry, Invoke-WithRetry, Send-ReleaseAssets planning) in a live dry
+    # run. It is skipped unless inject_fault is set, and the candidate job (which it needs) has
+    # already failed the run unless that was a dry run from refs/heads/main; the condition repeats
+    # both so the job can never run otherwise. Nothing depends on it and it publishes nothing.
+    name: Inject a rehearsal fault
+    needs: [candidate]
+    if: ${{ inputs.dry_run && inputs.inject_fault != 'none' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      INJECT_FAULT: ${{ inputs.inject_fault }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      # Attempt 1 only: the automatic re-run (attempt 2) skips every injected failure and passes.
+      - name: Injected real failure
+        if: ${{ env.INJECT_FAULT == 'real' && github.run_attempt == 1 }}
+        shell: pwsh
+        run: |
+          throw "Injected real failure (inject_fault=real): an ordinary step error. early-abort must cancel the run and release-auto-retry must not retry it."
+
+      # The step name is the signal: tools/Get-ReleaseRunFailureClass.ps1 classifies a failed step that
+      # only moves data to or from GitHub's own services (names starting with Download) as
+      # infrastructure. The step is labelled as injected so nobody mistakes it for a real outage.
+      - name: Download injected rehearsal inputs
+        if: ${{ env.INJECT_FAULT == 'infra' && github.run_attempt == 1 }}
+        shell: pwsh
+        run: |
+          throw "Injected infrastructure failure (inject_fault=infra): simulated transfer failure on attempt 1. release-auto-retry must re-run the failed job once."
+
+      - name: Exercise Invoke-WithRetry and the Send-ReleaseAssets resume plan
+        if: ${{ env.INJECT_FAULT == 'selftest' }}
+        shell: pwsh
+        run: pwsh -NoProfile -File tools/Test-ReleaseResilienceSelfTest.ps1
 
   release-tests:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}

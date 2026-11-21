@@ -127,6 +127,9 @@ public static class WorksheetContextMenuPlanner
         WorksheetContextMenuAction.ShowHideNote, WorksheetContextMenuAction.ClearAll,
         WorksheetContextMenuAction.ClearComments, WorksheetContextMenuAction.ClearContents,
         WorksheetContextMenuAction.ConvertTableToRange,
+        WorksheetContextMenuAction.InsertTableRowAbove, WorksheetContextMenuAction.InsertTableRowBelow,
+        WorksheetContextMenuAction.InsertTableColumnLeft, WorksheetContextMenuAction.InsertTableColumnRight,
+        WorksheetContextMenuAction.DeleteTableRows, WorksheetContextMenuAction.DeleteTableColumns,
     ];
 
     // Commands a protected sheet allows only when its protection options permit that kind of action.
@@ -305,15 +308,18 @@ public static class WorksheetContextMenuPlanner
         Submenu(
             "Insert and Delete",
             "_Insert and Delete",
+            [
             new WorksheetContextMenuCommand("Insert...", WorksheetContextMenuAction.InsertCells, AccessHeader: "_Insert..."),
             new WorksheetContextMenuCommand("Insert Row Above", WorksheetContextMenuAction.InsertRowAbove, AccessHeader: "Insert Row _Above"),
             new WorksheetContextMenuCommand("Insert Row Below", WorksheetContextMenuAction.InsertRowBelow, AccessHeader: "Insert Row _Below"),
             new WorksheetContextMenuCommand("Insert Column Left", WorksheetContextMenuAction.InsertColumnLeft, AccessHeader: "Insert Column _Left"),
             new WorksheetContextMenuCommand("Insert Column Right", WorksheetContextMenuAction.InsertColumnRight, AccessHeader: "Insert Column _Right"),
+            .. BuildTableInsertCommands(state),
             WorksheetContextMenuCommand.Separator,
             new WorksheetContextMenuCommand("Delete...", WorksheetContextMenuAction.DeleteCells, AccessHeader: "_Delete..."),
             new WorksheetContextMenuCommand("Delete Row(s)", WorksheetContextMenuAction.DeleteRows, AccessHeader: "Delete _Row(s)"),
-            new WorksheetContextMenuCommand("Delete Column(s)", WorksheetContextMenuAction.DeleteColumns, AccessHeader: "Delete _Column(s)")),
+            new WorksheetContextMenuCommand("Delete Column(s)", WorksheetContextMenuAction.DeleteColumns, AccessHeader: "Delete _Column(s)"),
+            .. BuildTableDeleteCommands(state)]),
         WorksheetContextMenuCommand.Separator,
         Submenu(
             "Sort and Filter",
@@ -532,6 +538,29 @@ public static class WorksheetContextMenuPlanner
                 new("Hyperlink...", WorksheetContextMenuAction.Hyperlink, AccessHeader: "_Hyperlink...")
             ]);
 
+    // Excel adds the table-scoped Insert (Table Rows Above/Below, Table Columns to the Left/Right) and
+    // Delete (Table Rows, Table Columns) entries to the cell menu when the clicked cell is in a table.
+    private static WorksheetContextMenuCommand[] BuildTableInsertCommands(WorksheetContextMenuState state) =>
+        state.HasTableTarget
+            ?
+            [
+                WorksheetContextMenuCommand.Separator,
+                new WorksheetContextMenuCommand("Table Rows Above", WorksheetContextMenuAction.InsertTableRowAbove, AccessHeader: "Table Ro_ws Above"),
+                new WorksheetContextMenuCommand("Table Rows Below", WorksheetContextMenuAction.InsertTableRowBelow, AccessHeader: "Table Rows Be_low"),
+                new WorksheetContextMenuCommand("Table Columns to the Left", WorksheetContextMenuAction.InsertTableColumnLeft, AccessHeader: "Table Colu_mns to the Left"),
+                new WorksheetContextMenuCommand("Table Columns to the Right", WorksheetContextMenuAction.InsertTableColumnRight, AccessHeader: "Table Columns to the Rig_ht"),
+            ]
+            : [];
+
+    private static WorksheetContextMenuCommand[] BuildTableDeleteCommands(WorksheetContextMenuState state) =>
+        state.HasTableTarget
+            ?
+            [
+                new WorksheetContextMenuCommand("Delete Table Rows", WorksheetContextMenuAction.DeleteTableRows, AccessHeader: "Delete Table Row_s"),
+                new WorksheetContextMenuCommand("Delete Table Columns", WorksheetContextMenuAction.DeleteTableColumns, AccessHeader: "Delete Table Colu_mns"),
+            ]
+            : [];
+
     // Excel adds a "Table" submenu to the cell menu when the cell is inside a table.
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildTableCommands(WorksheetContextMenuState state) =>
         state.HasTableTarget
@@ -686,7 +715,13 @@ public enum WorksheetContextMenuAction
     SelectionPane,
     DeleteObject,
     FilterBySelectedCellValue,
-    ConvertTableToRange
+    ConvertTableToRange,
+    InsertTableRowAbove,
+    InsertTableRowBelow,
+    InsertTableColumnLeft,
+    InsertTableColumnRight,
+    DeleteTableRows,
+    DeleteTableColumns
 }
 
 public enum WorksheetContextMenuTargetKind
