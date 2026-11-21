@@ -152,7 +152,10 @@ internal static class HeaderFooterBandRenderer
         var (inFlow, framed) = Partition(slot);
         var flowHeight = inFlow.Count == 0 && slot.Table is null
             ? 0
-            : MeasureFlowHeight(BuildFlow(model, inFlow, slot.Table, isHeader, context, widthDip, null), widthDip, maxHeightDip);
+            : MeasureFlowHeight(
+                BuildFlow(model, inFlow, slot.Table, isHeader, context, widthDip + TableOverflowDip(slot.Table, widthDip), null),
+                widthDip + TableOverflowDip(slot.Table, widthDip),
+                maxHeightDip);
 
         var frameTops = new List<double>(framed.Count);
         var height = flowHeight;
@@ -201,13 +204,17 @@ internal static class HeaderFooterBandRenderer
         var (inFlow, framed) = Partition(slot);
         if (inFlow.Count > 0 || slot.Table is not null)
         {
+            // A table wider than the band (Word lets it hang into the margin) must not be clipped at the
+            // band edge: a right-to-left table anchors at the right margin and so overflows to the left.
+            var overflowDip = TableOverflowDip(slot.Table, widthDip);
             AddFlowPage(
                 band,
                 band,
-                BuildFlow(model, inFlow, slot.Table, isHeader, context, widthDip, null),
-                widthDip,
+                BuildFlow(model, inFlow, slot.Table, isHeader, context, widthDip + overflowDip, null),
+                widthDip + overflowDip,
                 maxHeightDip,
-                0);
+                0,
+                slot.Table is { RightToLeft: true } ? -overflowDip : 0);
         }
 
         for (var index = 0; index < framed.Count; index++)
@@ -412,6 +419,17 @@ internal static class HeaderFooterBandRenderer
                         dc.DrawEllipse(fill, pen, new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2), rect.Width / 2, rect.Height / 2);
                     else
                         dc.DrawRectangle(fill, pen, rect);
+                }
+
+                if (frame.TableRuleWidthPt > 0 && frame.TableRuleOffsetPt > 0)
+                {
+                    // The rule of a layout table the text box wraps (a header's bottom border), sitting at the
+                    // table's own exact height, which is shorter than the box.
+                    var rulePen = new Pen(
+                        BrushFromHex(frame.TableRuleColorHex ?? "#000000") ?? Brushes.Black,
+                        Math.Max(0.5, PageLayout.PointsToDip(frame.TableRuleWidthPt)));
+                    var ruleY = rect.Y + PageLayout.PointsToDip(frame.TableRuleOffsetPt);
+                    dc.DrawLine(rulePen, new Point(rect.X, ruleY), new Point(rect.Right, ruleY));
                 }
             }
 
@@ -687,13 +705,23 @@ internal static class HeaderFooterBandRenderer
         }
     }
 
+    /// <summary>How far a header/footer table's authored width exceeds the band it is drawn in.</summary>
+    internal static double TableOverflowDip(FreeW.Core.Model.Table? table, double bandWidthDip)
+    {
+        if (table is null)
+            return 0;
+        var tableWidthDip = FreeW.App.Presentation.DocumentView.TableColumnLayoutPlanner.ResolveTableWidthDip(table);
+        return Math.Max(0, tableWidthDip - bandWidthDip);
+    }
+
     private static void AddFlowPage(
         BandVisual band,
         ContainerVisual parent,
         FlowDocument flow,
         double widthDip,
         double heightDip,
-        double topDip)
+        double topDip,
+        double leftDip = 0)
     {
         flow.PageHeight = heightDip;
         var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
@@ -706,7 +734,7 @@ internal static class HeaderFooterBandRenderer
         if (page == DocumentPage.Missing || page.Visual is null)
             return;
 
-        var host = new ContainerVisual { Offset = new Vector(0, topDip) };
+        var host = new ContainerVisual { Offset = new Vector(leftDip, topDip) };
         host.Children.Add(page.Visual);
         parent.Children.Add(host);
         band.Retain(flow, page);

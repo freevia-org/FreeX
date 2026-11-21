@@ -62,6 +62,32 @@ public sealed class CharacterScaleAndGridSkipRenderTests
         Assert.False(HasBoxes(plain));
     }
 
+    [Theory]
+    [InlineData(0, null)]
+    [InlineData(100, null)]
+    [InlineData(103, 1.03)]
+    [InlineData(95, 0.95)]
+    [InlineData(110, null)]
+    [InlineData(150, null)]
+    public void SmallCharacterScaleFactor_AppliesOnlyToScalesTooCloseTo100ForStretchedBoxes(int percent, double? expected) =>
+        Assert.Equal(expected, DocumentView.SmallCharacterScaleFactor(percent));
+
+    private static System.Windows.Documents.Run SingleRun(DocumentView view) => view.Document.Blocks
+        .OfType<System.Windows.Documents.Paragraph>()
+        .SelectMany(paragraph => paragraph.Inlines.OfType<System.Windows.Documents.Run>())
+        .First(run => run.Text == "Wide words here");
+
+    [StaFact]
+    public void PageRender_NearHundredScale_WidensTheGlyphEm_WhileTheEditorKeepsTheAuthoredSize()
+    {
+        var page = SingleRun(MakeScaledView(pageOnly: true, scalePercent: 103));
+        var plain = SingleRun(MakeScaledView(pageOnly: true, scalePercent: 100));
+        var editor = SingleRun(MakeScaledView(pageOnly: false, scalePercent: 103));
+
+        Assert.Equal(plain.FontSize * 1.03, page.FontSize, 6);
+        Assert.Equal(plain.FontSize, editor.FontSize, 6);
+    }
+
     private static System.Collections.Generic.IEnumerable<System.Windows.Documents.Inline> FlattenInlines(
         System.Windows.Documents.Inline inline) =>
         inline is System.Windows.Documents.Span span
