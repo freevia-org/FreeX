@@ -44,9 +44,27 @@ public sealed partial class MainWindow
         InsertChartFromSelection(choice.ChartType);
     }
 
-    private async Task<InsertChartDialogChoice?> ShowInsertChartDialogAsync(
-        IReadOnlyList<ChartType>? recommendedTypes = null)
+    // WPF PivotChartTypeDialog: a 640x410 outer window whose tab control is 290 high.
+    private const double PivotChartTypeDialogWidth = 640;
+    private const double PivotChartTypeDialogHeight = 410;
+    private const double PivotChartTypeTabsHeight = 290;
+
+    /// <summary>
+    /// Change PivotChart Type (WPF <c>PivotChartTypeDialog</c>): the Insert Chart picker body under
+    /// "Recommended PivotCharts" / "All Charts" tabs, seeded with the chart's current type, without the
+    /// recommended-layout check box. Returns the chosen type, or null on Cancel.
+    /// </summary>
+    private async Task<ChartType?> ShowPivotChartTypeDialogAsync(ChartType currentType)
     {
+        var choice = await ShowInsertChartDialogAsync(pivotCurrentType: currentType);
+        return choice?.ChartType;
+    }
+
+    private async Task<InsertChartDialogChoice?> ShowInsertChartDialogAsync(
+        IReadOnlyList<ChartType>? recommendedTypes = null,
+        ChartType? pivotCurrentType = null)
+    {
+        var isPivotPicker = pivotCurrentType is not null;
         var recommendedPanel = ChartTypePickerPlanner.GetRecommendedPanel();
         var recommendedChoices = recommendedTypes is null
             ? ChartTypePickerPlanner.GetRecommendedGalleryChoices()
@@ -66,6 +84,18 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 34, ChartTypeChangePlanner.PickerColumnGap, 0),
         };
         recommendedGallery.SelectedIndex = recommendedChoices.Count > 0 ? 0 : -1;
+        if (isPivotPicker)
+        {
+            // WPF PivotChartTypeDialog: preselect the chart's current type, else the first choice.
+            for (var index = 0; index < recommendedChoices.Count; index++)
+            {
+                if (recommendedChoices[index].Type == pivotCurrentType)
+                {
+                    recommendedGallery.SelectedIndex = index;
+                    break;
+                }
+            }
+        }
         AutomationProperties.SetName(
             recommendedGallery,
             UiText.Get(recommendedPanel.SubtypeGalleryAutomationNameResourceKey));
@@ -113,7 +143,7 @@ public sealed partial class MainWindow
         recommendedGrid.Children.Add(recommendedPreview);
 
         // ---- All Charts tab ------------------------------------------------------------------------
-        var allCharts = BuildAllChartsPickerBody(currentType: null, "InsertChart");
+        var allCharts = BuildAllChartsPickerBody(currentType: pivotCurrentType, "InsertChart");
         var subtypeGallery = allCharts.SubtypeGallery;
         // Inside the tab the body follows the WPF picker grid: a 250px minimum whose lists fill the
         // star row, instead of the fixed panel height the standalone Change Chart Type dialog uses.
@@ -124,19 +154,19 @@ public sealed partial class MainWindow
 
         var recommendedTab = new TabItem
         {
-            Header = StripDisplayMnemonic(UiText.Get("InsertChart_RecommendedChartsTab")),
+            Header = StripDisplayMnemonic(UiText.Get(isPivotPicker ? "PivotChartType_RecommendedPivotCharts" : "InsertChart_RecommendedChartsTab")),
             Content = recommendedGrid,
         };
         AutomationProperties.SetAutomationId(recommendedTab, "InsertChartRecommendedChartsTab");
         var allChartsTab = new TabItem
         {
-            Header = StripDisplayMnemonic(UiText.Get("InsertChart_AllChartsTab")),
+            Header = StripDisplayMnemonic(UiText.Get(isPivotPicker ? "PivotChartType_AllCharts" : "InsertChart_AllChartsTab")),
             Content = allCharts.Body,
         };
         AutomationProperties.SetAutomationId(allChartsTab, "InsertChartAllChartsTab");
         var tabs = new TabControl
         {
-            Height = ChartPickerTabsHeight,
+            Height = isPivotPicker ? PivotChartTypeTabsHeight : ChartPickerTabsHeight,
             Margin = new Thickness(0, 0, 0, 12),
             Items = { recommendedTab, allChartsTab },
         };
@@ -151,16 +181,20 @@ public sealed partial class MainWindow
         recommendedLayoutCheck.MaxHeight = 20;
         recommendedLayoutCheck.Margin = new Thickness(0, 0, 0, 6);
         AutomationProperties.SetAutomationId(recommendedLayoutCheck, "InsertChartUseRecommendedLayoutCheck");
+        recommendedLayoutCheck.IsVisible = !isPivotPicker;
 
-        var dialog = NewChartDialog(UiText.Get("InsertChart_Title"), "InsertChartDialog");
+        var dialog = isPivotPicker
+            ? NewChartDialog(UiText.Get("PivotChartType_ChangePivotChartType"), "PivotChartTypeDialog")
+            : NewChartDialog(UiText.Get("InsertChart_Title"), "InsertChartDialog");
         // WPF InsertChartDialog is a 660x430 outer NoResize window. The width loses the measured
         // Windows frame; its 310px tab control, check row and button row need more than the 391px
         // Windows client height, so the height follows the content with that client height as the
         // minimum rather than cutting the button row.
         dialog.SizeToContent = SizeToContent.Height;
-        dialog.Width = InsertChartDialogWidth - WpfNoResizeFrameWidth;
-        dialog.MinWidth = InsertChartDialogWidth - WpfNoResizeFrameWidth;
-        dialog.MinHeight = InsertChartDialogHeight - WpfNoResizeClientFrameHeight;
+        var pickerDialogWidth = isPivotPicker ? PivotChartTypeDialogWidth : InsertChartDialogWidth;
+        dialog.Width = pickerDialogWidth - WpfNoResizeFrameWidth;
+        dialog.MinWidth = pickerDialogWidth - WpfNoResizeFrameWidth;
+        dialog.MinHeight = (isPivotPicker ? PivotChartTypeDialogHeight : InsertChartDialogHeight) - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons(
             "InsertChart",
@@ -171,8 +205,8 @@ public sealed partial class MainWindow
         void Accept()
         {
             var chartType = ReferenceEquals(tabs.SelectedItem, allChartsTab)
-                ? (subtypeGallery.SelectedItem as ChartTypePickerOptionPlan)?.Type ?? ChartType.Column
-                : (recommendedGallery.SelectedItem as ChartTypeGalleryChoicePlan)?.Type ?? ChartType.Column;
+                ? (subtypeGallery.SelectedItem as ChartTypePickerOptionPlan)?.Type ?? pivotCurrentType ?? ChartType.Column
+                : (recommendedGallery.SelectedItem as ChartTypeGalleryChoicePlan)?.Type ?? pivotCurrentType ?? ChartType.Column;
             dialog.Close((InsertChartDialogChoice?)new InsertChartDialogChoice(
                 chartType,
                 recommendedLayoutCheck.IsChecked == true));

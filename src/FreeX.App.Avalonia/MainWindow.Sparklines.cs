@@ -76,7 +76,8 @@ public sealed partial class MainWindow
         var dataRangeBox = new TextBox
         {
             Width = 190,
-            Text = initialDataRangeText ?? (selection.CellCount > 1 ? FormatRangeReference(selection) : string.Empty),
+            // WPF InsertSparkline passes the selection text even for a single cell.
+            Text = initialDataRangeText ?? FormatRangeReference(selection),
         };
         ApplySparklineTextBoxChrome(dataRangeBox);
         AutomationProperties.SetAutomationId(dataRangeBox, "SparklineDataRangeBox");
@@ -90,7 +91,8 @@ public sealed partial class MainWindow
         var locationBox = new TextBox
         {
             Width = 190,
-            Text = initialLocationText ?? FormatCellReference(_session.ActiveCell),
+            // WPF opens with an empty Location Range.
+            Text = initialLocationText ?? string.Empty,
         };
         ApplySparklineTextBoxChrome(locationBox);
         AutomationProperties.SetAutomationId(locationBox, "SparklineLocationRangeBox");
@@ -115,7 +117,7 @@ public sealed partial class MainWindow
         // field rows, the type combo, and the OK/Cancel row.
         var dialog = new Window
         {
-            Title = UiText.Get("Sparkline_InsertTitle"),
+            Title = UiText.Get("Sparkline_InsertSparkline"),
             // The shared 380x280 size is the WPF *outer* NoResize window; Avalonia sizes the client
             // area, so drop the measured Windows frame from both.
             Width = SparklinePlanner.InsertDialogCaptureWidth - WpfNoResizeFrameWidth,
@@ -125,6 +127,8 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "InsertSparklineDialog");
+        // WPF SparklineDialog.FocusInitialKeyboardTarget: the data-range box, text selected.
+        dialog.Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(dataRangeBox);
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 72 };
         ApplySparklineButtonChrome(ok, 72, isDefault: true);
@@ -133,28 +137,35 @@ public sealed partial class MainWindow
         ApplySparklineButtonChrome(cancel, 72);
         AutomationProperties.SetAutomationId(cancel, "InsertSparklineCancelButton");
         cancel.Click += (_, _) => dialog.Close(false);
-        ok.Click += (_, _) =>
+        async Task ShowInvalidInputAsync(string message, TextBox target)
+        {
+            // WPF SparklineDialog.ShowInvalidInputWarning: modal warning titled with the dialog, then focus the box.
+            await AvaloniaUserMessageDialog.ShowWarningAsync(dialog, message, dialog.Title ?? string.Empty);
+            AvaloniaCompactDialogChrome.FocusAndSelect(target);
+        }
+
+        ok.Click += (_, _) => RunGuarded(async () =>
         {
             // Location accepts either a single cell (one sparkline) or a multi-row/column range that
             // expands into a sparkline group, matching Excel's "Insert Sparklines" dialog.
             switch (SparklinePlanner.ValidateInsertGroup(dataRangeBox.Text ?? string.Empty, locationBox.Text ?? string.Empty, sheetId, out var okMembers))
             {
                 case SparklineInputValidation.InvalidDataRange:
-                    ShowEditIssue(UiText.Get("Sparkline_InvalidDataRange"));
+                    await ShowInvalidInputAsync(UiText.Get("Sparkline_InvalidDataRange"), dataRangeBox);
                     return;
                 case SparklineInputValidation.InvalidLocation:
-                    ShowEditIssue(UiText.Get("Sparkline_InvalidLocation"));
+                    await ShowInvalidInputAsync(UiText.Get("Sparkline_InvalidLocationCell"), locationBox);
                     return;
                 default:
                     if (okMembers.Count == 0)
                     {
-                        ShowEditIssue(UiText.Get("Sparkline_InvalidLocation"));
+                        await ShowInvalidInputAsync(UiText.Get("Sparkline_InvalidLocationCell"), locationBox);
                         return;
                     }
                     dialog.Close(true);
                     break;
             }
-        };
+        });
 
         var content = new StackPanel
         {

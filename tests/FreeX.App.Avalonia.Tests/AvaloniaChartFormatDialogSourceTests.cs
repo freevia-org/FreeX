@@ -273,7 +273,7 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().NotContain("ChartColor_DescriptionFormat");
 
         var areaSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartRemainingDialogs.cs"));
-        areaSource.Should().Contain("\"FormatChartAreaDialog\", chartAreaEditor.Picker);");
+        areaSource.Should().Contain("\"FormatChartAreaDialog\", chartAreaEditor.Box);");
         areaSource.Should().Contain("chartAreaEditor.Text,");
         areaSource.Should().Contain("legendBorderEditor.Text,");
     }
@@ -317,10 +317,10 @@ public sealed class AvaloniaChartFormatDialogSourceTests
         source.Should().Contain("ChartTypePickerPlanner.GetRecommendedPanel()");
         source.Should().Contain("ChartTypePickerPlanner.GetRecommendedGalleryChoices(recommendedTypes)");
         source.Should().Contain("UiText.Get(\"InsertChart_Title\")");
-        source.Should().Contain("UiText.Get(\"InsertChart_RecommendedChartsTab\")");
-        source.Should().Contain("UiText.Get(\"InsertChart_AllChartsTab\")");
+        source.Should().Contain("\"InsertChart_RecommendedChartsTab\"");
+        source.Should().Contain("\"InsertChart_AllChartsTab\"");
         source.Should().Contain("UiText.Get(\"InsertChart_UseRecommendedLayout\")");
-        source.Should().Contain("BuildAllChartsPickerBody(currentType: null, \"InsertChart\")");
+        source.Should().Contain("BuildAllChartsPickerBody(currentType: pivotCurrentType, \"InsertChart\")");
         source.Should().Contain("ConfigureChartDialogKeyboardLifecycle(dialog, recommendedGallery);");
         source.Should().Contain("InsertChartFromSelection(choice.ChartType);");
 

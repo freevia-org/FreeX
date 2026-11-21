@@ -14329,13 +14329,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FindReplaceText(text, arguments);
 
         // ── Find tab: "Find what" box ───────────────────────────────────────────
-        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
+        // WPF FindReplaceDialog opens with empty boxes (no seeding from the last search).
+        var findBox = new TextBox { Text = string.Empty, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(findBox, Fr(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
         ApplyDialogTextBoxChrome(findBox);
 
         // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
-        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
+        var replaceFindBox = new TextBox { Text = string.Empty, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(replaceFindBox, Fr(FindReplaceDialogText.FindWhat));
         AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
         ApplyDialogTextBoxChrome(replaceFindBox);
@@ -14794,7 +14795,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key == Key.Enter)
             {
                 e.Handled = true;
-                if (OnReplaceTab()) DoReplace(); else DoFindNext();
+                // WPF: Find Next is the default button on both tabs (Enter never replaces).
+                DoFindNext();
             }
             else if (e.Key == Key.Escape)
             {
@@ -15480,8 +15482,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
         };
 
-        void AcceptReference()
+        void AcceptReference() => RunGuarded(AcceptReferenceAsync);
+
+        async Task AcceptReferenceAsync()
         {
+            // WPF GoToDialog.Accept validates before closing: an invalid reference shows
+            // "Reference is not valid." titled "Go To", keeps the dialog open and refocuses the box.
+            if (!_session.TryResolveReferenceRange(inputBox.Text ?? string.Empty, out _))
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    UiText.Get("GoTo_ReferenceIsNotValid"),
+                    UiText.Get("GoTo_GoTo"));
+                AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);
+                return;
+            }
+
             result = new GoToDialogResult(inputBox.Text ?? "", SpecialKind: null, SpecialOptions: null);
             dialog.Close();
         }
@@ -19480,12 +19496,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         new("Right", CellHAlign.Right),
         new("Justify", CellHAlign.Justify),
         new("Distributed", CellHAlign.Distributed),
+        // WPF lists every CellHAlign enum name (Fill is last); without it a Fill cell was rewritten to General.
+        new("Fill", CellHAlign.Fill),
     ];
 
     private static IReadOnlyList<FormatCellsNullableChoice<CellVAlign>> CreateFormatCellsVerticalAlignmentChoices() =>
     [
         new("Top", CellVAlign.Top),
-        new("Middle", CellVAlign.Center),
+        // WPF lists the CellVAlign enum names, so the middle entry reads "Center".
+        new("Center", CellVAlign.Center),
         new("Bottom", CellVAlign.Bottom),
         new("Justify", CellVAlign.Justify),
         new("Distributed", CellVAlign.Distributed),
@@ -21269,6 +21288,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             levels = SortDialogPlanner.NormalizeLevels(levels).ToList();
             selectedLevelIndex = Math.Clamp(selectedLevelIndex, 0, Math.Max(0, levels.Count - 1));
+            // WPF SortDialog.UpdateColumnChoices: "My data has headers" is unavailable for left-to-right sorts.
+            headersCheck.IsEnabled = !optionsState.LeftToRight;
             levelsGrid.Children.Clear();
             levelsGrid.RowDefinitions.Clear();
             levelsGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -21862,6 +21883,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(okButton, "SortOptionsOkButton");
         AutomationProperties.SetAutomationId(cancelButton, "SortOptionsCancelButton");
 
+        // WPF SortOptionsDialog.FocusInitialKeyboardTarget: the Case sensitive check box.
+        dialog.Opened += (_, _) => caseSensitiveBox.Focus();
         okButton.Click += (_, _) =>
         {
             // The editor text is authoritative: it names a catalog choice (by label or value) or
@@ -24975,6 +24998,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = 560 - WpfNoResizeClientFrameHeight,
             MinWidth = 480,
             MinHeight = 460,
+            CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -30404,6 +30428,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _statusText.Text = message;
         _statusText.Foreground = Brush(143, 74, 18);
         UpdateSaveButton();
+        // WPF reports these failures in an owned modal message box titled with the dialog; the
+        // status bar is hidden behind an open modal dialog, so surface it there as well.
+        ShowWarningOverOpenModalDialog(message);
     }
 
     private void ShowHelpIssue(string message)

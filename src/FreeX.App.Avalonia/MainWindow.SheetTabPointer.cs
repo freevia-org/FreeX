@@ -273,7 +273,8 @@ public sealed partial class MainWindow
         try
         {
             var targets = SheetDialogPlanner.BuildActivateSheetTargets(_session.Workbook);
-            var selected = SheetDialogPlanner.FindInitialActivateSheetTarget(targets, _session.ActiveSheet.Id);
+            // WPF ActivateSheetDialog preselects the first sheet in the list, not the active one.
+            var selected = targets.Count > 0 ? targets[0] : null;
             var list = new ListBox
             {
                 ItemsSource = targets,
