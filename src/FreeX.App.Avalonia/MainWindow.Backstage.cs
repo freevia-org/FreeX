@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.Shell;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
@@ -161,90 +162,12 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var commandPlan = WorkbookExportInteractionPlanner.CreateCommandPlan(
-            _session.Workbook,
-            _session.SelectedRange,
-            WorkbookExportPrintSurface.MacOs,
-            isBusy: _isSaving,
-            canChooseDestination: true);
-        var scopePlan = commandPlan.ScopePlan;
-        var exportPane = FreeXBackstageExportPanePlanner.Build(
-            FreeXBackstageExportPanePlanner.CreateRequest(
-                scopePlan.Scopes
-                    .Select(scope => new FreeXBackstageExportScopeOptionSource<WorkbookExportPrintScope>(
-                        scope.Scope,
-                        scope.IsAvailable,
-                        scope.IsDefault))
-                    .ToArray(),
-                scopePlan.SupportedOutputKinds,
-                scopePlan.DefaultOutputKind,
-                scopePlan.CanExport));
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("Backstage_Export_Title"),
-            Width = 400,
-            Height = 360,
-            MinWidth = 360,
-            MinHeight = 320,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "BackstageExportDialog");
-
-        var selectedScope = scopePlan.DefaultScope;
-        var selectedFormat = scopePlan.DefaultOutputKind;
-        var content = AvaloniaBackstageChrome.CreatePane(
-            BuildBackstagePaneSpec(
-                FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane),
-                dialog,
-                scope => selectedScope = FreeXBackstageExportPanePlanner.ToExternalScope<WorkbookExportPrintScope>(scope),
-                outputKind => selectedFormat = FreeXBackstageExportPanePlanner.ToExternalOutputKind<WorkbookExportPrintOutputKind>(outputKind)),
-            BackstageChromeStyle);
-
-        var exportButton = new Button
-        {
-            Content = UiText.Get("Backstage_Export_CreateButton"),
-            MinWidth = 96,
-            Padding = new Thickness(10, 4),
-            IsEnabled = scopePlan.CanExport,
-        };
-        AutomationProperties.SetAutomationId(exportButton, "BackstageExportCreateButton");
-        exportButton.Click += (_, _) => RunGuarded(async () =>
-        {
-            dialog.Close();
-            await ExportWorkbookFixedLayoutAsync(selectedScope, selectedFormat);
-        });
-
-        var cancelButton = new Button
-        {
-            Content = UiText.Get("Backstage_Export_CancelButton"),
-            MinWidth = 96,
-            Padding = new Thickness(10, 4),
-        };
-        AutomationProperties.SetAutomationId(cancelButton, "BackstageExportCancelButton");
-        cancelButton.Click += (_, _) => dialog.Close();
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Children = { cancelButton, exportButton },
-        };
-
-        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
-            new AvaloniaBackstageDialogLayoutSpec(content, buttonRow));
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                dialog.Close();
-                e.Handled = true;
-            }
-        };
-        dialog.Opened += (_, _) => exportButton.Focus();
-        await dialog.ShowDialog(this);
+        // WPF File > Export has no intermediate scope/format pane: it opens the PDF/XPS save dialog
+        // straight away, then the Export Options dialog (see ExportWorkbookFixedLayoutAsync).
+        await ExportWorkbookFixedLayoutAsync(
+            WorkbookExportPrintScope.ActiveSheet,
+            WorkbookExportPrintOutputKind.Pdf,
+            offerXpsInSavePicker: true);
     }
 
     private static IReadOnlyList<AvaloniaBackstageRadioOptionSpec> BuildBackstageExportScopeOptions(
@@ -308,38 +231,14 @@ public sealed partial class MainWindow
             LocalOsUserName: SafeEnvironment(() => Environment.UserName),
             LocalOsUserDomain: SafeEnvironment(() => Environment.UserDomainName)));
 
-        var dialog = new Window
-        {
-            Title = UiText.Get("Backstage_Account_Title"),
-            Width = 520,
-            Height = 540,
-            MinWidth = 460,
-            MinHeight = 460,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "BackstageAccountDialog");
-
-        var closeButton = CreateBackstageCloseButton("BackstageAccountCloseButton", dialog);
-        var content = AvaloniaBackstageChrome.CreatePane(
-            BuildBackstagePaneSpec(
-                FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(
-                    BuildBackstageAccountPanePlan(plan)),
-                dialog),
-            BackstageChromeStyle);
-
-        dialog.Content = AvaloniaBackstageChrome.CreateDialogLayout(
-            new AvaloniaBackstageDialogLayoutSpec(content, closeButton));
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                dialog.Close();
-                e.Handled = true;
-            }
-        };
-        dialog.Opened += (_, _) => closeButton.Focus();
-        await dialog.ShowDialog(this);
+        // WPF File > Account (SsAccountBtn_Click) is a plain information message box, not a pane or a
+        // bespoke dialog: the deferred "local account" title with the formatted account-pane body.
+        var panePlan = BuildBackstageAccountPanePlan(plan);
+        var message = DeferredCommandMessageResolver.Resolve(
+            DeferredCommandMessagePlanner.LocalAccountInfo(),
+            AvaloniaPlannerTextResources.Text,
+            body => FreeXBackstageAccountPanePlanner.FormatMessageBody(panePlan, body, UiText.Get));
+        await AvaloniaUserMessageDialog.ShowAsync(this, message.Body, message.Title, UserMessageIcon.Information);
     }
 
     private FreeXBackstageAccountPanePlan BuildBackstageAccountPanePlan(

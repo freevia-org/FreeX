@@ -212,8 +212,11 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
-                warningText.Text = result.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotDeleteName", name);
-                warningText.IsVisible = true;
+                // WPF DeleteButton_Click reports a failed delete in a "Named Range" warning box.
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    result.ErrorMessage ?? UiText.Get("NamedRange_DeleteFailedMessage"),
+                    UiText.Get("NamedRange_NamedRangeTitle"));
                 return;
             }
 
@@ -483,15 +486,6 @@ public sealed partial class MainWindow
         ApplyNamesTextBoxChrome(commentBox);
         AutomationProperties.SetAutomationId(commentBox, "DefineNameCommentBox");
 
-        var warningText = new TextBlock
-        {
-            FontSize = 12,
-            Foreground = Brush(180, 30, 30),
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-        };
-        AutomationProperties.SetAutomationId(warningText, "DefineNameWarningText");
-
         // WPF: DialogButtonRowFactory.Create(Accept, 72) -- OK then Cancel, 72px wide, 8px apart.
         var okButton = new Button { Content = UiText.Get("InsertLoc_OkButton"), IsDefault = true, MinWidth = 72 };
         ApplyNamesButtonChrome(okButton, minWidth: 72, isDefault: true);
@@ -500,46 +494,52 @@ public sealed partial class MainWindow
         ApplyNamesButtonChrome(cancelButton, minWidth: 72);
         AutomationProperties.SetAutomationId(cancelButton, "DefineNameCancelButton");
 
-        void ShowWarning(string message)
+        void FocusNameInput()
         {
-            warningText.Text = message;
-            warningText.IsVisible = true;
+            nameBox.Focus();
+            nameBox.SelectAll();
         }
 
-        void ValidateLive(object? _, EventArgs __)
+        void FocusRefersToInput()
         {
-            var draft = DefinedNameUiPolicy.CreateDraft(
-                nameBox.Text,
-                scopeOptions,
-                scopeBox.SelectedIndex,
-                refersToBox.Text,
-                commentBox.Text);
-            var validation = definedNames.ValidateDraft(draft, seed?.Identity);
-            if (!validation.Name.IsValid)
+            refersToBox.Focus();
+            refersToBox.SelectAll();
+        }
+
+        // WPF NameDefinitionDialog keeps OK enabled and reports problems in warning message boxes
+        // (titled with the dialog title): blank name, the scope-aware name rules, then the refers-to
+        // range format. The command itself then runs with "Named Range"-titled warnings.
+        okButton.Click += (_, _) => RunGuarded(async () =>
+        {
+            var name = (nameBox.Text ?? string.Empty).Trim();
+            var scopeIndex = scopeBox.SelectedIndex;
+            var scope = DefinedNameUiPolicy.ResolveScopeOption(scopeOptions, scopeIndex).Scope;
+            var dialogTitle = dialog.Title ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(name))
             {
-                ShowWarning(DescribeNameError(validation.Name.Error));
-                okButton.IsEnabled = false;
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog, UiText.Get("NameDefinition_PleaseEnterNameMessage"), dialogTitle);
+                FocusNameInput();
                 return;
             }
 
-            if (!validation.RefersTo.IsValid)
+            var nameValidation = definedNames.ValidateName(name, scope, seed?.Identity);
+            if (!nameValidation.IsValid)
             {
-                ShowWarning(DescribeRefersToError(validation.RefersTo.Error));
-                okButton.IsEnabled = false;
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog, DescribeNameError(nameValidation.Error), dialogTitle);
+                FocusNameInput();
                 return;
             }
 
-            warningText.IsVisible = false;
-            okButton.IsEnabled = true;
-        }
+            if (!definedNames.ValidateRefersTo((refersToBox.Text ?? string.Empty).Trim()).IsValid)
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog, UiText.Get("NameDefinition_InvalidRangeFormatMessage"), dialogTitle);
+                FocusRefersToInput();
+                return;
+            }
 
-        nameBox.GetObservable(TextBox.TextProperty).Subscribe(new SimpleObserver<string?>(_ => ValidateLive(null, EventArgs.Empty)));
-        refersToBox.GetObservable(TextBox.TextProperty).Subscribe(new SimpleObserver<string?>(_ => ValidateLive(null, EventArgs.Empty)));
-        scopeBox.SelectionChanged += ValidateLive;
-        ValidateLive(null, EventArgs.Empty);
-
-        okButton.Click += (_, _) =>
-        {
             var draft = DefinedNameUiPolicy.CreateDraft(
                 nameBox.Text,
                 scopeOptions,
@@ -547,15 +547,24 @@ public sealed partial class MainWindow
                 refersToBox.Text,
                 commentBox.Text);
             var plan = definedNames.PlanSave(draft, seed?.Identity);
+            var namedRangeTitle = UiText.Get("NamedRange_NamedRangeTitle");
             if (!plan.Validation.Name.IsValid)
             {
-                ShowWarning(DescribeNameError(plan.Validation.Name.Error));
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    plan.Validation.Name.Error == DefinedNameError.Duplicate
+                        ? UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", plan.Draft.Name)
+                        : DescribeNameError(plan.Validation.Name.Error),
+                    namedRangeTitle);
+                FocusNameInput();
                 return;
             }
 
             if (!plan.Validation.RefersTo.IsValid)
             {
-                ShowWarning(DescribeRefersToError(plan.Validation.RefersTo.Error));
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog, DescribeRefersToError(plan.Validation.RefersTo.Error), namedRangeTitle);
+                FocusRefersToInput();
                 return;
             }
 
@@ -577,7 +586,11 @@ public sealed partial class MainWindow
             var result = _session.ExecuteReviewCommand(plan.Command!);
             if (!result.Success)
             {
-                ShowWarning(result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDefineName"));
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    result.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"),
+                    namedRangeTitle);
+                FocusNameInput();
                 return;
             }
 
@@ -585,7 +598,7 @@ public sealed partial class MainWindow
                 ? UiText.Format("InsertLoc_UpdatedName", plan.Draft.Name)
                 : UiText.Format("InsertLoc_DefinedName", plan.Draft.Name));
             dialog.Close();
-        };
+        });
         cancelButton.Click += (_, _) => dialog.Close();
 
         // WPF CreateContent: Grid { Margin = 16 } with an 82 / * / Auto column split; Name, Scope and
@@ -612,7 +625,7 @@ public sealed partial class MainWindow
         dialog.Content = new StackPanel
         {
             Margin = new Thickness(16),
-            Children = { form, warningText, buttonRow },
+            Children = { form, buttonRow },
         };
         // WPF: Loaded focuses the Name box with its text selected.
         dialog.Opened += (_, _) =>

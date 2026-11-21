@@ -173,9 +173,15 @@ public sealed class ConditionalFormatDedupSourceTests
 
         factorySource.Should().Contain("ConditionalFormatDialogCatalog.DialogFamilyForRuleType(ruleType)");
         factorySource.Should().NotContain("\"Greater Than\" or \"Less Than\"");
-        avaloniaSource.Should().Contain("ConditionalFormatDialogCatalog.RuleEditorTypeOptions");
-        avaloniaSource.Should().Contain("ConditionalFormatDialogCatalog.RuleEditorOperatorOptions");
-        avaloniaSource.Should().Contain("UiText.Get(option.LabelKey)");
+        var ruleEditorSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ConditionalFormatRuleEditor.cs"));
+        // The Avalonia editor is a port of the WPF dialog and shares its presentation-owned rule identity.
+        ruleEditorSource.Should().Contain("ConditionalFormatDialogCatalog.RuleShellOptions");
+        ruleEditorSource.Should().Contain("ConditionalFormatDialogCatalog.CellValueOperatorOptions");
+        ruleEditorSource.Should().Contain("UiText.Get(option.LabelKey)");
         avaloniaSource.Should().NotContain("ConditionalFormatRuleTypeChoices");
         avaloniaSource.Should().NotContain("ConditionalFormatOperatorChoices");
     }

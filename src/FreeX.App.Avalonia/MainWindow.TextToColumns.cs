@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.TextToColumns;
@@ -143,7 +144,7 @@ public sealed partial class MainWindow
         ApplyDataOpsCheckBoxChrome(otherBox);
         AutomationProperties.SetAutomationId(otherBox, "TextToColumnsOtherBox");
         // WPF: _customBox Width = 48, Margin = (6, 0, 0, 0) beside the "Other:" check box.
-        var otherCharBox = new TextBox { Width = 48, MaxLength = 1 };
+        var otherCharBox = new TextBox { Width = 48 };
         ApplyDataOpsTextBoxChrome(otherCharBox);
         AutomationProperties.SetAutomationId(otherCharBox, "TextToColumnsOtherCharBox");
 
@@ -162,7 +163,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(qualifierBox, "TextToColumnsQualifierBox");
 
         // WPF: _fixedWidthBreaksBox.Width = 160.
-        var breaksBox = new TextBox { PlaceholderText = UiText.Get("TableLoc_TtcBreaksPlaceholder"), Width = 160 };
+        var breaksBox = new TextBox { Text = "10,20", Width = 160 };
         ApplyDataOpsTextBoxChrome(breaksBox);
         AutomationProperties.SetAutomationId(breaksBox, "TextToColumnsBreaksBox");
 
@@ -283,7 +284,6 @@ public sealed partial class MainWindow
         // Per-output-column format hints, keyed by output column index. Empty (General) by default.
         var columnFormats = new Dictionary<int, TextToColumnsColumnFormat>();
         var previewColumnCount = 1;
-        var overwriteConfirmed = false;
         var suppressColumnFormatSync = false;
         int? dragBreakIndex = null;
 
@@ -324,7 +324,6 @@ public sealed partial class MainWindow
 
         void RefreshPreview()
         {
-            overwriteConfirmed = false;
             warningText.IsVisible = false;
             RefreshFixedWidthRuler();
 
@@ -546,7 +545,6 @@ public sealed partial class MainWindow
         otherCharBox.TextChanged += (_, _) => RefreshPreview();
         qualifierBox.SelectionChanged += (_, _) => RefreshPreview();
         breaksBox.TextChanged += (_, _) => RefreshPreview();
-        destinationBox.TextChanged += (_, _) => overwriteConfirmed = false;
         formatColumnBox.SelectionChanged += (_, _) => SyncFormatBoxToSelectedColumn();
         formatGeneralButton.IsCheckedChanged += (_, _) =>
         {
@@ -639,6 +637,92 @@ public sealed partial class MainWindow
             return ReferenceEquals(dialog.FocusManager?.GetFocusedElement(), target);
         }
 
+        // WPF reports every validation failure in an owned modal warning titled with the dialog, then moves
+        // the wizard to the step that owns the field and focuses it (TextToColumnsDialog.ShowValidation).
+        async Task ShowValidationAsync(TextToColumnsDialogValidationIssue issue)
+        {
+            var presentation = TextToColumnsDialogPlanner.DescribeValidationIssue(issue);
+            try
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    presentation.Message.Resolve(UiText.Get, UiText.Format),
+                    dialog.Title ?? string.Empty);
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            if (!dialog.IsVisible)
+                return;
+
+            TextBox focusBox;
+            switch (presentation.FocusTarget)
+            {
+                case TextToColumnsDialogFocusTarget.FixedWidthBreaks:
+                    currentStep = 2;
+                    fixedWidthButton.IsChecked = true;
+                    focusBox = breaksBox;
+                    break;
+                case TextToColumnsDialogFocusTarget.DelimiterSelection:
+                    currentStep = 2;
+                    delimitedButton.IsChecked = true;
+                    SyncWizardNavigation();
+                    tabBox.Focus();
+                    return;
+                case TextToColumnsDialogFocusTarget.CustomDelimiter:
+                    currentStep = 2;
+                    delimitedButton.IsChecked = true;
+                    otherBox.IsChecked = true;
+                    focusBox = otherCharBox;
+                    break;
+                case TextToColumnsDialogFocusTarget.DecimalSeparator:
+                    currentStep = 3;
+                    focusBox = decimalSeparatorBox;
+                    break;
+                case TextToColumnsDialogFocusTarget.ThousandsSeparator:
+                    currentStep = 3;
+                    focusBox = thousandsSeparatorBox;
+                    break;
+                default:
+                    currentStep = 3;
+                    focusBox = destinationBox;
+                    break;
+            }
+
+            SyncWizardNavigation();
+            dialog.UpdateLayout();
+            focusBox.Focus();
+            focusBox.SelectAll();
+        }
+
+        // WPF closes the wizard first and then asks "There's already data here. Do you want to replace it?";
+        // answering No leaves the sheet untouched.
+        async Task ConfirmOverwriteAndApplyAsync(
+            SheetId sheetId,
+            IReadOnlyList<(CellAddress Address, Cell NewCell)> edits)
+        {
+            UserMessageResult answer;
+            try
+            {
+                answer = await AvaloniaUserMessageDialog.ShowMessageAsync(
+                    dialog,
+                    new UserMessageRequest(
+                        UiText.Get("MainWindowMessage_TextToColumnsReplaceDataPrompt"),
+                        UiText.Get("MainWindowMessage_TextToColumnsTitle"),
+                        UserMessageButtons.YesNo,
+                        UserMessageIcon.Question));
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            if (answer != UserMessageResult.Yes || ApplyTextToColumnsEdits(sheetId, edits, range))
+                dialog.Close();
+        }
+
         void ApplyWizardStep()
         {
             warningText.IsVisible = false;
@@ -648,42 +732,25 @@ public sealed partial class MainWindow
                     range.Start,
                     out var destination))
             {
-                currentStep = 3;
-                SyncWizardNavigation();
-                dialog.UpdateLayout();
-                warningText.Text = TextToColumnsDialogPlanner
-                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidDestination)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
-                destinationBox.Focus();
-                destinationBox.SelectAll();
+                RunGuarded(() => ShowValidationAsync(TextToColumnsDialogValidationIssue.InvalidDestination));
                 return;
             }
 
             if (!TextToColumnsDialogPlanner.TryBuildOptions(BuildState(), out var options, out var optionsIssue))
             {
-                warningText.Text = TextToColumnsDialogPlanner
-                    .DescribeValidationIssue(optionsIssue)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
+                RunGuarded(() => ShowValidationAsync(optionsIssue));
                 return;
             }
 
             if (!TextToColumnsDialogPlanner.TryParseAdvancedSeparator(decimalSeparatorBox.Text, out var decimalSeparator))
             {
-                warningText.Text = TextToColumnsDialogPlanner
-                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidDecimalSeparator)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
+                RunGuarded(() => ShowValidationAsync(TextToColumnsDialogValidationIssue.InvalidDecimalSeparator));
                 return;
             }
 
             if (!TextToColumnsDialogPlanner.TryParseAdvancedSeparator(thousandsSeparatorBox.Text, out var thousandsSeparator))
             {
-                warningText.Text = TextToColumnsDialogPlanner
-                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.InvalidThousandsSeparator)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
+                RunGuarded(() => ShowValidationAsync(TextToColumnsDialogValidationIssue.InvalidThousandsSeparator));
                 return;
             }
 
@@ -701,19 +768,14 @@ public sealed partial class MainWindow
                 advancedOptions);
             if (edits.Count == 0)
             {
-                warningText.Text = TextToColumnsDialogPlanner
-                    .DescribeValidationIssue(TextToColumnsDialogValidationIssue.NoColumnsToWrite)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
+                RunGuarded(() => ShowValidationAsync(TextToColumnsDialogValidationIssue.NoColumnsToWrite));
                 return;
             }
 
             var overwrites = TextToColumnsApplyPlanner.FindOverwriteTargets(sheet, edits, range);
-            if (overwrites.Count > 0 && !overwriteConfirmed)
+            if (overwrites.Count > 0)
             {
-                overwriteConfirmed = true;
-                warningText.Text = UiText.Format("TableLoc_TtcOverwriteWarning", overwrites.Count);
-                warningText.IsVisible = true;
+                RunGuarded(() => ConfirmOverwriteAndApplyAsync(sheet.Id, edits));
                 return;
             }
 

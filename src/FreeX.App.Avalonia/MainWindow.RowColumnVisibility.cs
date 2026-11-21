@@ -288,8 +288,8 @@ public sealed partial class MainWindow
 
         var current = _session.GetSelectedRowHeight();
         var value = await ShowDimensionInputDialogAsync(
-            UiText.Get("RowColumn_RowHeightDialogTitle"),
-            UiText.Get("RowColumn_RowHeightDialogPrompt"),
+            UiText.Get("Remaining_RowHeight"),
+            UiText.Get("Remaining_RowHeight2"),
             current,
             WorksheetDimensionKind.RowHeight,
             automationId: "RowHeightValueBox");
@@ -314,8 +314,8 @@ public sealed partial class MainWindow
 
         var current = _session.GetSelectedColumnWidth();
         var value = await ShowDimensionInputDialogAsync(
-            UiText.Get("RowColumn_ColumnWidthDialogTitle"),
-            UiText.Get("RowColumn_ColumnWidthDialogPrompt"),
+            UiText.Get("Remaining_ColumnWidth"),
+            UiText.Get("Remaining_ColumnWidth2"),
             current,
             WorksheetDimensionKind.ColumnWidth,
             automationId: "ColumnWidthValueBox");
@@ -393,12 +393,12 @@ public sealed partial class MainWindow
 
         var valueBox = new TextBox
         {
-            Text = current.ToString("0.##", CultureInfo.CurrentCulture),
+            Text = current.ToString(CultureInfo.InvariantCulture),
             HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Stretch,
             Margin = new Thickness(0, 0, 0, 12),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(valueBox, RowColumnDialogChromeStyle);
-        AutomationProperties.SetName(valueBox, prompt);
+        AutomationProperties.SetName(valueBox, title);
         AutomationProperties.SetAutomationId(valueBox, automationId);
 
         var validationText = new TextBlock();
@@ -419,10 +419,11 @@ public sealed partial class MainWindow
                     valueBox.Text,
                     out var parsed))
             {
-                validationText.Text = prompt;
-                validationText.IsVisible = true;
-                valueBox.Focus();
-                valueBox.SelectAll();
+                // WPF: an owned modal warning titled with the dialog, then focus back in the box.
+                var error = UiText.Get(dimensionKind == WorksheetDimensionKind.RowHeight
+                    ? "Remaining_EnterRowHeightFrom0To4095"
+                    : "Remaining_EnterColumnWidthFrom0To255");
+                RunGuarded(() => ShowDialogWarningAndFocusAsync(dialog, error, valueBox));
                 return;
             }
 

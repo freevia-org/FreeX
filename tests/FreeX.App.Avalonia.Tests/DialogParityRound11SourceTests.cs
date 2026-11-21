@@ -33,8 +33,11 @@ public sealed class DialogParityRound11SourceTests
         source.Should().Contain("ConfirmProtectionPasswordBox");
         source.Should().NotContain("ProtectSheetConfirmBox");
         source.Should().NotContain("ProtectWorkbookConfirmBox");
-        source.Should().NotContain("ProtectWorkbookStructureBox");
-        source.Should().NotContain("ProtectWorkbookWindowsBox");
+        // Protect Workbook offers Excel's Structure (checked) / Windows (unchecked) toggles, as in WPF.
+        source.Should().Contain("ProtectWorkbookStructureBox");
+        source.Should().Contain("ProtectWorkbookWindowsBox");
+        source.Should().Contain("ProtectStructure = structureBox.IsChecked == true,");
+        source.Should().Contain("ProtectWindows = windowsBox.IsChecked == true,");
     }
 
     [Fact]
@@ -147,7 +150,9 @@ public sealed class DialogParityRound11SourceTests
         source.Should().Contain("Remaining_EnterThresholdValue");
         source.Should().Contain("ConditionalFormatThresholdDialogPlanner.TryCreateResult");
         source.Should().Contain("UiText.Get(\"Remaining_NewFormattingRule\")");
-        source.Should().Contain("startRuleType: CfRuleType.DataBar");
+        // WPF's Manage Rules "New" opens the New Formatting Rule shell on the Data Bar rule over the plan's range.
+        source.Should().Contain("ConditionalFormatDialogCatalog.DataBarRule,");
+        source.Should().Contain("scopePlan.DefaultNewRuleRange");
         source.Should().Contain("Reload(selectIndex: deletedIndex)");
     }
 
