@@ -155,7 +155,10 @@ public partial class MainWindow
             ExportWorkbookAsync: () => RunBackstageCommand(() => ExportPdfButton_Click(this, new RoutedEventArgs())),
             CloseWorkbookAsync: () => RunBackstageCommand(Close),
             AccountAsync: () => RunBackstageCommand(() => SsAccountBtn_Click(this, new RoutedEventArgs())),
-            OptionsAsync: () => RunBackstageCommand(() => SsOptionsBtn_Click(this, new RoutedEventArgs())));
+            OptionsAsync: () => RunBackstageCommand(() => SsOptionsBtn_Click(this, new RoutedEventArgs())))
+        {
+            FeedbackAsync = () => RunBackstageCommand(() => FeedbackBtn_Click(this, new RoutedEventArgs())),
+        };
 
     private static Task RunBackstageCommand(Action action)
     {

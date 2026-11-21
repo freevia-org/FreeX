@@ -9,7 +9,14 @@ public sealed record FreeXBackstageCommandHandlers(
     Func<Task> ExportWorkbookAsync,
     Func<Task> CloseWorkbookAsync,
     Func<Task> AccountAsync,
-    Func<Task> OptionsAsync);
+    Func<Task> OptionsAsync)
+{
+    /// <summary>
+    /// File &gt; Feedback (Excel's bottom-rail "Feedback" entry). Init-only rather than a positional
+    /// parameter so prebuilt callers that construct the record with the original nine arguments keep binding.
+    /// </summary>
+    public Func<Task>? FeedbackAsync { get; init; }
+}
 
 /// <summary>
 /// Shared dispatcher for FreeX Backstage command workflows. Platform shells provide concrete effects;
@@ -49,6 +56,7 @@ public static class FreeXBackstageCommandWorkflowExecutor
             FreeXBackstageCommandWorkflowKind.CloseWorkbook => handlers.CloseWorkbookAsync,
             FreeXBackstageCommandWorkflowKind.Account => handlers.AccountAsync,
             FreeXBackstageCommandWorkflowKind.Options => handlers.OptionsAsync,
+            FreeXBackstageCommandWorkflowKind.Feedback => handlers.FeedbackAsync,
             _ => throw new InvalidOperationException($"Unsupported Backstage command workflow '{workflow}'.")
         };
 }

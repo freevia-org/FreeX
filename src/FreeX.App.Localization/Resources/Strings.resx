@@ -20174,6 +20174,18 @@ and {0} more.</value>
   <data name="Backstage_Home_NoRecentWorkbooks" xml:space="preserve">
     <value>(No recent workbooks)</value>
   </data>
+  <data name="Backstage_Home_NoMatchingWorkbooks" xml:space="preserve">
+    <value>(No matching workbooks)</value>
+  </data>
+  <data name="Backstage_Home_NoPinnedWorkbooks" xml:space="preserve">
+    <value>Pin workbooks you want to find easily later. Hover over a workbook in the Recent list and click the pin icon.</value>
+  </data>
+  <data name="Backstage_Feedback_AutomationHelpText" xml:space="preserve">
+    <value>Open the FreeX issue form with version and platform details prefilled.</value>
+  </data>
+  <data name="Backstage_Feedback_TooltipDescription" xml:space="preserve">
+    <value>Tell the FreeX team what is working and what is not. Opens the issue form in your browser.</value>
+  </data>
   <data name="Backstage_LiveInfo_WorkbookLabel" xml:space="preserve">
     <value>Workbook</value>
   </data>

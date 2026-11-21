@@ -15,5 +15,6 @@ public enum BackstageIconKind
     Save,
     Print,
     View,
-    WindowClose
+    WindowClose,
+    Feedback
 }

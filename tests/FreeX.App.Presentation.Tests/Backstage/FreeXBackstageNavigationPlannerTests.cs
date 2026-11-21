@@ -15,16 +15,17 @@ public sealed class FreeXBackstageNavigationPlannerTests
             "MainWindow_Text_Home",
             "Common_New",
             "MainWindow_Text_Open",
-            "MainWindow_Text_Share",
             "|",
             "MainWindow_Text_Info",
             "MainWindow_Text_Save",
             "MainWindow_Text_SaveAs",
             "MainWindow_Text_Print",
+            "MainWindow_Text_Share",
             "MainWindow_Text_Export",
             "MainWindow_Text_Close",
             "|",
             "MainWindow_Text_Account",
+            "MainWindow_Content_Feedback",
             "MainWindow_Text_Options");
 
         entries.Where(entry => entry.Kind == FreeXBackstageNavigationEntryKind.Pane)
@@ -35,13 +36,36 @@ public sealed class FreeXBackstageNavigationPlannerTests
             .Select(entry => entry.Command)
             .Should().Equal(
                 FreeXBackstageCommandId.New,
-                FreeXBackstageCommandId.Share,
                 FreeXBackstageCommandId.Save,
                 FreeXBackstageCommandId.SaveAs,
+                FreeXBackstageCommandId.Share,
                 FreeXBackstageCommandId.Export,
                 FreeXBackstageCommandId.Close,
                 FreeXBackstageCommandId.Account,
+                FreeXBackstageCommandId.Feedback,
                 FreeXBackstageCommandId.Options);
+    }
+
+    [Fact]
+    public void Build_PlacesFeedbackBetweenAccountAndOptionsInTheBottomRail()
+    {
+        var entries = FreeXBackstageNavigationPlanner.Build();
+
+        var feedback = entries.Single(entry => entry.Command == FreeXBackstageCommandId.Feedback);
+        feedback.DockBottom.Should().BeTrue();
+        feedback.AutomationId.Should().Be("BackstageFeedbackButton");
+        feedback.KeyTip.Should().Be("K");
+        feedback.Icon.Should().Be(BackstageIconKind.Feedback);
+        feedback.AutomationNameKey.Should().Be("MainWindow_AutomationName_Feedback");
+        feedback.TooltipTitleKey.Should().Be("MainWindow_TooltipTitle_Feedback");
+
+        var bottom = entries.Where(entry => entry.DockBottom && entry.Kind == FreeXBackstageNavigationEntryKind.Command)
+            .Select(entry => entry.Command)
+            .ToArray();
+        bottom.Should().Equal(
+            FreeXBackstageCommandId.Account,
+            FreeXBackstageCommandId.Feedback,
+            FreeXBackstageCommandId.Options);
     }
 
     [Fact]

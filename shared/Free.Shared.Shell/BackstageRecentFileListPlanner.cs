@@ -124,7 +124,7 @@ public sealed class RecentFileViewModel
         FileName = FilePathPolicy.FileNameOrPath(entry.Path);
         Directory = System.IO.Path.GetDirectoryName(entry.Path) ?? "";
         DisplayDirectory = CompactDirectoryForDisplay(Directory);
-        LastOpenedText = FormatDate(entry.LastOpened);
+        LastOpenedText = BackstageRecentDateFormatter.Format(entry.LastOpened, DateTimeOffset.Now);
         IsPinned = entry.IsPinned;
         OpenAutomationName = IsPinned
             ? BackstageStrings.Current.Format("Backstage_Recent_OpenPinnedFileAutomationName", FileName)
@@ -167,11 +167,19 @@ public sealed class RecentFileViewModel
         var prefixSeparator = prefix.EndsWith(separator) ? string.Empty : separator.ToString();
         return $"{prefix}{prefixSeparator}\u2026{separator}{tail}";
     }
+}
 
-    private static string FormatDate(DateTimeOffset timestamp)
+/// <summary>
+/// Relative "date modified" text for Backstage Home/Open rows (just now, today at, yesterday at, weekday
+/// at, then a calendar date). Takes the clock as a parameter so both hosts and the tests share one
+/// deterministic implementation.
+/// </summary>
+public static class BackstageRecentDateFormatter
+{
+    public static string Format(DateTimeOffset timestamp, DateTimeOffset now)
     {
         var localTimestamp = timestamp.ToLocalTime();
-        var now = DateTimeOffset.Now;
+        now = now.ToLocalTime();
         var diff = now - localTimestamp;
         if (diff.TotalHours < 1)
             return BackstageStrings.Current.Get("Backstage_Recent_LastOpenedJustNow");

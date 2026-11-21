@@ -457,21 +457,25 @@ public sealed partial class MainWindow
             var entries = _liveBackstageShowingPinnedList ? plan.PinnedItems : plan.RecentItems;
 
             fileList.Children.Clear();
-            if (entries.Count == 0)
+            // Shared policy shared with the WPF Home pane: Recent explains an empty history, Pinned explains
+            // how to pin (as Excel does), and an active search that hides every row says "no matches".
+            var emptyStateKey = FreeXBackstageHomePanePlanner.ResolveEmptyStateKey(
+                _liveBackstageShowingPinnedList ? FreeXBackstageRecentTabId.Pinned : FreeXBackstageRecentTabId.Recent,
+                !string.IsNullOrWhiteSpace(_liveBackstageRecentFilter),
+                entries.Count);
+            if (emptyStateKey is not null)
             {
-                // WPF leaves an empty Pinned list blank; only the Recent list explains itself.
-                if (!_liveBackstageShowingPinnedList)
+                var emptyState = new TextBlock
                 {
-                    fileList.Children.Add(new TextBlock
-                    {
-                        Text = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
-                        FontFamily = FormulaBarFontFamily,
-                        FontSize = 13,
-                        Foreground = LiveBackstageMutedInk,
-                        Margin = new Thickness(0, 14, 0, 0),
-                    });
-                }
-
+                    Text = UiText.Get(emptyStateKey),
+                    FontFamily = FormulaBarFontFamily,
+                    FontSize = 13,
+                    Foreground = LiveBackstageMutedInk,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 14, 0, 0),
+                };
+                AutomationProperties.SetAutomationId(emptyState, "BackstageHomeEmptyState");
+                fileList.Children.Add(emptyState);
                 return;
             }
 

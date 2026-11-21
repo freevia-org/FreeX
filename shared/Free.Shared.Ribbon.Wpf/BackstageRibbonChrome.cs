@@ -38,6 +38,7 @@ public static class BackstageRibbonChrome
             BackstageIconKind.Print => RibbonCommandIconKind.Print,
             BackstageIconKind.View => RibbonCommandIconKind.View,
             BackstageIconKind.WindowClose => RibbonCommandIconKind.WindowClose,
+            BackstageIconKind.Feedback => RibbonCommandIconKind.Comment,
             _ => RibbonCommandIconKind.Generic
         };
 }

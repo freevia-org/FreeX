@@ -66,6 +66,7 @@ public static class FreeXBackstageFramePlanner
             FreeXBackstageCommandId.Close => "freex.backstage.command.close",
             FreeXBackstageCommandId.Account => "freex.backstage.command.account",
             FreeXBackstageCommandId.Options => "freex.backstage.command.options",
+            FreeXBackstageCommandId.Feedback => "freex.backstage.command.feedback",
             _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
         };
 
