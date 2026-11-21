@@ -1251,6 +1251,7 @@ internal sealed class PagedLayoutSession
             document, segment.Page, runningHeader, runningFooter);
         top += topInsetDip;
         bottom += bottomInsetDip;
+        PaginationEngine.ApplyFirstPageHeaderInset(RenderedBlock(segment.Start), document, segment.Page, topInsetDip);
         var pageSize = new Size(pageWidth, pageHeight);
         var padding = new Thickness(left, top, right, bottom);
         var fontFamily = new System.Windows.Media.FontFamily(document.DefaultRun.FontFamily ?? "Calibri");

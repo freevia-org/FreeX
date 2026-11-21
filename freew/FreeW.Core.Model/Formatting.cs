@@ -273,6 +273,13 @@ public sealed record RunFormatting
     public string? FontFamily { get; init; }
 
     /// <summary>
+    /// Complex-script bold (<c>rPr/w:bCs</c>): Word bolds right-to-left (Arabic/Hebrew) text from this flag
+    /// rather than from <c>w:b</c>. Renderers fold it into the effective bold of complex-script text only
+    /// (<c>DocumentRunFormattingResolver.ProjectForScript</c>); a plain <c>w:b</c> is unchanged.
+    /// </summary>
+    public bool ComplexScriptBold { get; init; }
+
+    /// <summary>
     /// East Asian script typeface for this run (<c>rPr/w:rFonts/@w:eastAsia</c>), e.g. <c>"MS Gothic"</c>.
     /// Independent of <see cref="FontFamily"/> (which maps to <c>@w:ascii</c>/<c>@w:hAnsi</c>) — Word stores
     /// the three <c>w:rFonts</c> typeface attributes (ascii/eastAsia/cs) separately because a single run

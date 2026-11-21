@@ -587,6 +587,7 @@ internal static class PaginationEngine
             document, segment.Page, runningHeader, runningFooter);
         top += topInsetDip;
         bottom += bottomInsetDip;
+        ApplyFirstPageHeaderInset(scratchBlocks[segment.Start], document, segment.Page, topInsetDip);
 
         // Mirror PrintLayout.BuildPaginatedDocument's footnote body-reserve: when the model has
         // footnotes, PrintLayout shrinks the body's usable height by the estimated rendered height
@@ -1564,6 +1565,86 @@ internal static class PaginationEngine
     }
 
     internal readonly record struct PageSegment(int Start, int End, PageSettings Page);
+
+    /// <summary>
+    /// A section whose first page carries its own (taller) header -- w:titlePg with a first-page header of
+    /// several lines, the usual chapter-opening page -- starts its body lower on that page than on the
+    /// rest. A segment's flow has a single page box, so the extra first-page inset is added as leading
+    /// space on the segment's first block, which lies at the top of that first page.
+    /// </summary>
+    internal static void ApplyFirstPageHeaderInset(
+        System.Windows.Documents.Block firstBlock,
+        TextDocument document,
+        PageSettings page,
+        double runningTopInsetDip)
+    {
+        var extraDip = ResolveFirstPageExtraTopInsetDip(document, page, runningTopInsetDip);
+        var target = firstBlock;
+        if (target is System.Windows.Documents.Section { Blocks.Count: > 0 } section)
+            target = section.Blocks.FirstBlock;
+
+        // WPF drops a first block's top margin at the head of a page, so the space is carried as padding
+        // (inside the block). A table has no padding; a leading table keeps the running inset.
+        if (target is not System.Windows.Documents.Paragraph paragraph)
+            return;
+
+        // The same scratch block can be laid out again (an incremental re-layout), so the extra space is
+        // tracked per block and swapped rather than accumulated.
+        var applied = AppliedFirstPageInsets.TryGetValue(paragraph, out var box) ? box.Value : 0.0;
+        if (extraDip <= 0.5)
+            extraDip = 0;
+        if (Math.Abs(applied - extraDip) < 0.01)
+            return;
+
+        paragraph.Padding = new Thickness(
+            paragraph.Padding.Left,
+            Math.Max(0, paragraph.Padding.Top - applied + extraDip),
+            paragraph.Padding.Right,
+            paragraph.Padding.Bottom);
+        AppliedFirstPageInsets.Remove(paragraph);
+        if (extraDip > 0)
+            AppliedFirstPageInsets.Add(paragraph, new System.Runtime.CompilerServices.StrongBox<double>(extraDip));
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
+        System.Windows.Documents.Block, System.Runtime.CompilerServices.StrongBox<double>> AppliedFirstPageInsets = new();
+
+    internal static double ResolveFirstPageExtraTopInsetDip(
+        TextDocument document,
+        PageSettings page,
+        double runningTopInsetDip)
+    {
+        if (!page.DifferentFirstPage)
+            return 0;
+
+        var sections = document.Sections;
+        var index = -1;
+        for (var i = 0; i < sections.Count; i++)
+        {
+            if (ReferenceEquals(sections[i].Page, page))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        // Only a section that begins on a fresh page opens with its first-page header; a continuous
+        // section starts mid-page under the previous page's header.
+        if (index < 0 || (index > 0 && !IsPageTypeSectionBreak(sections[index - 1])))
+            return 0;
+
+        HeaderFooter? firstHeader = null;
+        for (var i = index; i >= 0 && firstHeader is null; i--)
+            firstHeader = sections[i].HeadersFooters.FirstHeader;
+        if (firstHeader is null || !HeaderFooterBandRenderer.HasLayoutContent(firstHeader))
+            return 0;
+
+        var (firstTopInsetDip, _) = HeaderFooterBandRenderer.ResolveBodyInsetsDip(
+            document, page, firstHeader, null, includeEmptyParagraphs: true);
+        var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
+        firstTopInsetDip = Math.Min(firstTopInsetDip, Math.Max(0, contentHeightDip - 72));
+        return Math.Max(0, firstTopInsetDip - runningTopInsetDip);
+    }
 
     internal static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {

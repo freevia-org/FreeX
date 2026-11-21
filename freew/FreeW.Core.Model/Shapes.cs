@@ -496,6 +496,12 @@ public sealed class Shape
     public string? OutlineDash { get; set; }
 
     /// <summary>
+    /// Compound line type of the outline (<c>a:ln/@cmpd</c>): <c>"dbl"</c> (two parallel lines),
+    /// <c>"thickThin"</c>, <c>"thinThick"</c> or <c>"tri"</c>. Null (or <c>"sng"</c>) is a single stroke.
+    /// </summary>
+    public string? OutlineCompound { get; set; }
+
+    /// <summary>
     /// Accessibility description (maps onto <c>wp:docPr/@descr</c>). Null means no alt text.
     /// Mirrors <see cref="InlineImage.AltText"/>.
     /// </summary>

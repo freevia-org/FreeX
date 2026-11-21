@@ -5434,6 +5434,8 @@ public static partial class DocxWriter
             var lnAttrs = new List<object>();
             if (shape.OutlineWidthPt > 0)
                 lnAttrs.Add(new XAttribute("w", (long)(shape.OutlineWidthPt * 12700)));
+            if (shape.OutlineCompound is { Length: > 0 } compound)
+                lnAttrs.Add(new XAttribute("cmpd", compound));
             var ln = new XElement(A + "ln", lnAttrs);
             ln.Add(new XElement(A + "solidFill",
                 new XElement(A + "srgbClr", new XAttribute("val", outlineColor.TrimStart('#')))));
@@ -8548,6 +8550,8 @@ public static partial class DocxWriter
         if (BuildRunFontsElement(f) is { } rFontsEl)
             rPr.Add(rFontsEl);
         AddRunToggle(rPr, "b", f.Bold, f, RunToggleOverrides.Bold);
+        if (f.ComplexScriptBold)
+            rPr.Add(new XElement(W + "bCs"));
         AddRunToggle(rPr, "i", f.Italic, f, RunToggleOverrides.Italic);
         AddRunToggle(rPr, "caps", f.AllCaps, f, RunToggleOverrides.AllCaps);
         AddRunToggle(rPr, "smallCaps", f.SmallCaps, f, RunToggleOverrides.SmallCaps);
@@ -8911,6 +8915,8 @@ public static partial class DocxWriter
         PageNumberFormat.UpperRoman => "upperRoman",
         PageNumberFormat.LowerLetter => "lowerLetter",
         PageNumberFormat.UpperLetter => "upperLetter",
+        PageNumberFormat.ArabicAbjad => "arabicAbjad",
+        PageNumberFormat.ArabicAlpha => "arabicAlpha",
         _ => "decimal"
     };
 
@@ -10462,6 +10468,8 @@ public static partial class DocxWriter
             rPr.Add(rFontsEl);
         if (f.Bold)
             rPr.Add(new XElement(W + "b"));
+        if (f.ComplexScriptBold)
+            rPr.Add(new XElement(W + "bCs"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
         if (f.AllCaps)

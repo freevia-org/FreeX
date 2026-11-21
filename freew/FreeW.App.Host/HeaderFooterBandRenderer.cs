@@ -99,7 +99,8 @@ internal static class HeaderFooterBandRenderer
         TextDocument model,
         PageSettings page,
         HeaderFooter? header,
-        HeaderFooter? footer)
+        HeaderFooter? footer,
+        bool includeEmptyParagraphs = false)
     {
         var (contentWidthDip, _) = PageLayout.ContentAreaDip(page);
         if (contentWidthDip <= 0)
@@ -109,9 +110,10 @@ internal static class HeaderFooterBandRenderer
         var maxHeight = MaxBandHeightDip(page);
         var top = 0.0;
         var bottom = 0.0;
-        if (header is { IsEmpty: false } && page.MarginTopPt >= 0)
+        if (header is not null && (!header.IsEmpty || (includeEmptyParagraphs && HasLayoutContent(header)))
+            && page.MarginTopPt >= 0)
         {
-            var height = Measure(model, header, isHeader: true, contentWidthDip, maxHeight).HeightDip;
+            var height = Measure(model, header, isHeader: true, contentWidthDip, maxHeight, includeEmptyParagraphs).HeightDip;
             top = Math.Max(0, HeaderDistanceDip(page) + height - marginTop);
         }
 
@@ -124,17 +126,26 @@ internal static class HeaderFooterBandRenderer
         return (top, bottom);
     }
 
+    /// <summary>
+    /// True when the slot has paragraphs or a layout table, even if every paragraph is empty: Word lays an
+    /// empty header paragraph out at its own line height, so a first-page header made of blank paragraphs
+    /// still pushes the body down.
+    /// </summary>
+    internal static bool HasLayoutContent(HeaderFooter slot) => slot.Paragraphs.Count > 0 || slot.Table is not null;
+
     /// <summary>Measures <paramref name="slot"/> at <paramref name="widthDip"/>, capped at <paramref name="maxHeightDip"/>.</summary>
     internal static HeaderFooterBandMetrics Measure(
         TextDocument model,
         HeaderFooter slot,
         bool isHeader,
         double widthDip,
-        double maxHeightDip)
+        double maxHeightDip,
+        bool includeEmptyParagraphs = false)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(slot);
-        if (widthDip <= 0 || maxHeightDip <= 0 || slot.IsEmpty)
+        if (widthDip <= 0 || maxHeightDip <= 0
+            || (slot.IsEmpty && !(includeEmptyParagraphs && HasLayoutContent(slot))))
             return new HeaderFooterBandMetrics(0, []);
 
         var context = new HeaderFooterBandContext(1, null, 1);
@@ -452,6 +463,18 @@ internal static class HeaderFooterBandRenderer
         var end = shape.HeightPt > 0
             ? new Point(start.X, start.Y + PageLayout.PointsToDip(shape.HeightPt))
             : new Point(start.X + PageLayout.PointsToDip(Math.Max(0, shape.WidthPt)), start.Y);
+        if (string.Equals(shape.OutlineCompound, "dbl", StringComparison.OrdinalIgnoreCase) && pen.Thickness >= 1.5)
+        {
+            // Compound double line (a:ln cmpd="dbl"): two strokes a third of the weight each, a third apart.
+            var band = pen.Thickness / 3.0;
+            var bandPen = new Pen(brush, band);
+            var offset = (pen.Thickness - band) / 2.0;
+            var normal = end.X == start.X ? new Vector(offset, 0) : new Vector(0, offset);
+            dc.DrawLine(bandPen, start - normal, end - normal);
+            dc.DrawLine(bandPen, start + normal, end + normal);
+            return true;
+        }
+
         dc.DrawLine(pen, start, end);
         return true;
     }
