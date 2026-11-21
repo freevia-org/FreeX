@@ -2144,6 +2144,7 @@ public static partial class DocxReader
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults, startOverrides);
             paragraph.DropCap = ReadDropCapIntent(pPr);
             paragraph.FrameHorizontalAlignment = ReadFrameHorizontalAlignment(pPr);
+            paragraph.Frame = paragraph.DropCap is null ? ReadParagraphFrame(pPr) : null;
             // A paragraph whose formatting was changed under Track Changes carries a w:pPrChange as the
             // last child of its w:pPr; parse the author/date and the nested previous w:pPr into the model.
             ApplyParagraphFormatRevision(paragraph, pPr);
@@ -2356,6 +2357,17 @@ public static partial class DocxReader
 
         return paragraph;
     }
+
+    /// <summary>
+    /// Reads the verbatim <c>w:framePr</c> attributes of a non-drop-cap text frame so consecutive paragraphs of one
+    /// frame compare equal and the frame round-trips; null when the paragraph is not framed.
+    /// </summary>
+    private static ParagraphFrame? ReadParagraphFrame(XElement pPr) =>
+        pPr.Element(W + "framePr") is { } framePr
+            ? ParagraphFrame.FromAttributes(framePr.Attributes()
+                .Where(attribute => !attribute.IsNamespaceDeclaration && attribute.Name.Namespace == W)
+                .Select(attribute => new KeyValuePair<string, string>(attribute.Name.LocalName, attribute.Value)))
+            : null;
 
     /// <summary>
     /// Reads <c>w:framePr/@w:xAlign</c> for a non-drop-cap text frame. Only the aligned shapes Word's

@@ -90,6 +90,13 @@ try {
     $r = Invoke-Classifier @((New-Job 13 'Package J' 'in_progress' $null @()), (New-Job 14 'Validate complete release inventory' 'in_progress' $null @()))
     if ([int]$r.pendingJobs -ne 1) { $errors.Add("pending: counted $($r.pendingJobs), expected 1.") }
     if (-not [bool]$r.reachedPublicationGate) { $errors.Add('publication gate: not recognised.') }
+
+    # The two shapes full-release.yml's inject_fault produces (job 'Inject a rehearsal fault'): the
+    # live rehearsal is only meaningful while the classifier keeps reading them this way.
+    $r = Invoke-Classifier @((New-Job 15 'Inject a rehearsal fault' 'completed' 'failure' @((New-Step 'Set up job' 'success'), (New-Step 'Checkout' 'success'), (New-Step 'Injected real failure' 'failure'))))
+    Assert-Case 'injected real' $r $true $false 1
+    $r = Invoke-Classifier @((New-Job 16 'Inject a rehearsal fault' 'completed' 'failure' @((New-Step 'Set up job' 'success'), (New-Step 'Checkout' 'success'), (New-Step 'Injected real failure' 'skipped'), (New-Step 'Download injected rehearsal inputs' 'failure'))))
+    Assert-Case 'injected infra' $r $false $true 1
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -99,4 +106,4 @@ if ($errors.Count -gt 0) {
     throw ("Release failure classification contract failed:`n - " + ($errors -join "`n - "))
 }
 
-Write-Host 'Release failure classification contract passed: 10 offline cases (real, infrastructure, mixed, timeout, consequences, gate).'
+Write-Host 'Release failure classification contract passed: 12 offline cases (real, infrastructure, mixed, timeout, consequences, gate, injected faults).'

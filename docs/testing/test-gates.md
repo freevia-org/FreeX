@@ -33,6 +33,12 @@ those suites in push CI, including the platform-agnostic managed-core ones (Form
 Presentation, Localization). `Test-TestGateContract.ps1` pins that every one of those projects stays
 assigned on macOS and that the two legs stay release-tier and macOS-only. FreeW and FreeP keep their
 small macOS commit legs: they own the macOS platform preflight and finish in 1.5 to 3 minutes.
+`freex-portable-unix-macos` runs as two whole-project partitions: the macOS pool is five slots shared
+with the six osx package legs, so in full release run 44885755819 its single 10.5-minute job (576 s of
+test step, serial across nine projects) was granted a slot last (08:46:52) and alone set the 08:57
+finish while the other macOS legs ended by 08:54. Halving it keeps every project on macOS (each runs in
+exactly one partition) and makes the late-slot tail about 7 minutes; `freex-avalonia-macos` carries a
+9-minute hint because it is the longest macOS leg (572 s / 442 s) and should be dispatched first.
 The repository-automation tests (the PowerShell preflight and tool-script runners, the GitHub workflow
 and release-automation source contracts, the macOS readiness/promotion preflights, and the resx
 localization suites) live in `tests/FreeX.Tools.Tests`, run by the Windows-only `freex-tools` commit
