@@ -3810,6 +3810,9 @@ public static partial class DocxWriter
         // and before widowControl in CT_PPr order. Size still lives on the leading run's rPr.
         if (paragraph.DropCap is { } dropCap)
             pPr.Add(BuildDropCapFrameProperties(dropCap));
+        else if (paragraph.Frame is { } frame && frame.Attributes.Count > 0)
+            pPr.Add(new XElement(W + "framePr",
+                frame.Attributes.Select(pair => new XAttribute(W + pair.Key, pair.Value))));
         // Widow/orphan control: preserve explicit off independently from Word's omitted/default-on form.
         if (f.WidowControl)
             pPr.Add(new XElement(W + "widowControl"));

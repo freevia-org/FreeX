@@ -2565,6 +2565,12 @@ public sealed class Paragraph : Block
     public TextAlignment? FrameHorizontalAlignment { get; set; }
 
     /// <summary>
+    /// The text-frame properties (<c>w:framePr</c>) of a non-drop-cap framed paragraph, or null when the
+    /// paragraph is not framed. Consecutive paragraphs with equal frames share one frame. Round-trips to docx.
+    /// </summary>
+    public ParagraphFrame? Frame { get; set; }
+
+    /// <summary>
     /// The positioned legacy VML text box this header/footer paragraph was flattened out of, or null for
     /// an ordinary paragraph. Render-only (see <see cref="Model.LegacyTextBoxFrame"/>); never written.
     /// </summary>
