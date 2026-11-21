@@ -58,6 +58,17 @@ on:
         required: false
         default: true
         type: boolean
+      source_sha:
+        description: >-
+          Optional full 40-character lowercase commit SHA to release instead of the dispatched main
+          head. It must be an ancestor of (or equal to) the dispatched main head. The release is
+          built, packaged and tagged at THIS commit, and the release-only test gates are skipped
+          only when a fully green release-readiness run on exactly this commit is found (otherwise
+          every gate runs against it). Leave empty to release the dispatched head. Find a value with
+          tools/Get-LatestReadinessGreenSha.ps1.
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -70,6 +81,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # The commit this run builds, packages, tags and attests. Empty source_sha (the default) is the
+  # dispatched head. A non-empty one is validated by the candidate job BEFORE any package or test
+  # job runs (they all need it), and every other job consumes only this variable.
+  RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
   # This workflow runs the same per-project test gates as ci.yml through Invoke-TestGate.ps1, so it
@@ -193,10 +208,13 @@ jobs:
       gate_evidence_reuse: ${{ steps.gate_evidence.outputs.reuse }}
       gate_evidence_run_id: ${{ steps.gate_evidence.outputs.evidence_run_id }}
     steps:
+      # Checks out the release commit itself (RELEASE_SHA), so the evidence lookup below reads THAT
+      # commit's own gate manifest. A source_sha release needs full history for the ancestry proof.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 1
+          ref: ${{ env.RELEASE_SHA }}
+          fetch-depth: ${{ inputs.source_sha != '' && 0 || 1 }}
           persist-credentials: false
 
       - name: Validate latest release source
@@ -212,7 +230,25 @@ jobs:
           if (-not ($isMainRelease -or $isTaggedContinuation)) {
             throw "Full app releases must start from refs/heads/main or continue from an immutable tag for the requested version."
           }
-          Write-Host "Pinned immutable release candidate $env:GITHUB_SHA from $env:GITHUB_REF. Later main commits do not invalidate this run."
+
+          # source_sha: release an older, already readiness-proven commit of main. The value only ever
+          # reaches this script through the RELEASE_SHA environment variable, never through script text.
+          if ($env:RELEASE_SHA -cne $env:GITHUB_SHA) {
+            if (-not $isMainRelease) {
+              throw "source_sha is only allowed on a dispatch from refs/heads/main; a tag continuation must release the tagged commit."
+            }
+            if ($env:RELEASE_SHA -cnotmatch '^[0-9a-f]{40}$') {
+              throw "source_sha must be a full 40-character lowercase commit SHA."
+            }
+            git cat-file -e "$($env:RELEASE_SHA)^{commit}"
+            if ($LASTEXITCODE -ne 0) { throw "source_sha $env:RELEASE_SHA is not a commit of this repository." }
+            git merge-base --is-ancestor $env:RELEASE_SHA $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) {
+              throw "source_sha $env:RELEASE_SHA is not an ancestor of the dispatched main head $env:GITHUB_SHA; refusing to release a commit that is not on main."
+            }
+            Write-Host "Releasing the readiness-proven ancestor $env:RELEASE_SHA of main head $env:GITHUB_SHA (source_sha)."
+          }
+          Write-Host "Pinned immutable release candidate $env:RELEASE_SHA from $env:GITHUB_REF. Later main commits do not invalidate this run."
 
       # Fail in seconds on a missing prerequisite rather than ~30 minutes in. Releasing 0.8.187 ran
       # the entire release test matrix and every package build before the macOS lanes died on an
@@ -286,7 +322,7 @@ jobs:
             if ($remoteRefs.Count -eq 0) { continue }
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "\`t")[0]
-            if ($tagSha -cne $env:GITHUB_SHA) {
+            if ($tagSha -cne $env:RELEASE_SHA) {
               throw "Tag '$tag' is immutable at $tagSha; choose a new version before running full release tests."
             }
           }
@@ -330,7 +366,7 @@ jobs:
         run: |
           pwsh -NoProfile -File tools/Resolve-GitHubReleaseCandidate.ps1 `
             -Repository $env:GITHUB_REPOSITORY `
-            -CommitSha $env:GITHUB_SHA
+            -CommitSha $env:RELEASE_SHA
 
       # release-readiness.yml runs the same release-only gates on a schedule. If a readiness run
       # already proved ALL of them on EXACTLY this commit (fresh, every expected job present once and
@@ -345,7 +381,7 @@ jobs:
         run: |
           pwsh -NoProfile -File tools/Resolve-ReleaseGateEvidence.ps1 `
             -Repository $env:GITHUB_REPOSITORY `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -GitHubOutputPath $env:GITHUB_OUTPUT
 
   early-abort:
@@ -441,6 +477,7 @@ jobs:
       - name: Checkout immutable candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: ${{ matrix.fetchDepth }}
           persist-credentials: false
       - name: Setup .NET
@@ -467,14 +504,14 @@ jobs:
           path: |
             **/obj
             obj-build-cache-commit.txt
-          key: release-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          key: release-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ env.RELEASE_SHA }}
           restore-keys: release-v2-${{ runner.os }}-${{ matrix.displayGateId }}-
       - name: Make build-cache timestamps honest
         shell: pwsh
         run: pwsh -NoProfile -File tools/Set-BuildCacheTimestamps.ps1
       - name: Record the commit this cache will hold
         shell: pwsh
-        run: '"${{ github.sha }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
+        run: '"${{ env.RELEASE_SHA }}" | Set-Content -LiteralPath obj-build-cache-commit.txt -Encoding ascii'
       - name: Run isolated release test gate
         shell: pwsh
         run: |
@@ -497,7 +534,7 @@ jobs:
           path: |
             **/obj
             obj-build-cache-commit.txt
-          key: release-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ github.sha }}
+          key: release-v2-${{ runner.os }}-${{ matrix.displayGateId }}-${{ env.RELEASE_SHA }}
       - name: Upload release test diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -569,6 +606,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -696,7 +734,7 @@ jobs:
           tools/New-ReleaseSbom.ps1 `
             -Name $app `
             -Version $version `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -Runtime $runtime `
             -InputRoot artifacts/release `
             -PayloadNames $payloadNames `
@@ -706,7 +744,7 @@ jobs:
             -Scope App `
             -Apps $app `
             -Version $version `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -Runtimes $runtime `
             -InputRoot artifacts/release `
             -OutputPath "artifacts/release/$prefix-manifest.json"
@@ -761,6 +799,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
 
       - name: Download portable app packages
@@ -807,7 +846,7 @@ jobs:
               -Scope App `
               -Apps $app `
               -Version "${{ inputs.release_version }}" `
-              -CommitSha $env:GITHUB_SHA `
+              -CommitSha $env:RELEASE_SHA `
               -Runtimes "${{ matrix.runtime }}" `
               -InputRoot downloaded-artifacts `
               -OutputPath "artifacts/precheck/$app-v${{ inputs.release_version }}-${{ matrix.runtime }}-validated.json" `
@@ -899,7 +938,7 @@ jobs:
           tools/New-ReleaseSbom.ps1 `
             -Name FreeSuite `
             -Version $version `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -Runtime $runtime `
             -InputRoot artifacts/suite `
             -PayloadNames $payloadName `
@@ -909,7 +948,7 @@ jobs:
             -Scope Suite `
             -Apps FreeX,FreeW,FreeP `
             -Version $version `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -Runtimes $runtime `
             -InputRoot artifacts/suite `
             -OutputPath "artifacts/suite/$prefix-manifest.json" `
@@ -1013,8 +1052,8 @@ jobs:
             if ($remoteRefs.Count -eq 0) { continue }
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
-            if ($tagSha -cne $env:GITHUB_SHA) {
-              throw "Tag '$tag' is immutable at $tagSha; refusing publication from $env:GITHUB_SHA."
+            if ($tagSha -cne $env:RELEASE_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; refusing publication from $env:RELEASE_SHA."
             }
           }
 
@@ -1037,6 +1076,7 @@ jobs:
       - name: Checkout release context
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_SHA }}
           persist-credentials: false
 
       - name: Download selected app packages
@@ -1092,7 +1132,7 @@ jobs:
             -Scope App `
             -Apps $app `
             -Version $version `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -Runtimes $runtimes `
             -InputRoot $assetRoot `
             -OutputPath (Join-Path $assetRoot "$app-v$version-release-manifest.json") `
@@ -1135,7 +1175,7 @@ jobs:
           $notes = $notes.
             Replace("{{APP}}", $app).
             Replace("{{VERSION}}", $version).
-            Replace("{{SHA}}", $env:GITHUB_SHA)
+            Replace("{{SHA}}", $env:RELEASE_SHA)
 
           . tools/Invoke-WithRetry.ps1
           # Only a definite "release not found" means the release does not exist. Any other failure
@@ -1151,8 +1191,8 @@ jobs:
           if ($remoteRefs.Count -gt 0) {
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
-            if ($tagSha -cne $env:GITHUB_SHA) {
-              throw "Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:GITHUB_SHA. Use a new version."
+            if ($tagSha -cne $env:RELEASE_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:RELEASE_SHA. Use a new version."
             }
           } elseif ($releaseExists) {
             throw "Existing release '$tag' has no resolvable remote tag."
@@ -1166,7 +1206,7 @@ jobs:
           } else {
             $releaseArgs = @()
             if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }
-            $notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs
+            $notes | gh release create $tag @assets --target $env:RELEASE_SHA --title $title --notes-file - @releaseArgs
           }
 
   publish-suite:
@@ -1184,6 +1224,7 @@ jobs:
       - name: Checkout release context
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ env.RELEASE_SHA }}
           fetch-depth: 1
           persist-credentials: false
 
@@ -1233,7 +1274,7 @@ jobs:
             -Scope Suite `
             -Apps FreeX,FreeW,FreeP `
             -Version $version `
-            -CommitSha $env:GITHUB_SHA `
+            -CommitSha $env:RELEASE_SHA `
             -Runtimes $runtimes `
             -InputRoot $assetRoot `
             -OutputPath (Join-Path $assetRoot "FreeSuite-v$version-release-manifest.json") `
@@ -1263,8 +1304,8 @@ jobs:
           if ($remoteRefs.Count -gt 0) {
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
-            if ($tagSha -cne $env:GITHUB_SHA) {
-              throw "Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:GITHUB_SHA. Use a new version."
+            if ($tagSha -cne $env:RELEASE_SHA) {
+              throw "Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:RELEASE_SHA. Use a new version."
             }
           } elseif ($releaseExists) {
             throw "Existing release '$tag' has no resolvable remote tag."
@@ -1278,7 +1319,7 @@ jobs:
           } else {
             $releaseArgs = @()
             if ("${{ inputs.prerelease }}" -eq "true") { $releaseArgs += "--prerelease" }
-            $notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs
+            $notes | gh release create $tag @assets --target $env:RELEASE_SHA --title $title --notes-file - @releaseArgs
           }
 
   verify-publication:
@@ -1316,7 +1357,7 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or $remoteRefs.Count -eq 0) { throw "Published tag '$Tag' could not be resolved." }
             $peeled = @($remoteRefs | Where-Object { $_ -match '\^\{\}$' })
             $tagSha = (($peeled + $remoteRefs)[0] -split "`t")[0]
-            if ($tagSha -cne $env:GITHUB_SHA) { throw "Published tag '$Tag' targets $tagSha instead of $env:GITHUB_SHA." }
+            if ($tagSha -cne $env:RELEASE_SHA) { throw "Published tag '$Tag' targets $tagSha instead of $env:RELEASE_SHA." }
 
             $release = gh release view $Tag --json isPrerelease,assets,url | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0) { throw "Could not inspect published release '$Tag'." }
