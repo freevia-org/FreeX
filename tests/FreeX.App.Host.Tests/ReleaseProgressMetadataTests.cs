@@ -32,15 +32,17 @@ public sealed class ReleaseProgressMetadataTests
     }
 
     [Fact]
-    public void ReleaseProgressCompletionBands_MatchTesterReleaseWorkflow()
+    public void ReleaseProgressCompletionBands_MatchTesterReleaseReadinessTool()
     {
-        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "tester-release.yml");
+        // tester-release.yml was retired; the completion-to-minor bands now live in the readiness
+        // preflight that validates release/progress.json before a release is dispatched.
+        var tool = WorkspaceFileLocator.ReadAllText("tools", "Test-TesterReleaseReadiness.ps1");
 
-        workflow.Should().Contain("if ($overallCompletion -ge 99) { $minor = 9 }");
-        workflow.Should().Contain("elseif ($overallCompletion -ge 95) { $minor = 8 }");
-        workflow.Should().Contain("elseif ($overallCompletion -ge 93) { $minor = 7 }");
-        workflow.Should().Contain("elseif ($overallCompletion -ge 90) { $minor = 6 }");
-        workflow.Should().Contain("else { $minor = 5 }");
+        tool.Should().Contain("if ($OverallCompletion -ge 99) { return 9 }");
+        tool.Should().Contain("if ($OverallCompletion -ge 95) { return 8 }");
+        tool.Should().Contain("if ($OverallCompletion -ge 93) { return 7 }");
+        tool.Should().Contain("if ($OverallCompletion -ge 90) { return 6 }");
+        tool.Should().Contain("return 5");
     }
 
     private static ReleaseProgress LoadProgress()
