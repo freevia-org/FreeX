@@ -751,6 +751,16 @@ public partial class GridView
                 return;
             }
 
+            // An inner chart element (title, legend, axis, series...) under the pointer is selected
+            // instead of starting a whole-chart move; resize handles keep priority.
+            if (SelectedObjectKind == ObjectKind.Chart &&
+                dragKind == ObjectDragKind.Move &&
+                TrySelectChartElementAt(pos, e.ClickCount >= 2))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (dragKind != ObjectDragKind.None)
             {
                 _selectedObjectId = SelectedObjectId;
@@ -783,6 +793,14 @@ public partial class GridView
             SelectedObjectKind = hit.Kind;
             _selectedObjectId = hit.Id;
             _selectedObjectKind = hit.Kind;
+            if (hit.Kind == ObjectKind.Chart && TrySelectChartElementAt(pos, isDoubleClick: false))
+            {
+                _objectDragKind = ObjectDragKind.None;
+                InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+
             if (hit.Kind == ObjectKind.TextBox && e.ClickCount >= 2)
             {
                 _objectDragKind = ObjectDragKind.None;
@@ -1013,6 +1031,8 @@ public partial class GridView
             SelectedObjectKind = objectHit.Kind;
             _selectedObjectId = objectHit.Id;
             _selectedObjectKind = objectHit.Kind;
+            if (objectHit.Kind == ObjectKind.Chart)
+                TrySelectChartElementAt(pos, isDoubleClick: false);
             InvalidateVisual();
             ContextMenuRequested?.Invoke(objectHit.Anchor, pos);
             e.Handled = true;

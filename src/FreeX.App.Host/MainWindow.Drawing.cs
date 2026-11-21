@@ -392,6 +392,10 @@ public partial class MainWindow
     // ExecuteClearSelection's ordinary Clear Contents behavior instead.
     private bool TryDeleteSelectedDrawingObject()
     {
+        // A selected inner chart element (title, legend, axis, series...) is deleted instead of the chart.
+        if (TryDeleteSelectedChartElement())
+            return true;
+
         var kind = ToSelectionPaneObjectKindIncludingChart(SheetGrid.SelectedObjectKind);
         var objectId = SheetGrid.SelectedObjectId;
         if (kind is null || objectId == Guid.Empty)

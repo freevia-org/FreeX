@@ -3053,6 +3053,57 @@
   <data name="ChartLoc_SelectedChart" xml:space="preserve">
     <value>Selected Chart: {0}</value>
   </data>
+  <data name="ChartElement_Selected" xml:space="preserve">
+    <value>Selected: {0}</value>
+  </data>
+  <data name="ChartElement_Deleted" xml:space="preserve">
+    <value>Deleted: {0}</value>
+  </data>
+  <data name="ChartElement_CannotDelete" xml:space="preserve">
+    <value>{0} cannot be deleted.</value>
+  </data>
+  <data name="ChartElement_ChartArea" xml:space="preserve">
+    <value>Chart Area</value>
+  </data>
+  <data name="ChartElement_PlotArea" xml:space="preserve">
+    <value>Plot Area</value>
+  </data>
+  <data name="ChartElement_ChartTitle" xml:space="preserve">
+    <value>Chart Title</value>
+  </data>
+  <data name="ChartElement_Legend" xml:space="preserve">
+    <value>Legend</value>
+  </data>
+  <data name="ChartElement_CategoryAxis" xml:space="preserve">
+    <value>Category Axis</value>
+  </data>
+  <data name="ChartElement_ValueAxis" xml:space="preserve">
+    <value>Value Axis</value>
+  </data>
+  <data name="ChartElement_SecondaryValueAxis" xml:space="preserve">
+    <value>Secondary Value Axis</value>
+  </data>
+  <data name="ChartElement_CategoryAxisTitle" xml:space="preserve">
+    <value>Category Axis Title</value>
+  </data>
+  <data name="ChartElement_ValueAxisTitle" xml:space="preserve">
+    <value>Value Axis Title</value>
+  </data>
+  <data name="ChartElement_CategoryGridlines" xml:space="preserve">
+    <value>Category Axis Major Gridlines</value>
+  </data>
+  <data name="ChartElement_ValueGridlines" xml:space="preserve">
+    <value>Value Axis Major Gridlines</value>
+  </data>
+  <data name="ChartElement_Series" xml:space="preserve">
+    <value>Series "{0}"</value>
+  </data>
+  <data name="ChartElement_SeriesDataLabels" xml:space="preserve">
+    <value>Series "{0}" Data Labels</value>
+  </data>
+  <data name="ChartElement_DataLabels" xml:space="preserve">
+    <value>Data Labels</value>
+  </data>
   <data name="ChartLoc_InsertChartFailed" xml:space="preserve">
     <value>Insert Chart failed.</value>
   </data>

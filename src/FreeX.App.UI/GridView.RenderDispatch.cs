@@ -122,7 +122,7 @@ public partial class GridView
                         : GetSelectedPictureCropRatios();
                     DrawPictureCropHandles(dc, liveRect, crop, liveRotationDegrees);
                 }
-                else
+                else if (!TryDrawSelectedChartElementHighlight(dc, liveRect))
                     DrawObjectSelectionHandles(dc, liveRect, liveRotationDegrees);
             }
         }
