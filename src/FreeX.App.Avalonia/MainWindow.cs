@@ -3086,6 +3086,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             NativeMenuGestureKey.N => Key.N,
             NativeMenuGestureKey.O => Key.O,
             NativeMenuGestureKey.S => Key.S,
+            NativeMenuGestureKey.T => Key.T,
             NativeMenuGestureKey.P => Key.P,
             NativeMenuGestureKey.G => Key.G,
             NativeMenuGestureKey.H => Key.H,

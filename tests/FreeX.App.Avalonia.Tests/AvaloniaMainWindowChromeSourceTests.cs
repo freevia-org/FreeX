@@ -1318,6 +1318,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             WorkbookShortcutKey.P => Key.P,
             WorkbookShortcutKey.R => Key.R,
             WorkbookShortcutKey.S => Key.S,
+            WorkbookShortcutKey.T => Key.T,
             WorkbookShortcutKey.U => Key.U,
             WorkbookShortcutKey.V => Key.V,
             WorkbookShortcutKey.X => Key.X,

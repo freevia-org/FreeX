@@ -353,7 +353,7 @@ public sealed class NativeMenuCatalogTests
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.FlashFill).Gesture
             .Should()
-            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Control));
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Meta));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.PageSetup).Should().Be(
             new NativeMenuItemPlan(
@@ -368,7 +368,15 @@ public sealed class NativeMenuCatalogTests
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.AutoSumSum).Gesture
             .Should()
-            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Alt));
+            .Be(new NativeMenuGesturePlan(
+                NativeMenuGestureKey.T,
+                NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift));
+
+        NativeMenuCatalog.GetMenuItem(NativeMenuItemId.Strikethrough).Gesture
+            .Should()
+            .Be(new NativeMenuGesturePlan(
+                NativeMenuGestureKey.X,
+                NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.ShowFormulas).Gesture
             .Should()
@@ -595,6 +603,7 @@ public sealed class NativeMenuCatalogTests
             WorkbookShortcutKey.P => NativeMenuGestureKey.P,
             WorkbookShortcutKey.R => NativeMenuGestureKey.R,
             WorkbookShortcutKey.S => NativeMenuGestureKey.S,
+            WorkbookShortcutKey.T => NativeMenuGestureKey.T,
             WorkbookShortcutKey.U => NativeMenuGestureKey.U,
             WorkbookShortcutKey.V => NativeMenuGestureKey.V,
             WorkbookShortcutKey.X => NativeMenuGestureKey.X,

@@ -349,7 +349,8 @@ public static class WorkbookKeyboardShortcutCatalog
         new(
             WorkbookShortcutRoute.ToggleStrikethrough,
             new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control)),
+            // Excel for Mac: Cmd+Shift+X. Ctrl+5 stays live through the Windows chord.
+            new WorkbookShortcutChord(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
         new(
             WorkbookShortcutRoute.FillDown,
             new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control),
@@ -361,7 +362,8 @@ public static class WorkbookKeyboardShortcutCatalog
         new(
             WorkbookShortcutRoute.FlashFill,
             new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control)),
+            // Excel for Mac: Cmd+E.
+            new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Meta)),
         new(
             WorkbookShortcutRoute.ToggleShowFormulas,
             new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control),
@@ -442,7 +444,8 @@ public static class WorkbookKeyboardShortcutCatalog
         new(
             WorkbookShortcutRoute.AutoSum,
             new WorkbookShortcutChord(WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Alt),
-            new WorkbookShortcutChord(WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Alt)),
+            // Excel for Mac: Cmd+Shift+T.
+            new WorkbookShortcutChord(WorkbookShortcutKey.T, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
         new(
             WorkbookShortcutRoute.WorkbookStatistics,
             new WorkbookShortcutChord(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
