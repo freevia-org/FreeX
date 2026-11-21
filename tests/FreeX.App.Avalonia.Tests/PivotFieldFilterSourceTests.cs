@@ -53,7 +53,7 @@ public sealed class PivotFieldFilterSourceTests
     }
 
     [Fact]
-    public void PivotChartContextMenu_ConsumesSharedFilterStateWithoutChangingVisibleHeaders()
+    public void PivotChartContextMenu_ConsumesSharedFilterStateAndWpfHeaderFormatters()
     {
         var source = File.ReadAllText(RepoFile(
             "src",
@@ -61,9 +61,10 @@ public sealed class PivotFieldFilterSourceTests
             "MainWindow.PivotChartContextMenus.cs"));
 
         source.Should().Contain("PivotFieldFilterSummary.CreateState(");
-        source.Should().Contain("var hasFilter = filterState.HasStoredFilter;");
-        source.Should().Contain("SelectItemsHeader: \"Select Items...\"");
-        source.Should().Contain("ClearFilterHeader: $\"Clear Filters from {target.FieldCaption}\"");
+        source.Should().Contain("OverallSummary: PivotFieldFilterSummary.FormatOverallSummary(filterState)");
+        source.Should().Contain("SelectItemsHeader: PivotFieldFilterSummary.FormatSelectItemsHeader(filterState)");
+        source.Should().Contain("ClearFilterHeader: PivotFieldFilterSummary.FormatClearFilterHeader(filterState)");
+        source.Should().Contain("HasAnyFilter: filterState.HasAnyFilter");
         source.Should().Contain("PivotUiPlanner.ResolvePivotChartFieldArea(");
         source.Should().NotContain("pivot.LabelFilters.Any(");
         source.Should().NotContain("pivot.ValueFilters.Any(");
