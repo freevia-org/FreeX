@@ -10630,9 +10630,13 @@ public sealed partial class DocumentView : RichTextBox
                     row.RowRevisionAuthor = authoredRow.RowRevisionAuthor;
                     row.RowRevisionDateXml = authoredRow.RowRevisionDateXml;
                     row.IsRepeatingHeader = authoredRow.AuthoredIsRepeatingHeader;
+                    row.GridBefore = authoredRow.GridBefore;
+                    row.GridAfter = authoredRow.GridAfter;
                 }
                 foreach (var wpfCell in wpfRow.Cells)
                 {
+                    if (wpfCell.Tag is WpfTableGridGapTag)
+                        continue;
                     var span = Math.Max(1, wpfCell.ColumnSpan);
                     string? cellShading;
                     if (wpfCell.Tag is TableCellTag tag)
@@ -11074,7 +11078,12 @@ public sealed partial class DocumentView : RichTextBox
         // IsRepeatedHeader above (which marks a duplicate render-only row inserted for on-screen
         // pagination). Recovered by CommitToModel so a multi-row repeating header survives an
         // edit-triggered view->model round-trip instead of collapsing to just row 0.
-        bool AuthoredIsRepeatingHeader = false);
+        bool AuthoredIsRepeatingHeader = false,
+        int GridBefore = 0,
+        int GridAfter = 0);
+
+    /// <summary>Tag of the empty, borderless placeholder cell that stands in for a row's w:gridBefore columns.</summary>
+    private sealed record WpfTableGridGapTag;
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
@@ -11315,6 +11324,10 @@ public sealed partial class DocumentView : RichTextBox
         if (flowCellSpacingDip > 0)
             wpf.Padding = new Thickness(flowCellSpacingDip / 2);
         var columns = table.ColumnCount;
+        // A row that skips leading grid columns (w:gridBefore) pushes its cells right, so the grid is wider
+        // than the widest cell count.
+        if (table.Rows.Any(row => row.GridBefore > 0))
+            columns = Math.Max(columns, TableGridProjection.TableWidth(table));
         var columnWidthsDip = ResolveRenderedTableColumnWidths(
             table, document, columns, autoFitColumnWidthsDip, flowCellSpacingDip);
         for (var c = 0; c < columns; c++)
@@ -11393,7 +11406,9 @@ public sealed partial class DocumentView : RichTextBox
                     modelRow.RowRevision,
                     modelRow.RowRevisionAuthor,
                     modelRow.RowRevisionDateXml,
-                    modelRow.IsRepeatingHeader)
+                    modelRow.IsRepeatingHeader,
+                    modelRow.GridBefore,
+                    modelRow.GridAfter)
             };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -11409,6 +11424,17 @@ public sealed partial class DocumentView : RichTextBox
                 // FlowDocument adds table-cell chrome outside the BlockUI content host. Reserve
                 // that measured overhead so an exact Word row does not grow by the full amount.
                 rowHeightPx = Math.Max(0, authoredRowHeight - 2);
+            }
+            if (modelRow.GridBefore > 0)
+            {
+                // Word leaves the skipped leading grid columns empty (no cells, no borders).
+                var gap = new WpfTableCell
+                {
+                    ColumnSpan = TableGridProjection.NormalizeGridSkip(modelRow.GridBefore),
+                    Tag = new WpfTableGridGapTag()
+                };
+                gap.Blocks.Add(new WpfParagraph { Margin = new Thickness(0), FontSize = 0.015 });
+                wpfRow.Cells.Add(gap);
             }
             foreach (var projected in TableGridProjection.ProjectRow(modelRow))
             {
@@ -12197,10 +12223,13 @@ public sealed partial class DocumentView : RichTextBox
             || TryParseColor(token.Trim(), out color);
     }
 
+    /// <summary>How far past the text column a grid may hang before it counts as deliberately wider (Word keeps such a grid as authored).</summary>
+    internal const double OverwideTableScaleToleranceDip = 20 * 96.0 / 72.0;
+
     // Column widths as WPF lays them out: an authored cell spacing is carved out of the grid (Word's
     // table width includes it, WPF adds it on top), and a grid wider than the text column is scaled
     // back so the right-hand border is not clipped away by the page column.
-    private static double?[] ResolveRenderedTableColumnWidths(
+    internal static double?[] ResolveRenderedTableColumnWidths(
         ModelTable table,
         TextDocument document,
         int columns,
@@ -12233,8 +12262,18 @@ public sealed partial class DocumentView : RichTextBox
                 : metrics.ContentWidthDip;
             var available = contentWidth - Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint
                 - spacingTotal - tableBorderDip;
-            if (available > 0)
+            // Word keeps the authored widths of a grid that is clearly wider than the text column (the
+            // table runs into the margin and off the page); only a near-miss -- the few points a table
+            // hangs out by through its border or indent -- is pulled back so the right edge is not clipped.
+            if (available > 0 && target - available <= OverwideTableScaleToleranceDip)
+            {
                 target = Math.Min(target, available);
+            }
+            else if (available > 0)
+            {
+                // The columns keep Word's authored widths; the part beyond the text column is clipped by the page.
+                return widths;
+            }
         }
         if (total <= 0 || target <= 0 || Math.Abs(target - total) < 0.01)
             return widths;
@@ -13434,6 +13473,14 @@ public sealed partial class DocumentView : RichTextBox
         if (syntheticSmallCaps && !IsTextHiddenInCurrentView(fmt))
             content = SplitSyntheticSmallCaps(wpf, fontSizePx);
 
+        // WPF has no glyph-width scaling for a Run, so a page-only render (never read back) paints a run with
+        // a character scale (w:w) as per-word scaled text boxes; the editor keeps the plain, editable run.
+        if (_renderJoinSlashes && Math.Abs(fmt.CharacterScalePercent - 100) >= MinimumRenderedCharacterScalePercentDelta
+            && fmt.CharacterScalePercent > 0 && !IsTextHiddenInCurrentView(fmt))
+        {
+            content = ScaleInlineWidth(content, fmt.CharacterScalePercent / 100.0, fontSizePx);
+        }
+
         if (run.HyperlinkUrl is { Length: > 0 } url)
             return HideTextInlineWhenNeeded(BuildHyperlink(content, url, run.HyperlinkTooltip), fmt);
         if (run.HyperlinkAnchor is { Length: > 0 } anchor)
@@ -13467,6 +13514,64 @@ public sealed partial class DocumentView : RichTextBox
         }
 
         return span;
+    }
+
+    /// <summary>
+    /// Replaces the text runs of <paramref name="inline"/> by inline text boxes whose glyphs are stretched
+    /// horizontally by <paramref name="scale"/> (Word's character scale, w:w). A box per word keeps the line
+    /// breaking points; layout widths are scaled too, so the paragraph wraps as it does in Word. Page-only renders.
+    /// </summary>
+    // A near-100% scale (Word's Normal style of some documents sets 103) changes widths by a few percent only;
+    // the per-word text boxes cost more in layout fidelity (line stacking, justification) than they recover.
+    internal const int MinimumRenderedCharacterScalePercentDelta = 10;
+
+    internal static Inline ScaleInlineWidth(Inline inline, double scale, double fallbackFontSizePx)
+    {
+        if (inline is Span span)
+        {
+            for (var i = 0; i < span.Inlines.Count; i++)
+            {
+                var child = span.Inlines.ElementAt(i);
+                var replaced = ScaleInlineWidth(child, scale, fallbackFontSizePx);
+                if (!ReferenceEquals(replaced, child))
+                {
+                    span.Inlines.InsertAfter(child, replaced);
+                    span.Inlines.Remove(child);
+                }
+            }
+            return span;
+        }
+
+        if (inline is not WpfRun { Text.Length: > 0 } source || source.TextEffects.Count > 0)
+            return inline;
+
+        var size = source.ReadLocalValue(WpfRun.FontSizeProperty) != DependencyProperty.UnsetValue
+            ? source.FontSize
+            : fallbackFontSizePx;
+        var result = new Span { Tag = source.Tag };
+        foreach (System.Text.RegularExpressions.Match word in System.Text.RegularExpressions.Regex.Matches(
+                     source.Text, @"\S+\s*|\s+"))
+        {
+            var box = new System.Windows.Controls.TextBlock
+            {
+                Text = word.Value,
+                FontFamily = source.FontFamily,
+                FontSize = size,
+                FontWeight = source.FontWeight,
+                FontStyle = source.FontStyle,
+                Foreground = source.Foreground,
+                Background = source.Background,
+                TextDecorations = source.TextDecorations,
+                FlowDirection = source.FlowDirection,
+                Language = source.Language,
+                LayoutTransform = new ScaleTransform(scale, 1)
+            };
+            Typography.SetCapitals(box, Typography.GetCapitals(source));
+            Typography.SetKerning(box, Typography.GetKerning(source));
+            result.Inlines.Add(new InlineUIContainer(box) { BaselineAlignment = BaselineAlignment.Baseline });
+        }
+
+        return result.Inlines.Count == 0 ? inline : result;
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<WpfRun, RunFormatting>

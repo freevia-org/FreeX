@@ -1746,14 +1746,16 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
-    public void TableWiderThanTheTextColumn_IsScaledToFit_WithoutRewritingTheAuthoredGrid()
+    public void TableSlightlyWiderThanTheTextColumn_IsScaledToFit_WithoutRewritingTheAuthoredGrid()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         var contentWidthPt = DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip * 72.0 / 96.0;
         var table = Table.Create(1, 2);
-        table.ColumnWidthsPt.Add(contentWidthPt * 0.6);
-        table.ColumnWidthsPt.Add(contentWidthPt * 0.6);
+        // A near miss (10pt over); a grid far wider than the column keeps Word's authored widths instead
+        // (CharacterScaleAndGridSkipRenderTests.OverwideGrid_KeepsAuthoredWidths_...).
+        table.ColumnWidthsPt.Add(contentWidthPt / 2 + 5);
+        table.ColumnWidthsPt.Add(contentWidthPt / 2 + 5);
         doc.Blocks.Add(table);
 
         var view = new DocumentView();
