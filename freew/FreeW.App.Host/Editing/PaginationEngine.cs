@@ -1124,6 +1124,14 @@ internal static class PaginationEngine
                 {
                     take = index; // no text of it fits on this page after all
                 }
+                else if (block is System.Windows.Documents.Table straddlingTable
+                    && SplitTableAtFirstOverflowRow(dynamicWork, straddlingTable) is { } tableRemainder)
+                {
+                    // The rows that do not fit continue on the next page as a table of their own, like Word, so
+                    // the content after the table follows them instead of starting yet another page.
+                    work.Blocks.InsertAfter(straddlingTable, tableRemainder);
+                    pending.Insert(index + 1, (tableRemainder, pending[index].ModelIndex, true));
+                }
 
                 break;
             }
@@ -1228,6 +1236,69 @@ internal static class PaginationEngine
         }
 
         return paragraph.ContentStart.GetPositionAtOffset(high, LogicalDirection.Forward);
+    }
+
+    /// <summary>
+    /// Moves the rows of a table that straddles the first page's bottom edge and do not fit on it into a new
+    /// table (same columns and chrome) returned as the continuation, leaving the rows that fit in
+    /// <paramref name="table"/>. A row that starts on the page but runs past its edge moves whole. Null when no
+    /// row boundary can split the table (the first row already overflows, or every row fits).
+    /// </summary>
+    internal static System.Windows.Documents.Table? SplitTableAtFirstOverflowRow(
+        DynamicDocumentPaginator paginator,
+        System.Windows.Documents.Table table)
+    {
+        var rows = table.RowGroups.SelectMany(group => group.Rows).ToList();
+        var splitIndex = -1;
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var lastPage = 0;
+            foreach (var cell in rows[index].Cells)
+            {
+                try
+                {
+                    lastPage = Math.Max(lastPage, paginator.GetPageNumber(cell.ContentStart));
+                    lastPage = Math.Max(lastPage, paginator.GetPageNumber(cell.ContentEnd));
+                }
+                catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException)
+                {
+                }
+            }
+
+            if (lastPage > 0)
+            {
+                splitIndex = index;
+                break;
+            }
+        }
+
+        if (splitIndex <= 0)
+            return null;
+
+        var remainder = new System.Windows.Documents.Table
+        {
+            CellSpacing = table.CellSpacing,
+            Margin = new Thickness(table.Margin.Left, 0, table.Margin.Right, table.Margin.Bottom),
+            Padding = table.Padding,
+            BorderBrush = table.BorderBrush,
+            BorderThickness = table.BorderThickness,
+            Background = table.Background,
+            FlowDirection = table.FlowDirection,
+            TextAlignment = table.TextAlignment,
+            Tag = table.Tag,
+        };
+        foreach (var column in table.Columns)
+            remainder.Columns.Add(new TableColumn { Width = column.Width, Background = column.Background });
+        var group = new TableRowGroup();
+        remainder.RowGroups.Add(group);
+        foreach (var row in rows.Skip(splitIndex).ToList())
+        {
+            ((TableRowGroup)row.Parent).Rows.Remove(row);
+            group.Rows.Add(row);
+        }
+
+        table.Margin = new Thickness(table.Margin.Left, table.Margin.Top, table.Margin.Right, 0);
+        return remainder;
     }
 
     internal static bool HasText(TextPointer start, TextPointer end) =>

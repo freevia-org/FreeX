@@ -169,4 +169,105 @@ public sealed class TableCellExactSpacingTocTests
 
         plan.Rows.Single().EstimatedHeightDip.Should().Be(26, "one 18 DIP line plus the 8 DIP gutter");
     }
+
+    [Fact]
+    public void LeadingContentEstimate_UsesTheStyleCascadeLineHeightAndSpacingOfTheHeadingBeforeTheTable()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Styles["HeadingExact"] = new DocumentStyle
+        {
+            Id = "HeadingExact",
+            Name = "Heading Exact",
+            Paragraph = ParagraphFormatting.Default with
+            {
+                LineRule = LineSpacingRule.Exact,
+                LineHeightPt = 22.5,
+                LineSpacingIsSet = true,
+            },
+        };
+        var heading = new Paragraph("Contents")
+        {
+            StyleId = "HeadingExact",
+            Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 6, SpaceAfterIsSet = true },
+        };
+        heading.Runs.Insert(0, new Run(string.Empty) { IsPageBreak = true });
+        doc.Blocks.Add(heading);
+        doc.Blocks.Add(Table.Create(1, 1));
+
+        var estimate = DocumentViewLayoutPlanner.EstimateLeadingContentHeightDip(doc, 1);
+
+        // 22.5pt exact line (from the style) + 6pt after (direct) = 28.5pt = 38 DIP, not an 11pt natural line.
+        estimate.Should().BeApproximately(28.5 * 96.0 / 72.0, 0.01);
+    }
+
+    [Fact]
+    public void ExpandedCharacterSpacing_NarrowsTheCharactersPerLineOfAnArabicCell()
+    {
+        static double RowHeight(double spacingPt)
+        {
+            var table = Table.Create(1, 1);
+            var cell = table.Rows[0].Cells[0];
+            cell.WidthPt = CellWidthPt;
+            cell.Paragraphs.Clear();
+            var paragraph = new Paragraph(new string('ا', 110))
+            {
+                Formatting = ExactTocFormatting(),
+            };
+            paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with
+            {
+                FontSizePt = 8.5,
+                CharacterSpacingPt = spacingPt,
+            };
+            cell.Paragraphs.Add(paragraph);
+            table.ColumnWidthsPt.Add(CellWidthPt);
+            return DocumentViewLayoutPlanner.BuildTablePaginationPlan(table, new PageSettings()).Rows.Single().EstimatedHeightDip;
+        }
+
+        var plain = RowHeight(0);
+        var spaced = RowHeight(3);
+
+        plain.Should().BeApproximately(23 * 96.0 / 72.0, 0.02, "110 narrow Arabic letters fit one line unspaced");
+        spaced.Should().BeApproximately((2 * 17 + 6) * 96.0 / 72.0, 0.02, "3pt spacing per letter wraps the same text onto a second line");
+    }
+
+    [StaFact]
+    public void SplitTableAtFirstOverflowRow_MovesTheRowsBelowThePageEdgeIntoAContinuationTable()
+    {
+        var flow = new System.Windows.Documents.FlowDocument
+        {
+            PageWidth = 400,
+            PageHeight = 300,
+            PagePadding = new System.Windows.Thickness(20),
+        };
+        var table = new System.Windows.Documents.Table();
+        table.Columns.Add(new System.Windows.Documents.TableColumn { Width = new System.Windows.GridLength(300) });
+        var group = new System.Windows.Documents.TableRowGroup();
+        table.RowGroups.Add(group);
+        for (var index = 0; index < 12; index++)
+        {
+            var row = new System.Windows.Documents.TableRow();
+            row.Cells.Add(new System.Windows.Documents.TableCell(new WpfParagraph(new System.Windows.Documents.Run("row " + index))
+            {
+                Margin = new System.Windows.Thickness(0, 0, 0, 40),
+            }));
+            group.Rows.Add(row);
+        }
+
+        flow.Blocks.Add(table);
+        var paginator = (System.Windows.Documents.DynamicDocumentPaginator)((System.Windows.Documents.IDocumentPaginatorSource)flow).DocumentPaginator;
+        paginator.PageSize = new System.Windows.Size(400, 300);
+        paginator.ComputePageCount();
+        paginator.PageCount.Should().BeGreaterThan(1, "the table is taller than one page");
+
+        var remainder = PaginationEngine.SplitTableAtFirstOverflowRow(paginator, table);
+
+        remainder.Should().NotBeNull();
+        var kept = table.RowGroups.SelectMany(g => g.Rows).Count();
+        var moved = remainder!.RowGroups.SelectMany(g => g.Rows).Count();
+        kept.Should().BeGreaterThan(0);
+        moved.Should().BeGreaterThan(0);
+        (kept + moved).Should().Be(12);
+        remainder.Columns.Should().HaveCount(1);
+    }
 }

@@ -744,9 +744,16 @@ public static class DocumentViewLayoutPlanner
         private readonly double _defaultFontSizeDip;
         private readonly int _charsPerColumnLine;
         private readonly bool _hasFootnotes;
+        private readonly TextDocument _document;
 
-        private LeadingHeightContext(double dipPerPoint, double defaultFontSizeDip, int charsPerColumnLine, bool hasFootnotes)
+        private LeadingHeightContext(
+            TextDocument document,
+            double dipPerPoint,
+            double defaultFontSizeDip,
+            int charsPerColumnLine,
+            bool hasFootnotes)
         {
+            _document = document;
             _dipPerPoint = dipPerPoint;
             _defaultFontSizeDip = defaultFontSizeDip;
             _charsPerColumnLine = charsPerColumnLine;
@@ -768,7 +775,7 @@ public static class DocumentViewLayoutPlanner
                             PageLayout.ContentAreaDip(document.Page).Width,
                             usePageColumns: true).WidthDip
                         / Math.Max(4.5, defaultFontSizeDip * 0.50)));
-            return new LeadingHeightContext(dipPerPoint, defaultFontSizeDip, charsPerColumnLine, document.Footnotes.Count > 0);
+            return new LeadingHeightContext(document, dipPerPoint, defaultFontSizeDip, charsPerColumnLine, document.Footnotes.Count > 0);
         }
 
         /// <summary>True when the block (a paragraph, or a table's cell paragraphs) carries a footnote/endnote reference.</summary>
@@ -785,13 +792,17 @@ public static class DocumentViewLayoutPlanner
         {
             var dipPerPoint = _dipPerPoint;
             var defaultFontSizeDip = _defaultFontSizeDip;
+            // Line pitch and spacing come from the paragraph's full style cascade: a heading whose exact
+            // line height and space-after live on its style (and its based-on chain) is far taller than the
+            // direct formatting alone says, and underestimating the lead let a table plan one page too many rows.
+            var fmt = DocumentParagraphFormattingResolver.Resolve(_document, paragraph);
 
             // Only the content on the table's own (first) page counts as leading content: a forced page
             // boundary (page-break-before, a page-break run, or a section break that starts a new page)
             // moves everything before it onto earlier pages. Summing the whole document prefix here made a
             // table that follows a cover page look like it started with no room left, so it was split far
             // too early and left the page it begins on mostly empty.
-            if (paragraph.Formatting.PageBreakBefore)
+            if (fmt.PageBreakBefore)
             {
                 height = 0;
                 pageHasNote = false;
@@ -802,15 +813,15 @@ public static class DocumentViewLayoutPlanner
                 : _charsPerColumnLine;
             var lineCount = Math.Max(1, (int)Math.Ceiling(
                 Math.Max(1, paragraph.PlainText.Length) / (double)charsPerLine));
-            var lineHeightDip = paragraph.Formatting.LineRule switch
+            var lineHeightDip = fmt.LineRule switch
             {
-                LineSpacingRule.Exact or LineSpacingRule.AtLeast when paragraph.Formatting.LineHeightPt > 0
-                    => paragraph.Formatting.LineHeightPt * dipPerPoint,
-                _ => defaultFontSizeDip * Math.Max(1, paragraph.Formatting.LineSpacing)
+                LineSpacingRule.Exact or LineSpacingRule.AtLeast when fmt.LineHeightPt > 0
+                    => fmt.LineHeightPt * dipPerPoint,
+                _ => defaultFontSizeDip * Math.Max(1, fmt.LineSpacing)
             };
             height += lineCount * lineHeightDip
-                + paragraph.Formatting.SpaceBeforePt * dipPerPoint
-                + paragraph.Formatting.SpaceAfterPt * dipPerPoint;
+                + fmt.SpaceBeforePt * dipPerPoint
+                + fmt.SpaceAfterPt * dipPerPoint;
 
             if (paragraph.StyleId?.Equals("Heading1", StringComparison.OrdinalIgnoreCase) == true)
                 height += defaultFontSizeDip * 0.6;
@@ -821,7 +832,7 @@ public static class DocumentViewLayoutPlanner
             pageHasNote |= HasNoteReference(paragraph);
             if (paragraph.Runs.Any(run => run.IsPageBreak))
             {
-                height = lineCount * lineHeightDip + paragraph.Formatting.SpaceAfterPt * dipPerPoint;
+                height = lineCount * lineHeightDip + fmt.SpaceAfterPt * dipPerPoint;
                 pageHasNote = HasNoteReference(paragraph);
             }
             if (paragraph.SectionBreak?.BreakKind is SectionBreakKind.NextPage or SectionBreakKind.EvenPage or SectionBreakKind.OddPage)
@@ -3373,7 +3384,19 @@ public static class DocumentViewLayoutPlanner
         // estimate undercounts wrapped lines -- and diverges further still for a larger font -- on
         // virtually every real table. Use the authored grid width so the pagination plan agrees with both
         // hosts when a narrow cell wraps before a page boundary.
-        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt * ScriptCharWidthFactor(text));
+        // Expanded character spacing (w:spacing, e.g. the 3pt letter-spacing on a UN document's contents lines)
+        // adds its full advance to every character, so a spaced line carries far fewer characters per row.
+        var spacingPt = 0.0;
+        foreach (var run in paragraph.Runs)
+            spacingPt = Math.Max(spacingPt, run.Formatting.CharacterSpacingPt);
+        var scriptFactor = ScriptCharWidthFactor(text);
+        // Calibration (UN Arabic contents table, 8.5pt with 3pt spacing): Word holds ~95 characters on a full
+        // 601 DIP line, i.e. the connected Arabic glyphs themselves average only ~2.3 DIP, about half the
+        // unspaced estimate, once the spacing advance is counted separately.
+        if (spacingPt > 0 && scriptFactor < 1.0)
+            scriptFactor *= 0.5;
+        var charWidthDip = Math.Max(2.0, fontSizePt * TableCharWidthDipPerPt * scriptFactor)
+            + PageLayout.PointsToDip(spacingPt);
         var charsPerLine = Math.Max(1, (int)Math.Floor(Math.Max(12, contentWidthDip) / charWidthDip));
         var wrappedLines = Math.Max(1, (int)Math.Ceiling(text.Length / (double)charsPerLine));
         return Math.Max(explicitLines, wrappedLines);

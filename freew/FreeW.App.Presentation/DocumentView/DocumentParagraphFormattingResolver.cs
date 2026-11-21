@@ -118,6 +118,14 @@ public static class DocumentParagraphFormattingResolver
             IndentRightIsSet = direct.IndentRightIsSet || style.IndentRightIsSet,
             FirstLineIndentIsSet = direct.FirstLineIndentIsSet || style.FirstLineIndentIsSet,
             Border = direct.Border ?? style.Border,
+            // Flow-control toggles (w:keepNext, w:keepLines, w:pageBreakBefore) inherited from the style apply
+            // even when the paragraph carries other direct formatting: a heading style's keep-with-next must not
+            // vanish just because the heading also states its own spacing, or it strands at a page bottom.
+            PageBreakBefore = direct.PageBreakBefore || style.PageBreakBefore,
+            KeepWithNext = direct.KeepWithNext || style.KeepWithNext,
+            KeepLinesTogether = direct.KeepLinesTogether || style.KeepLinesTogether,
+            WidowControl = direct.WidowControlIsSet ? direct.WidowControl : style.WidowControl,
+            WidowControlIsSet = direct.WidowControlIsSet || style.WidowControlIsSet,
             ShadingColorHex = shadingFrom.ShadingColorHex,
             ShadingPattern = shadingFrom.ShadingPattern,
             TabStops = MergeTabStops(style.TabStops, direct.TabStops),

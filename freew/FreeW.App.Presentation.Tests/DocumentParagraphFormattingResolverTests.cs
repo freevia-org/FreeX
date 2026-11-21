@@ -186,6 +186,35 @@ public sealed class DocumentParagraphFormattingResolverTests
     }
 
     [Fact]
+    public void Resolve_keeps_style_flow_toggles_when_paragraph_also_has_direct_formatting()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Styles["Heading"] = new DocumentStyle
+        {
+            Id = "Heading",
+            Name = "Heading",
+            Paragraph = new ParagraphFormatting
+            {
+                KeepWithNext = true,
+                KeepLinesTogether = true,
+                PageBreakBefore = true,
+            },
+        };
+        var paragraph = new Paragraph
+        {
+            StyleId = "Heading",
+            Formatting = new ParagraphFormatting { SpaceAfterPt = 6, SpaceAfterIsSet = true },
+        };
+
+        var resolved = DocumentParagraphFormattingResolver.Resolve(document, paragraph);
+
+        resolved.SpaceAfterPt.Should().Be(6);
+        resolved.KeepWithNext.Should().BeTrue("the style's keep-with-next survives the paragraph's own spacing");
+        resolved.KeepLinesTogether.Should().BeTrue();
+        resolved.PageBreakBefore.Should().BeTrue();
+    }
+
+    [Fact]
     public void Probe_resolves_run_and_paragraph_formatting_at_model_offset()
     {
         var document = TextDocument.CreateEmpty();
