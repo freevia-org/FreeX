@@ -139,7 +139,9 @@ public sealed partial class MainWindow
         void SyncRangeState()
         {
             var grouping = PivotGroupFieldPlanner.GroupingFromIndex(groupingBox.SelectedIndex);
-            rangePanel.IsEnabled = PivotGroupFieldPlanner.GroupingUsesNumberRange(grouping);
+            // WPF PivotFieldGroupingDialog never disables the Range group.
+            _ = PivotGroupFieldPlanner.GroupingUsesNumberRange(grouping);
+            rangePanel.IsEnabled = true;
         }
 
         fieldBox.SelectionChanged += (_, _) =>

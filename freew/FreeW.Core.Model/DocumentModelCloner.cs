@@ -22,6 +22,9 @@ public static class DocumentModelCloner
         target.DefaultRun = source.DefaultRun;
         target.DefaultParagraph = source.DefaultParagraph;
         target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
+        target.CompatibilityMode = source.CompatibilityMode;
+        target.CompatibilityFlags.Clear();
+        target.CompatibilityFlags.AddRange(source.CompatibilityFlags);
         target.EmbedSystemFonts = source.EmbedSystemFonts;
         target.SaveSubsetFonts = source.SaveSubsetFonts;
         target.PageBordersDoNotSurroundHeader = source.PageBordersDoNotSurroundHeader;

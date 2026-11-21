@@ -313,7 +313,7 @@ public sealed partial class MainWindow
 
         var nameBox = new TextBox
         {
-            Text = CustomViewsPlanner.SuggestDefaultName(_session.Workbook, UiText.Get("CustomViews_DefaultNameFormat")),
+            Text = CustomViewsPlanner.SuggestDefaultName(_session.Workbook, UiText.Get("CustomViews_DefaultName")),
             MinWidth = 220,
         };
         ApplyDataOpsTextBoxChrome(nameBox);

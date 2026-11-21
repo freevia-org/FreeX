@@ -337,7 +337,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Control)");
         source.Should().Contain("HasHyperlinkActivationModifier(args.KeyModifiers)");
         source.Should().Contain("if (IsContextClick(point, args))");
-        source.Should().Contain("OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost);");
+        source.Should().Contain("OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost, clickedCell: address);");
         source.Should().Contain("OpenColumnHeaderContextMenu(_sheetGridHost);");
         source.Should().Contain("OpenRowHeaderContextMenu(_sheetGridHost);");
     }

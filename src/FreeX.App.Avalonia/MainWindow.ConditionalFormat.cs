@@ -123,8 +123,8 @@ public sealed partial class MainWindow
             return;
 
         var value = await ShowConditionalFormatValuePromptAsync(
-            UiText.Get("InsertLoc_CfGreaterThanTitle"),
-            UiText.Get("InsertLoc_CfGreaterThanPrompt"),
+            UiText.Get("Remaining_NewFormattingRule"),
+            StripDisplayMnemonic(UiText.Get("Remaining_FormatCellsGreaterThan")),
             "0");
         if (value is null)
             return;
@@ -983,11 +983,23 @@ public sealed partial class MainWindow
         ApplyCfButtonChrome(okButton, 72, isDefault: true);
         var cancelButton = new Button { Content = UiText.Get("InsertLoc_CancelButton"), IsCancel = true, MinWidth = 72 };
         ApplyCfButtonChrome(cancelButton, 72);
-        okButton.Click += (_, _) =>
+        okButton.Click += (_, _) => RunGuarded(async () =>
         {
-            result = valueBox.Text ?? string.Empty;
+            // WPF ConditionalFormatThresholdDialog.Accept: blank input shows "Enter a threshold value."
+            // (titled with the dialog), refocuses the box and keeps the dialog open.
+            if (!ConditionalFormatThresholdDialogPlanner.TryCreateResult(valueBox.Text, out var threshold))
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    UiText.Get("Remaining_EnterThresholdValue"),
+                    dialog.Title ?? string.Empty);
+                AvaloniaCompactDialogChrome.FocusAndSelect(valueBox);
+                return;
+            }
+
+            result = threshold.ThresholdText;
             dialog.Close();
-        };
+        });
         cancelButton.Click += (_, _) => dialog.Close();
 
         // WPF button order: [OK][Cancel] — primary on left
@@ -1156,7 +1168,9 @@ public sealed partial class MainWindow
         // The shared session uses this scope for both the list projection and move neighbours.
         GridRange? CurrentScope() => scopeBox.SelectedItem is ManageConditionalFormatScopeItem { Range: { } range } ? range : null;
 
-        void Reload(Guid? selectId = null)
+        // WPF ManageConditionalFormatsDialog opens (and changes scope) with nothing selected, so Edit,
+        // Duplicate, Delete and Move stay disabled; a delete selects the neighbouring row.
+        void Reload(Guid? selectId = null, int? selectIndex = null)
         {
             var scope = CurrentScope();
             manageSession.SetScope(scope);
@@ -1165,7 +1179,7 @@ public sealed partial class MainWindow
             emptyText.IsVisible = items.Count == 0;
             if (items.Count > 0)
             {
-                var index = 0;
+                var index = -1;
                 if (selectId is { } id)
                     for (var i = 0; i < items.Count; i++)
                         if (items[i].Id == id)
@@ -1173,6 +1187,9 @@ public sealed partial class MainWindow
                             index = i;
                             break;
                         }
+
+                if (selectIndex is { } neighbour)
+                    index = Math.Min(neighbour, items.Count - 1);
 
                 listBox.SelectedIndex = index;
             }
@@ -1245,7 +1262,8 @@ public sealed partial class MainWindow
 
         newButton.Click += (_, _) => RunGuarded(async () =>
         {
-            var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null);
+            // WPF ManageConditionalFormatsDialog opens New Rule on the Data Bar rule type.
+            var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType: CfRuleType.DataBar);
             if (built is null)
                 return;
 
@@ -1274,10 +1292,11 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not ManageConditionalFormatRuleProjection item)
                 return;
 
+            var deletedIndex = listBox.SelectedIndex;
             if (!manageSession.Delete(item.Id))
                 return;
 
-            Reload();
+            Reload(selectIndex: deletedIndex);
         };
 
         duplicateButton.Click += (_, _) => RunGuarded(async () =>

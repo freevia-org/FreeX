@@ -554,6 +554,17 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
         workbook.FirstVisibleSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.FirstVisibleSheetIndex, maxLoadedSheetIndex);
         workbook.ActiveSheetIndex = NativeJsonValueSanitizer.ValidNonNegativeIntOrNull(workbook.ActiveSheetIndex, maxLoadedSheetIndex);
 
+        foreach (var customStyleDto in dto.CustomCellStyles ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(customStyleDto?.Name) || ToCellStyle(customStyleDto.Style) is not { } customStyle)
+                continue;
+
+            workbook.CustomCellStyles.Add(new CustomCellStyle(
+                customStyleDto.Name.Trim(),
+                customStyle,
+                (CustomCellStyleParts)(customStyleDto.Parts & (int)CustomCellStyleParts.All)));
+        }
+
         foreach (var namedRangeDto in dto.NamedRanges ?? [])
         {
             if (string.IsNullOrWhiteSpace(namedRangeDto?.Name))

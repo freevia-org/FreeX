@@ -11941,7 +11941,11 @@ public sealed partial class DocumentView : RichTextBox
         double? measuredWidthDip = null,
         DocumentTableLayoutPlan? tableLayoutPlan = null)
     {
-        var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
+        // Pre-2013 compatibility modes put the first cell's text (not its border) at the indent position.
+        // A Block margin cannot be negative, so a table whose outdent exceeds its indent stays at the margin.
+        var indent = Math.Max(0, Math.Max(0, table.IndentFromLeftPt ?? 0)
+            - TableCompatibilityIndentPlanner.ResolveLeftOutdentPt(
+                document.UsesLegacyCompatibilityLayout && tableLayoutPlan?.FloatingPosition is null, table)) * PxPerPoint;
         var widthDip = TableColumnLayoutPlanner.ResolveTableWidthDip(table, measuredWidthDip);
         if (widthDip <= 0)
             return new Thickness(indent, 0, 0, 0);
@@ -12861,6 +12865,38 @@ public sealed partial class DocumentView : RichTextBox
         && !run.IsPageBreak
         && !run.IsColumnBreak;
 
+    /// <summary>
+    /// Whether <paramref name="run"/> contributes visible text to the segment that follows a tab. Besides plain
+    /// text this admits field results (the PAGEREF page number that ends every TOC entry): a right-aligned tab
+    /// must reserve the width of that cached result, or the leader runs the full distance to the stop and the
+    /// number wraps onto a line of its own, doubling the entry's height.
+    /// </summary>
+    private static bool IsTabFollowingTextRun(ModelRun run, bool isTabRun)
+    {
+        if (isTabRun)
+            return IsPlainTextRun(run);
+        if (IsPlainTextRun(run))
+            return true;
+        return run.Image is null
+            && run.Shape is null
+            && run.Chart is null
+            && run.WordArt is null
+            && run.Equation is null
+            && run.SmartArt is null
+            && run.EmbeddedObject is null
+            && run.PreservedDrawing is null
+            && run.DrawingGroup is null
+            && run.FootnoteId is null
+            && run.EndnoteId is null
+            && run.TableFormula is null
+            && run.Citation is null
+            && !run.IsCommentReference
+            && !run.IsPageBreak
+            && !run.IsColumnBreak
+            && (run.ComplexField is null || !run.ComplexField.ShowCode)
+            && (run.CrossReference is not null || run.ComplexField is not null || run.FieldKind != RunFieldKind.None);
+    }
+
     private static TabFollowingSegmentMetrics MeasureFollowingTabSegment(
         IReadOnlyList<ModelRun> runs,
         int runIndex,
@@ -12874,7 +12910,7 @@ public sealed partial class DocumentView : RichTextBox
         for (var i = runIndex; i < runs.Count; i++)
         {
             var run = runs[i];
-            if (!IsPlainTextRun(run))
+            if (!IsTabFollowingTextRun(run, isTabRun: i == runIndex))
                 break;
 
             var text = run.Text;
@@ -13288,9 +13324,13 @@ public sealed partial class DocumentView : RichTextBox
         // ReadRunFormatting recovers the exact combination -- see the SmallCapsFlagProperty doc comment.
         wpf.SetValue(SmallCapsFlagProperty, fmt.SmallCaps);
         wpf.SetValue(AllCapsFlagProperty, fmt.AllCaps);
+        // Word synthesizes small capitals (upper-case glyphs at 80%) instead of using the font's smcp feature,
+        // which fonts such as Bookman Old Style lack. A non-interactive page render (never committed back) does
+        // the same by splitting the text below; the editor keeps the single run and Typography.Capitals.
+        var syntheticSmallCaps = _renderJoinSlashes && fmt.SmallCaps && !fmt.AllCaps;
         if (fmt.AllCaps)
             Typography.SetCapitals(wpf, FontCapitals.AllSmallCaps);
-        else if (fmt.SmallCaps)
+        else if (fmt.SmallCaps && !syntheticSmallCaps)
             Typography.SetCapitals(wpf, FontCapitals.SmallCaps);
         ApplyOpenTypeTypography(wpf, fmt);
 
@@ -13390,12 +13430,43 @@ public sealed partial class DocumentView : RichTextBox
             wpf.FontSize = 0.015;
         }
 
-        if (run.HyperlinkUrl is { Length: > 0 } url)
-            return HideTextInlineWhenNeeded(BuildHyperlink(wpf, url, run.HyperlinkTooltip), fmt);
-        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
-            return HideTextInlineWhenNeeded(BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip), fmt);
+        Inline content = wpf;
+        if (syntheticSmallCaps && !IsTextHiddenInCurrentView(fmt))
+            content = SplitSyntheticSmallCaps(wpf, fontSizePx);
 
-        return HideTextInlineWhenNeeded(wpf, fmt);
+        if (run.HyperlinkUrl is { Length: > 0 } url)
+            return HideTextInlineWhenNeeded(BuildHyperlink(content, url, run.HyperlinkTooltip), fmt);
+        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
+            return HideTextInlineWhenNeeded(BuildInternalHyperlink(content, anchor, run.HyperlinkTooltip), fmt);
+
+        return HideTextInlineWhenNeeded(content, fmt);
+    }
+
+    /// <summary>
+    /// Replaces a small-caps run by a span of runs: upper-case glyphs for the lower-case letters at
+    /// <see cref="SyntheticSmallCapsPlanner.SmallCapScale"/> of the run's size, everything else unchanged. Returns
+    /// the original run when it has no lower-case letter. Page-only renders (never read back) only.
+    /// </summary>
+    private static Inline SplitSyntheticSmallCaps(WpfRun source, double fontSizePx)
+    {
+        var segments = SyntheticSmallCapsPlanner.Split(source.Text);
+        if (segments.Count == 0)
+            return source;
+
+        var baseSize = source.ReadLocalValue(WpfRun.FontSizeProperty) != DependencyProperty.UnsetValue
+            ? source.FontSize
+            : fontSizePx;
+        var span = new Span { Tag = source.Tag };
+        foreach (var segment in segments)
+        {
+            var piece = CloneTextRun(source, segment.Text);
+            piece.FontSize = segment.IsSmallCapital ? baseSize * SyntheticSmallCapsPlanner.SmallCapScale : baseSize;
+            foreach (var effect in source.TextEffects)
+                piece.TextEffects.Add(effect.Clone());
+            span.Inlines.Add(piece);
+        }
+
+        return span;
     }
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<WpfRun, RunFormatting>

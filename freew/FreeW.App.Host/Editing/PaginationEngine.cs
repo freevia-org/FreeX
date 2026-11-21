@@ -905,16 +905,42 @@ internal static class PaginationEngine
         void SetReserve(double reserveDip) =>
             work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
 
-        // The last of the first blockCount entries that carries its own footnote reference, or -1.
+        // The last of the first blockCount entries that carries its own footnote reference, or -1. Evaluated
+        // under the reserve currently set (callers use none): the entry's last reference mark that sits on
+        // the first page is remembered so that "is the reference still kept?" is judged at the line of the
+        // mark, not just at the start of its paragraph -- a long paragraph can stay on the page while the
+        // line holding its mark (and so its note) is pushed to the next one.
+        TextPointer? lastReferenceMark = null;
         int LastReferencingEntry(int blockCount)
         {
+            lastReferenceMark = null;
             for (var index = Math.Min(blockCount, pending.Count) - 1; index >= 0; index--)
             {
-                if (!pending[index].IsContinuation
-                    && FootnoteIdsInModelBlock(modelBlocks[pending[index].ModelIndex]).Any())
-                    return index;
+                if (pending[index].IsContinuation
+                    || !FootnoteIdsInModelBlock(modelBlocks[pending[index].ModelIndex]).Any())
+                    continue;
+                var markers = DocumentView.CollectFootnoteMarkers([pending[index].Block], includeAutomationIdMarks: true);
+                foreach (var marker in markers)
+                {
+                    int markerPage;
+                    try { markerPage = dynamicWork.GetPageNumber(marker.Position); }
+                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { markerPage = 0; }
+                    if (markerPage <= 0)
+                        lastReferenceMark = marker.Position;
+                }
+                return index;
             }
             return -1;
+        }
+
+        bool ReferenceStaysOnFirstPage(int lastReferencing)
+        {
+            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+                return false;
+            if (lastReferenceMark is null)
+                return true;
+            try { return dynamicWork.GetPageNumber(lastReferenceMark) <= 0; }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { return true; }
         }
 
         // The largest band (at most upperDip) under which entry lastReferencing still starts on the page,
@@ -923,7 +949,7 @@ internal static class PaginationEngine
         {
             var minimumDip = Math.Min(upperDip, minimumSplitBandDip);
             SetReserve(minimumDip);
-            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+            if (!ReferenceStaysOnFirstPage(lastReferencing))
                 return 0;
 
             var low = minimumDip;
@@ -932,7 +958,7 @@ internal static class PaginationEngine
             {
                 var middle = (low + high) / 2;
                 SetReserve(middle);
-                if (CountBlocksStartingOnFirstPage() > lastReferencing)
+                if (ReferenceStaysOnFirstPage(lastReferencing))
                     low = middle;
                 else
                     high = middle;
@@ -953,12 +979,12 @@ internal static class PaginationEngine
             // still covers the page it produces.
             SetReserve(0);
             var countWithoutReserve = CountBlocksStartingOnFirstPage();
+            var lastReferencing = LastReferencingEntry(countWithoutReserve);
             var reserveDip = ReserveFor(countWithoutReserve);
             if (reserveDip > 0)
             {
                 SetReserve(reserveDip);
-                var lastReferencing = LastReferencingEntry(countWithoutReserve);
-                if (lastReferencing >= 0 && CountBlocksStartingOnFirstPage() <= lastReferencing)
+                if (lastReferencing >= 0 && !ReferenceStaysOnFirstPage(lastReferencing))
                 {
                     // Word keeps a note with its reference line: when the whole note band would push the
                     // referencing text off the page, the band shrinks to what still leaves that reference
