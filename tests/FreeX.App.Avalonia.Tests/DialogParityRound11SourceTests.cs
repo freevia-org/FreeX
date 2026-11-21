@@ -33,8 +33,11 @@ public sealed class DialogParityRound11SourceTests
         source.Should().Contain("ConfirmProtectionPasswordBox");
         source.Should().NotContain("ProtectSheetConfirmBox");
         source.Should().NotContain("ProtectWorkbookConfirmBox");
-        source.Should().NotContain("ProtectWorkbookStructureBox");
-        source.Should().NotContain("ProtectWorkbookWindowsBox");
+        // Protect Workbook offers Excel's Structure (checked) / Windows (unchecked) toggles, as in WPF.
+        source.Should().Contain("ProtectWorkbookStructureBox");
+        source.Should().Contain("ProtectWorkbookWindowsBox");
+        source.Should().Contain("ProtectStructure = structureBox.IsChecked == true,");
+        source.Should().Contain("ProtectWindows = windowsBox.IsChecked == true,");
     }
 
     [Fact]
