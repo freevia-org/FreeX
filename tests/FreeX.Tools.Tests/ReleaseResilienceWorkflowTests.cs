@@ -242,6 +242,76 @@ public sealed class ReleaseResilienceWorkflowTests
     }
 
     [Fact]
+    public void FullRelease_FaultInjectionIsDryRunOnlyMainOnlyAndOffByDefault()
+    {
+        var workflow = FullRelease();
+
+        // Off by default, a closed choice.
+        Regex.IsMatch(workflow, @"(?s)inject_fault:\s+description:.*?default: none\s+type: choice\s+options:\s+- none\s+- real\s+- infra\s+- selftest")
+            .Should().BeTrue("inject_fault must default to none and offer exactly none/real/infra/selftest");
+
+        // The candidate job rejects it first, fail closed, outside a main dry run.
+        var candidate = Job(workflow, "candidate");
+        var guardIndex = candidate.IndexOf("name: Reject fault injection outside a main dry run", StringComparison.Ordinal);
+        guardIndex.Should().BeGreaterThan(0);
+        guardIndex.Should().BeLessThan(candidate.IndexOf("- name: Checkout", StringComparison.Ordinal), "the guard runs before anything is checked out");
+        candidate.Should().Contain("$env:INJECT_DRY_RUN -cne 'true'");
+        candidate.Should().Contain("$env:GITHUB_REF -cne 'refs/heads/main'");
+        candidate.Should().Contain("-cnotin @('', 'none', 'real', 'infra', 'selftest')");
+
+        // The injected job is itself gated on dry run + main, runs nothing it does not name, and the
+        // injected failures apply to the first attempt only so the automatic re-run can pass.
+        var job = Job(workflow, "fault-injection");
+        job.Should().Contain("needs: [candidate]");
+        job.Should().Contain("if: ${{ inputs.dry_run && inputs.inject_fault != 'none' && github.ref == 'refs/heads/main' }}");
+        job.Should().Contain("contents: read");
+        job.Should().NotContain("contents: write");
+        job.Should().NotContain("secrets.");
+        job.Should().Contain("if: ${{ env.INJECT_FAULT == 'real' && github.run_attempt == 1 }}");
+        job.Should().Contain("if: ${{ env.INJECT_FAULT == 'infra' && github.run_attempt == 1 }}");
+        // The infrastructure signal is the step name the classifier treats as a service-transfer step.
+        job.Should().Contain("name: Download injected rehearsal inputs");
+        Regex.IsMatch(job, @"(?m)^      - name: Injected real failure$").Should().BeTrue();
+
+        // Nothing can depend on it, so it cannot change a gate or publication.
+        Regex.IsMatch(workflow, @"needs:\s*\[[^\]]*fault-injection").Should().BeFalse();
+
+        // The value reaches scripts only through env: every use of the input is an env assignment, the
+        // job condition, or the input declaration, never script text.
+        var uses = workflow.Split('\n')
+            .Where(l => l.Contains("inputs.inject_fault", StringComparison.Ordinal))
+            .Select(l => l.Trim())
+            .ToList();
+        uses.Should().NotBeEmpty();
+        foreach (var use in uses)
+        {
+            (use.StartsWith("INJECT_FAULT: ${{ inputs.inject_fault }}", StringComparison.Ordinal)
+                || use.StartsWith("if: ${{ inputs.dry_run && inputs.inject_fault != 'none'", StringComparison.Ordinal))
+                .Should().BeTrue($"inputs.inject_fault must only reach the job through env or the job condition: '{use}'");
+        }
+        workflow.Should().Contain("INJECT_DRY_RUN: ${{ inputs.dry_run }}");
+
+        // Only the packaging rehearsal and the dry-run switch itself may mention it elsewhere; the
+        // publishing jobs never read it.
+        foreach (var publishJob in new[] { "publish", "publish-suite", "verify-publication" })
+        {
+            Job(workflow, publishJob).Should().NotContain("inject_fault");
+        }
+    }
+
+    [Fact]
+    public void ReleaseResilienceSelfTest_RunsRetryAndResumePlanWithoutTouchingAnyRelease()
+    {
+        var selfTest = WorkspaceFileLocator.ReadAllText("tools", "Test-ReleaseResilienceSelfTest.ps1");
+        selfTest.Should().Contain("Invoke-WithRetry");
+        selfTest.Should().Contain("-PlanOnly");
+        selfTest.Should().Contain("-ExistingReleaseJsonPath");
+        selfTest.Should().NotContain("gh ");
+        selfTest.Should().NotContain("gh.exe");
+        Job(FullRelease(), "fault-injection").Should().Contain("tools/Test-ReleaseResilienceSelfTest.ps1");
+    }
+
+    [Fact]
     public void LatestReadinessGreenSha_DelegatesTheProofToTheReleaseEvidenceResolverAndFailsClosed()
     {
         var helper = WorkspaceFileLocator.ReadAllText("tools", "Get-LatestReadinessGreenSha.ps1");

@@ -100,3 +100,24 @@ signed release.
 - Publication resumes safely: `tools/Send-ReleaseAssets.ps1` uploads only assets that are
   missing, leaves identical ones, replaces only interrupted uploads, and refuses to overwrite a
   published asset whose content differs.
+
+### Rehearsing the failure paths (fault injection)
+
+`inject_fault` (default `none`, which changes nothing) lets a dry run exercise the paths above
+live. It is honoured only with `dry_run=true` dispatched from `refs/heads/main`; the first step of
+the `candidate` job fails the run for any other combination, and the value reaches scripts only
+through environment variables. It adds one cheap job, `Inject a rehearsal fault`, that nothing
+depends on.
+
+- `real`: that job fails with an ordinary step error. With `early_abort` on, the watcher
+  cancels the run and `release-auto-retry.yml` stays out (cancelled runs are never retried);
+  with `early_abort=false` the run ends `failure` and the classifier reports `real`, so
+  auto-retry does not retry.
+- `infra`: on attempt 1 the job fails in a step named `Download injected rehearsal inputs`,
+  which the classifier treats as infrastructure (a genuine runner annotation cannot be faked
+  honestly). The watcher does not cancel, the run ends `failure`, auto-retry re-runs the failed
+  job once, and attempt 2 skips the injection and passes.
+- `selftest`: the job runs `tools/Test-ReleaseResilienceSelfTest.ps1`: `Invoke-WithRetry` with a
+  first attempt that fails and a second that succeeds, and `Send-ReleaseAssets.ps1 -PlanOnly`
+  against a synthetic half-published release. Uploading to a live release is not rehearsed,
+  because a draft release is invisible to the tag lookup and a real tag is public.
