@@ -74,6 +74,11 @@ internal static class PrintPlainText
             FontSize = fontSizeDip * 0.65
         });
         block.Inlines.Add(new Run(text));
+        // Word does not grow a note's first line for its raised reference mark; WPF would (the superscript's
+        // raised box extends the line), pushing the whole note band 3-5 dip lower than the pagination reserved.
+        // Pin every line to the font's own single line.
+        block.LineHeight = Math.Ceiling(family.LineSpacing * fontSizeDip * 100) / 100;
+        block.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         Typography.SetKerning(block, false);
         block.Measure(new Size(Math.Max(1, maxWidthDip), double.PositiveInfinity));
         return block;

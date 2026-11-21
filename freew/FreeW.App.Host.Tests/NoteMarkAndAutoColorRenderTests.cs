@@ -38,6 +38,18 @@ public sealed class NoteMarkAndAutoColorRenderTests
     }
 
     [StaFact]
+    public void PrintNoteRow_PinsEveryLineToTheFontsSingleLineSoTheRaisedMarkDoesNotGrowTheFirstLine()
+    {
+        var family = new FontFamily("Times New Roman");
+        var labelled = PrintPlainText.BuildNote("63", "Siehe auch", family, 13, Brushes.Black, 400);
+        var plain = PrintPlainText.BuildNote("", "Siehe auch", family, 13, Brushes.Black, 400);
+
+        Assert.Equal(System.Windows.LineStackingStrategy.BlockLineHeight, labelled.LineStackingStrategy);
+        Assert.InRange(labelled.LineHeight, family.LineSpacing * 13, family.LineSpacing * 13 + 0.01);
+        Assert.InRange(labelled.DesiredSize.Height, plain.DesiredSize.Height - 0.5, plain.DesiredSize.Height + 0.5);
+    }
+
+    [StaFact]
     public void PrintNoteRow_WithoutLabelIsPlainText()
     {
         var block = PrintPlainText.BuildNote("", "Hillman", new FontFamily("Times New Roman"), 13, Brushes.Black, 400);

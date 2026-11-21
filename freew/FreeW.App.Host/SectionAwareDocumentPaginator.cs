@@ -343,7 +343,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
             if (y < maxY)
             {
                 var pen = new Pen(Brushes.Black, 0.75);
-                var ruleY = wordStack ? y + plan.SeparatorHeightDip / 2 : y;
+                var ruleY = wordStack ? y + plan.SeparatorHeightDip * WordSeparatorRuleFraction : y;
                 dc.DrawLine(
                     pen,
                     new Point(marginLeft + plan.SeparatorXOffsetDip, ruleY),
@@ -380,6 +380,12 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         container.Children.Add(visual);
     }
 
+    /// <summary>
+    /// Where Word draws the footnote separator inside its line box, measured from the box top (the rule sits
+    /// a little below the middle, about two points above the baseline of an 11pt line).
+    /// </summary>
+    private const double WordSeparatorRuleFraction = 0.6;
+
     /// <summary>The region-wide note layout, for a row or fragment that carries none of its own.</summary>
     private static NoteRowLayout RegionLayout(DocumentNoteRegionPlan plan) => new(
         plan.TextFontSizePt,
@@ -411,14 +417,18 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         var visual = new ContainerVisual();
         var rules = new DrawingVisual();
         visual.Children.Add(rules);
-        var y = bodyBottom - band.AvailableHeightDip;
+        // Word sets the band flush against the body's bottom limit; the pagination reserve carries a sliver more
+        // (the per-note line-growth charge), so anchor on the height the notes actually occupy.
+        var y = bodyBottom - (band.EstimatedHeightDip > 0
+            ? Math.Min(band.AvailableHeightDip, band.EstimatedHeightDip)
+            : band.AvailableHeightDip);
         using (var dc = rules.RenderOpen())
         {
             var pen = new Pen(Brushes.Black, 0.75);
             var ruleWidth = band.SeparatorKind == DocumentFootnoteSeparatorKind.Continuation
                 ? contentWidth
                 : metricsPlan.SeparatorWidthDip;
-            var ruleY = y + metricsPlan.SeparatorHeightDip / 2;
+            var ruleY = y + metricsPlan.SeparatorHeightDip * WordSeparatorRuleFraction;
             dc.DrawLine(pen, new Point(marginLeft, ruleY), new Point(marginLeft + ruleWidth, ruleY));
         }
 
