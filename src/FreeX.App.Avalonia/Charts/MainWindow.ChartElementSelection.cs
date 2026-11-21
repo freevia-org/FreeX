@@ -48,7 +48,7 @@ public sealed partial class MainWindow
         _selectedChartElementSeriesName = seriesName;
 
         var name = ChartElementCommandPlanner.Describe(element, seriesName).Resolve(UiText.Get, UiText.Format);
-        SelectChart(chart, element, UiText.Format(ChartElementCommandPlanner.SelectedStatusResourceKey, name));
+        SelectChartWithElement(chart, element, UiText.Format(ChartElementCommandPlanner.SelectedStatusResourceKey, name));
     }
 
     /// <summary>

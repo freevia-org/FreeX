@@ -220,7 +220,9 @@ public sealed partial class MainWindow
             DrawingObjectHandleHitPadding);
     }
 
-    private void SelectChart(ChartModel chart, ChartElementRef? element = null, string? status = null)
+    private void SelectChart(ChartModel chart) => SelectChartWithElement(chart, null, null);
+
+    private void SelectChartWithElement(ChartModel chart, ChartElementRef? element, string? status)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
