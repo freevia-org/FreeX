@@ -51,7 +51,7 @@ jobs:
   #
   # Nothing consumes readiness conclusions as evidence: Resolve-GitHubReleaseCandidate.ps1 and
   # full-release.yml only look at ci.yml and codeql.yml, so a skipped run cannot make a release
-  # candidate unresolvable. A skipped run concludes success (all gate jobs skipped). Release-gate\n  # evidence reuse (tools/Resolve-ReleaseGateEvidence.ps1) accepts only a run that holds every\n  # expected gate job, so a skipped run is never mistaken for evidence and the resolver walks past it.
+  # candidate unresolvable. A skipped run concludes success (all gate jobs skipped), except the known_red skip below, which fails in the summary job. Release-gate\n  # evidence reuse (tools/Resolve-ReleaseGateEvidence.ps1) accepts only a run that holds every\n  # expected gate job, so a skipped run is never mistaken for evidence and the resolver walks past it.
   # A skipped run is itself "success", so a run only counts as a FULL run when its "Select release
   # gates" job succeeded; otherwise skipped runs would extend the window forever.
   guard:
@@ -63,6 +63,7 @@ jobs:
       actions: read
     outputs:
       skip: ${{ steps.decide.outputs.skip }}
+      known_red: ${{ steps.decide.outputs.known_red }}
     steps:
       - name: Decide whether this commit needs a full readiness run
         id: decide
@@ -75,6 +76,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           $skip = 'false'
+          $knownRed = 'false'
           $reason = "event '$($env:EVENT_NAME)' always runs in full."
           try {
             if ($env:EVENT_NAME -eq 'schedule') {
@@ -108,15 +110,52 @@ jobs:
                 }
                 break
               }
+              # An unchanged SHA that has ALREADY failed its full gates twice teaches nothing a third
+              # time: measured 2026-11-10..21, c1af1fb4 was re-tested in full six times and 54e0cdc7
+              # three times while red (nine of 28 scheduled runs, ~100 job-minutes each, holding the
+              # shared macOS/Windows slots the push gate queues for). One retry is kept so a flaky or
+              # infrastructure failure still gets a second look. The run is then NOT reported green:
+              # known_red makes the summary job fail with the reason, so the red signal is unchanged
+              # and only the re-execution is saved. Only failures whose README check passed count,
+              # because that check reads state outside the repository (the newest published release)
+              # and can flip without a new commit. workflow_dispatch and any read failure still run.
+              if ($skip -ne 'true') {
+                $failedRows = gh api --method GET "repos/$($env:REPOSITORY)/actions/workflows/release-readiness.yml/runs" `
+                  -f "head_sha=$($env:SHA)" -f status=failure -f per_page=100 `
+                  --jq '.workflow_runs[] | [.id, .run_started_at] | @tsv'
+                if ($LASTEXITCODE -ne 0) { throw "gh api failed listing failed readiness runs (exit $LASTEXITCODE)." }
+                $failedFull = 0
+                foreach ($failedRow in @($failedRows | Where-Object { $_ })) {
+                  $failedParts = $failedRow -split "`t"
+                  if ($failedParts[0] -eq $env:RUN_ID) { continue }
+                  $failedAge = ([DateTimeOffset]::UtcNow - [DateTimeOffset]::Parse($failedParts[1], [System.Globalization.CultureInfo]::InvariantCulture)).TotalDays
+                  if ($failedAge -ge $maxAgeDays) { continue }
+                  $failedJobs = gh api --method GET "repos/$($env:REPOSITORY)/actions/runs/$($failedParts[0])/jobs" `
+                    -f per_page=100 `
+                    --jq '.jobs[] | [.name, .conclusion] | @tsv'
+                  if ($LASTEXITCODE -ne 0) { throw "gh api failed listing jobs of run $($failedParts[0]) (exit $LASTEXITCODE)." }
+                  $failedJobs = @($failedJobs | Where-Object { $_ })
+                  if (($failedJobs -contains "Select release gates`tsuccess") -and ($failedJobs -contains "README download links`tsuccess")) {
+                    $failedFull++
+                  }
+                }
+                if ($failedFull -ge 2) {
+                  $skip = 'true'
+                  $knownRed = 'true'
+                  $reason = "$failedFull full readiness runs already failed on unchanged $($env:SHA) in the last $maxAgeDays days; not re-testing. Push a fix (or dispatch manually) to run the lanes again."
+                }
+              }
             }
           }
           catch {
             $skip = 'false'
+            $knownRed = 'false'
             $reason = "could not read readiness history ($($_.Exception.Message)); failing open and running in full."
           }
           Write-Host $reason
           "skip=$skip" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "Release readiness guard: skip=$skip. $reason" | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          "known_red=$knownRed" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "Release readiness guard: skip=$skip known_red=$knownRed. $reason" | Out-File -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
   prepare:
     name: Select release gates
@@ -252,6 +291,11 @@ jobs:
         run: |
           $guardResult = "${{ needs.guard.result }}"
           $guardSkip = "${{ needs.guard.outputs.skip }}"
+          $guardKnownRed = "${{ needs.guard.outputs.known_red }}"
+          # Skipping a repeat of a red SHA saves the re-execution, never the red signal.
+          if ($guardResult -eq 'success' -and $guardSkip -eq 'true' -and $guardKnownRed -eq 'true') {
+            throw "Not re-tested: this exact commit already failed its full release-readiness run twice within seven days. The release lanes are still not releasable on it; see the guard job summary for the reason."
+          }
           if ($guardResult -eq 'success' -and $guardSkip -eq 'true') {
             Write-Host "Skipped: this commit already passed a full readiness run within the last seven days."
             exit 0
