@@ -73,8 +73,8 @@ public sealed class RepositoryPreflightTests
 
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".github", "workflows"));
 
-        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
-        File.WriteAllText(workflowPath, "name: Tester Release");
+        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "full-release.yml");
+        File.WriteAllText(workflowPath, "name: Full Signed Release");
 
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
             "Test-DotNetSdkReadiness.ps1",
@@ -94,11 +94,11 @@ public sealed class RepositoryPreflightTests
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Current"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".claude", "worktrees", "agent", "src", "Future"));
 
-        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
+        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "full-release.yml");
         File.WriteAllText(
             workflowPath,
             """
-            name: Tester Release
+            name: Full Signed Release
             jobs:
               build:
                 steps:
@@ -142,11 +142,11 @@ public sealed class RepositoryPreflightTests
         Directory.CreateDirectory(Path.Combine(tempDirectory, ".github", "workflows"));
         Directory.CreateDirectory(Path.Combine(tempDirectory, "src", "Future"));
 
-        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "tester-release.yml");
+        var workflowPath = Path.Combine(tempDirectory, ".github", "workflows", "full-release.yml");
         File.WriteAllText(
             workflowPath,
             """
-            name: Tester Release
+            name: Full Signed Release
             jobs:
               build:
                 steps:

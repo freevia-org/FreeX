@@ -43,7 +43,12 @@ public sealed partial class MainWindow
 {
     private readonly FreeXOptionsRuntimeSession _optionsRuntimeSession;
 
-    private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);
+    private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily)
+    {
+        // WPF keeps a disabled Options TextBox (the iterative-calculation limits, the Move-after-Enter
+        // direction) on the white surface and only greys its text, so the disabled face stays white.
+        DisabledTextBoxBackgroundBrush = global::Avalonia.Media.Brushes.White,
+    };
 
     // ── File ▸ Options entry point ──────────────────────────────────────────────
     private void ShowOptions() => RunGuarded(ShowOptionsDialogAsync);
@@ -534,7 +539,11 @@ public sealed partial class MainWindow
                 0,
                 languageOptions.FindIndex(option =>
                     string.Equals(option.CultureName, normalizedLanguage, StringComparison.OrdinalIgnoreCase))),
-            Width = OptionsDialogPlanner.LanguageFieldWidth,
+            // WPF gives the combo a 240 px column after the 230 px label; that sum is wider than the
+            // narrow content page, so here 240 is a ceiling and the combo shrinks to the space left
+            // (its drop-down arrow used to run past the page edge).
+            MaxWidth = OptionsDialogPlanner.LanguageFieldWidth,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         ApplyOptionsComboBoxChrome(languageBox);
         AutomationProperties.SetAutomationId(languageBox, "OptionsAppLanguageComboBox");
@@ -550,7 +559,7 @@ public sealed partial class MainWindow
                 OptionsText("Options_AppLanguage"),
                 languageBox,
                 labelWidth: OptionsDialogPlanner.GeneralLabelWidth,
-                fieldWidth: OptionsDialogPlanner.LanguageFieldWidth,
+                stretchField: true,
                 spacing: OptionsDialogPlanner.GeneralFieldSpacing,
                 margin: new Thickness(0, 0, 0, OptionsDialogPlanner.LanguageFieldBottomMargin)),
             OptionsHint(
@@ -712,7 +721,9 @@ public sealed partial class MainWindow
 
         Button MakeQuickAccessButton(string text, string automationId, double width = 92)
         {
-            var button = new Button { Content = text, Width = width, Height = 26 };
+            // WPF pins these at 92 px; here the width is a floor (MinWidth via the chrome) so a
+            // wider glyph run ("Move Down", "<< Remove", "Reset...") grows the button, never clips.
+            var button = new Button { Content = text, Height = 26 };
             ApplyOptionsButtonChrome(button, width);
             AutomationProperties.SetAutomationId(button, automationId);
             var helpKey = automationId switch

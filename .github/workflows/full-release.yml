@@ -242,6 +242,13 @@ jobs:
             }
             git cat-file -e "$($env:RELEASE_SHA)^{commit}"
             if ($LASTEXITCODE -ne 0) { throw "source_sha $env:RELEASE_SHA is not a commit of this repository." }
+            # This job checked out RELEASE_SHA (the older commit), so the dispatched head is not present
+            # locally. Fetch it explicitly (full history is already present) and fail closed if it cannot
+            # be fetched, rather than letting merge-base die with "Not a valid commit name".
+            git fetch --no-tags origin $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) { throw "Could not fetch the dispatched main head $env:GITHUB_SHA to prove source_sha ancestry; refusing to release." }
+            git cat-file -e "$($env:GITHUB_SHA)^{commit}"
+            if ($LASTEXITCODE -ne 0) { throw "Dispatched main head $env:GITHUB_SHA is not available locally after fetch; refusing to release." }
             git merge-base --is-ancestor $env:RELEASE_SHA $env:GITHUB_SHA
             if ($LASTEXITCODE -ne 0) {
               throw "source_sha $env:RELEASE_SHA is not an ancestor of the dispatched main head $env:GITHUB_SHA; refusing to release a commit that is not on main."

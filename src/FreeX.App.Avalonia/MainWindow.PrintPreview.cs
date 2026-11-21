@@ -527,18 +527,66 @@ public sealed partial class MainWindow
         printIcon.Click += (_, _) => exportButton.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         printIcon.Bind(IsEnabledProperty, new Binding(nameof(IsEnabled)) { Source = exportButton });
 
-        var documentToolbar = CreatePreviewDocumentToolbar(
+        // WPF's DocumentViewer toolbar shows only icon buttons: print, copy | zoom in, zoom out |
+        // actual size, page width, whole page. The page navigation, zoom box, Margins and Page Setup
+        // controls stay fully functional but sit in a trailing overflow row (the chevron at the end
+        // of the icon row toggles it), out of the default visible toolbar.
+        var actualSizeIndex = documentToolbarPlan.ZoomSelectedIndex;
+        var actualSizeButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, zoomOptions[actualSizeIndex].Text, chrome);
+        AutomationProperties.SetAutomationId(actualSizeButton, "PrintPreviewActualSizeButton");
+        actualSizeButton.Click += (_, _) => zoomBox.SelectedIndex = actualSizeIndex;
+        actualSizeButton.IsEnabled = pageCount > 0;
+        var overflowToggle = new global::Avalonia.Controls.Primitives.ToggleButton
+        {
+            Width = chrome.ButtonWidth,
+            MinWidth = chrome.ButtonWidth,
+            Height = chrome.ButtonHeight,
+            MinHeight = chrome.ButtonHeight,
+            MaxHeight = chrome.ButtonHeight,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            Content = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 1 1 L 5 5 L 9 1"),
+                Stroke = Brush(92, 92, 92),
+                StrokeThickness = 1.5,
+                Width = 10,
+                Height = 6,
+            },
+        };
+        AutomationProperties.SetAutomationId(overflowToggle, "PrintPreviewToolbarOverflowButton");
+        AutomationProperties.SetName(overflowToggle, UiText.Get("PrintPreview_ZoomAutomationName"));
+        var primaryToolbar = CreatePreviewDocumentToolbar(
         [
             printIcon, copyIcon,
             CreateDocumentToolbarSeparator(chrome),
+            zoomInButton, zoomOutButton,
+            CreateDocumentToolbarSeparator(chrome),
+            actualSizeButton, fitWidthButton, fitPageButton,
+            overflowToggle,
+        ]);
+        var overflowToolbar = CreatePreviewDocumentToolbar(
+        [
             firstButton, prevButton, nextButton, lastButton,
             new TextBlock { Text = documentToolbarPlan.PageLabelText, VerticalAlignment = AvaloniaVerticalAlignment.Center },
             pageNumberBox, pageStatusText,
             CreateDocumentToolbarSeparator(chrome),
-            zoomOutButton, zoomBox, zoomInButton, fitPageButton, fitWidthButton,
+            zoomBox,
             CreateDocumentToolbarSeparator(chrome),
             marginsButton, pageSetupButton,
         ]);
+        // The page navigation, page box, zoom combo, Margins and Page Setup live in this second row.
+        // It starts EXPANDED: a collapsed row is never templated, so its controls would be absent from
+        // the visual/automation tree (page range, find and zoom flows could not reach them). The chevron
+        // still collapses it for the compact, icon-only WPF look.
+        overflowToggle.IsChecked = true;
+        overflowToolbar.IsVisible = true;
+        overflowToggle.IsCheckedChanged += (_, _) => overflowToolbar.IsVisible = overflowToggle.IsChecked == true;
+        var documentToolbar = new StackPanel { Children = { primaryToolbar, overflowToolbar } };
         var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost, findBar);
         // An externally supplied static page source has no live sheet/session behind it, so its rail
         // stays read-only. A real preview is backed by the live active sheet and its settings rail is
@@ -758,6 +806,55 @@ public sealed partial class MainWindow
         TextBlock Status,
         ComboBox PageRangeMode);
 
+    /// <summary>
+    /// A WPF <c>CheckBox</c> placed in a <c>ToolBar</c> renders as a flat toggle button (no check glyph;
+    /// a pressed, highlighted face when checked). The control stays a <see cref="CheckBox"/> for its
+    /// checked state and automation, but is templated as that toggle button.
+    /// </summary>
+    private static void ApplyPreviewToolbarToggleChrome(CheckBox checkBox)
+    {
+        var checkedFace = Brush(201, 224, 247);
+        var checkedBorder = Brush(86, 157, 229);
+        checkBox.Padding = new Thickness(6, 2);
+        checkBox.Template = new global::Avalonia.Controls.Templates.FuncControlTemplate<CheckBox>((owner, scope) =>
+        {
+            var presenter = new global::Avalonia.Controls.Presenters.ContentPresenter
+            {
+                Name = "PART_ContentPresenter",
+                HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            presenter.Bind(global::Avalonia.Controls.Presenters.ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = owner });
+            presenter.Bind(global::Avalonia.Controls.Presenters.ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = owner });
+            scope.Register("PART_ContentPresenter", presenter);
+
+            var face = new Border
+            {
+                Name = "PART_ToggleFace",
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                Child = presenter,
+            };
+            face.Bind(
+                Border.BackgroundProperty,
+                new Binding(nameof(ToggleButton.IsChecked))
+                {
+                    Source = owner,
+                    Converter = new global::Avalonia.Data.Converters.FuncValueConverter<bool?, IBrush>(
+                        isChecked => isChecked == true ? checkedFace : Brushes.Transparent),
+                });
+            face.Bind(
+                Border.BorderBrushProperty,
+                new Binding(nameof(ToggleButton.IsChecked))
+                {
+                    Source = owner,
+                    Converter = new global::Avalonia.Data.Converters.FuncValueConverter<bool?, IBrush>(
+                        isChecked => isChecked == true ? checkedBorder : Brushes.Transparent),
+                });
+            return face;
+        });
+    }
+
     private static Border CreatePrintPreviewTopToolbar(
         PrintPreviewTopToolbarPlan plan,
         Button printButton,
@@ -789,13 +886,19 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
+        ApplyPreviewToolbarToggleChrome(collatedBox);
         var sidesBox = CreatePreviewChoiceComboBox(plan.SidesComboWidth, plan.SidesOptions, plan.SidesSelectedIndex);
         var status = new TextBlock
         {
             Text = plan.StatusText,
+            MinWidth = 120,
             MaxWidth = 280,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
             TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         var pageRange = CreatePreviewComboBox(plan.PageRangeComboWidth, plan.PageRangeChoices
             .Select(choice => choice.Text).ToArray(), (int)PrintPreviewPageRangeMode.AllPages);
@@ -811,26 +914,35 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(copiesBox, plan.CopiesLabelText);
         AutomationProperties.SetName(sidesBox, plan.SidesLabelText);
 
-        var toolbar = new StackPanel
+        // The fixed-width controls take their natural width; the job status takes the remaining star
+        // column and wraps inside it, so a wider platform font never pushes controls into the
+        // overflow chevron or clips the "Ready: <printer>; 1 copy; N pages" text.
+        var toolbarItems = new Control[]
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 4,
+            printButton,
+            new TextBlock { Text = plan.PrinterLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+            printerBox,
+            new TextBlock { Text = plan.CopiesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+            copiesBox,
+            collatedBox,
+            new TextBlock { Text = plan.SidesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
+            sidesBox,
+            status,
+            pageRange,
+        };
+        var toolbar = new Grid
+        {
             Margin = new Thickness(1, 6, 0, 4),
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            Children =
-            {
-                printButton,
-                new TextBlock { Text = plan.PrinterLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                printerBox,
-                new TextBlock { Text = plan.CopiesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                copiesBox,
-                collatedBox,
-                new TextBlock { Text = plan.SidesLabelText, FontSize = 12, FontFamily = FormulaBarFontFamily, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                sidesBox,
-                status,
-                pageRange,
-            },
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*,Auto"),
         };
+        for (var i = 0; i < toolbarItems.Length; i++)
+        {
+            var item = toolbarItems[i];
+            item.Margin = new Thickness(item.Margin.Left, item.Margin.Top, item.Margin.Right + 4, item.Margin.Bottom);
+            Grid.SetColumn(item, i);
+            toolbar.Children.Add(item);
+        }
 
         printButton.Width = PrintPreviewSurfacePlanner.TopToolbarPrintButtonWidth;
         printButton.MinWidth = PrintPreviewSurfacePlanner.TopToolbarPrintButtonWidth;
@@ -1142,6 +1254,12 @@ public sealed partial class MainWindow
 
         var ignorePrintAreaBox = new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily };
         AutomationProperties.SetAutomationId(ignorePrintAreaBox, "PrintPreviewSettingsIgnorePrintAreaBox");
+        // Print windows are outside the scoped dialog chrome (DialogControlStyles.IsOutOfScope), so
+        // Fluent's disabled foreground would grey the label. WPF greys only the glyph of a disabled
+        // check box (the label keeps its ink), so the disabled label brushes stay at the rail's ink.
+        ignorePrintAreaBox.Resources["CheckBoxForegroundUncheckedDisabled"] = Brushes.Black;
+        ignorePrintAreaBox.Resources["CheckBoxForegroundCheckedDisabled"] = Brushes.Black;
+        ignorePrintAreaBox.Resources["CheckBoxForegroundIndeterminateDisabled"] = Brushes.Black;
         if (interaction is not null)
         {
             ignorePrintAreaBox.IsCheckedChanged += (_, _) => ApplyAction(
@@ -1198,13 +1316,21 @@ public sealed partial class MainWindow
             },
         };
 
-        return new ScrollViewer
+        // WPF shows the classic always-expanded vertical bar beside the rail while its rows overflow.
+        // The print windows sit outside the scoped dialog chrome, so the rail carries the classic bar
+        // resources and reserves the bar's lane (no overlay auto-hide) itself.
+        var railScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            AllowAutoHide = false,
             Background = Brush(245, 245, 245),
             Content = panel,
         };
+        ClassicScrollBarChrome.ApplyResources(railScroll.Resources);
+        foreach (var barStyle in ClassicScrollBarChrome.CreateDialogScrollBarStyles())
+            railScroll.Styles.Add(barStyle);
+        return railScroll;
     }
 
     private static Grid CreatePageRangeRow(

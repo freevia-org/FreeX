@@ -386,7 +386,9 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         var moveCopySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.MoveCopySheet.cs"));
         var sheetOptionsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.SheetOptionsNotes.cs"));
 
-        optionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);");
+        optionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily)");
+        optionsSource.Should().Contain("DisabledTextBoxBackgroundBrush = global::Avalonia.Media.Brushes.White,");
+        optionsSource.Should().NotContain("Color.FromRgb(240, 240, 240)");
         optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, OptionsDialogChromeStyle, minWidth, isDefault);");
         optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, OptionsDialogChromeStyle);");
         optionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(comboBox, OptionsDialogChromeStyle);");

@@ -369,11 +369,20 @@ public sealed partial class MainWindow
         ("WatchWindow_Formula", WatchWindowDialogPlanner.FormulaColumnWidth),
     ];
 
+    private const double WatchWindowBookColumnMinWidth = 112;
+
     private static Grid CreateWatchWindowColumnGrid()
     {
         var grid = new Grid();
         foreach (var column in WatchWindowColumns)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(column.Width) });
+        {
+            // "This Workbook" is wider than the WPF 90 px Book column at the Linux dialog font, so
+            // that column keeps at least WatchWindowBookColumnMinWidth.
+            var width = column.Key == "WatchWindow_Book"
+                ? Math.Max(column.Width, WatchWindowBookColumnMinWidth)
+                : column.Width;
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+        }
         return grid;
     }
 

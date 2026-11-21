@@ -16583,6 +16583,15 @@ Continue saving?</value>
   <data name="Hyperlink_CurrentFolderLinkLocation" xml:space="preserve">
     <value>Current folder link location</value>
   </data>
+  <data name="Hyperlink_CurrentFolderHeading" xml:space="preserve">
+    <value>Current Folder</value>
+  </data>
+  <data name="Hyperlink_UseBrowseToChooseAFile" xml:space="preserve">
+    <value>Use Browse... to choose a file</value>
+  </data>
+  <data name="Hyperlink_UseBrowseToChooseAnotherFile" xml:space="preserve">
+    <value>Use Browse... to choose another file</value>
+  </data>
   <data name="Hyperlink_LookIn" xml:space="preserve">
     <value>Look _in:</value>
   </data>

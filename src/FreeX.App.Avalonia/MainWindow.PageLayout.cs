@@ -1424,6 +1424,8 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 2, 0, 10),
             Content = previewGrid,
         };
+        // Same plain WPF group-box frame and header as the Scaling group on the Page tab.
+        ApplyPlainWindowGroupBoxChrome(previewGroup, PageLayoutDialogChromeStyle);
         var customButtons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -1490,7 +1492,14 @@ public sealed partial class MainWindow
         var sheetGrid = new Grid
         {
             Margin = new Thickness(10),
-            ColumnDefinitions = new ColumnDefinitions("150,*,Auto"),
+            // WPF fixes the label column at 150; here 150 is the floor so a wider glyph run
+            // ("Columns to repeat at left") widens the column instead of being clipped.
+            ColumnDefinitions =
+            {
+                new ColumnDefinition(GridLength.Auto) { MinWidth = 150 },
+                new ColumnDefinition(GridLength.Star),
+                new ColumnDefinition(GridLength.Auto),
+            },
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
         };
         // The WPF Auto rows above resolve to fixed heights; pin them so a taller Avalonia line box

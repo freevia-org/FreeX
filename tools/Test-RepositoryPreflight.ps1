@@ -22,7 +22,7 @@ param(
 
     # Local pre-merge scoping (tools/Test-BranchForIntegration.ps1 only). When set, a check runs only
     # if the diff against this base ref can change its outcome (eng/preflight-scopes.json); anything
-    # unmapped, or any doubt, runs everything. CI, tester-release and a bare run never set it, so
+    # unmapped, or any doubt, runs everything. CI, full-release and a bare run never set it, so
     # they always run every check. -Full forces the same locally.
     [string]$ScopeBaseRef = "",
 

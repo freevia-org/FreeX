@@ -116,6 +116,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ReviewPasswordIncorrect\")");
         UiText.Get("MainWindowMessage_ReviewPasswordIncorrect").Should().Be("The password you supplied is not correct.");
         source.Should().Contain("ProtectionSession.ExecuteWorkbook(pwd)");
+        // Protect Workbook is password-only (structure always protected), matching the Avalonia dialog.
+        source.Should().NotContain("includeWorkbookOptions");
+        source.Should().NotContain("dialog.ProtectWindows");
+        source.Should().NotContain("ExecuteWorkbook(protectOptions)");
         source.Should().NotContain("new ProtectSheetCommand");
         source.Should().NotContain("new UnprotectSheetCommand");
         source.Should().NotContain("new ProtectWorkbookCommand");

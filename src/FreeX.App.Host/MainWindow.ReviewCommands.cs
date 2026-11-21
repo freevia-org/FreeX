@@ -562,7 +562,12 @@ public partial class MainWindow
 
         var outcome = ProtectionSession.ExecuteWorkbook(pwd);
         if (!outcome.Success)
+        {
+            var failure = outcome.ErrorMessage ?? (outcome.ErrorResourceKey is { } key ? UiText.Get(key) : null);
+            if (!string.IsNullOrEmpty(failure))
+                _messageService.ShowWarning(failure, UiText.Get(outcome.TitleResourceKey));
             return;
+        }
 
         _messageService.ShowInfo(
             UiText.Get(outcome.SuccessMessageResourceKey),
