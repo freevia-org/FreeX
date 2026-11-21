@@ -39,7 +39,7 @@ public sealed class PivotDialogLifecycleRegressionTests
             ["dialog.PivotCalculatedField"] = "passed:TextBox#PivotCalcFieldNameBox",
             ["dialog.PivotCalculatedItem"] = "passed:TextBox#PivotCalcItemNameBox",
             ["dialog.PivotChartOptions"] = "passed:ListBox#PivotChartOptionsStyleGallery",
-            ["dialog.PivotChartType"] = "passed:ListBox#ChangeChartTypeSubtypeGallery",
+            ["dialog.PivotChartType"] = "passed:ListBox#InsertChartRecommendedGallery",
             ["dialog.PivotFieldFilter"] = "passed:TextBox#PivotItemFilterSearchBox",
             ["dialog.PivotFieldGrouping"] = "passed:ComboBox#PivotGroupFieldBox",
             ["dialog.PivotLabelFilter"] = "passed:ComboBox#PivotLabelFilterKindBox",

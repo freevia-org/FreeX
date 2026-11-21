@@ -231,6 +231,17 @@ public sealed partial class MainWindow
             dialog.Close();
         };
 
+        // WPF SpellCheckDialog.SuggestionsBox_MouseDoubleClick: double-clicking a suggestion applies Change.
+        suggestionList.DoubleTapped += (_, args) =>
+        {
+            if (suggestionList.SelectedItem is not string selectedSuggestion)
+                return;
+
+            args.Handled = true;
+            decision = new(SpellCheckSessionAction.Change, selectedSuggestion);
+            dialog.Close();
+        };
+
         // WPF: Change / Change All are only available while there is replacement text.
         void RefreshChangeButtonState()
         {
