@@ -65,6 +65,11 @@ gh workflow run full-release.yml --ref main `
 Use `prerelease=true` for a signed test release. The same signing and integrity
 requirements apply to both release states.
 
+To release the newest commit that already has a fully green readiness run without re-running the
+release tests, add `-f source_sha=$(pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1)`. The
+commit must be an ancestor of the dispatched main head; see Release Gate in
+`docs/testing/test-gates.md` for the exact rules and fail-closed behaviour.
+
 ## Installation verification
 
 - Windows: run Authenticode verification and compare the adjacent SHA-256 file

@@ -294,7 +294,7 @@ public sealed class ReleaseAutomationWorkflowTests
         var candidate = ExtractWorkflowJob(workflow, "candidate");
         candidate.Should().Contain("gate_evidence_reuse: ${{ steps.gate_evidence.outputs.reuse }}");
         candidate.Should().Contain("pwsh -NoProfile -File tools/Resolve-ReleaseGateEvidence.ps1");
-        candidate.Should().Contain("-CommitSha $env:GITHUB_SHA");
+        candidate.Should().Contain("-CommitSha $env:RELEASE_SHA");
 
         // 'skipped' is accepted only together with the dry_run input or verified evidence; a real
         // release without either needs 'success'.
@@ -428,10 +428,10 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("$notes = @'");
         workflow.Should().Contain("sha256sum -c {{APP}}-v{{VERSION}}-linux-<architecture>.zip.sha256");
         workflow.Should().Contain("shasum -a 256 -c {{APP}}-v{{VERSION}}-osx-<architecture>.zip.sha256");
-        workflow.Should().Contain("Replace(\"{{SHA}}\", $env:GITHUB_SHA)");
+        workflow.Should().Contain("Replace(\"{{SHA}}\", $env:RELEASE_SHA)");
         workflow.Should().Contain("$notes | gh release edit $tag --title $title --notes-file - \"--prerelease=$prerelease\"");
         Regex.Matches(workflow, "gh release edit .*--prerelease=").Count.Should().Be(2);
-        workflow.Should().Contain("$notes | gh release create $tag @assets --target $env:GITHUB_SHA --title $title --notes-file - @releaseArgs");
+        workflow.Should().Contain("$notes | gh release create $tag @assets --target $env:RELEASE_SHA --title $title --notes-file - @releaseArgs");
         workflow.Should().NotContain("## Assets");
 
         publisher.Should().Contain("[ValidateSet(\"FreeX\", \"FreeW\", \"FreeP\")]");
