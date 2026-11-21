@@ -13,7 +13,10 @@ public partial class GridView
 
     public static readonly DependencyProperty SelectedObjectIdProperty =
         DependencyProperty.Register(nameof(SelectedObjectId), typeof(Guid), typeof(GridView),
-            new FrameworkPropertyMetadata(Guid.Empty, FrameworkPropertyMetadataOptions.AffectsRender));
+            new FrameworkPropertyMetadata(
+                Guid.Empty,
+                FrameworkPropertyMetadataOptions.AffectsRender,
+                (d, e) => ((GridView)d).OnSelectedObjectIdChangedForChartElement((Guid)e.NewValue)));
     public Guid SelectedObjectId
     {
         get => (Guid)GetValue(SelectedObjectIdProperty);

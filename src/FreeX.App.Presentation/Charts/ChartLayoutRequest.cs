@@ -59,4 +59,11 @@ public sealed class ChartLayoutRequest
     public required IReadOnlyList<ChartSeriesData> Series { get; init; }
     public required PlotRect PlotArea { get; init; }
     public required ITextMeasurer TextMeasurer { get; init; }
+
+    /// <summary>
+    /// When true (the default) the legend gutter is carved out of <see cref="PlotArea"/>. Hosts that
+    /// already know the final plot rectangle (their own renderer reserved the legend) set this to false
+    /// so the series are laid out inside <see cref="PlotArea"/> unchanged.
+    /// </summary>
+    public bool ReserveLegendGutter { get; init; } = true;
 }

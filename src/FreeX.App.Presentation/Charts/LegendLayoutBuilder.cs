@@ -86,6 +86,12 @@ internal static class LegendLayoutBuilder
         }
 
         var entries = BuildEntries(measured, bounds, isVertical, entryHeight);
+
+        // A host whose own renderer already settled the plot rectangle (WPF/OxyPlot) lays the series out
+        // inside exactly that rectangle instead of letting the portable legend gutter shrink it again.
+        if (!request.ReserveLegendGutter)
+            plot = request.PlotArea;
+
         return new LegendLayout
         {
             Position = chart.LegendPosition,
