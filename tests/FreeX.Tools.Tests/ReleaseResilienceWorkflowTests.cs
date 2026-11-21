@@ -185,6 +185,74 @@ public sealed class ReleaseResilienceWorkflowTests
     }
 
     [Fact]
+    public void FullRelease_SourceShaReleasesAReadinessProvenAncestorWithoutWeakeningTheCandidateChain()
+    {
+        var workflow = FullRelease();
+
+        // Optional, empty by default: the default dispatch behaves exactly as before.
+        Regex.IsMatch(workflow, @"(?s)source_sha:\s+description:.*?required: false\s+default: ''\s+type: string").Should().BeTrue();
+        workflow.Should().Contain("RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}");
+
+        // The untrusted input reaches only the env expression and checkout depth, never script text.
+        var uses = workflow.Split('\n').Where(line => line.Contains("inputs.source_sha") && line.Contains("${{")).Select(line => line.Trim()).ToList();
+        uses.Should().BeEquivalentTo(new[]
+        {
+            "RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}",
+            "fetch-depth: ${{ inputs.source_sha != '' && 0 || 1 }}",
+        });
+
+        // The candidate job owns validation, and everything that builds or releases needs it.
+        var candidate = Job(workflow, "candidate");
+        candidate.Should().Contain("ref: ${{ env.RELEASE_SHA }}");
+        candidate.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
+        candidate.Should().Contain("source_sha is only allowed on a dispatch from refs/heads/main");
+        candidate.Should().Contain("-cnotmatch '^[0-9a-f]{40}$'");
+        candidate.Should().Contain("git merge-base --is-ancestor $env:RELEASE_SHA $env:GITHUB_SHA");
+
+        // The job checks out the OLDER commit, so the dispatched head is absent locally: it must be
+        // fetched (via env, never script interpolation) and fail closed BEFORE the ancestry test.
+        var fetchIndex = candidate.IndexOf("git fetch --no-tags origin $env:GITHUB_SHA", StringComparison.Ordinal);
+        var mergeBaseIndex = candidate.IndexOf("git merge-base --is-ancestor $env:RELEASE_SHA $env:GITHUB_SHA", StringComparison.Ordinal);
+        fetchIndex.Should().BeGreaterThan(0);
+        fetchIndex.Should().BeLessThan(mergeBaseIndex);
+        candidate.Should().Contain("Could not fetch the dispatched main head $env:GITHUB_SHA");
+        candidate.Should().Contain("git cat-file -e \"$($env:GITHUB_SHA)^{commit}\"");
+        candidate.Should().NotContain("${{ github.sha }}");
+        candidate.Should().Contain("tools/Resolve-GitHubReleaseCandidate.ps1");
+        candidate.Should().Contain("-CommitSha $env:RELEASE_SHA");
+        candidate.Should().Contain("tools/Resolve-ReleaseGateEvidence.ps1");
+        Job(workflow, "package").Should().Contain("needs: [prepare, candidate]");
+        Job(workflow, "release-tests").Should().Contain("needs: [prepare, candidate]");
+
+        // Evidence reuse stays the only way to skip the gates: a source_sha without proof runs them all.
+        Job(workflow, "release-tests").Should().Contain("needs.candidate.outputs.gate_evidence_reuse != 'true'");
+
+        // The dispatched head is consulted only by the candidate job's ancestry proof.
+        foreach (var job in new[] { "prepare", "publish-permission", "early-abort", "release-tests", "release-gate", "package", "suite-package", "publication-gate", "publish", "publish-suite", "verify-publication" })
+        {
+            Job(workflow, job).Should().NotContain("GITHUB_SHA", $"{job} must use RELEASE_SHA");
+            Job(workflow, job).Should().NotContain("github.sha", $"{job} must use RELEASE_SHA");
+        }
+
+        // Every job that builds, tests or publishes the tree checks out exactly RELEASE_SHA.
+        foreach (var job in new[] { "release-tests", "package", "suite-package", "publish", "publish-suite" })
+        {
+            Job(workflow, job).Should().Contain("ref: ${{ env.RELEASE_SHA }}", $"{job} must build the release commit");
+        }
+    }
+
+    [Fact]
+    public void LatestReadinessGreenSha_DelegatesTheProofToTheReleaseEvidenceResolverAndFailsClosed()
+    {
+        var helper = WorkspaceFileLocator.ReadAllText("tools", "Get-LatestReadinessGreenSha.ps1");
+
+        helper.Should().Contain("Resolve-ReleaseGateEvidence.ps1");
+        helper.Should().Contain("$decision.reuse -eq $true");
+        helper.Should().Contain("exit 1");
+        helper.Should().Contain("failing closed");
+    }
+
+    [Fact]
     public void FailureClassifier_FailsClosedAndIsProvenOffline()
     {
         var classifier = WorkspaceFileLocator.ReadAllText("tools", "Get-ReleaseRunFailureClass.ps1");

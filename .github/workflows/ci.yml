@@ -37,8 +37,8 @@ env:
   # node reuse on, worker processes from one invocation outlive it and can still hold a handle to an
   # intermediate assembly when the next invocation compiles it, which fails the whole gate with
   # "CSC : error CS2012 ... because it is being used by another process". That took main red on run
-  # 33994120035 (FreeP windows freep-wpf-desktop). The sibling workflows freep-ci, freew-ci and
-  # tester-release already avoid this by passing -p:NodeReuse=false /nr:false explicitly; this gate
+  # 33994120035 (FreeP windows freep-wpf-desktop). The sibling workflows freep-ci and freew-ci
+  # already avoid this by passing -p:NodeReuse=false /nr:false explicitly; this gate
   # sets it as an environment variable instead so it reaches the MSBuild instances that
   # Invoke-TestGate.ps1 spawns without threading flags through the script.
   #

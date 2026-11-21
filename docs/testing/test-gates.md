@@ -217,6 +217,18 @@ serial critical path roughly in half without launching an unbounded renderer fan
 belong to one gate per platform only; platform-specific grouping can differ when it removes runner
 overhead without changing coverage.
 
+### Releasing from the newest readiness-green commit
+
+When main moved since the last fully green `release-readiness.yml` run, a head dispatch re-runs every
+release gate. Dispatch with `source_sha` instead to release an older commit of main that already has
+that proof: the workflow builds, packages, signs and tags exactly that commit and skips the release
+tests only when a fresh (7 days) readiness run proved every expected gate on exactly that SHA
+(`tools/Resolve-ReleaseGateEvidence.ps1`, unchanged and fail closed). The SHA must be a 40-character
+lowercase ancestor of the dispatched `refs/heads/main` head; tag continuations cannot use it. The
+CI/CodeQL attestation and immutable-tag checks apply to that SHA as before, and without full evidence
+every gate runs against it. Find a candidate with `pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1`
+(advisory; exits 1 when none exists, then release from the head).
+
 Hosted CI and release gates retain TRX and hang-diagnostic output and use a 15-minute test-host hang
 timeout. They do not silently retry a failed project; a failure remains visible and the individual
 matrix job can be rerun without repeating successful jobs. Local runs may explicitly request the

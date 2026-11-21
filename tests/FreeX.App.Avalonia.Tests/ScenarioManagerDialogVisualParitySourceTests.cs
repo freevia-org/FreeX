@@ -27,7 +27,7 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         source.Should().Contain("ButtonPadding = new Thickness(8, 1)");
         source.Should().Contain("ScenarioManagerDialogLayout.CloseRowTopMargin");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,Auto,Auto,Auto,Auto\")");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions($\"{ScenarioManagerDialogLayout.FieldLabelColumnWidth},*\")");
+        source.Should().Contain("fields.ColumnDefinitions[0].MinWidth = ScenarioManagerDialogLayout.FieldLabelColumnWidth;");
         source.Should().Contain("control.MinWidth = 0;");
         source.Should().Contain("control.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;");
         source.Should().Contain("AddScenarioManagerField(fields, 2");

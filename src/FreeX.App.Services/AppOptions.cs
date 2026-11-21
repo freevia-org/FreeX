@@ -80,6 +80,11 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
     // typing a plain text entry, offers to complete it from a matching entry already in the same
     // column (see FreeX.Core.Commands.CellValueAutoCompleteSuggester).
     public bool EnableAutoCompleteForCellValues { get; set; } = true;
+
+    // Advanced — editing options. Parity with Excel's "Automatically Flash Fill": while typing next
+    // to data, a detected pattern is previewed as grey ghost cells (Enter/Tab accepts, Esc dismisses;
+    // see FreeX.App.Presentation.Editing.FlashFillSuggestionPlanner).
+    public bool AutomaticallyFlashFill { get; set; } = true;
     public bool ShowGridlines { get; set; } = true;
     public bool ShowHeadings { get; set; } = true;
     public AppOptionsObjectDisplay ObjectsDisplay { get; set; } = AppOptionsObjectDisplay.All;
@@ -144,6 +149,7 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
         AfterEnterDirection = source.AfterEnterDirection;
         EnableFillHandleAndCellDragAndDrop = source.EnableFillHandleAndCellDragAndDrop;
         EnableAutoCompleteForCellValues = source.EnableAutoCompleteForCellValues;
+        AutomaticallyFlashFill = source.AutomaticallyFlashFill;
         ShowGridlines = source.ShowGridlines;
         ShowHeadings = source.ShowHeadings;
         ObjectsDisplay = source.ObjectsDisplay;

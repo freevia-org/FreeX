@@ -43,7 +43,7 @@ version, pins the `main` SHA, requires successful exact-SHA CI and CodeQL, runs
 the release-only matrix, and publishes nothing until every selected native
 package and trust gate succeeds. See
 [app-platform-publish-lanes.md](app-platform-publish-lanes.md) for its complete
-asset and dispatch contract. The older FreeX-only workflow historically
+asset and dispatch contract. The retired FreeX-only workflow historically
 published these stable-name assets:
 
 - `FreeX-latest-win-x64.exe`
@@ -62,7 +62,7 @@ When macOS bundling is explicitly enabled, the same release also receives:
 - `FreeX-latest-macos-<runtime>-instructions.md`
 - `FreeX-latest-macos-<runtime>-evidence.txt`
 
-Release dispatches must run from `main` or an isolated `codex/daily-tester-release-*` branch because the workflow publishes stable latest assets, and a workflow-level `tester-release` concurrency group prevents overlapping dispatches from moving `latest` backward. Use the daily branch path only for a frozen verified candidate when `origin/main` has already advanced with work intentionally deferred to the next release.
+Release dispatches use the `Full Signed Release` workflow, which pins the `main` SHA and serializes dispatches per release version through its `full-signed-release-<version>` concurrency group. The former FreeX-only `Tester Release` workflow (`tester-release.yml`, including its `codex/daily-tester-release-*` branch path) has been retired.
 
 The hosted Windows publish path fails closed unless GitHub OIDC authenticates the dedicated release identity and Azure Artifact Signing signs and verifies the standalone executable, the Velopack application payload, and the generated Setup executable. It does not store a PFX or client secret. The MSIX asset is retained only for Store/package validation: Store-bound MSIX packages are submitted with the Partner Center identity and Microsoft signs them during certification. The legacy optional PFX inputs remain isolated to local/direct MSIX validation and are not the direct-download trust path.
 

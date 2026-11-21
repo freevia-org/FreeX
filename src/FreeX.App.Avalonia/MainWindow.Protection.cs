@@ -114,26 +114,34 @@ public sealed partial class MainWindow
 
         if (state.IsProtected)
         {
-            var unprotectPanel = new StackPanel
-            {
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = state.HasPassword
-                            ? UiText.Get("ShellLoc_SheetProtectedEnterPassword")
-                            : UiText.Get("ShellLoc_SheetProtectedClickOk"),
-                        Foreground = HeaderForeground,
-                        TextWrapping = TextWrapping.Wrap,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
-                    },
-                },
-            };
+            var unprotectPanel = new StackPanel();
 
-            if (state.HasPassword)
+            if (!state.HasPassword)
             {
-                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("ShellLoc_PasswordLabel"), passwordBox, topMargin: 8));
+                unprotectPanel.Children.Add(new TextBlock
+                {
+                    Text = UiText.Get("ShellLoc_SheetProtectedClickOk"),
+                    Foreground = HeaderForeground,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                });
+            }
+            else
+            {
+                // WPF TryConfirmUnprotectPassword opens PasswordProtectionDialog with the password
+                // prompt as both the SemiBold heading above the group and the label inside it (no
+                // explanatory paragraph), followed by the password box and the grey caution line.
+                contentChildren.Add(new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("Protection_Password2")),
+                    Foreground = HeaderForeground,
+                    FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 0, 0, 8),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                });
+                unprotectPanel.Children.Add(ProtectionLabeledField(UiText.Get("Protection_Password2"), passwordBox));
                 unprotectPanel.Children.Add(new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_CautionPasswordsCannotBeRecovered"),

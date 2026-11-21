@@ -1706,10 +1706,11 @@ public sealed class DocumentViewRoundTripTests
         var rendered = RenderedTables(view.Document).Single();
         var rows = rendered.RowGroups.Single().Rows;
         rendered.CellSpacing.Should().Be(0, "Word collapses cell borders unless w:tblCellSpacing is authored");
-        rows[1].Cells.Should().HaveCount(2);
-        rows[0].Cells[0].RowSpan.Should().Be(1);
+        // The merge renders as one real RowSpan cell so its content height is shared by the spanned
+        // rows (Word) instead of inflating the restart row; the continuation is re-synthesised on read.
+        rows[1].Cells.Should().HaveCount(1);
+        rows[0].Cells[0].RowSpan.Should().Be(2);
         rows[0].Cells[0].BorderThickness.Bottom.Should().Be(0);
-        rows[1].Cells[0].BorderThickness.Top.Should().Be(0);
     }
 
     [StaTheory]

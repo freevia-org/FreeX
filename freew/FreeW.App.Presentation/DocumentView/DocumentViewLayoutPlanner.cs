@@ -1297,9 +1297,7 @@ public static class DocumentViewLayoutPlanner
             .ToArray();
         var headerRowSet = headerRowIndexes.ToHashSet();
         var paginationColumnWidthsDip = ResolvePaginationColumnWidths(table, page);
-        var estimatedHeights = table.Rows
-            .Select(row => EstimateTableRowHeightDip(table, row, paginationColumnWidthsDip))
-            .ToArray();
+        var estimatedHeights = EstimateTableRowHeightsDip(table, paginationColumnWidthsDip);
         var headerHeightDip = RoundDip(headerRowIndexes.Sum(index => estimatedHeights[index]));
 
         var pageRows = new List<DocumentTablePaginationPagePlan>();
@@ -3273,7 +3271,66 @@ public static class DocumentViewLayoutPlanner
             table,
             Math.Max(1, TableGridProjection.TableWidth(table)),
             availableWidthDip);
-        return table.Rows.Sum(row => EstimateTableRowHeightDip(table, row, widths));
+        return EstimateTableRowHeightsDip(table, widths).Sum();
+    }
+
+    /// <summary>
+    /// Per-row estimated heights with vertical merges handled as Word lays them out: a merged cell's
+    /// content height is shared by the rows it spans (its deficit over those rows' own heights lands on
+    /// the last spanned row), instead of inflating the restart row by the whole merged content.
+    /// </summary>
+    private static double[] EstimateTableRowHeightsDip(Table table, IReadOnlyList<double> columnWidthsDip)
+    {
+        var heights = new double[table.Rows.Count];
+        var spanning = new List<(int Row, int Span, double Content)>();
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            var projectedCells = TableGridProjection.ProjectRow(row).ToList();
+            if (row.Cells.Count == 0 || !projectedCells.Any(p => p.Cell.VerticalMerge == VerticalMergeState.Restart
+                && CountVerticalMergeSpan(table, rowIndex, p.StartColumn) > 1))
+            {
+                heights[rowIndex] = EstimateTableRowHeightDip(table, row, columnWidthsDip);
+                continue;
+            }
+
+            var maxContent = 0.0;
+            foreach (var projected in projectedCells)
+            {
+                var span = TableGridProjection.SpanWithinWidth(projected, columnWidthsDip.Count);
+                var widthDip = Enumerable.Range(projected.StartColumn, span)
+                    .Where(column => column >= 0 && column < columnWidthsDip.Count)
+                    .Sum(column => columnWidthsDip[column]);
+                var content = EstimateTableCellContentHeightDip(table, projected.Cell, Math.Max(0, widthDip));
+                var rowSpan = projected.Cell.VerticalMerge == VerticalMergeState.Restart
+                    ? CountVerticalMergeSpan(table, rowIndex, projected.StartColumn)
+                    : 1;
+                if (rowSpan > 1)
+                    spanning.Add((rowIndex, rowSpan, content));
+                else
+                    maxContent = Math.Max(maxContent, content);
+            }
+            heights[rowIndex] = ResolveAuthoredTableRowHeightDip(
+                row, ApplyTableRowHeightFloorDip(maxContent));
+        }
+
+        // Rows are final before sharing: a spanning cell only adds height when it outgrows its rows.
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            if (heights[rowIndex] == 0)
+                heights[rowIndex] = EstimateTableRowHeightDip(table, table.Rows[rowIndex], columnWidthsDip);
+        }
+        foreach (var (row, span, content) in spanning)
+        {
+            var last = Math.Min(table.Rows.Count - 1, row + span - 1);
+            var covered = 0.0;
+            for (var i = row; i <= last; i++)
+                covered += heights[i];
+            if (content > covered)
+                heights[last] = RoundDip(heights[last] + content - covered);
+        }
+
+        return heights;
     }
 
     /// <summary>

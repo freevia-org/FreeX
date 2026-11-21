@@ -21,9 +21,13 @@ public static class GoalSeekStatusDialogPlanner
     public const double ConvergedWindowHeight = 190;
     public const double NotConvergedWindowHeight = 170;
     public const double ContentMargin = 16;
-    public const double SummaryLineHeight = 32;
-    public const double SummaryTopCompensation = -5;
-    public const double SummaryBottomMargin = 5;
+    // WPF lays the status lines out at the font's natural line height (one line break between
+    // them) inside a 16px content margin followed by a 16px gap before the button row.
+    public const double SummaryTopCompensation = 0;
+    public const double SummaryBottomMargin = 16;
+    // The captured WPF status lines sit on a 16.5px pitch; the capture font's natural line box is
+    // about 14.5px, which left the block 9px short and the button row 7px high.
+    public const double SummaryLineHeight = 16.5;
     public const double ButtonHeight = 20;
     public const double ButtonGap = 8;
     public const double KeepResultButtonWidth = 104;
