@@ -1005,7 +1005,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         end.Should().BeGreaterThan(start);
         var sheetSource = source[start..end];
 
-        sheetSource.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"150,*,Auto\")");
+        // WPF's 150px label column is a floor here (Auto + MinWidth 150), then a star field and an Auto picker column.
+        sheetSource.Should().Contain("new ColumnDefinition(GridLength.Auto) { MinWidth = 150 },");
+        sheetSource.Should().Contain("new ColumnDefinition(GridLength.Star),");
         sheetSource.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto\")");
         sheetSource.Should().Contain("picker.Width = 24;");
         sheetSource.Should().Contain("AddSheetValue(0, printAreaBox, printAreaPicker);");

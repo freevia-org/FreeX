@@ -7779,7 +7779,7 @@ public partial class MainWindow
         {
             openDialog = new AdvancedFilterDialog(
                 _currentSheetId,
-                context.RemoveDuplicatesRange.ToString(),
+                FormatWorkbookRange(context.RemoveDuplicatesRange),
                 ResolveSheetIdByName,
                 _ => { })
             {

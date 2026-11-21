@@ -271,10 +271,12 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, symbol => ApplySelection(symbol));
-        // Right details column: 210px to comfortably fit "Inverted Exclamation Mark" in SemiBold on Linux/Skia.
+        // WPF mainGrid: a star tab column and an Auto details column (190 wide + 12 left margin = 202),
+        // so the symbol grid wraps at the same width and column count as the WPF list. Long names
+        // such as "Inverted Exclamation Mark" wrap inside the 190px stack.
         var contentGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,210"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
         };
         Grid.SetColumn(details, 1);
         contentGrid.Children.Add(tabs);
@@ -465,6 +467,7 @@ public sealed partial class MainWindow
         var panel = new StackPanel
         {
             Margin = new Thickness(12, 0, 0, 0),
+            Width = 190,
             // WPF docks the details stack at its natural width, so the 96px code box centres
             // under the widest detail line instead of the whole column.
             HorizontalAlignment = HorizontalAlignment.Left,

@@ -73,10 +73,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get(EvaluateFormulaDialogPlanner.TitleKey),
-            // WPF EvaluateFormulaDialog sizes are outer sizes of a resizable window; Avalonia sizes the
-            // client area, so take the Windows caption/frame off.
-            Width = EvaluateFormulaDialogPlanner.Width - WpfResizableFrameWidth,
-            Height = EvaluateFormulaDialogPlanner.Height - WpfResizableFrameHeight,
+            // The WPF parity capture pins this dialog's planner size as the CLIENT area
+            // (TryGetFixedDialogClientCaptureSize -> ApplyDialogClientCaptureSize adds the frame on top),
+            // so the Avalonia client takes the planner size unreduced; subtracting the Windows frame here
+            // left the steps box ~39px shorter (and the dialog 16px narrower) than the WPF reference.
+            Width = EvaluateFormulaDialogPlanner.Width,
+            Height = EvaluateFormulaDialogPlanner.Height,
             MinWidth = EvaluateFormulaDialogPlanner.MinWidth - WpfResizableFrameWidth,
             MinHeight = EvaluateFormulaDialogPlanner.MinHeight - WpfResizableFrameHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -209,8 +211,9 @@ public sealed partial class MainWindow
         var button = new Button
         {
             Content = UiText.Get(contentKey),
-            Width = width,
         };
+        // The WPF fixed width is the minimum (ApplyButton sets MinWidth): a wider platform font grows
+        // the button to its content instead of clipping "Help on this Function...".
         AvaloniaCompactDialogChrome.ApplyButton(button, EvaluateFormulaDialogChromeStyle, width, isDefault);
         return button;
     }

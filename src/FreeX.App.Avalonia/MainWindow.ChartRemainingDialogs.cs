@@ -386,6 +386,12 @@ public sealed partial class MainWindow
 
         var legendGroup = MakeAreaDescriptorGroup(legendSection, legendStack);
 
+        // The compact Avalonia editors are ~2px taller than WPF's, which pushed the Legend group past the
+        // WPF 767 window and forced a scroll bar; take the 2px back from the gap below each editor so the
+        // row pitch matches WPF (51px) and the whole form fits the WPF height.
+        TightenAreaEditorRows(fillLineStack);
+        TightenAreaEditorRows(legendStack);
+
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         // WPF ChartAreaLegendDialog focuses the chart-area fill editor on load. Use the matching
         // Avalonia color control explicitly so nested scroll content does not lose the initial focus.
@@ -395,7 +401,11 @@ public sealed partial class MainWindow
         dialog.SizeToContent = SizeToContent.Manual;
         // WPF ChartAreaLegendDialog's 420x590 is the outer window; the client loses the Windows frame.
         dialog.Width = ChartAreaFormatPlanner.DialogWidth - WpfNoResizeFrameWidth;
-        dialog.Height = ChartAreaFormatPlanner.DialogHeight - WpfNoResizeClientFrameHeight;
+        // The WPF window renders the whole Legend section (through "Legend font size" and the OK row) without
+        // scrolling; the planner's nominal 590 is too short for that content, so use the rendered WPF height.
+        // The ScrollViewer below stays only as a fallback for small screens.
+        const double ChartAreaDialogRenderedHeight = 767;
+        dialog.Height = Math.Max(ChartAreaFormatPlanner.DialogHeight, ChartAreaDialogRenderedHeight) - WpfNoResizeClientFrameHeight;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("FormatChartArea");
         okButton.Click += (_, _) =>
@@ -444,7 +454,9 @@ public sealed partial class MainWindow
         };
         Grid.SetRow(scrollContent, 0);
         Grid.SetRow(buttonRow, 1);
-        buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
+        // The Legend group's own 10px bottom margin is the WPF gap above the buttons, and the form fits the
+        // WPF height, so the viewport gets no extra scroll gap (it only cut the group border off).
+        buttonRow.Margin = new Thickness(0);
 
         var contentGrid = new Grid
         {
@@ -457,6 +469,18 @@ public sealed partial class MainWindow
         ApplyChartDialogTypography(dialog);
 
         return await dialog.ShowDialog<ChartAreaFormatInput?>(this);
+
+        static void TightenAreaEditorRows(StackPanel stack)
+        {
+            foreach (var child in stack.Children)
+            {
+                if (child is TextBlock or CheckBox)
+                    continue;
+
+                var margin = child.Margin;
+                child.Margin = new Thickness(margin.Left, margin.Top, margin.Right, Math.Max(0, margin.Bottom - 2));
+            }
+        }
 
         ChartAreaFormatDialogFieldDescriptor AreaField(ChartAreaFormatDialogFieldId fieldId) =>
             ChartAreaFormatPlanner.GetDialogField(fieldId);

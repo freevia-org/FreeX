@@ -427,6 +427,8 @@ public sealed partial class MainWindow
             IsEnabled = hasItemFilter || labelFilter is not null || valueFilter is not null,
         };
         ApplyPivotFilterButtonChrome(clearFiltersBtn, 160);
+        // WPF's 160 px is a floor here: a longer caption widens the button instead of clipping.
+        clearFiltersBtn.Width = double.NaN;
         AutomationProperties.SetAutomationId(clearFiltersBtn, "PivotItemFilterClearFiltersButton");
         clearFiltersBtn.Click += (_, _) => dialog.Close(5);
 

@@ -54,10 +54,9 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            // WPF AccessibilityCheckerDialog: Width/Height are *outer* sizes of a resizable window;
-            // Avalonia sizes the client area, so take the Windows caption/frame off.
-            Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,
-            Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,
+            // Same client-size contract as the issues dialog below (the clean dialog shares the metrics).
+            Width = AccessibilityCheckerDialogMetrics.Width,
+            Height = AccessibilityCheckerDialogMetrics.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
@@ -140,10 +139,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            // WPF AccessibilityCheckerDialog: Width/Height are *outer* sizes of a resizable window;
-            // Avalonia sizes the client area, so take the Windows caption/frame off.
-            Width = AccessibilityCheckerDialogMetrics.Width - WpfResizableFrameWidth,
-            Height = AccessibilityCheckerDialogMetrics.Height - WpfResizableFrameHeight,
+            // The WPF parity surface (RenderAccessibilityCheckerDialog) draws the planner metrics as the
+            // CLIENT area (a 360x520 canvas with a 176px results tree), not as the outer window, so the
+            // Avalonia client takes them unreduced; subtracting the Windows frame left the star-row
+            // results tree ~40px short of that reference.
+            Width = AccessibilityCheckerDialogMetrics.Width,
+            Height = AccessibilityCheckerDialogMetrics.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
@@ -198,10 +199,11 @@ public sealed partial class MainWindow
         });
         ApplyAutomation(resultsTree, plan.IssueListAutomation);
 
-        // WPF: the results tree owns the star row between the "Inspection Results" header and the
-        // additional-information block, so it takes whatever height the window leaves.
+        // WPF (RenderAccessibilityCheckerDialog): the results tree is a fixed 176px box between the
+        // "Inspection Results" header and the additional-information block.
         var resultsBorder = new Border
         {
+            Height = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB)),
             BorderThickness = new Thickness(1),
@@ -349,7 +351,7 @@ public sealed partial class MainWindow
 
         var bodyGrid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
         };
         Grid.SetRow(resultsHeader, 0);
         Grid.SetRow(resultsBorder, 1);
@@ -512,14 +514,6 @@ public sealed partial class MainWindow
                 Children = { chevron, headerPresenter },
             };
             Grid.SetColumn(headerPresenter, 1);
-            header.Bind(
-                Layoutable.MarginProperty,
-                new Binding(nameof(TreeViewItem.Level))
-                {
-                    Source = item,
-                    Converter = new FuncValueConverter<int, Thickness>(level =>
-                        new Thickness(level * AccessibilityCheckerTreeIndent, 0, 0, 0)),
-                });
             scope.Register("PART_Header", header);
 
             var layoutRoot = new Border
@@ -530,7 +524,15 @@ public sealed partial class MainWindow
             };
             scope.Register("PART_LayoutRoot", layoutRoot);
 
-            var itemsPresenter = new ItemsPresenter { Name = "PART_ItemsPresenter" };
+            // Children sit inside their parent's template, so a fixed per-level left margin on the
+            // items presenter indents every level under its parent (header, then indented children)
+            // without depending on TreeViewItem.Level, which is not reliably maintained for
+            // directly-added containers.
+            var itemsPresenter = new ItemsPresenter
+            {
+                Name = "PART_ItemsPresenter",
+                Margin = new Thickness(AccessibilityCheckerTreeIndent, 0, 0, 0),
+            };
             itemsPresenter.Bind(
                 Visual.IsVisibleProperty,
                 new Binding(nameof(TreeViewItem.IsExpanded)) { Source = item });

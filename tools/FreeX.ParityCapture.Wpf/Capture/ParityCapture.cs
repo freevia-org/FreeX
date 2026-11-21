@@ -518,8 +518,9 @@ internal static class ParityCapture
             }
             else if (string.Equals(targetSurfaceId, "dialog.ProtectWorkbook", StringComparison.Ordinal))
             {
+                // Constructed exactly as MainWindow.ProtectWorkbookBtn_Click builds the protect dialog.
                 CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
-                    new PasswordProtectionDialog(UiText.Get("Protection_ProtectWorkbookTitle"), UiText.Get("Protection_PasswordToUnprotectWorkbook")));
+                    new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel"), includeWorkbookOptions: true));
             }
             else if (string.Equals(targetSurfaceId, "dialog.FindReplace", StringComparison.Ordinal) ||
                 targetSurfaceId.StartsWith("dialog.FindReplace.", StringComparison.Ordinal))
@@ -666,7 +667,7 @@ internal static class ParityCapture
                 new CellAddress(sheet.Id, 2, 6)));
 
         CaptureDialog(results, "dialog.AdvancedFilter", outDir, () =>
-            new AdvancedFilterDialog(sheet.Id, "Sheet1!$A$1:$D$5", ResolveSheetId(workbook)));
+            new AdvancedFilterDialog(sheet.Id, "A1:D5", ResolveSheetId(workbook)));
 
         CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
 
@@ -819,11 +820,12 @@ internal static class ParityCapture
         CaptureDialog(results, "dialog.AllowEditRanges", outDir, () =>
             new AllowEditRangeDialog(sheet.Id, "Sheet1!$B$2:$D$5", [range]));
 
+        // Constructed exactly as MainWindow.ProtectSheetBtn_Click / ProtectWorkbookBtn_Click build the protect dialogs.
         CaptureDialog(results, "dialog.ProtectSheet", outDir, () =>
-            new PasswordProtectionDialog(UiText.Get("Protection_ProtectSheetTitle"), UiText.Get("Protection_PasswordToUnprotectSheet")));
+            new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectSheetTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel")));
 
         CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
-            new PasswordProtectionDialog(UiText.Get("Protection_ProtectWorkbookTitle"), UiText.Get("Protection_PasswordToUnprotectWorkbook")));
+            new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel"), includeWorkbookOptions: true));
 
         CaptureAccessibilityCheckerDialog(results, outDir, AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id));
 
@@ -1210,7 +1212,6 @@ internal static class ParityCapture
         (width, height) = surfaceId switch
         {
             "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
-            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
             "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
             "dialog.Consolidate" => (ConsolidateDialogPlanner.CaptureWidth, ConsolidateDialogPlanner.CaptureHeight),
             _ => (0, 0)

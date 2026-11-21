@@ -2752,7 +2752,11 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("results.AddRange(await CaptureModalTabsAsync(");
         parityCaptureSource.Should().Contain("render: !interactionOnly));");
         parityCaptureSource.Should().Contain("private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(");
-        parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () => ShowFormatCellsDialogAsync(),");
+        // Format Cells opens on a blank, default-styled cell so the captured state matches the WPF
+        // capture (an unstyled cell) instead of the bold demo header in A1.
+        parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () =>");
+        parityCaptureSource.Should().Contain("_session.SelectCell(new CellAddress(_session.ActiveSheet.Id, 60, 26));");
+        parityCaptureSource.Should().Contain("return ShowFormatCellsDialogAsync();");
         parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Border\", \"Fill\", \"Protection\"]),");
         parityCaptureSource.Should().Contain("(\"dialog.FindReplace\", () => ShowFindDialogAsync(),");
         // PageSetup is registered per-tab (both shells have Page/Margins/Header-Footer/Sheet in order).
@@ -2915,7 +2919,7 @@ public sealed class AvaloniaShellSourceTests
         // automation id or the chrome and still pass.
         selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton, deleteButton }");
         selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.SelectionPane.DeleteButton)");
-        selectionPaneSource.Should().Contain("ApplySelectionPaneButtonChrome(deleteButton, 82)");
+        selectionPaneSource.Should().Contain("ApplySelectionPaneAutoWidthButtonChrome(deleteButton, 82)");
         selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
         selectionPaneSource.Should().NotContain("SelectionPane_Hint");
@@ -3315,6 +3319,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("Width = ScenarioManagerDialogLayout.DialogWidth,");
         source.Should().Contain("Height = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("MaxWidth = ScenarioManagerDialogLayout.DialogWidth,");
+        // The window must stay at the WPF size: a wider Avalonia frame is not a like-for-like comparison.
+        source.Should().NotContain("scenarioManagerWidth");
         source.Should().Contain("MaxHeight = ScenarioManagerDialogLayout.DialogHeight,");
         source.Should().Contain("CanResize = false,");
         source.Should().Contain("AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);");
@@ -4840,7 +4846,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("FormatCellsBorderColorTextBox");
         source.Should().Contain("CreateBorderPalette(borderColorBox)");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"80,*,*\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*,*\")");
+        source.Should().Contain("borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;");
         source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +

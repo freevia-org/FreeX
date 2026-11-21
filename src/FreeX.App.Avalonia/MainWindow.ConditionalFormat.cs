@@ -593,6 +593,16 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
+        // The 218px column truncates the longer Excel rule-type captions ("Use a formula to determine
+        // which cells to format"); wrap them so every caption stays fully readable.
+        ruleTypeShellList.ItemTemplate = new global::Avalonia.Controls.Templates.FuncDataTemplate<string>(
+            (label, _) => new TextBlock
+            {
+                Text = label,
+                TextWrapping = global::Avalonia.Media.TextWrapping.Wrap,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+            });
         // WPF ConditionalFormatDialog.RuleShell.cs: a default-template ListBox whose 12pt rows are 20px.
         ruleTypeShellList.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
@@ -1200,7 +1210,7 @@ public sealed partial class MainWindow
         void SyncAppliesTo()
         {
             appliesToBox.Text = listBox.SelectedItem is ManageConditionalFormatRuleProjection item
-                ? FormatRangeReference(item.Rule.AppliesTo)
+                ? ManageConditionalFormatsPlanner.FormatAppliesToRange(item.Rule.AppliesTo)
                 : string.Empty;
         }
 
