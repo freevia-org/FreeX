@@ -132,6 +132,9 @@ public sealed class Workbook
     public IReadOnlyList<Sheet> Sheets => _sheets;
 
     /// <summary>Named ranges defined in this workbook (case-insensitive keys).</summary>
+    /// <summary>User-defined named cell styles (Home > Cell Styles > New Cell Style).</summary>
+    public List<CustomCellStyle> CustomCellStyles { get; } = [];
+
     public Dictionary<string, GridRange> NamedRanges { get; } =
         new Dictionary<string, GridRange>(StringComparer.OrdinalIgnoreCase);
 

@@ -117,6 +117,11 @@ public sealed partial class NativeJsonAdapter
                 .OrderBy(code => code, StringComparer.Ordinal)
                 .ToList(),
             NamedRanges = ToNamedRangeDtos(workbook),
+            CustomCellStyles = workbook.CustomCellStyles.Count == 0
+                ? null
+                : workbook.CustomCellStyles
+                    .Select(style => new CustomCellStyleDto { Name = style.Name, Parts = (int)style.Parts, Style = FromCellStyle(style.Style) })
+                    .ToList(),
             CustomViews = workbook.CustomViews
                 .OfType<WorkbookCustomView>()
                 .Select(view => new CustomViewDto

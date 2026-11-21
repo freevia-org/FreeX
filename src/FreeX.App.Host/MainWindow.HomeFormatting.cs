@@ -1565,7 +1565,10 @@ public partial class MainWindow
     private void CellStylesBtn_Click(object sender, RoutedEventArgs e)
     {
         if (sender is System.Windows.Controls.Button btn && btn.ContextMenu is { } cm)
+        {
+            AppendCustomCellStyleMenuItems(cm);
             OpenRibbonContextMenu(btn, cm);
+        }
     }
     private void ApplyCellStylePreset(CellStylePreset preset)
         => ApplyStyleDiff(CellStyleDiffPlanner.GetCellStylePresetDiff(preset, _workbook.Theme));
