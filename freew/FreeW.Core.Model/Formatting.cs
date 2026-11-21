@@ -563,6 +563,19 @@ public sealed record ParagraphFormatting
     public double IndentLeftPt { get; init; }
     public double IndentRightPt { get; init; }
     public double FirstLineIndentPt { get; init; }
+
+    /// <summary>
+    /// True when this formatting carries an EXPLICIT left indent (<c>w:ind/@w:left</c>), even a zero one. Lets the
+    /// style cascade tell a direct <c>left="0"</c> that cancels an indented style (List Paragraph's 36pt) from an
+    /// absent attribute that should inherit it; the value comparison against the default 0 cannot.
+    /// </summary>
+    public bool IndentLeftIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="IndentLeftIsSet"/> (right indent).</summary>
+    public bool IndentRightIsSet { get; init; }
+
+    /// <summary><inheritdoc cref="IndentLeftIsSet"/> (first-line / hanging indent).</summary>
+    public bool FirstLineIndentIsSet { get; init; }
     public ListKind ListKind { get; init; } = ListKind.None;
     public int ListLevel { get; init; }
 

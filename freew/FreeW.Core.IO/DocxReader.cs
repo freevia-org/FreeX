@@ -1645,7 +1645,8 @@ public static partial class DocxReader
                 .ToList();
             foreach (var run in watermarkRuns)
                 run.Remove();
-            if (!preservedParagraph.Descendants(W + "r").Any())
+            var authoredEmpty = !p.Descendants(W + "r").Any();
+            if (!preservedParagraph.Descendants(W + "r").Any() && !authoredEmpty)
                 continue;
 
             var storyParagraph = ReadParagraph(
@@ -1660,6 +1661,12 @@ public static partial class DocxReader
             storyParagraph.LegacyTextBoxFrame = legacyFrame;
             result.Paragraphs.Add(storyParagraph);
         }
+
+        // A run-less paragraph is a real line in Word (a trailing empty Footer-style paragraph under a
+        // page-number shape sets how far the footer pushes the body up), so it is kept -- but only
+        // beside real content: a part that is nothing but empty paragraphs stays empty, as before.
+        if (result.Paragraphs.All(paragraph => paragraph.Runs.Count == 0))
+            result.Paragraphs.Clear();
         return result;
     }
 
@@ -2984,9 +2991,12 @@ public static partial class DocxReader
             LineRule = line.LineRule,
             LineHeightPt = line.LineHeightPt,
             LineSpacingIsSet = direct.LineSpacingIsSet || inherited.LineSpacingIsSet,
-            IndentLeftPt = direct.IndentLeftPt != defaults.IndentLeftPt ? direct.IndentLeftPt : inherited.IndentLeftPt,
-            IndentRightPt = direct.IndentRightPt != defaults.IndentRightPt ? direct.IndentRightPt : inherited.IndentRightPt,
-            FirstLineIndentPt = direct.FirstLineIndentPt != defaults.FirstLineIndentPt ? direct.FirstLineIndentPt : inherited.FirstLineIndentPt,
+            IndentLeftPt = direct.IndentLeftIsSet || direct.IndentLeftPt != defaults.IndentLeftPt ? direct.IndentLeftPt : inherited.IndentLeftPt,
+            IndentRightPt = direct.IndentRightIsSet || direct.IndentRightPt != defaults.IndentRightPt ? direct.IndentRightPt : inherited.IndentRightPt,
+            FirstLineIndentPt = direct.FirstLineIndentIsSet || direct.FirstLineIndentPt != defaults.FirstLineIndentPt ? direct.FirstLineIndentPt : inherited.FirstLineIndentPt,
+            IndentLeftIsSet = direct.IndentLeftIsSet || inherited.IndentLeftIsSet,
+            IndentRightIsSet = direct.IndentRightIsSet || inherited.IndentRightIsSet,
+            FirstLineIndentIsSet = direct.FirstLineIndentIsSet || inherited.FirstLineIndentIsSet,
             Border = direct.Border ?? inherited.Border,
             ShadingColorHex = direct.ShadingColorHex ?? inherited.ShadingColorHex,
             ShadingPattern = direct.ShadingColorHex is not null ? direct.ShadingPattern : inherited.ShadingPattern
@@ -7828,6 +7838,10 @@ public static partial class DocxReader
             AlignmentIsSet = jc is "left" or "start",
             IndentLeftPt = DxaToPoints(indent?.Attribute(W + "left")?.Value ?? indent?.Attribute(W + "start")?.Value),
             IndentRightPt = DxaToPoints(indent?.Attribute(W + "right")?.Value ?? indent?.Attribute(W + "end")?.Value),
+            // An explicit w:ind attribute (even 0) must beat the paragraph style's indent in the cascade.
+            IndentLeftIsSet = (indent?.Attribute(W + "left") ?? indent?.Attribute(W + "start")) is not null,
+            IndentRightIsSet = (indent?.Attribute(W + "right") ?? indent?.Attribute(W + "end")) is not null,
+            FirstLineIndentIsSet = indent?.Attribute(W + "hanging") is not null || indent?.Attribute(W + "firstLine") is not null,
             // w:hanging (a positive twips value) is mutually exclusive with w:firstLine in OOXML; the model
             // represents a hanging indent as a NEGATIVE FirstLineIndentPt so callers can distinguish the two.
             FirstLineIndentPt = indent?.Attribute(W + "hanging") is { } hangAttr

@@ -1964,22 +1964,46 @@ internal sealed class PagedLayoutSession
         void SetReserve(double reserveDip) =>
             work.PagePadding = new Thickness(padding.Left, padding.Top, padding.Right, padding.Bottom + reserveDip);
 
+        // As PaginationEngine.PaginateWithPerPageFootnoteReserve: the reference is judged at the line of its
+        // mark, so a long paragraph whose mark line is pushed to the next page shrinks the band instead of
+        // moving the reference (and its note) away.
+        TextPointer? lastReferenceMark = null;
         int LastReferencingEntry(int blockCount)
         {
+            lastReferenceMark = null;
             for (var index = Math.Min(blockCount, pending.Count) - 1; index >= 0; index--)
             {
-                if (!pending[index].IsContinuation
-                    && PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(pending[index].Rendered)).Any())
-                    return index;
+                if (pending[index].IsContinuation
+                    || !PaginationEngine.FootnoteIdsInModelBlock(OwnerOf(pending[index].Rendered)).Any())
+                    continue;
+                foreach (var marker in DocumentView.CollectFootnoteMarkers([pending[index].Block], includeAutomationIdMarks: true))
+                {
+                    int markerPage;
+                    try { markerPage = dynamicWork.GetPageNumber(marker.Position); }
+                    catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { markerPage = 0; }
+                    if (markerPage <= 0)
+                        lastReferenceMark = marker.Position;
+                }
+                return index;
             }
             return -1;
+        }
+
+        bool ReferenceStaysOnFirstPage(int lastReferencing)
+        {
+            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+                return false;
+            if (lastReferenceMark is null)
+                return true;
+            try { return dynamicWork.GetPageNumber(lastReferenceMark) <= 0; }
+            catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) { return true; }
         }
 
         double LargestReserveKeeping(int lastReferencing, double upperDip)
         {
             var minimumDip = Math.Min(upperDip, minimumSplitBandDip);
             SetReserve(minimumDip);
-            if (CountBlocksStartingOnFirstPage() <= lastReferencing)
+            if (!ReferenceStaysOnFirstPage(lastReferencing))
                 return 0;
 
             var low = minimumDip;
@@ -1988,7 +2012,7 @@ internal sealed class PagedLayoutSession
             {
                 var middle = (low + high) / 2;
                 SetReserve(middle);
-                if (CountBlocksStartingOnFirstPage() > lastReferencing)
+                if (ReferenceStaysOnFirstPage(lastReferencing))
                     low = middle;
                 else
                     high = middle;
@@ -2070,12 +2094,12 @@ internal sealed class PagedLayoutSession
                 // Mid-pass yield (no progress to report): keeps one step of background work short.
                 yield return false;
                 var countWithoutReserve = CountBlocksStartingOnFirstPage();
+                var lastReferencing = LastReferencingEntry(countWithoutReserve);
                 var reserveDip = ReserveFor(countWithoutReserve);
                 if (reserveDip > 0)
                 {
                     SetReserve(reserveDip);
-                    var lastReferencing = LastReferencingEntry(countWithoutReserve);
-                    if (lastReferencing >= 0 && CountBlocksStartingOnFirstPage() <= lastReferencing)
+                    if (lastReferencing >= 0 && !ReferenceStaysOnFirstPage(lastReferencing))
                     {
                         var keptReserve = LargestReserveKeeping(lastReferencing, reserveDip);
                         if (keptReserve > 0)

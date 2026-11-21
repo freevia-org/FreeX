@@ -3936,14 +3936,21 @@ public static partial class DocxWriter
         // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
         // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
         // indent entirely on save -- in every locale, not only a foreign one.
-        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0
+            || f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet)
         {
-            var indEl = new XElement(W + "ind",
-                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
-                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
+            // Formatting that carries explicit-indent flags (a direct "0" cancelling a style indent) writes only
+            // the attributes it actually owns, so an unflagged edge keeps inheriting the style; legacy formatting
+            // without any flag keeps writing both edges.
+            var indEl = new XElement(W + "ind");
+            var ownsEdges = f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet;
+            if (!ownsEdges || f.IndentLeftIsSet || f.IndentLeftPt != 0)
+                indEl.Add(new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)));
+            if (!ownsEdges || f.IndentRightIsSet || f.IndentRightPt != 0)
+                indEl.Add(new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
             if (f.FirstLineIndentPt < 0)
                 indEl.Add(new XAttribute(W + "hanging", PointsToDxa(-f.FirstLineIndentPt)));
-            else if (f.FirstLineIndentPt > 0)
+            else if (f.FirstLineIndentPt > 0 || f.FirstLineIndentIsSet)
                 indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
             pPr.Add(indEl);
         }
@@ -10706,14 +10713,21 @@ public static partial class DocxWriter
         // r603: the gate is != 0, not > 0. w:left/w:right are ST_SignedTwipsMeasure and Word
         // writes a negative one for an outdent into the margin, so a > 0 gate dropped such an
         // indent entirely on save -- in every locale, not only a foreign one.
-        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0)
+        if (f.IndentLeftPt != 0 || f.IndentRightPt != 0 || f.FirstLineIndentPt != 0
+            || f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet)
         {
-            var indEl = new XElement(W + "ind",
-                new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)),
-                new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
+            // Formatting that carries explicit-indent flags (a direct "0" cancelling a style indent) writes only
+            // the attributes it actually owns, so an unflagged edge keeps inheriting the style; legacy formatting
+            // without any flag keeps writing both edges.
+            var indEl = new XElement(W + "ind");
+            var ownsEdges = f.IndentLeftIsSet || f.IndentRightIsSet || f.FirstLineIndentIsSet;
+            if (!ownsEdges || f.IndentLeftIsSet || f.IndentLeftPt != 0)
+                indEl.Add(new XAttribute(W + "left", PointsToDxa(f.IndentLeftPt)));
+            if (!ownsEdges || f.IndentRightIsSet || f.IndentRightPt != 0)
+                indEl.Add(new XAttribute(W + "right", PointsToDxa(f.IndentRightPt)));
             if (f.FirstLineIndentPt < 0)
                 indEl.Add(new XAttribute(W + "hanging", PointsToDxa(-f.FirstLineIndentPt)));
-            else if (f.FirstLineIndentPt > 0)
+            else if (f.FirstLineIndentPt > 0 || f.FirstLineIndentIsSet)
                 indEl.Add(new XAttribute(W + "firstLine", PointsToDxa(f.FirstLineIndentPt)));
             pPr.Add(indEl);
         }
