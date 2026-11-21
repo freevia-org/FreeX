@@ -4848,7 +4848,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*,*\")");
         source.Should().Contain("borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;");
-        source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);");
+        source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target, validation.Tab);");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +
             "            {\n" +
