@@ -328,7 +328,7 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private Task ExportActiveSheetPdfAsync() =>");
         source.Should().Contain("ExportWorkbookFixedLayoutAsync(");
-        source.Should().Contain("await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
+        source.Should().Contain("await ShowPortablePdfSavePickerAsync(UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\"))");
         source.Should().Contain("private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
         source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");

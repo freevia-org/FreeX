@@ -515,7 +515,7 @@ public sealed partial class MainWindow
             var scopeIndex = scopeBox.SelectedIndex;
             var scope = DefinedNameUiPolicy.ResolveScopeOption(scopeOptions, scopeIndex).Scope;
             var dialogTitle = dialog.Title ?? string.Empty;
-            if (DefinedNameValidator.Validate(name).Error == DefinedNameError.Blank)
+            if (string.IsNullOrWhiteSpace(name))
             {
                 await AvaloniaUserMessageDialog.ShowWarningAsync(
                     dialog, UiText.Get("NameDefinition_PleaseEnterNameMessage"), dialogTitle);
