@@ -30432,7 +30432,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             title,
             ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle));
 
+    // Test-only seam (implemented in the parity-capture/test support partial): lets validation harnesses
+    // replace the native export save panel with a deterministic, cancelling picker. Null in production.
+    partial void ResolveExportSavePicker(
+        ref Func<string, ExportSavePickerPlan, Task<AvaloniaPickedStorageFile?>>? picker);
+
     private Task<AvaloniaPickedStorageFile?> ShowPortableExportSavePickerAsync(
+        string title,
+        ExportSavePickerPlan pickerPlan)
+    {
+        Func<string, ExportSavePickerPlan, Task<AvaloniaPickedStorageFile?>>? pickerOverride = null;
+        ResolveExportSavePicker(ref pickerOverride);
+        return pickerOverride is not null
+            ? pickerOverride(title, pickerPlan)
+            : PickExportSaveFileAsync(title, pickerPlan);
+    }
+
+    private Task<AvaloniaPickedStorageFile?> PickExportSaveFileAsync(
         string title,
         ExportSavePickerPlan pickerPlan) =>
         AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(

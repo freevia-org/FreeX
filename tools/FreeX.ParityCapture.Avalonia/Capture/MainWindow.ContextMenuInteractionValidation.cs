@@ -87,6 +87,10 @@ public sealed partial class MainWindow
 
     internal async Task<InteractionValidationResult> RunContextMenuInteractionValidationForTestAsync(string id)
     {
+        // Routes such as File > Export or Save As open a native save panel that never returns under
+        // validation; cancel those pickers unless a probe installed its own.
+        _workbookSaveAsPickerOverride ??= static _ => Task.FromResult<WorkbookSaveAsPickerSelection?>(null);
+        InstallCancellingExportSavePicker();
         var row = BuildContextMenuValidationInventory().Single(candidate => candidate.Id == id);
         var evidence = row.IsEnabled
             ? await ExerciseContextMenuProductionRouteAsync(row)
@@ -641,6 +645,9 @@ public sealed partial class MainWindow
         return parts.Length == 2 &&
             parts[0] == "file" &&
             Enum.TryParse<NativeFileMenuItemId>(parts[1], out var fileId) &&
+            // File > Export now opens the save picker first (WPF order); with the harness's cancelling picker
+            // (or no native storage provider) no owned dialog is expected for it.
+            fileId != NativeFileMenuItemId.BackstageExport &&
             IsOwnedNativeFileMenuValidationRoute(fileId);
     }
 
@@ -725,7 +732,16 @@ public sealed partial class MainWindow
         }
         if (dialog is not null)
         {
-            try { dialog.Close(); } catch { /* best-effort validation cleanup */ }
+            try
+            {
+                // Message boxes are ShowDialog<UserMessageResult> windows: a bare Close() leaves no result
+                // for the awaiting caller to unbox and crashes the host, so close them with a result.
+                if (dialog is Free.Shared.Shell.Avalonia.AvaloniaUserMessageDialog)
+                    dialog.Close(Free.Shared.AppServices.UserMessageResult.Cancel);
+                else
+                    dialog.Close();
+            }
+            catch { /* best-effort validation cleanup */ }
             await Task.Delay(25);
             return Passed(row, "production-dialog-opened-cancelled", row.ProductionRoute, "The owned dialog opened and was closed without submitting changes.");
         }
