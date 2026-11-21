@@ -2,7 +2,11 @@ using System.Collections.Generic;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.AppServices;
 using FreeX.App.Services;
 
@@ -33,6 +37,90 @@ public sealed partial class MainWindow
     // Enable announcements for the general status line when an action needs to report a failure.
     private bool _statusTextAnnouncementConfigured;
     private StatusBarAutomationSnapshot? _lastStatusBarAutomationSnapshot;
+
+    /// <summary>
+    /// Brings the status-bar view buttons, zoom buttons, zoom slider and zoom percentage up to the WPF
+    /// host's tooltips, automation names/help text/ids and the click-to-open Zoom dialog behaviour
+    /// (StatusZoomText_OpenZoomDialog / StatusZoomText_PreviewKeyDown in MainWindow.ViewCommands.cs).
+    /// </summary>
+    private void ApplyStatusBarWpfInteractionParity()
+    {
+        ConfigureStatusBarViewButtonParity(
+            _statusNormalViewButton, "StatusNormalViewButton",
+            "MainWindow_TooltipTitle_Normal", "MainWindow_Content_Normal",
+            "MainWindow_TooltipDescription_ShowTheWorksheetInTheStandardEditingView");
+        ConfigureStatusBarViewButtonParity(
+            _statusPageLayoutViewButton, "StatusPageLayoutViewButton",
+            "MainWindow_TooltipTitle_PageLayout", "MainWindow_Content_PageLayout",
+            "MainWindow_TooltipDescription_ShowTheSheetWithPrintLayoutBoundaries");
+        ConfigureStatusBarViewButtonParity(
+            _statusPageBreakPreviewButton, "StatusPageBreakPreviewButton",
+            "MainWindow_TooltipTitle_PageBreakPreview", "MainWindow_Content_PageBreakPreview",
+            "MainWindow_TooltipDescription_ShowManualPageBreaksAndPrintAreaBoundariesWhileEditing");
+
+        ToolTip.SetTip(_statusZoomSlider, UiText.Get("MainWindow_ToolTip_Zoom"));
+        AutomationProperties.SetAutomationId(_statusZoomSlider, "ZoomSlider");
+
+        ToolTip.SetTip(_zoomText, UiText.Get("MainWindow_ToolTip_Zoom"));
+        _zoomText.Cursor = new Cursor(StandardCursorType.Hand);
+        // A background-less TextBlock only hits on its glyphs; the whole 38px readout is the click target.
+        _zoomText.Background = Brushes.Transparent;
+        AutomationProperties.SetAutomationId(_zoomText, "StatusZoomText");
+        AutomationProperties.SetName(_zoomText, UiText.Get("MainWindow_AutomationName_ZoomPercentage"));
+        AutomationProperties.SetHelpText(_zoomText, UiText.Get("MainWindow_AutomationHelpText_OpenTheZoomDialog"));
+        _zoomText.PointerReleased += (_, args) =>
+        {
+            if (args.InitialPressMouseButton != MouseButton.Left)
+                return;
+
+            args.Handled = true;
+            RunGuarded(ShowZoomDialogAsync);
+        };
+        _zoomText.KeyDown += (_, args) =>
+        {
+            if (args.Key is not Key.Enter and not Key.Space)
+                return;
+
+            args.Handled = true;
+            RunGuarded(ShowZoomDialogAsync);
+        };
+    }
+
+    private static void ConfigureStatusBarViewButtonParity(
+        ToggleButton button,
+        string automationId,
+        string titleKey,
+        string nameKey,
+        string descriptionKey)
+    {
+        // WPF: ToolTip is the plain title string, AutomationProperties.Name the button caption and
+        // HelpText the one-line description.
+        ToolTip.SetTip(button, UiText.Get(titleKey));
+        AutomationProperties.SetAutomationId(button, automationId);
+        AutomationProperties.SetName(button, UiText.Get(nameKey));
+        AutomationProperties.SetHelpText(button, UiText.Get(descriptionKey));
+    }
+
+    private static void ConfigureStatusBarZoomButtonParity(Button button, bool isZoomIn)
+    {
+        // WPF: RibbonTooltip.Title with KeyTip SZ / SX, localized automation name and help text.
+        ToolTip.SetTip(
+            button,
+            AvaloniaRibbonRenderer.CreateRibbonTooltipContent(
+                UiText.Get(isZoomIn ? "MainWindow_TooltipTitle_ZoomIn" : "MainWindow_TooltipTitle_ZoomOut"),
+                description: null,
+                keyTip: isZoomIn ? "SX" : "SZ"));
+        button.Cursor = new Cursor(StandardCursorType.Hand);
+        AutomationProperties.SetAutomationId(button, isZoomIn ? "StatusZoomInButton" : "StatusZoomOutButton");
+        AutomationProperties.SetName(
+            button,
+            UiText.Get(isZoomIn ? "MainWindow_AutomationName_ZoomIn" : "MainWindow_AutomationName_ZoomOut"));
+        AutomationProperties.SetHelpText(
+            button,
+            UiText.Get(isZoomIn
+                ? "MainWindow_AutomationHelpText_IncreaseWorksheetZoom"
+                : "MainWindow_AutomationHelpText_DecreaseWorksheetZoom"));
+    }
 
     private bool GetStatusBarOption(string optionTag) =>
         StatusBarVisibilityPlanner.IsOptionVisible(_statusBarOptionVisibility, optionTag);

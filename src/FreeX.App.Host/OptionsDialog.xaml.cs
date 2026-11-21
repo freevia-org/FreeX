@@ -570,6 +570,52 @@ public partial class OptionsDialog : Window
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 
+    // Excel's File > Options > Advanced > Edit Custom Lists, as a one-list-per-line editor.
+    private void EditCustomLists_Click(object sender, RoutedEventArgs e)
+    {
+        var editor = new TextBox
+        {
+            AcceptsReturn = true,
+            Height = 220,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Text = CustomListsTextPlanner.Format(_dialogSession.EditedCustomLists),
+        };
+        AutomationProperties.SetAutomationId(editor, "OptionsCustomListsEditor");
+        AutomationProperties.SetName(editor, UiText.Get("Options_CustomListsEditorAutomationName"));
+
+        var ok = new Button { Content = UiText.Get("Options_OK"), MinWidth = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        AutomationProperties.SetAutomationId(ok, "OptionsCustomListsOkButton");
+        var cancel = new Button { Content = UiText.Get("Options_Cancel"), MinWidth = 80, IsCancel = true };
+        AutomationProperties.SetAutomationId(cancel, "OptionsCustomListsCancelButton");
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        buttons.Children.Add(ok);
+        buttons.Children.Add(cancel);
+        var body = new StackPanel { Margin = new Thickness(16) };
+        body.Children.Add(new TextBlock { Text = UiText.Get("Options_CustomListsDescription"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) });
+        body.Children.Add(editor);
+        body.Children.Add(buttons);
+
+        var dialog = new Window
+        {
+            Title = UiText.Get("Options_CustomListsTitle"),
+            Width = 460,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            ResizeMode = ResizeMode.NoResize,
+            Owner = this,
+            Content = body,
+        };
+        ok.Click += (_, _) =>
+        {
+            _dialogSession.EditedCustomLists = CustomListsTextPlanner.Parse(editor.Text)
+                .Select(list => (IReadOnlyList<string>)list).ToList();
+            dialog.DialogResult = true;
+        };
+        dialog.ShowDialog();
+    }
+
     private const int DefaultMaxCalculationIterations = CalculationCommandPolicy.DefaultMaxCalculationIterations;
     private const double DefaultMaxCalculationChange = CalculationCommandPolicy.DefaultMaxCalculationChange;
 

@@ -103,7 +103,7 @@ public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
         _sourceRange = sourceRange;
         _fillRange   = fillRange;
         _ctrlHeld    = ctrlHeld;
-        _customLists = customLists ?? [];
+        _customLists = customLists ?? AutoFillCustomLists.Current;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)

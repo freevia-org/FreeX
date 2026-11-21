@@ -41,6 +41,7 @@ public sealed partial class MainWindow
     {
         var ownerFocusBeforeOpen = FocusManager?.GetFocusedElement();
         KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
+        _modelessOwnedWindows.Add(dialog);
 
         var focusEstablished = false;
         var focusAttemptInProgress = false;
@@ -114,6 +115,7 @@ public sealed partial class MainWindow
         dialog.KeyDown += (_, args) => CloseOwnedModelessWindowOnEscape(dialog, args);
         dialog.Closed += (_, _) =>
         {
+            _modelessOwnedWindows.Remove(dialog);
             focusRetries.Stop();
             dialog.LayoutUpdated -= layoutUpdated;
             onClosed?.Invoke();

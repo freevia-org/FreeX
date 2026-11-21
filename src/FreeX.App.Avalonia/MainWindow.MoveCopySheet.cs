@@ -111,6 +111,18 @@ public sealed partial class MainWindow
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();
+        // WPF MoveOrCopySheetDialog: a double-click in the "Before sheet" list accepts, and the list
+        // takes the initial keyboard focus.
+        beforeSheetList.DoubleTapped += (_, args) =>
+        {
+            if (beforeSheetList.SelectedIndex < 0)
+                return;
+
+            args.Handled = true;
+            accepted = true;
+            dialog.Close();
+        };
+        dialog.Opened += (_, _) => beforeSheetList.Focus();
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 

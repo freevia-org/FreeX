@@ -22,7 +22,9 @@ public sealed partial class MainWindow
     /// default PivotChart is a clustered column chart; the Core model represents that as
     /// <see cref="ChartType.Column"/>.
     /// </summary>
-    private void InsertPivotChart()
+    private void InsertPivotChart() => RunGuarded(InsertPivotChartAsync);
+
+    private async Task InsertPivotChartAsync()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -34,10 +36,15 @@ public sealed partial class MainWindow
             return;
         }
 
+        // WPF PivotChartInsert opens the Change PivotChart Type picker seeded with the default
+        // clustered column type before adding the chart.
+        if (await ShowPivotChartTypeDialogAsync(ChartType.Column) is not { } chartType)
+            return;
+
         var command = ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(
             _session.ActiveSheet.Id,
             pivot,
-            ChartType.Column);
+            chartType);
         var result = _session.ExecuteReviewCommand(command);
 
         RefreshShell(result.Success

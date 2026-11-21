@@ -175,6 +175,48 @@ public sealed class AvaloniaWorksheetContextMenuBehaviorTests
         }
     }, CancellationToken.None);
 
+    [Fact]
+    public Task KeyboardMenuOverWholeRowOrColumnSelection_UsesHeaderMenuLikeWpf() => Session.Dispatch(() =>
+    {
+        var window = new MainWindow([]);
+        try
+        {
+            var sheet = window.Session.ActiveSheet;
+            ActionTags(BuildWorksheetCellMenu(window)).Should().Equal(
+                PlannedActionTags(WorksheetContextMenuTargetKind.Worksheet));
+
+            window.Session.SelectRange(new GridRange(
+                new CellAddress(sheet.Id, 2, 1),
+                new CellAddress(sheet.Id, 2, CellAddress.MaxCol)));
+            ActionTags(BuildWorksheetCellMenu(window)).Should().Equal(
+                PlannedActionTags(WorksheetContextMenuTargetKind.RowSelection));
+
+            window.Session.SelectRange(new GridRange(
+                new CellAddress(sheet.Id, 1, 2),
+                new CellAddress(sheet.Id, CellAddress.MaxRow, 2)));
+            ActionTags(BuildWorksheetCellMenu(window)).Should().Equal(
+                PlannedActionTags(WorksheetContextMenuTargetKind.ColumnSelection));
+        }
+        finally
+        {
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+            window.Close();
+        }
+    }, CancellationToken.None);
+
+    private static string[] ActionTags(ContextMenu menu) =>
+        menu.Items.OfType<MenuItem>()
+            .Where(item => item.Tag is string tag && tag != "WorksheetContextMenuSearch")
+            .Select(item => (string)item.Tag!)
+            .ToArray();
+
+    private static string[] PlannedActionTags(WorksheetContextMenuTargetKind kind) =>
+        WorksheetContextMenuPlanner.BuildCommands(kind)
+            .Where(command => !command.IsSeparator && command.Action != WorksheetContextMenuAction.None)
+            .Select(command => command.Action.ToString())
+            .ToArray();
+
     private static ContextMenu BuildWorksheetCellMenu(MainWindow window) =>
         (ContextMenu)(typeof(MainWindow).GetMethod(
             "BuildWorksheetCellContextMenu",

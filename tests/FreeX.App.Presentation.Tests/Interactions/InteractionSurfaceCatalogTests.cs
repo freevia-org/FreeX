@@ -86,12 +86,12 @@ public sealed class InteractionSurfaceCatalogTests
     }
 
     [Fact]
-    public void WorksheetFamily_ExposesPlannerOwnedTargetsAndAllEightStateAxes()
+    public void WorksheetFamily_ExposesPlannerOwnedTargetsAndAllNineStateAxes()
     {
         var worksheet = InteractionSurfaceCatalog.ContextMenus
             .Single(row => row.ContextFamily == ContextMenuFamily.WorksheetTargetsAndStateVariants);
 
-        worksheet.Variants.Should().HaveCount(15);
+        worksheet.Variants.Should().HaveCount(16);
         worksheet.Variants.Select(variant => variant.Name).Should().Contain(
             "Worksheet",
             "Picture",
@@ -107,7 +107,8 @@ public sealed class InteractionSurfaceCatalogTests
             "HasAutoFilterHeaderTarget",
             "HasDropdownTarget",
             "HasPivotTableTarget",
-            "NoteIsShown");
+            "NoteIsShown",
+            "HasTableTarget");
     }
 
     [Fact]

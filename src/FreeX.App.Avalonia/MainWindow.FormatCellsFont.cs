@@ -22,7 +22,7 @@ public sealed partial class MainWindow
     /// workbooks authored elsewhere use them even when this machine does not have them installed,
     /// and they are the only entries when the platform font list cannot be read.
     /// </summary>
-    private static string[] BuildFormatCellsFontNameChoices(
+    internal static string[] BuildFormatCellsFontNameChoices(
         IReadOnlyList<string> curatedFontNames,
         string? currentFontName)
     {

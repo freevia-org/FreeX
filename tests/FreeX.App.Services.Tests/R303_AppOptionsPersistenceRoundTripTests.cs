@@ -76,6 +76,8 @@ public sealed class R303_AppOptionsPersistenceRoundTripTests : IDisposable
             return (current is int i ? i : 0) + 7;
         if (type == typeof(string))
             return "r303-" + property.Name;
+        if (type == typeof(List<List<string>>))
+            return new List<List<string>> { new() { "r303-x-" + property.Name, "r303-y" } };
         if (type == typeof(List<string>))
             return new List<string> { "r303-a-" + property.Name, "r303-b" };
         if (type.IsEnum)
@@ -135,7 +137,9 @@ public sealed class R303_AppOptionsPersistenceRoundTripTests : IDisposable
                 continue;
 
             var got = property.GetValue(reloaded);
-            var same = want is List<string> wantList
+            var same = want is List<List<string>> wantLists
+                ? got is List<List<string>> gotLists && wantLists.Select(l => string.Join("|", l)).SequenceEqual(gotLists.Select(l => string.Join("|", l)))
+                : want is List<string> wantList
                 ? got is List<string> gotList && wantList.SequenceEqual(gotList)
                 : Equals(want, got);
 
@@ -180,5 +184,5 @@ public sealed class R303_AppOptionsPersistenceRoundTripTests : IDisposable
     }
 
     private static string Describe(object? value) =>
-        value is List<string> list ? string.Join("|", list) : value?.ToString() ?? "<null>";
+        value is List<List<string>> lists ? string.Join(";", lists.Select(l => string.Join("|", l))) : value is List<string> list ? string.Join("|", list) : value?.ToString() ?? "<null>";
 }

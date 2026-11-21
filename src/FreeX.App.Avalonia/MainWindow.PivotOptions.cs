@@ -170,13 +170,7 @@ public sealed partial class MainWindow
         ApplyPivotCheckBoxChrome(mergeLabelsBox);
         AutomationProperties.SetAutomationId(mergeLabelsBox, "PivotOptionsMergeLabelsBox");
 
-        void SyncSubtotalState()
-        {
-            subtotalPlacementBox.IsEnabled = subtotalsBox.IsChecked == true;
-        }
-
-        subtotalsBox.IsCheckedChanged += (_, _) => SyncSubtotalState();
-        SyncSubtotalState();
+        // WPF PivotTableOptionsDialog never disables the subtotal placement combo.
 
         var dialog = new Window
         {
