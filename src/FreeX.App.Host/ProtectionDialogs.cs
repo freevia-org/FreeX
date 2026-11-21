@@ -17,8 +17,19 @@ public sealed class PasswordProtectionDialog : Window
     public IReadOnlyList<SheetProtectionPermission> SelectedSheetPermissions { get; private set; } =
         SheetProtectionOptions.DefaultEnabledPermissions;
 
-    public PasswordProtectionDialog(string title, string prompt)
+    private readonly CheckBox _structureBox = new() { Content = UiText.Get("ShellLoc_StructureCheckbox"), IsChecked = true, Margin = new Thickness(0, 0, 0, 4) };
+    private readonly CheckBox _windowsBox = new() { Content = UiText.Get("ShellLoc_WindowsCheckbox"), Margin = new Thickness(0, 0, 0, 8) };
+    private readonly bool _includeWorkbookOptions;
+
+    /// <summary>Protect Structure (Excel "Protect Structure and Windows" dialog); true unless the options are hidden.</summary>
+    public bool ProtectStructure { get; private set; } = true;
+
+    /// <summary>Protect Windows (Excel "Protect Structure and Windows" dialog).</summary>
+    public bool ProtectWindows { get; private set; }
+
+    public PasswordProtectionDialog(string title, string prompt, bool includeWorkbookOptions = false)
     {
+        _includeWorkbookOptions = includeWorkbookOptions;
         var isProtectSheet = IsProtectSheetTitle(title);
         _requiresConfirmation = title.StartsWith("Protect ", StringComparison.OrdinalIgnoreCase) ||
             title.StartsWith(UiText.Get("Protection_ProtectTitlePrefix"), StringComparison.OrdinalIgnoreCase);
@@ -35,10 +46,18 @@ public sealed class PasswordProtectionDialog : Window
         {
             Text = isProtectSheet
                 ? UiText.Get("Protection_ProtectWorksheetContents")
-                : prompt,
+                : includeWorkbookOptions
+                    ? UiText.Get("ShellLoc_ProtectWorkbookForLabel")
+                    : prompt,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
+
+        if (includeWorkbookOptions)
+        {
+            root.Children.Add(_structureBox);
+            root.Children.Add(_windowsBox);
+        }
 
         var passwordGroup = new GroupBox { Header = UiText.Get("Protection_Password"), Margin = new Thickness(0, 0, 0, 10) };
         var passwordPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
@@ -108,6 +127,12 @@ public sealed class PasswordProtectionDialog : Window
         }
 
         Password = _passwordBox.Password;
+        if (_includeWorkbookOptions)
+        {
+            ProtectStructure = _structureBox.IsChecked == true;
+            ProtectWindows = _windowsBox.IsChecked == true;
+        }
+
         SelectedSheetPermissions = _sheetPermissionBoxes
             .Where(item => item.Box.IsChecked == true)
             .Select(item => item.Permission)

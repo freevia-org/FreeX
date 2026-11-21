@@ -257,7 +257,7 @@ public sealed partial class MainWindow
         selectItemsPanel.Children.Add(chooseItemsText);
         var itemSummaryText = new TextBlock
         {
-            Text = UiText.Get("PivotFieldFilter_NoItemFilter"),
+            Text = filterState.ItemSummary,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
@@ -312,7 +312,7 @@ public sealed partial class MainWindow
         var labelFiltersPanel = new StackPanel { Margin = new Thickness(10) };
         labelFiltersPanel.Children.Add(new TextBlock
         {
-            Text = UiText.Get("PivotFieldFilter_NoLabelFilter"),
+            Text = filterState.LabelSummary,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
@@ -360,7 +360,7 @@ public sealed partial class MainWindow
         var valueFiltersPanel = new StackPanel { Margin = new Thickness(10) };
         valueFiltersPanel.Children.Add(new TextBlock
         {
-            Text = UiText.Get("PivotFieldFilter_NoValueFilter"),
+            Text = filterState.ValueSummary,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontWeight = FontWeight.SemiBold,
@@ -421,7 +421,7 @@ public sealed partial class MainWindow
         // WPF layout: "Clear Filters from This Field" at bottom-left; [OK][Cancel] at bottom-right.
         var clearFiltersBtn = new Button
         {
-            Content = UiText.Get("PivotFieldFilter_ClearFiltersFromThisField"),
+            Content = PivotFieldFilterSummary.FormatClearFilterHeader(filterState),
             MinWidth = 160,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
             IsEnabled = hasItemFilter || labelFilter is not null || valueFilter is not null,

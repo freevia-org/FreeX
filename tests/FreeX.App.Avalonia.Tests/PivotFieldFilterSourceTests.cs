@@ -44,9 +44,10 @@ public sealed class PivotFieldFilterSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
 
-        source.Should().Contain("UiText.Get(\"PivotFieldFilter_NoItemFilter\")");
-        source.Should().Contain("UiText.Get(\"PivotFieldFilter_NoLabelFilter\")");
-        source.Should().Contain("UiText.Get(\"PivotFieldFilter_NoValueFilter\")");
+        // The summaries come from the shared filter state (which localizes the "No ... filter" text).
+        source.Should().Contain("Text = filterState.ItemSummary,");
+        source.Should().Contain("Text = filterState.LabelSummary,");
+        source.Should().Contain("Text = filterState.ValueSummary,");
         source.Should().Contain("filter.SourceFieldIndex == target.SourceFieldIndex");
         source.Should().NotContain("filter.SourceFieldIndex is null || filter.SourceFieldIndex == target.SourceFieldIndex");
     }

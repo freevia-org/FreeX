@@ -1146,24 +1146,28 @@ internal static class MacOsLaunchSmokeCoordinator
             probe =>
             {
                 hasConditionalFormatRuleDialog = HasDialog(probe.Dialog, "New Formatting Rule");
+                // The WPF-style editor opens on the cell-value (Greater Than) rule: a "Format only cells
+                // with" selector plus the shell list that re-targets the description to the other families.
                 hasConditionalFormatRuleTypeControls =
-                    HasComboBox(probe.RuleTypeBox, "ConditionalFormatRuleTypeBox", "Rule type") &&
-                    probe.RuleTypeBox.SelectedIndex == 0 &&
-                    HasComboBox(probe.TopBottomBox, "ConditionalFormatTopBottomBox", "Top or bottom") &&
-                    HasAutomationId(probe.IconSetBox, "ConditionalFormatIconSetBox");
+                    probe.FindControl("ConditionalFormatRuleTypeBox") is ComboBox ruleTypeBox &&
+                    HasComboBox(ruleTypeBox, "ConditionalFormatRuleTypeBox", "Rule type") &&
+                    ruleTypeBox.SelectedIndex == 0 &&
+                    HasAutomationId(probe.RuleShellList, "ConditionalFormatRuleShellList") &&
+                    probe.RuleShellList.SelectedIndex == 1;
                 hasConditionalFormatRulePresetControls =
-                    HasComboBox(probe.PresetBox, "ConditionalFormatPresetBox", "Preset") &&
-                    probe.PresetBox.ItemCount > 0 &&
-                    HasAutomationId(probe.HighlightBox, "ConditionalFormatHighlightBox") &&
-                    probe.HighlightBox.SelectedIndex == 0;
+                    probe.FindControl("ConditionalFormatHighlightBox") is ComboBox highlightBox &&
+                    highlightBox.ItemCount > 0 &&
+                    highlightBox.SelectedIndex == 0 &&
+                    probe.FindControl("ConditionalFormatFormatButton") is Button;
                 hasConditionalFormatRuleValueControls =
-                    HasAutomationId(probe.OperatorBox, "ConditionalFormatOperatorBox") &&
-                    HasAutomationId(probe.Value1Box, "ConditionalFormatValue1Box") &&
-                    HasAutomationId(probe.FormulaBox, "ConditionalFormatFormulaBox") &&
-                    HasAutomationId(probe.TextBox, "ConditionalFormatTextBox") &&
-                    HasAutomationId(probe.RankBox, "ConditionalFormatRankBox") &&
-                    HasAutomationId(probe.MinColorBox, "ConditionalFormatMinColorBox") &&
-                    HasAutomationId(probe.MaxColorBox, "ConditionalFormatMaxColorBox");
+                    probe.FindControl("ConditionalFormatOperatorBox") is ComboBox &&
+                    probe.FindControl("ConditionalFormatValue1Box") is TextBox;
+                // Switching the shell to "Format all cells" rebuilds the description with the data-bar
+                // fields WPF's Data Bar rule dialog carries.
+                probe.SelectRuleType("Data Bar");
+                hasConditionalFormatRuleValueControls = hasConditionalFormatRuleValueControls &&
+                    probe.FindControl("ConditionalFormatDataBarMinTypeBox") is ComboBox &&
+                    probe.FindControl("ConditionalFormatDataBarGradientBox") is CheckBox;
                 hasConditionalFormatRuleActionButtons =
                     HasButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
                     HasButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
@@ -1191,9 +1195,11 @@ internal static class MacOsLaunchSmokeCoordinator
             hasManageConditionalFormatsReorderControls =
                 HasNamedButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", UiText.Get("ManageConditionalFormats_MoveUp")) &&
                 HasNamedButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", UiText.Get("ManageConditionalFormats_MoveDown"));
+            // WPF edits Applies To inline on each row; the dialog-level Apply commits pending edits and stays
+            // disabled until the first edit.
             hasManageConditionalFormatsAppliesToControls =
-                HasAutomationId(probe.AppliesToBox, "ManageConditionalFormatsAppliesToBox") &&
-                HasButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", UiText.Get("ManageConditionalFormats_Apply"));
+                HasButton(probe.ApplyButton, "ManageConditionalFormatsApplyButton", UiText.Get("ManageConditionalFormats_Apply")) &&
+                !probe.ApplyButton.IsEnabled;
             hasManageConditionalFormatsActionButtons =
                 HasButton(probe.NewButton, "ManageConditionalFormatsNewButton", UiText.Get("ManageConditionalFormats_NewRule")) &&
                 HasButton(probe.EditButton, "ManageConditionalFormatsEditButton", UiText.Get("ManageConditionalFormats_EditRule")) &&

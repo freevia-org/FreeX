@@ -89,8 +89,7 @@ public sealed class DialogRangeSelectionTests
         textToColumns.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination(");
         textToColumns.Should().Contain("TextToColumnsApplyPlanner.MapResultToEdits(");
         textToColumns.Should().Contain("destination,");
-        textToColumns.Should().Contain("destinationBox.TextChanged += (_, _) => overwriteConfirmed = false;");
-        textToColumns.Should().NotContain("warningText.IsVisible = false;\n            overwriteConfirmed = false;");
+        textToColumns.Should().Contain("ConfirmOverwriteAndApplyAsync(sheet.Id, edits)");
     }
 
     [Fact]
