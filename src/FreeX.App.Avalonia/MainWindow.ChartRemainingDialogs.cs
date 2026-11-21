@@ -391,6 +391,8 @@ public sealed partial class MainWindow
         // row pitch matches WPF (51px) and the whole form fits the WPF height.
         TightenAreaEditorRows(fillLineStack);
         TightenAreaEditorRows(legendStack);
+        fillLineGroup.Padding = new Thickness(10, 10, 10, 8);
+        legendGroup.Padding = new Thickness(10, 10, 10, 8);
 
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
         // WPF ChartAreaLegendDialog focuses the chart-area fill editor on load. Use the matching
@@ -474,11 +476,21 @@ public sealed partial class MainWindow
         {
             foreach (var child in stack.Children)
             {
-                if (child is TextBlock or CheckBox)
+                if (child is CheckBox)
                     continue;
 
                 var margin = child.Margin;
-                child.Margin = new Thickness(margin.Left, margin.Top, margin.Right, Math.Max(0, margin.Bottom - 2));
+                if (child is TextBlock label)
+                {
+                    // Inline help keeps its own margin; field labels give back 1px above them.
+                    if (!label.Classes.Contains(ChartDialogInlineHelpClass))
+                        label.Margin = new Thickness(margin.Left, Math.Max(0, margin.Top - 1), margin.Right, margin.Bottom);
+                    continue;
+                }
+
+                // Editors give back 3px below them, so the form clears the viewport by a safe margin
+                // under both the Windows and Linux font metrics (a bare fit scrolled under Windows).
+                child.Margin = new Thickness(margin.Left, margin.Top, margin.Right, Math.Max(0, margin.Bottom - 3));
             }
         }
 

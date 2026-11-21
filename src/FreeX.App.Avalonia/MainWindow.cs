@@ -16002,6 +16002,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Fluent's disabled CheckBox template swaps the label to its disabled foreground resources
         // regardless of Foreground, so pin them to the ink as well (WPF greys only the glyph).
         checkBox.Foreground = Brushes.Black;
+        // The app-wide compact fallback style fades a disabled CheckBox (Opacity < 1, which also
+        // fades the label). Style setters tie on priority, so pin the opacity as a local value,
+        // which always wins, and only the template's own disabled glyph colours show greyed.
+        checkBox.Opacity = 1d;
         checkBox.Resources["CheckBoxForegroundDisabled"] = Brushes.Black;
         checkBox.Resources["CheckBoxForegroundUncheckedDisabled"] = Brushes.Black;
         checkBox.Resources["CheckBoxForegroundCheckedDisabled"] = Brushes.Black;
@@ -16106,10 +16110,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
             // WPF HyperlinkDialog: a fixed LinkTypeColumnWidth-wide list (long entries scroll
-            // horizontally) that is as tall as its four rows plus the horizontal scroll bar (~100px),
+            // horizontally) that fills the body row's height (the column docks it under its label),
             // so the Look-in column starts at the same x as in WPF.
             Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
-            Height = 100,
         };
         ScrollViewer.SetHorizontalScrollBarVisibility(linkTypeBox, ScrollBarVisibility.Auto);
         AvaloniaCompactDialogChrome.ApplyListBox(
@@ -16363,9 +16366,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = StripDisplayMnemonic(UiText.Get("Hyperlink_LinkTo")),
             Margin = new Thickness(0, 0, 0, 4),
         };
-        var linkToColumn = new StackPanel
+        // WPF docks the "Link to:" label above a list that fills the rest of the star body row, so the
+        // list runs down to the Address row like the Look-in list beside it.
+        DockPanel.SetDock(linkToLabel, Dock.Top);
+        linkTypeBox.Height = double.NaN;
+        linkTypeBox.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+        var linkToColumn = new DockPanel
         {
-            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
             Children =
             {
                 linkToLabel,
@@ -18276,8 +18284,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Width = 96,
             Height = 64,
             Background = Brushes.White,
-            BorderBrush = Brush(112, 112, 112),
-            BorderThickness = new Thickness(1),
+            // WPF's preview sits on a plain white box with no frame of its own; only the chosen
+            // edges draw (as the Top/Left/Right/Bottom buttons' neighbours).
+            BorderThickness = new Thickness(0),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
         AutomationProperties.SetAutomationId(borderPreview, "FormatCellsBorderPreview");
@@ -22482,11 +22491,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Children =
             {
                 summaryBlock,
-                new Border
-                {
-                    Child = buttonRow,
-                    Margin = new Thickness(0, 0, GoalSeekStatusDialogPlanner.ContentMargin, 0),
-                },
+                // WPF right-aligns the row inside the stack's own 16px margin; the row adds none.
+                buttonRow,
             },
         };
         dialog.Opened += (_, _) => defaultButton.Focus();

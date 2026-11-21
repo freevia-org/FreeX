@@ -33,7 +33,6 @@ public sealed partial class MainWindow
     // WPF PasswordProtectionDialog (ProtectionDialogs.cs) uses a default-template PasswordBox, which
     // renders 18px tall at the 12px dialog font; the buttons keep the shared control height.
     private const double ProtectWpfPasswordBoxHeight = 18;
-    private const double ProtectWorkbookOptionsClientHeight = 236;
     // WPF ProtectionDialogs.AddSheetPermissionChecklist: twelve whole permission rows show in the
     // permission viewport; each row is a 16px check box with a 4px bottom margin.
     private const int ProtectSheetWpfVisiblePermissionRows = 12;
@@ -302,11 +301,7 @@ public sealed partial class MainWindow
             // *outer* minimum (DialogSizing.ApplyContentHeight). Avalonia sizes the client area, so the
             // Windows caption/frame comes off both.
             Width = ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
-            // The protect form (label + Structure/Windows + Password group + buttons) is taller than the
-            // 250 minimum, so the seed height is the content's own client height (WPF grows the same way).
-            Height = state.IsStructureProtected
-                ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight
-                : ProtectWorkbookOptionsClientHeight,
+            Height = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight,
             MinHeight = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
