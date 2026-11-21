@@ -43,6 +43,18 @@ public static class ExportFilePickerPlanner
             BuildSuggestedExportFileName(sourceName, fallbackDisplayName, format),
             ExtensionFor(format)[1..]);
 
+    /// <summary>
+    /// Portable equivalent of the WPF "PDF files|XPS files" export save dialog: both types are offered,
+    /// PDF first and suggested; the chosen path's extension decides the format.
+    /// </summary>
+    public static ExportSavePickerPlan BuildPortablePdfXpsPickerPlan(
+        string? sourceName,
+        string fallbackDisplayName) =>
+        new(
+            [BuildPickerType(ExportFileFormat.Pdf), BuildPickerType(ExportFileFormat.Xps)],
+            BuildSuggestedExportFileName(sourceName, fallbackDisplayName, ExportFileFormat.Pdf),
+            ExtensionFor(ExportFileFormat.Pdf)[1..]);
+
     public static ExportSaveDialogPlan BuildPdfXpsDialogPlan(
         string? sourceName,
         string fallbackDisplayName) =>

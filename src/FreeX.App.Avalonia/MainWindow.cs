@@ -25511,15 +25511,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             errorMessageBox.IsEnabled = plan.ErrorEditorsEnabled;
         }
 
-        void Accept()
+        TabControl? validationTabStrip = null;
+
+        void Accept() => RunGuarded(AcceptAsync);
+
+        async Task AcceptAsync()
         {
             var type = SelectedType();
             var op = SelectedOperator();
             var validation = DataValidationDialogPlanner.ValidateCriteria(type, op, formula1Box.Text, formula2Box.Text);
             if (!validation.IsValid)
             {
-                errorText.Text = DataValidationValidationErrorText(validation.FirstError);
-                errorText.IsVisible = !string.IsNullOrEmpty(errorText.Text);
+                // WPF DataValidationDialog.OkButton_Click: switch to the Settings tab, show the problem
+                // in a warning box titled with the dialog title, then focus the offending criteria input.
+                if (validationTabStrip is not null)
+                    validationTabStrip.SelectedIndex = 0;
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    DataValidationValidationErrorText(validation.FirstError) ?? string.Empty,
+                    dialog.Title ?? string.Empty);
+                var focusSecond = DataValidationDialogPlanner.FocusTargetForInvalidCriteria(
+                    type, op, formula1Box.Text, formula2Box.Text) == DvRuleEditorFocusTarget.Formula2;
+                var focusBox = focusSecond ? formula2Box : formula1Box;
+                focusBox.Focus();
+                focusBox.SelectAll();
                 return;
             }
 
@@ -25749,6 +25764,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(tabStrip, "DataValidationTabStrip");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabStrip);
+        validationTabStrip = tabStrip;
 
         var buttonRow = new StackPanel
         {
@@ -25864,8 +25880,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return choices[0];
     }
 
+    // Same localized wording as WPF DataValidationDialog.LocalizeValidationError.
     private static string DataValidationValidationErrorText(DvValidationError? error) =>
-        error?.Message ?? "";
+        error?.Kind switch
+        {
+            null => "",
+            DvValidationErrorKind.SourceRequired => UiText.Get("DataValidation_SourceRequired"),
+            DvValidationErrorKind.FormulaRequired => UiText.Get("DataValidation_FormulaRequired"),
+            DvValidationErrorKind.ValueRequired => UiText.Get("DataValidation_ValueRequired"),
+            DvValidationErrorKind.MaximumRequired => UiText.Get("DataValidation_MaximumRequired"),
+            DvValidationErrorKind.InvalidWholeNumberCriteria => UiText.Get("DataValidation_InvalidWholeNumberCriteria"),
+            DvValidationErrorKind.InvalidDecimalCriteria => UiText.Get("DataValidation_InvalidDecimalCriteria"),
+            DvValidationErrorKind.InvalidDateCriteria => UiText.Get("DataValidation_InvalidDateCriteria"),
+            DvValidationErrorKind.InvalidTimeCriteria => UiText.Get("DataValidation_InvalidTimeCriteria"),
+            DvValidationErrorKind.InvalidTextLengthCriteria => UiText.Get("DataValidation_InvalidTextLengthCriteria"),
+            DvValidationErrorKind.InvalidListCriteria => UiText.Get("DataValidation_InvalidListCriteria"),
+            DvValidationErrorKind.InvalidCustomCriteria => UiText.Get("DataValidation_InvalidCustomCriteria"),
+            _ => error.Message,
+        };
 
     private static StackPanel CreateDataValidationField(string label, Control control) =>
         CreateDataValidationField(new TextBlock { Text = StripDisplayMnemonic(label) }, control);
@@ -30116,7 +30148,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task ExportWorkbookFixedLayoutAsync(
         WorkbookExportPrintScope scope,
-        WorkbookExportPrintOutputKind outputKind)
+        WorkbookExportPrintOutputKind outputKind,
+        bool offerXpsInSavePicker = false)
     {
         if (!TryBeginFileOperation())
             return;
@@ -30143,21 +30176,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);
-            if (exportOptions is null)
-                return;
-
-            var storageFile = isXps
+            // WPF ExportPdfAsync order: the save picker comes first, then the Export Options dialog, then
+            // the normalized-overwrite confirmation.
+            // File > Export mirrors WPF's single "Export as PDF / XPS" save dialog that lists both types.
+            var storageFile = offerXpsInSavePicker
                 ? await ShowPortableExportSavePickerAsync(
-                    UiText.Get("MainWindowMessage_ExportXpsTitle"),
-                    ExportFilePickerPlanner.BuildPortablePickerPlan(_session.DisplayName, ApplicationTitle, format.FileFormat))
-                : await ShowPortablePdfSavePickerAsync("Export to PDF");
+                    UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
+                    ExportFilePickerPlanner.BuildPortablePdfXpsPickerPlan(_session.DisplayName, ApplicationTitle))
+                : isXps
+                    ? await ShowPortableExportSavePickerAsync(
+                        UiText.Get("MainWindowMessage_ExportXpsTitle"),
+                        ExportFilePickerPlanner.BuildPortablePickerPlan(_session.DisplayName, ApplicationTitle, format.FileFormat))
+                    : await ShowPortablePdfSavePickerAsync(UiText.Get("MainWindowDialog_ExportPdfXpsTitle"));
 
             if (storageFile is null)
                 return;
 
             using (storageFile)
             {
+                if (offerXpsInSavePicker &&
+                    string.Equals(Path.GetExtension(storageFile.LocalPath), ExportFilePickerPlanner.XpsExtensionWithDot, StringComparison.OrdinalIgnoreCase))
+                {
+                    outputKind = WorkbookExportPrintOutputKind.Xps;
+                    format = ExportFormatCatalog.Get(outputKind);
+                    isXps = true;
+                }
+
+                var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);
+                if (exportOptions is null)
+                    return;
+
                 var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {

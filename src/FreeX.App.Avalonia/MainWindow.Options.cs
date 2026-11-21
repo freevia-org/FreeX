@@ -1235,7 +1235,16 @@ public sealed partial class MainWindow
         ApplyOptionsButtonChrome(cancelButton, OptionsDialogPlanner.FooterButtonWidth);
         AutomationProperties.SetAutomationId(cancelButton, "OptionsCancelButton");
 
-        bool ApplyFormulaErrorCheckingOptions()
+        // WPF OptionsDialog reports invalid input and persistence failures in message boxes titled with the
+        // dialog title; invalid input also moves focus to the offending field.
+        async Task WarnAndFocusAsync(string message, Control target)
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(dialog, message, dialog.Title ?? string.Empty);
+            target.Focus();
+            (target as TextBox)?.SelectAll();
+        }
+
+        async Task<bool> ApplyFormulaErrorCheckingOptions()
         {
             var requestedDisabledErrorCodes = errorRuleBoxes
                 .Where(entry => entry.Value.IsChecked != true)
@@ -1245,15 +1254,15 @@ public sealed partial class MainWindow
                 requestedDisabledErrorCodes);
             if (!outcome.Success)
             {
-                warningText.Text = outcome.ErrorMessage ?? UiText.Get("Options_SaveFailed");
-                warningText.IsVisible = true;
+                await AvaloniaUserMessageDialog.ShowErrorAsync(
+                    dialog, outcome.ErrorMessage ?? UiText.Get("Options_SaveFailed"), dialog.Title ?? string.Empty);
                 return false;
             }
 
             return true;
         }
 
-        bool TryCommit()
+        async Task<bool> TryCommit()
         {
             warningText.IsVisible = false;
 
@@ -1283,10 +1292,12 @@ public sealed partial class MainWindow
                         : current.AppLanguage,
                     crashAnalyticsEnabled: crashAnalyticsBox.IsChecked == true))
             {
-                warningText.Text = OptionsDialogPlanner
-                    .DescribeInputError(inputError)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
+                var inputPresentation = OptionsDialogPlanner.DescribeInputError(inputError);
+                await WarnAndFocusAsync(
+                    inputPresentation.Message.Resolve(UiText.Get, UiText.Format),
+                    inputPresentation.FocusTarget == OptionsValidationFocusTarget.DefaultFontSize
+                        ? fontSizeBox
+                        : sheetCountBox);
                 return false;
             }
 
@@ -1301,10 +1312,13 @@ public sealed partial class MainWindow
                     out var maxChange,
                     out var calculationInputError))
             {
-                warningText.Text = OptionsValidationPresentationPlanner
-                    .DescribeCalculationInput(calculationInputError)
-                    .Message.Resolve(UiText.Get, UiText.Format);
-                warningText.IsVisible = true;
+                var calculationPresentation = OptionsValidationPresentationPlanner
+                    .DescribeCalculationInput(calculationInputError);
+                await WarnAndFocusAsync(
+                    calculationPresentation.Message.Resolve(UiText.Get, UiText.Format),
+                    calculationPresentation.FocusTarget == OptionsValidationFocusTarget.MaxIterations
+                        ? maxIterationsBox
+                        : maxChangeBox);
                 return false;
             }
 
@@ -1324,8 +1338,8 @@ public sealed partial class MainWindow
                 automaticallyFlashFill: advancedAutomaticFlashFillBox.IsChecked == true);
             if (!saveResult.IsPersisted)
             {
-                warningText.Text = saveResult.PersistenceError ?? UiText.Get("Options_SaveFailed");
-                warningText.IsVisible = true;
+                await AvaloniaUserMessageDialog.ShowErrorAsync(
+                    dialog, saveResult.PersistenceError ?? UiText.Get("Options_SaveFailed"), dialog.Title ?? string.Empty);
                 return false;
             }
 
@@ -1339,7 +1353,7 @@ public sealed partial class MainWindow
             // FreeXOptionsRuntimeSession every sibling window shares, so committing it here must
             // rebuild every OTHER open window's QAT chrome too, not just this window's.
             WindowRegistry.NotifyQuickAccessToolbarChanged(this);
-            if (!ApplyFormulaErrorCheckingOptions())
+            if (!await ApplyFormulaErrorCheckingOptions())
                 return false;
 
             ApplyFormulaBarOptions(current);
@@ -1348,11 +1362,11 @@ public sealed partial class MainWindow
             return true;
         }
 
-        okButton.Click += (_, _) =>
+        okButton.Click += (_, _) => RunGuarded(async () =>
         {
-            if (TryCommit())
+            if (await TryCommit())
                 dialog.Close();
-        };
+        });
         cancelButton.Click += (_, _) => dialog.Close();
 
         var footerActions = new StackPanel

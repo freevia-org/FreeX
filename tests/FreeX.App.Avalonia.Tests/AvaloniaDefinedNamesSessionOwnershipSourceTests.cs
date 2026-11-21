@@ -16,7 +16,7 @@ public sealed class AvaloniaDefinedNamesSessionOwnershipSourceTests
 
         source.Should().Contain("new DefinedNamesSession(_session.Workbook, _session.ActiveSheet.Id)");
         source.Should().Contain("definedNames.ProjectRows(filter)");
-        source.Should().Contain("definedNames.ValidateDraft(draft, seed?.Identity)");
+        source.Should().Contain("definedNames.ValidateName(name, scope, seed?.Identity)");
         source.Should().Contain("definedNames.PlanSave(draft, seed?.Identity)");
         source.Should().Contain("definedNames.BuildDeleteCommand(row)");
         source.Should().Contain("definedNames.BuildCreateCommands(planned)");

@@ -1674,19 +1674,25 @@ public sealed partial class MainWindow
                         : PageSetupScalingMode.AdjustToPercent));
         }
 
-        void Accept(PageSetupDialogAction requestedAction)
+        void Accept(PageSetupDialogAction requestedAction) => RunGuarded(() => AcceptAsync(requestedAction));
+
+        async Task AcceptAsync(PageSetupDialogAction requestedAction)
         {
             var fields = ReadFields();
             var submission = PageSetupSubmissionPlanner.TryBuild(_session.ActiveSheet, fields, requestedAction);
             if (!submission.Success)
             {
                 var validation = submission.Validation!;
+                // WPF PageSetupDialog.Accept: a warning message box captioned "Page Setup", then focus
+                // moves to the offending field.
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    validation.Message.Resolve(UiText.Get),
+                    UiText.Get(PageSetupSubmissionPlanner.DefaultCaptionResourceKey));
                 FocusDialogTarget(
                     PageSetupDialogPlanner.PlanValidationFocus(
                         validation.Target,
                         CreateValidationFocusState()));
-                validationText.Text = PageLayoutStatusPlanner.ResolvePageSetupValidationIssue(validation, UiText.Get);
-                validationText.IsVisible = true;
                 return;
             }
 
