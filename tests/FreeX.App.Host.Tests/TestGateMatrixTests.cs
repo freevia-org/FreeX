@@ -173,6 +173,8 @@ public sealed class TestGateMatrixTests
         releaseAvalonia.GetProperty("partitions").GetInt32()
             .Should().Be(commitAvalonia.GetProperty("partitions").GetInt32());
         releaseAvalonia.GetProperty("requiresFullHistory").GetBoolean().Should().BeTrue();
+        // Split so the nine-project macOS leg is no longer the single longest macOS job (run 44885755819).
+        releaseUnix.GetProperty("partitions").GetInt32().Should().Be(2);
     }
 
     [Fact]
