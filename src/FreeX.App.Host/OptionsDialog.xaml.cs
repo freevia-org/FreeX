@@ -157,6 +157,7 @@ public partial class OptionsDialog : Window
         UpdateAfterEnterDirectionState();
         OptAdvancedFillHandle.IsChecked = _opts.EnableFillHandleAndCellDragAndDrop;
         OptAdvancedAutoComplete.IsChecked = _opts.EnableAutoCompleteForCellValues;
+        OptAdvancedAutomaticFlashFill.IsChecked = _opts.AutomaticallyFlashFill;
         OptShowGridlines.IsChecked = _opts.ShowGridlines;
         OptShowHeadings.IsChecked = _opts.ShowHeadings;
         OptObjectsDisplay.ItemsSource = new[]
@@ -548,7 +549,8 @@ public partial class OptionsDialog : Window
             enableFillHandleAndCellDragAndDrop: OptAdvancedFillHandle.IsChecked == true,
             enableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true,
             quickAccessToolbarBelowRibbon: QuickAccessBelowRibbonCheckBox.IsChecked == true,
-            formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true);
+            formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true,
+            automaticallyFlashFill: OptAdvancedAutomaticFlashFill.IsChecked == true);
         if (!saveResult.IsPersisted)
         {
             DialogMessageHelper.ShowError(this, saveResult.PersistenceError, Title);
