@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using FreeW.App.Presentation.DocumentView;
 
@@ -211,6 +212,14 @@ public sealed class SpacedTextBlock : FrameworkElement
             brush,
             dpi);
 
+        // Word does not pair-kern unless asked to (w:kern), and a plain WPF run lays out at the font's ideal glyph
+        // advances; FormattedText always kerns. Unkerned runs therefore take their advances straight from the
+        // glyph typeface so a spaced box is exactly as wide as the plain run plus the spacing.
+        var kerning = Typography.GetKerning(this);
+        GlyphTypeface? glyphs = null;
+        if (!kerning)
+            typeface.TryGetGlyphTypeface(out glyphs);
+
         var elements = new List<FormattedText>();
         var offsets = new List<double>();
         var x = 0.0;
@@ -222,12 +231,26 @@ public sealed class SpacedTextBlock : FrameworkElement
         while (enumerator.MoveNext())
         {
             var element = enumerator.GetTextElement();
-            consumed += element;
-            var width = Format(consumed).WidthIncludingTrailingWhitespace;
-            var elementAdvance = Math.Max(0, width - previousWidth);
-            previousWidth = width;
-
             var formatted = Format(element);
+            double elementAdvance;
+            if (kerning)
+            {
+                consumed += element;
+                var width = Format(consumed).WidthIncludingTrailingWhitespace;
+                elementAdvance = Math.Max(0, width - previousWidth);
+                previousWidth = width;
+            }
+            else if (glyphs is not null
+                     && element.Length == 1
+                     && glyphs.CharacterToGlyphMap.TryGetValue(element[0], out var glyph))
+            {
+                elementAdvance = glyphs.AdvanceWidths[glyph] * FontSize;
+            }
+            else
+            {
+                elementAdvance = formatted.WidthIncludingTrailingWhitespace;
+            }
+
             height = Math.Max(height, formatted.Height);
             baseline = Math.Max(baseline, formatted.Baseline);
             elements.Add(formatted);
