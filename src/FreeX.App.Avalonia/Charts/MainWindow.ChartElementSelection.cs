@@ -129,14 +129,7 @@ public sealed partial class MainWindow
 
         var name = ChartElementCommandPlanner.Describe(element, _selectedChartElementSeriesName).Resolve(UiText.Get, UiText.Format);
         var plan = ChartElementCommandPlanner.PlanDelete(chart, element);
-        IWorkbookCommand? command = plan.Action switch
-        {
-            ChartElementDeleteAction.ApplyLayout when plan.Options is { } options =>
-                new SetChartLayoutCommand(sheet.Id, chart.Id, options),
-            ChartElementDeleteAction.RemoveSeries =>
-                ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(sheet.Id, chart, plan.SeriesOrdinal),
-            _ => null,
-        };
+        var command = ChartElementCommandPlanner.BuildDeleteCommand(sheet.Id, chart, plan);
 
         if (command is null)
         {

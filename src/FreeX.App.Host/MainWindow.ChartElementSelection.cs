@@ -61,14 +61,7 @@ public partial class MainWindow
             .Resolve(UiText.Get, UiText.Format);
         var plan = ChartElementCommandPlanner.PlanDelete(chart, element);
 
-        IWorkbookCommand? command = plan.Action switch
-        {
-            ChartElementDeleteAction.ApplyLayout when plan.Options is { } options =>
-                new SetChartLayoutCommand(_currentSheetId, chart.Id, options),
-            ChartElementDeleteAction.RemoveSeries =>
-                ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(_currentSheetId, chart, plan.SeriesOrdinal),
-            _ => null,
-        };
+        var command = ChartElementCommandPlanner.BuildDeleteCommand(_currentSheetId, chart, plan);
 
         if (command is null)
         {

@@ -1,4 +1,5 @@
 using Free.Shared.Localization;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -170,6 +171,26 @@ public static class ChartElementCommandPlanner
             ChartElementKind.DataLabels => "ChartElement_DataLabels",
             _ => "ChartElement_ChartArea",
         });
+    }
+
+    /// <summary>
+    /// Builds the workbook command that carries out <paramref name="plan"/> on <paramref name="chart"/>, or
+    /// null when the plan has nothing to execute (<see cref="ChartElementDeleteAction.None"/> /
+    /// <see cref="ChartElementDeleteAction.DeleteChart"/>, which the host handles as a plain object delete).
+    /// </summary>
+    public static IWorkbookCommand? BuildDeleteCommand(SheetId sheetId, ChartModel chart, ChartElementDeletePlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return plan.Action switch
+        {
+            ChartElementDeleteAction.ApplyLayout when plan.Options is { } options =>
+                ChartCommandWorkflowPlanner.BuildLayoutCommand(sheetId, chart, options),
+            ChartElementDeleteAction.RemoveSeries =>
+                ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(sheetId, chart, plan.SeriesOrdinal),
+            _ => null,
+        };
     }
 
     private static ChartElementDeletePlan Layout(ChartLayoutOptions options) =>
