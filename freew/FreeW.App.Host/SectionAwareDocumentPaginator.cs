@@ -315,7 +315,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         var visual = new ContainerVisual();
         var rules = new DrawingVisual();
         visual.Children.Add(rules);
-        var noteFont = new FontFamily(plan.TextFontFamily ?? "Calibri");
+        var noteFont = DocumentFontFamilies.Create(plan.TextFontFamily ?? "Calibri");
         // Inside the reserved band the notes follow Word's own stack: a separator line box (the rule sits
         // in its middle), then each note line by line with the note paragraph's own space after.
         var wordStack = notesInsideBody && footnoteIds.Count > 0;
@@ -356,22 +356,41 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
                 if (y >= maxY)
                     break;
 
-                var text = PrintPlainText.BuildNote(
+                var layout = row.Layout.IsSpecified ? row.Layout : RegionLayout(plan);
+                var placed = PrintPlainText.PlaceNoteRow(
+                    visual,
                     row.Label,
                     row.Text,
-                    noteFont,
-                    PageLayout.PointsToDip(plan.TextFontSizePt),
+                    layout.FontFamily is { Length: > 0 } rowFamily ? DocumentFontFamilies.Create(rowFamily) : noteFont,
+                    PageLayout.PointsToDip(layout.FontSizePt),
                     Brushes.Black,
-                    contentWidth);
-                var placed = PrintPlainText.Place(visual, text, marginLeft, y);
+                    marginLeft,
+                    y,
+                    contentWidth,
+                    layout.ExactLineHeightDip,
+                    layout.IndentDip,
+                    layout.HangingDip,
+                    layout.Justified);
                 y += wordStack
-                    ? Math.Max(row.EstimatedHeightDip, placed) + plan.RowGapDip
+                    ? Math.Max(row.EstimatedHeightDip, placed) + (double.IsNaN(layout.GapAfterDip) ? plan.RowGapDip : layout.GapAfterDip)
                     : Math.Max(row.EstimatedHeightDip, placed) + PageLayout.PointsToDip(1);
             }
         }
 
         container.Children.Add(visual);
     }
+
+    /// <summary>The region-wide note layout, for a row or fragment that carries none of its own.</summary>
+    private static NoteRowLayout RegionLayout(DocumentNoteRegionPlan plan) => new(
+        plan.TextFontSizePt,
+        plan.TextFontFamily,
+        0,
+        0,
+        plan.RowGapDip,
+        plan.ExactLineHeightDip,
+        plan.TextIndentDip,
+        plan.HangingDip,
+        plan.Justified);
 
     /// <summary>
     /// Paints one page's footnote band, bottom-aligned in the space its pagination reserved: Word's
@@ -388,7 +407,7 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
     {
         var ids = box.FootnoteIds.Count > 0 ? box.FootnoteIds : band.Fragments.Select(f => f.NoteId).Distinct().ToList();
         var metricsPlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(_model, ids, box.PageNumber, contentWidth);
-        var noteFont = new FontFamily(metricsPlan.TextFontFamily ?? "Calibri");
+        var noteFont = DocumentFontFamilies.Create(metricsPlan.TextFontFamily ?? "Calibri");
         var visual = new ContainerVisual();
         var rules = new DrawingVisual();
         visual.Children.Add(rules);
@@ -406,15 +425,23 @@ internal sealed class SectionAwareDocumentPaginator : DocumentPaginator
         y += metricsPlan.SeparatorHeightDip;
         foreach (var fragment in band.Fragments)
         {
-            var text = PrintPlainText.BuildNote(
+            var layout = fragment.Layout.IsSpecified ? fragment.Layout : RegionLayout(metricsPlan);
+            PrintPlainText.PlaceNoteRow(
+                visual,
                 fragment.Label,
                 fragment.Text,
-                noteFont,
-                PageLayout.PointsToDip(metricsPlan.TextFontSizePt),
+                layout.FontFamily is { Length: > 0 } fragmentFamily ? DocumentFontFamilies.Create(fragmentFamily) : noteFont,
+                PageLayout.PointsToDip(layout.FontSizePt),
                 Brushes.Black,
-                contentWidth);
-            PrintPlainText.Place(visual, text, marginLeft, y);
-            y += fragment.EstimatedHeightDip + (fragment.EndsNote ? metricsPlan.RowGapDip : 0);
+                marginLeft,
+                y,
+                contentWidth,
+                layout.ExactLineHeightDip,
+                layout.IndentDip,
+                layout.HangingDip,
+                layout.Justified);
+            y += fragment.EstimatedHeightDip
+                + (fragment.EndsNote ? (double.IsNaN(layout.GapAfterDip) ? metricsPlan.RowGapDip : layout.GapAfterDip) : 0);
         }
 
         container.Children.Add(visual);

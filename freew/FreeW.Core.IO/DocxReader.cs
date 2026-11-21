@@ -5070,6 +5070,9 @@ public static partial class DocxReader
             if (trPr is not null)
             {
                 row.AllowBreakAcrossPages = !ReadToggle(trPr, "cantSplit");
+                // w:gridBefore / w:gridAfter: grid columns left empty before / after the row's cells.
+                row.GridBefore = ReadRowGridSkip(trPr, "gridBefore");
+                row.GridAfter = ReadRowGridSkip(trPr, "gridAfter");
                 // Word allows any number of leading, contiguous rows to carry w:tblHeader to build a
                 // multi-row repeating header (e.g. a title row plus a column-labels row). Read the flag
                 // per row rather than only on the first row so a two- or three-row header round-trips
@@ -8675,6 +8678,23 @@ public static partial class DocxReader
         }
     }
 
+    private static int ReadCharacterScalePercent(XElement rPr)
+    {
+        var raw = rPr.Element(W + "w")?.Attribute(W + "val")?.Value?.Trim().TrimEnd('%');
+        return int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var percent)
+            && percent is >= 1 and <= 600
+                ? percent
+                : 0;
+    }
+
+    private static int ReadRowGridSkip(XElement trPr, string elementName)
+    {
+        var raw = trPr.Element(W + elementName)?.Attribute(W + "val")?.Value;
+        return int.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var count)
+            ? Math.Clamp(count, 0, TableGridProjection.MaximumGridSpan)
+            : 0;
+    }
+
     internal static RunFormatting ReadRunFormatting(XElement? rPr, ThemeFontResolution? themeFonts = null)
     {
         if (rPr is null)
@@ -8832,6 +8852,8 @@ public static partial class DocxReader
             },
             // w:spacing is in dxa (twentieths of a point); 0 / absent means no advanced spacing.
             CharacterSpacingPt = spacing is null ? 0 : DxaToPoints(spacing),
+            // w:w is a percentage (1..600) of the normal glyph width; absent means inherit (0).
+            CharacterScalePercent = ReadCharacterScalePercent(rPr),
             // w:kern is in half-points; absent means no kerning threshold (null).
             KerningMinSizePt = kern is null ? null : HalfPointsToPoints(kern),
             // w:position is in half-points, signed; 0 / absent means baseline.
@@ -9255,6 +9277,9 @@ public static partial class DocxReader
                 CharacterSpacingPt = defaultRun.CharacterSpacingPt != 0
                     ? defaultRun.CharacterSpacingPt
                     : document.DefaultRun.CharacterSpacingPt,
+                CharacterScalePercent = defaultRun.CharacterScalePercent != 0
+                    ? defaultRun.CharacterScalePercent
+                    : document.DefaultRun.CharacterScalePercent,
                 KerningMinSizePt = defaultRun.KerningMinSizePt ?? document.DefaultRun.KerningMinSizePt,
                 PositionPt = defaultRun.PositionPt != 0
                     ? defaultRun.PositionPt

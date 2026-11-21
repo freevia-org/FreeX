@@ -2638,6 +2638,9 @@ public static partial class DocxWriter
             // order (w:ins and w:del are the trailing children per CT_TrPr's extension of CT_TrPrBase).
             // Emitted only when a non-default row property is set, so plain rows stay unchanged.
             var trPr = new XElement(W + "trPr");
+            // CT_TrPrBase order: gridBefore, wBefore, gridAfter, wAfter precede cantSplit / trHeight.
+            AddRowGridSkip(trPr, "gridBefore", "wBefore", row.GridBefore, table, 0);
+            AddRowGridSkip(trPr, "gridAfter", "wAfter", row.GridAfter, table, TableGridProjection.RowWidth(row));
             if (!row.AllowBreakAcrossPages)
                 trPr.Add(new XElement(W + "cantSplit"));
             if (row.HeightPt is { } heightPt)
@@ -2691,6 +2694,22 @@ public static partial class DocxWriter
             tbl.Add(tr);
         }
         return tbl;
+    }
+
+    private static void AddRowGridSkip(XElement trPr, string countName, string widthName, int count, Table table, int firstColumn)
+    {
+        if (count <= 0)
+            return;
+        trPr.Add(new XElement(W + countName, new XAttribute(W + "val", count)));
+        var widthPt = 0.0;
+        for (var c = firstColumn; c < firstColumn + count && c < table.ColumnWidthsPt.Count; c++)
+            widthPt += table.ColumnWidthsPt[c];
+        if (widthPt > 0)
+        {
+            trPr.Add(new XElement(W + widthName,
+                new XAttribute(W + "w", PointsToDxa(widthPt)),
+                new XAttribute(W + "type", "dxa")));
+        }
     }
 
     /// <summary>
@@ -8570,6 +8589,8 @@ public static partial class DocxWriter
         // Emitted only when non-zero so default runs round-trip byte-unchanged.
         if (f.CharacterSpacingPt != 0)
             rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        if (f.CharacterScalePercent > 0)
+            rPr.Add(new XElement(W + "w", new XAttribute(W + "val", f.CharacterScalePercent)));
         // w:kern (kerning minimum font size) — value in half-points. Emitted only when a positive
         // threshold is set.
         if (f.KerningMinSizePt is { } kern && kern > 0)
@@ -10490,6 +10511,8 @@ public static partial class DocxWriter
             rPr.Add(color);
         if (f.CharacterSpacingPt != 0)
             rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        if (f.CharacterScalePercent > 0)
+            rPr.Add(new XElement(W + "w", new XAttribute(W + "val", f.CharacterScalePercent)));
         if (f.KerningMinSizePt is { } kern && kern > 0)
             rPr.Add(new XElement(W + "kern", new XAttribute(W + "val", PointsToHalfPoints(kern))));
         if (f.PositionPt != 0)

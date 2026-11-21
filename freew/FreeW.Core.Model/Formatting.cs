@@ -369,6 +369,14 @@ public sealed record RunFormatting
     public double CharacterSpacingPt { get; init; }
 
     /// <summary>
+    /// Character width scale in percent (rPr/w:w): 150 stretches every glyph to one and a half times its width,
+    /// 50 condenses it to half. <c>0</c> (the default) means "not set" (inherit, and 100 percent when nothing
+    /// above sets it) and emits no <c>w:w</c>, so existing runs round-trip unchanged; an explicit 100 is a real
+    /// override of an inherited scale and is written back.
+    /// </summary>
+    public int CharacterScalePercent { get; init; }
+
+    /// <summary>
     /// Kerning threshold: the minimum font size (in points) at which kerning is applied (rPr/w:kern). Null
     /// (the default) emits no <c>w:kern</c>, so existing runs are unaffected. A value of <c>0</c> would
     /// disable kerning; we model "unset" as null and only emit the element when a positive threshold is set.
