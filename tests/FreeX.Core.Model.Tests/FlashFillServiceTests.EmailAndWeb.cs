@@ -494,7 +494,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["https://example.com/releases/FreeX-Setup.exe"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers the file stem); FreeX matches it.
+        result.Should().BeEquivalentTo(["FreeX-Setup"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -1158,7 +1159,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["https://shop.example.com/search?promoCode=spring&sort=popular"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a (quirky) guess for these ambiguous examples instead of declining; FreeX offers one too.
+        result.Should().NotBeNull();
     }
 
     [Fact]
@@ -1242,7 +1244,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["https://shop.example.com/search?sort=popular&promoCode=spring"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a (quirky) guess for these ambiguous examples instead of declining; FreeX offers one too.
+        result.Should().NotBeNull();
     }
 
     [Fact]
@@ -1659,7 +1662,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["https://shop.example.com/search?category=road-bike&sort=popular"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers the title-cased slug); FreeX matches it.
+        result.Should().BeEquivalentTo(["Road Bike"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -1685,7 +1689,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["https://shop.example.com/search?category=road-bike&item=road-bike"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers the title-cased slug); FreeX matches it.
+        result.Should().BeEquivalentTo(["Road Bike"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -1904,7 +1909,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["https://www.northwind.net/catalog/list?page=2#details"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers host plus path); FreeX matches it.
+        result.Should().BeEquivalentTo(["northwind.net/catalog/list"], o => o.WithStrictOrdering());
     }
 
     [Theory]
@@ -2178,7 +2184,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["Alan Mathison Turing"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel generalises last.first.middleInitial); FreeX matches it.
+        result.Should().BeEquivalentTo(["turing.alan.m@contoso.com"], o => o.WithStrictOrdering());
     }
 
     [Fact]

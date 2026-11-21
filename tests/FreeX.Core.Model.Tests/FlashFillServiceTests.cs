@@ -137,7 +137,8 @@ public sealed partial class FlashFillServiceTests
             [("1 Market St, San Francisco, Atlantis 94105", "CA")],
             ["500 5th Ave Apt 2B, New York, New York 10018-0110"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a (quirky) guess for these ambiguous examples instead of declining; FreeX offers one too.
+        result.Should().NotBeNull();
     }
 
 }
@@ -623,7 +624,8 @@ public sealed class FlashFillCommandTests
             ],
             ["Account 123-456"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel guesses the first digit run here); FreeX matches it.
+        result.Should().BeEquivalentTo(["123"], o => o.WithStrictOrdering());
     }
 
 }

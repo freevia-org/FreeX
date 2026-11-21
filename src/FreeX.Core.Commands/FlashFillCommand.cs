@@ -189,7 +189,8 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
         }
 
         // 2. Detect pattern and compute filled values
-        var filled = TryFillFromImmediateLeftColumns(sheet, exampleRows, exampleOutputs, rowsToFill)
+        var filled = TryFillFromImmediateLeftColumns(sheet, exampleRows, exampleOutputs, rowsToFill, synthesized: true)
+            ?? TryFillFromImmediateLeftColumns(sheet, exampleRows, exampleOutputs, rowsToFill)
             ?? FlashFillService.Fill(examplePairs, sourcesToFill);
         if (filled is null)
             return new FillDetection(false, "Could not detect a pattern from the provided examples.", null, null);
@@ -227,7 +228,8 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
         Sheet sheet,
         IReadOnlyList<uint> exampleRows,
         IReadOnlyList<string> exampleOutputs,
-        IReadOnlyList<uint> rowsToFill)
+        IReadOnlyList<uint> rowsToFill,
+        bool synthesized = false)
     {
         if (_fillColIndex < 3 || _sourceColIndex != _fillColIndex - 1)
             return null;
@@ -244,7 +246,8 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
                 rowsToFill,
                 threeLeftCol0,
                 threeLeftCol1,
-                threeLeftCol2);
+                threeLeftCol2,
+                synthesized);
             if (threeColumnResult is not null)
                 return threeColumnResult;
         }
@@ -258,7 +261,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
             exampleOutputs,
             rowsToFill,
             leftCol0,
-            leftCol1);
+            leftCol1, synthesized: synthesized);
     }
 
     private static IReadOnlyList<string>? TryFillFromImmediateLeftColumns(
@@ -267,7 +270,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
         IReadOnlyList<string> exampleOutputs,
         IReadOnlyList<uint> rowsToFill,
         uint leftCol0,
-        uint leftCol1)
+        uint leftCol1, bool synthesized = false)
     {
         var exampleSources = new List<IReadOnlyList<string>>(exampleRows.Count);
         foreach (var row in exampleRows)
@@ -289,7 +292,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
             remainingSources.Add(sources);
         }
 
-        return FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
+        return synthesized ? FlashFillService.FillFromColumnsSynthesized(exampleSources, exampleOutputs, remainingSources) : FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
     }
 
     private static IReadOnlyList<string>? TryFillFromImmediateLeftColumns(
@@ -299,7 +302,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
         IReadOnlyList<uint> rowsToFill,
         uint leftCol0,
         uint leftCol1,
-        uint leftCol2)
+        uint leftCol2, bool synthesized = false)
     {
         var exampleSources = new List<IReadOnlyList<string>>(exampleRows.Count);
         foreach (var row in exampleRows)
@@ -321,7 +324,7 @@ public sealed class FlashFillCommand : IWorkbookCommand, IEstimatesMemory
             remainingSources.Add(sources);
         }
 
-        return FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
+        return synthesized ? FlashFillService.FillFromColumnsSynthesized(exampleSources, exampleOutputs, remainingSources) : FlashFillService.FillFromColumns(exampleSources, exampleOutputs, remainingSources);
     }
 
     private static IReadOnlyList<string>? GetPopulatedLeftSources(Sheet sheet, uint row, uint leftCol0, uint leftCol1)

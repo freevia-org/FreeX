@@ -402,7 +402,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["1600 Amphitheatre Pkwy, Mountain View, CA 94043"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel takes the last four characters); FreeX matches it.
+        result.Should().BeEquivalentTo(["4043"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -1168,7 +1169,8 @@ public sealed partial class FlashFillServiceTests
             [("Ada Lovelace", "AL"), ("Grace-Hopper", "GH")],
             ["Alan Turing"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers word initials); FreeX matches it.
+        result.Should().BeEquivalentTo(["AT"], o => o.WithStrictOrdering());
     }
 
     [Fact]

@@ -8,6 +8,7 @@ namespace FreeX.Core.Commands;
 public static partial class FlashFillService
 {
     private const string EmailSeparators = "._-";
+    
 
     /// <summary>
     /// Given training examples (source → expected output), detect a pattern
@@ -23,93 +24,130 @@ public static partial class FlashFillService
 
         // Try each pattern in priority order.
         // Non-nullable patterns are widened to Func<string, string?> for uniform handling.
-        Func<string, string?>? patternFn =
-            TryTimeComponentExtraction(examples)
-            ?? TryEmbeddedTimeComponentExtraction(examples)
-            ?? TryEmbeddedTimeRangeEndpointExtraction(examples)
-            ?? TryConstant(examples)
-            ?? TryCaseTransform(examples)
-            ?? TryInitials(examples)
-            ?? TryNameAbbreviations(examples)
-            ?? TryKnownNameCleanupDerivedPattern(examples)
-            ?? TryFullNameMiddleInitialEmailPattern(examples)
-            ?? TryFullNameEmailPattern(examples)
-            ?? TryKnownTitleAndSuffixRemoval(examples)
-            ?? TryKnownTitleRemoval(examples)
-            ?? TryKnownNameSuffixRemoval(examples)
-            ?? TryKnownOrganizationSuffixRemoval(examples)
-            ?? TrySplitPascalCaseWords(examples)
-            ?? TryEmailDisplayName(examples)
-            ?? TryEmailLocalPartWithoutPlusTag(examples)
-            ?? TryEmailDomainStem(examples)
-            ?? TryEmailDomainSuffix(examples)
-            ?? TryWebAddressCleanup(examples)
-            ?? TryUrlTrackingQueryCleanup(examples)
-            ?? TryExtractFinalUrlPathSegmentStem(examples)
-            ?? TryExtractFinalUrlPathSegmentRawSlugStem(examples)
-            ?? TryExtractFinalUrlPathSegmentSlugTitle(examples)
-            ?? TryExtractParentUrlPathSegment(examples)
-            ?? TryExtractFirstUrlPathSegment(examples)
-            ?? TryExtractSecondUrlPathSegment(examples)
-            ?? TryExtractParentUrlPathSegmentTitle(examples)
-            ?? TryExtractFirstUrlPathSegmentTitle(examples)
-            ?? TryExtractSecondUrlPathSegmentTitle(examples)
-            ?? TryUrlQueryParameterValue(examples)
-            ?? TryDigitMask(examples)
-            ?? TryDateNormalization(examples)
-            ?? TryEmbeddedDateExtraction(examples)
-            ?? TryEmbeddedDateComponentExtraction(examples)
-            ?? TryTimeNormalization(examples)
-            ?? TryEmbeddedTimeExtraction(examples)
-            ?? TryPhoneNumberNormalization(examples)
-            ?? TryUsAddressComponentExtraction(examples)
-            ?? TryStripThousandSeparators(examples)
-            ?? TryExtractDigitsOnly(examples)
-            ?? TryDateComponentExtraction(examples)
-            ?? TryExtractFinalDigitRun(examples)
-            ?? TryExtractFirstDigitRun(examples)
-            ?? TryThreeTokenNameInitial(examples)
-            ?? TryThreeTokenNameDropMiddle(examples)
-            ?? TryPairedDelimiterExtraction(examples)
-            ?? TryPairedDelimiterRemoval(examples)
-            ?? TryLabelValueExtraction(examples)
-            ?? TryLabelQualifierRemoval(examples)
-            ?? TryDelimitedPartCaseTransform(examples)
-            ?? TryDelimitedPartReorder(examples)
-            ?? TryFinalWhitespaceToken(examples)
-            ?? TryExtractFinalPathSegmentStem(examples)
-            ?? TryExtractFileParentDirectoryName(examples)
-            ?? TryExtractFileParentDirectoryTitle(examples)
-            ?? TryRemoveFinalDottedToken(examples)
-            ?? TryExtractFinalDottedToken(examples)
-            ?? TryRemoveLeadingDottedToken(examples)
-            ?? TryExtractMiddleDottedToken(examples)
-            ?? TryExtractFirstDottedToken(examples)
-            ?? TryRemoveMiddleDottedToken(examples)
-            ?? TryRemoveLeadingDelimitedToken(examples)
-            ?? TryRemoveFinalDelimitedToken(examples)
-            ?? TryExtractFinalDelimitedToken(examples)
-            ?? TryExtractPenultimateDelimitedToken(examples)
-            ?? TryRemoveMiddleDelimitedToken(examples)
-            ?? TryExtractByDelimiter(examples)
-            ?? TryPrefixTrim(examples)
-            ?? TrySuffixTrim(examples)
-            ?? TryPrefixAdd(examples)
-            ?? TrySuffixAdd(examples)
-            ?? TrySubstring(examples);
+        var detectors = new (string Name, Func<IReadOnlyList<(string Source, string Expected)>, Func<string, string?>?> Detect)[]
+        {
+            ("TryTimeComponentExtraction", e => TryTimeComponentExtraction(e)),
+            ("TryEmbeddedTimeComponentExtraction", e => TryEmbeddedTimeComponentExtraction(e)),
+            ("TryEmbeddedTimeRangeEndpointExtraction", e => TryEmbeddedTimeRangeEndpointExtraction(e)),
+            ("TryConstant", e => TryConstant(e)),
+            ("TryCaseTransform", e => TryCaseTransform(e)),
+            ("TryInitials", e => TryInitials(e)),
+            ("TryNameAbbreviations", e => TryNameAbbreviations(e)),
+            ("TryKnownNameCleanupDerivedPattern", e => TryKnownNameCleanupDerivedPattern(e)),
+            ("TryFullNameMiddleInitialEmailPattern", e => TryFullNameMiddleInitialEmailPattern(e)),
+            ("TryFullNameEmailPattern", e => TryFullNameEmailPattern(e)),
+            ("TryKnownTitleAndSuffixRemoval", e => TryKnownTitleAndSuffixRemoval(e)),
+            ("TryKnownTitleRemoval", e => TryKnownTitleRemoval(e)),
+            ("TryKnownNameSuffixRemoval", e => TryKnownNameSuffixRemoval(e)),
+            ("TryKnownOrganizationSuffixRemoval", e => TryKnownOrganizationSuffixRemoval(e)),
+            ("TrySplitPascalCaseWords", e => TrySplitPascalCaseWords(e)),
+            ("TryEmailDisplayName", e => TryEmailDisplayName(e)),
+            ("TryEmailLocalPartWithoutPlusTag", e => TryEmailLocalPartWithoutPlusTag(e)),
+            ("TryEmailDomainStem", e => TryEmailDomainStem(e)),
+            ("TryEmailDomainSuffix", e => TryEmailDomainSuffix(e)),
+            ("TryWebAddressCleanup", e => TryWebAddressCleanup(e)),
+            ("TryUrlTrackingQueryCleanup", e => TryUrlTrackingQueryCleanup(e)),
+            ("TryExtractFinalUrlPathSegmentStem", e => TryExtractFinalUrlPathSegmentStem(e)),
+            ("TryExtractFinalUrlPathSegmentRawSlugStem", e => TryExtractFinalUrlPathSegmentRawSlugStem(e)),
+            ("TryExtractFinalUrlPathSegmentSlugTitle", e => TryExtractFinalUrlPathSegmentSlugTitle(e)),
+            ("TryExtractParentUrlPathSegment", e => TryExtractParentUrlPathSegment(e)),
+            ("TryExtractFirstUrlPathSegment", e => TryExtractFirstUrlPathSegment(e)),
+            ("TryExtractSecondUrlPathSegment", e => TryExtractSecondUrlPathSegment(e)),
+            ("TryExtractParentUrlPathSegmentTitle", e => TryExtractParentUrlPathSegmentTitle(e)),
+            ("TryExtractFirstUrlPathSegmentTitle", e => TryExtractFirstUrlPathSegmentTitle(e)),
+            ("TryExtractSecondUrlPathSegmentTitle", e => TryExtractSecondUrlPathSegmentTitle(e)),
+            ("TryUrlQueryParameterValue", e => TryUrlQueryParameterValue(e)),
+            ("TryDigitMask", e => TryDigitMask(e)),
+            ("TryDateNormalization", e => TryDateNormalization(e)),
+            ("TryEmbeddedDateExtraction", e => TryEmbeddedDateExtraction(e)),
+            ("TryEmbeddedDateComponentExtraction", e => TryEmbeddedDateComponentExtraction(e)),
+            ("TryTimeNormalization", e => TryTimeNormalization(e)),
+            ("TryEmbeddedTimeExtraction", e => TryEmbeddedTimeExtraction(e)),
+            ("TryPhoneNumberNormalization", e => TryPhoneNumberNormalization(e)),
+            ("TryUsAddressComponentExtraction", e => TryUsAddressComponentExtraction(e)),
+            ("TryStripThousandSeparators", e => TryStripThousandSeparators(e)),
+            ("TryExtractDigitsOnly", e => TryExtractDigitsOnly(e)),
+            ("TryDateComponentExtraction", e => TryDateComponentExtraction(e)),
+            ("TryExtractFinalDigitRun", e => TryExtractFinalDigitRun(e)),
+            ("TryExtractFirstDigitRun", e => TryExtractFirstDigitRun(e)),
+            ("TryThreeTokenNameInitial", e => TryThreeTokenNameInitial(e)),
+            ("TryThreeTokenNameDropMiddle", e => TryThreeTokenNameDropMiddle(e)),
+            ("TryPairedDelimiterExtraction", e => TryPairedDelimiterExtraction(e)),
+            ("TryPairedDelimiterRemoval", e => TryPairedDelimiterRemoval(e)),
+            ("TryLabelValueExtraction", e => TryLabelValueExtraction(e)),
+            ("TryLabelQualifierRemoval", e => TryLabelQualifierRemoval(e)),
+            ("TryDelimitedPartCaseTransform", e => TryDelimitedPartCaseTransform(e)),
+            ("TryDelimitedPartReorder", e => TryDelimitedPartReorder(e)),
+            ("TryFinalWhitespaceToken", e => TryFinalWhitespaceToken(e)),
+            ("TryExtractFinalPathSegmentStem", e => TryExtractFinalPathSegmentStem(e)),
+            ("TryExtractFileParentDirectoryName", e => TryExtractFileParentDirectoryName(e)),
+            ("TryExtractFileParentDirectoryTitle", e => TryExtractFileParentDirectoryTitle(e)),
+            ("TryRemoveFinalDottedToken", e => TryRemoveFinalDottedToken(e)),
+            ("TryExtractFinalDottedToken", e => TryExtractFinalDottedToken(e)),
+            ("TryRemoveLeadingDottedToken", e => TryRemoveLeadingDottedToken(e)),
+            ("TryExtractMiddleDottedToken", e => TryExtractMiddleDottedToken(e)),
+            ("TryExtractFirstDottedToken", e => TryExtractFirstDottedToken(e)),
+            ("TryRemoveMiddleDottedToken", e => TryRemoveMiddleDottedToken(e)),
+            ("TryRemoveLeadingDelimitedToken", e => TryRemoveLeadingDelimitedToken(e)),
+            ("TryRemoveFinalDelimitedToken", e => TryRemoveFinalDelimitedToken(e)),
+            ("TryExtractFinalDelimitedToken", e => TryExtractFinalDelimitedToken(e)),
+            ("TryExtractPenultimateDelimitedToken", e => TryExtractPenultimateDelimitedToken(e)),
+            ("TryRemoveMiddleDelimitedToken", e => TryRemoveMiddleDelimitedToken(e)),
+            ("TryExtractByDelimiter", e => TryExtractByDelimiter(e)),
+            ("TryPrefixTrim", e => TryPrefixTrim(e)),
+            ("TrySuffixTrim", e => TrySuffixTrim(e)),
+            ("TryPrefixAdd", e => TryPrefixAdd(e)),
+            ("TrySuffixAdd", e => TrySuffixAdd(e)),
+            ("TrySubstring", e => TrySubstring(e)),
+        };
 
+        Func<string, string?>? patternFn = null;
+        string? detectorName = null;
+        foreach (var (name, detect) in detectors)
+        {
+            patternFn = detect(examples);
+            if (patternFn is not null)
+            {
+                detectorName = name;
+                break;
+            }
+        }
+
+        var synthExamples = examples.Select(e => ((IReadOnlyList<string>)new[] { e.Source }, e.Expected)).ToList();
+        var synthRemaining = remaining.Select(r => (IReadOnlyList<string>)new[] { r }).ToList();
+
+        LastDetectorName = detectorName;
         if (patternFn is null)
-            return null;
+            return TrySynthesizeFill(synthExamples, synthRemaining);
 
         var results = new List<string>(remaining.Count);
         foreach (var src in remaining)
         {
             var filled = patternFn(src);
-            if (filled is null) return null;
+            if (filled is null)
+            {
+                results = null;
+                break;
+            }
+
             results.Add(filled);
         }
+
+        // The catch-all detectors (constants, literal prefix/suffix edits, fixed substrings) are weaker evidence than a
+        // program learned over token/delimiter positions; when both fit, Excel's behaviour follows the learned program.
+        if ((GenericDetectors.Contains(detectorName!) || (detectorName == "TryTimeComponentExtraction" && examples.Count == 1)) && TrySynthesizeFill(synthExamples, synthRemaining) is { } learned)
+            return learned;
+
         return results;
     }
+
+    [ThreadStatic]
+    internal static string? LastDetectorName;
+
+    private static readonly HashSet<string> GenericDetectors =
+    [
+        "TryConstant", "TryDigitMask", "TryPrefixTrim", "TrySuffixTrim", "TryPrefixAdd", "TrySuffixAdd", "TrySubstring", "TryExtractByDelimiter",
+    ];
 
     public static IReadOnlyList<string>? FillFromColumns(
         IReadOnlyList<IReadOnlyList<string>> exampleSources,

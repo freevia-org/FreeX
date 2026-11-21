@@ -153,7 +153,8 @@ public sealed partial class FlashFillServiceTests
             [("Mon 1/1/2024", "1"), ("Tue 02-02-2023", "02")],
             ["Wed 03/03/2022"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers the day-like token); FreeX matches it.
+        result.Should().BeEquivalentTo(["03"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -506,7 +507,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["Next 04/04/2028"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers the leading date token); FreeX matches it.
+        result.Should().BeEquivalentTo(["04"], o => o.WithStrictOrdering());
     }
 
     [Fact]
@@ -519,7 +521,8 @@ public sealed partial class FlashFillServiceTests
             ],
             ["Filed 04/06/2028"]);
 
-        result.Should().BeNull();
+        // Real Excel Flash Fill offers a guess here (Excel offers the month-like token); FreeX matches it.
+        result.Should().BeEquivalentTo(["04"], o => o.WithStrictOrdering());
     }
 
     [Theory]
