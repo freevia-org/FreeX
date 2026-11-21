@@ -295,6 +295,189 @@ public sealed class StructuredTableShiftCommandTests
         new DeleteTableColumnsCommand(sheet.Id, 999, 0).Apply(ctx).Success.Should().BeFalse();
     }
 
+    // ---- Filtered tables (expected values recorded from real Excel via COM on the same layout) ----
+
+    // Filters Price (table column 1) to {2, 4}: data row 3 (Price 3) becomes filter-hidden.
+    private static (Workbook Wb, Sheet Sheet, TestCommandContext Ctx, StructuredTableModel Table) BuildFiltered()
+    {
+        var built = Build();
+        Ok(new FilterCommand(built.Sheet.Id, built.Table.Range, 1, ["2", "4"]), built.Ctx);
+        built.Sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+        return (built.Wb, built.Sheet, built.Ctx, built.Sheet.StructuredTables.Single());
+    }
+
+    [Fact]
+    public void InsertTableRows_InMiddleOfFilteredTable_IsRefusedLikeExcel()
+    {
+        var (_, sheet, ctx, table) = BuildFiltered();
+
+        // Excel: "Can't move cells in a filtered range or table." -- even when nothing is hidden.
+        var outcome = new InsertTableRowsCommand(sheet.Id, table.Id, dataRowIndex: 1).Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Contain("filtered");
+        sheet.StructuredTables.Single().Range.End.Row.Should().Be(4);
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+    }
+
+    [Fact]
+    public void DeleteTableRows_OfFilteredTable_IsRefusedLikeExcel()
+    {
+        var (_, sheet, ctx, table) = BuildFiltered();
+
+        new DeleteTableRowsCommand(sheet.Id, table.Id, 0).Apply(ctx).Success.Should().BeFalse();
+        new DeleteTableRowsCommand(sheet.Id, table.Id, 2).Apply(ctx).Success.Should().BeFalse();
+        sheet.StructuredTables.Single().Range.End.Row.Should().Be(4);
+    }
+
+    [Fact]
+    public void InsertTableRows_AppendedToFilteredTable_IsAllowedAndKeepsHiddenRowsAndUndoes()
+    {
+        var (_, sheet, ctx, table) = BuildFiltered();
+        var command = new InsertTableRowsCommand(sheet.Id, table.Id, dataRowIndex: 3);
+
+        Ok(command, ctx);
+
+        sheet.StructuredTables.Single().Range.End.Row.Should().Be(5);
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+        sheet.IsRowEffectivelyHidden(5).Should().BeFalse();
+
+        command.Revert(ctx);
+        sheet.StructuredTables.Single().Range.End.Row.Should().Be(4);
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+    }
+
+    [Fact]
+    public void InsertAndDeleteTableRows_DoNotShiftManualHiddenRowsOrRowHeights()
+    {
+        var (_, sheet, ctx, table) = Build();
+        sheet.HiddenRows.Add(3);
+        sheet.RowHeights[4] = 40;
+
+        var insert = new InsertTableRowsCommand(sheet.Id, table.Id, dataRowIndex: 1);
+        Ok(insert, ctx);
+        sheet.HiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+        sheet.RowHeights.Should().ContainSingle().Which.Should().Be(new KeyValuePair<uint, double>(4, 40));
+
+        Ok(new DeleteTableRowsCommand(sheet.Id, table.Id, 0), ctx);
+        sheet.HiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+        sheet.RowHeights[4].Should().Be(40);
+    }
+
+    [Fact]
+    public void InsertTableColumns_InFilteredTable_ReindexesFilterKeepsHiddenRowsAndUndoes()
+    {
+        var (_, sheet, ctx, table) = BuildFiltered();
+        var command = new InsertTableColumnsCommand(sheet.Id, table.Id, columnIndex: 0);
+
+        Ok(command, ctx);
+
+        var grown = sheet.StructuredTables.Single();
+        grown.FilterColumns.Should().ContainSingle().Which.ColumnId.Should().Be(2);
+        sheet.ActiveValueFilterColumns.Keys.Should().BeEquivalentTo(new uint[] { 3 });
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+
+        command.Revert(ctx);
+        sheet.StructuredTables.Single().FilterColumns.Single().ColumnId.Should().Be(1);
+        sheet.ActiveValueFilterColumns.Keys.Should().BeEquivalentTo(new uint[] { 2 });
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+    }
+
+    [Fact]
+    public void DeleteTableColumns_UnfilteredColumn_KeepsFilterOnSurvivorAndSameHiddenRows()
+    {
+        var (_, sheet, ctx, table) = BuildFiltered();
+
+        Ok(new DeleteTableColumnsCommand(sheet.Id, table.Id, columnIndex: 0), ctx);
+
+        sheet.StructuredTables.Single().FilterColumns.Single().ColumnId.Should().Be(0);
+        sheet.ActiveValueFilterColumns.Keys.Should().BeEquivalentTo(new uint[] { 1 });
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+    }
+
+    [Fact]
+    public void DeleteTableColumns_FilteredColumn_DropsCriterionUnhidesRowsAndUndoes()
+    {
+        var (_, sheet, ctx, table) = BuildFiltered();
+        var command = new DeleteTableColumnsCommand(sheet.Id, table.Id, columnIndex: 1);
+
+        Ok(command, ctx);
+
+        // Excel: FilterMode becomes false and every row that only that column hid is visible again.
+        sheet.StructuredTables.Single().FilterColumns.Should().BeEmpty();
+        sheet.ActiveValueFilterColumns.Should().BeEmpty();
+        sheet.FilterHiddenRows.Should().BeEmpty();
+        sheet.ValueFilterHiddenRows.Should().BeEmpty();
+
+        command.Revert(ctx);
+        sheet.StructuredTables.Single().FilterColumns.Single().ColumnId.Should().Be(1);
+        sheet.ActiveValueFilterColumns.Keys.Should().BeEquivalentTo(new uint[] { 2 });
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3 });
+    }
+
+    [Fact]
+    public void DeleteTableColumns_FilteredColumnWithSecondFilter_ReappliesSurvivingFilter()
+    {
+        var (_, sheet, ctx, table) = Build();
+        // Qty filter {20, 30} hides row 4; Price filter {2, 4} hides row 3. Deleting Price leaves row 4 hidden.
+        Ok(new FilterCommand(sheet.Id, table.Range, 0, ["20", "30"]), ctx);
+        Ok(new FilterCommand(sheet.Id, sheet.StructuredTables.Single().Range, 1, ["2", "4"]), ctx);
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 3, 4 });
+
+        Ok(new DeleteTableColumnsCommand(sheet.Id, table.Id, columnIndex: 1), ctx);
+
+        sheet.StructuredTables.Single().FilterColumns.Single().ColumnId.Should().Be(0);
+        sheet.FilterHiddenRows.Should().BeEquivalentTo(new uint[] { 4 });
+    }
+
+    [Fact]
+    public void TableShift_SortStateFollowsKeyColumnAndRowsAndDropsWithDeletedKeyColumn()
+    {
+        var (_, sheet, ctx, table) = Build();
+        var state = table.CaptureCopyState() with
+        {
+            NativeSortStateXml = "<sortState xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" ref=\"A2:C4\">" +
+                                 "<sortCondition ref=\"C2:C4\"/></sortState>"
+        };
+        sheet.StructuredTables[0] = StructuredTableModel.FromCopyState(state);
+
+        var addColumn = new InsertTableColumnsCommand(sheet.Id, table.Id, 0);
+        Ok(addColumn, ctx);
+        var afterColumn = sheet.StructuredTables.Single().NativeSortStateXml!;
+        afterColumn.Should().Contain("ref=\"B2:D4\"").And.Contain("ref=\"D2:D4\"");
+
+        Ok(new InsertTableRowsCommand(sheet.Id, table.Id, 1), ctx);
+        sheet.StructuredTables.Single().NativeSortStateXml!.Should().Contain("ref=\"B2:D5\"").And.Contain("ref=\"D2:D5\"");
+
+        // Appending at the end does not extend the key range (Excel left C2:C6 untouched).
+        Ok(new InsertTableRowsCommand(sheet.Id, table.Id, 4), ctx);
+        sheet.StructuredTables.Single().NativeSortStateXml!.Should().Contain("ref=\"D2:D5\"");
+
+        // Deleting the key column removes the only sort condition, so the whole state goes (SortFields.Count = 0).
+        Ok(new DeleteTableColumnsCommand(sheet.Id, table.Id, 3), ctx);
+        sheet.StructuredTables.Single().NativeSortStateXml.Should().BeNull();
+    }
+
+    [Fact]
+    public void InsertAndDeleteTableRows_WithTotalsRow_ShiftsTotalsRowAndRowsBelowLikeExcel()
+    {
+        var (_, sheet, ctx, table) = Build(totals: true);
+        var totalsRow = sheet.StructuredTables.Single().Range.End.Row;
+        uint BelowRow() => Enumerable.Range(1, 15).Select(r => (uint)r).Single(r => Text(sheet, r, 1) == "below");
+        var below = BelowRow();
+
+        // Excel: the totals row and everything below it in the table's columns move down together.
+        Ok(new InsertTableRowsCommand(sheet.Id, table.Id, dataRowIndex: 1), ctx);
+        sheet.StructuredTables.Single().Range.End.Row.Should().Be(totalsRow + 1);
+        sheet.StructuredTables.Single().TotalsRowShown.Should().BeTrue();
+        BelowRow().Should().Be(below + 1);
+
+        Ok(new DeleteTableRowsCommand(sheet.Id, table.Id, 0), ctx);
+        sheet.StructuredTables.Single().Range.End.Row.Should().Be(totalsRow);
+        sheet.StructuredTables.Single().TotalsRowShown.Should().BeTrue();
+        BelowRow().Should().Be(below);
+    }
+
     private static class StructuredTableShiftSupportAssert
     {
         internal static void IsBlankRow(Sheet sheet, uint row, uint firstCol, uint lastCol)
