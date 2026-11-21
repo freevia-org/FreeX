@@ -21322,8 +21322,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return border;
         }
 
-        static TextBlock CreateCellText(string text, bool selected) =>
-            new()
+        static TextBlock CreateCellText(string text, bool selected)
+        {
+            var block = new TextBlock
             {
                 Text = text,
                 Foreground = selected ? Brushes.White : Brushes.Black,
@@ -21332,6 +21333,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 FontSize = 12,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
             };
+            // Light text on the selection blue: LCD sub-pixel rendering fattens white strokes well past
+            // WPF's thin grayscale look at the same (normal) weight, so use grayscale anti-aliasing.
+            if (selected)
+                TextOptions.SetTextRenderingMode(block, TextRenderingMode.Antialias);
+            return block;
+        }
 
         // Selected-row text cell (white on the selection blue) that hands over to its combo box as
         // the cell editor. The combo stays in the cell so its automation id and selection state
