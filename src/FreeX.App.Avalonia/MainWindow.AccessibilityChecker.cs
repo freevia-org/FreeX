@@ -364,7 +364,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            // WPF: DialogButtonRowFactory.Create(goTo, close, (0, 12, 0, 0)) -- 8px apart, no rule.
+            // WPF: DialogButtonRowFactory.Create(goTo, close, (0, 12, 0, 0)) -- 8px apart; the parity surface adds the rule above.
             Spacing = 8,
             Children =
             {
@@ -373,9 +373,13 @@ public sealed partial class MainWindow
             },
         };
 
+        // The WPF surface draws a light rule (ButtonDividerTop) across the content width above the
+        // action row; the 1px rule comes out of the row's 12px lead-in so the layout height is unchanged.
         var buttonBar = new Border
         {
-            Padding = new Thickness(0, 12, 0, 0),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xDE)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 11, 0, 0),
             Child = buttonRow,
         };
 
@@ -505,6 +509,9 @@ public sealed partial class MainWindow
                 VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             };
             headerPresenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedItemsControl.Header)) { Source = item });
+            // The section nodes ("Errors", "Tips") are bold in WPF. Inheriting the item's FontWeight
+            // through the template lost to the dialog's text styles, so bind the presenter to it.
+            headerPresenter.Bind(ContentPresenter.FontWeightProperty, new Binding(nameof(TreeViewItem.FontWeight)) { Source = item });
             scope.Register("PART_HeaderPresenter", headerPresenter);
 
             var header = new Grid

@@ -753,7 +753,8 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get("ConditionalFormatDialog_EditRuleDescriptionHeader").Replace("_", string.Empty, StringComparison.Ordinal),
                     FontWeight = FontWeight.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 6),
+                    // WPF outdents the heading 16px to the left of the description controls.
+                    Margin = new Thickness(-16, 0, 0, 6),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                     [DockPanel.DockProperty] = Dock.Top,

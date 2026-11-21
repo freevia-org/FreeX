@@ -547,31 +547,20 @@ public partial class MainWindow
     {
         var state = ProtectionSession.ProjectWorkbook();
         string? pwd = null;
-        ProtectWorkbookOptions? protectOptions = null;
         if (!state.IsStructureProtected)
         {
             var dialog = new PasswordProtectionDialog(
                 UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
-                UiText.Get("MainWindowMessage_OptionalPasswordLabel"),
-                includeWorkbookOptions: true) { Owner = this };
+                UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
             if (dialog.ShowDialog() != true) return;
             pwd = dialog.Password;
-            protectOptions = new ProtectWorkbookOptions
-            {
-                ProtectStructure = dialog.ProtectStructure,
-                ProtectWindows = dialog.ProtectWindows,
-                Password = pwd,
-                PasswordConfirmation = pwd,
-            };
         }
         else if (!TryConfirmWorkbookUnprotectPassword(out pwd))
         {
             return;
         }
 
-        var outcome = protectOptions is null
-            ? ProtectionSession.ExecuteWorkbook(pwd)
-            : ProtectionSession.ExecuteWorkbook(protectOptions);
+        var outcome = ProtectionSession.ExecuteWorkbook(pwd);
         if (!outcome.Success)
         {
             var failure = outcome.ErrorMessage ?? (outcome.ErrorResourceKey is { } key ? UiText.Get(key) : null);

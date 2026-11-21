@@ -116,11 +116,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("UiText.Get(\"MainWindowMessage_ReviewPasswordIncorrect\")");
         UiText.Get("MainWindowMessage_ReviewPasswordIncorrect").Should().Be("The password you supplied is not correct.");
         source.Should().Contain("ProtectionSession.ExecuteWorkbook(pwd)");
-        // Protect Workbook offers Excel's Structure / Windows options and honours them.
-        source.Should().Contain("includeWorkbookOptions: true");
-        source.Should().Contain("ProtectStructure = dialog.ProtectStructure,");
-        source.Should().Contain("ProtectWindows = dialog.ProtectWindows,");
-        source.Should().Contain("ProtectionSession.ExecuteWorkbook(protectOptions)");
+        // Protect Workbook is password-only (structure always protected), matching the Avalonia dialog.
+        source.Should().NotContain("includeWorkbookOptions");
+        source.Should().NotContain("dialog.ProtectWindows");
+        source.Should().NotContain("ExecuteWorkbook(protectOptions)");
         source.Should().NotContain("new ProtectSheetCommand");
         source.Should().NotContain("new UnprotectSheetCommand");
         source.Should().NotContain("new ProtectWorkbookCommand");
