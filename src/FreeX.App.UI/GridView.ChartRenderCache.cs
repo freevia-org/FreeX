@@ -135,6 +135,7 @@ public partial class GridView
 
     private void ClearChartRenderCache()
     {
+        _chartElementMapCache.Clear();
         if (_chartRenderCache.Count > 0)
             _chartRenderCache.Clear();
     }

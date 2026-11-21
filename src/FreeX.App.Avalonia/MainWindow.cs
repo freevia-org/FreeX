@@ -6060,6 +6060,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _pictureCropDragSession = null;
         }
 
+        _selectedChartElement = null;
         _selectedDrawingObjectKind = drawingObject.Kind;
         _selectedDrawingObjectId = drawingObject.Id;
         _ribbonContextSource.OnDrawingObjectSelected(drawingObject.Kind);
@@ -6101,6 +6102,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _isPictureCropMode = false;
         _pictureCropDragSession = null;
+        _selectedChartElement = null;
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
         _ribbonContextSource.OnSelectionCleared();

@@ -473,6 +473,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         SheetGrid.SplitPaneScrollbarScrolled += OnSplitPaneScrollbarScrolled;
         SheetGrid.ObjectMoved   += OnObjectMoved;
         SheetGrid.ChartBoundsChanged += OnChartBoundsChanged;
+        SheetGrid.ChartElementFormatRequested += OnChartElementFormatRequested;
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;

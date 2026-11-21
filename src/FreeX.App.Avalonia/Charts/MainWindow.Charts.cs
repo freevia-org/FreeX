@@ -6,6 +6,7 @@ using Avalonia.Media;
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.Charts.Selection;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.Core.Model;
 
@@ -101,6 +102,8 @@ public sealed partial class MainWindow
         double height)
     {
         var selected = IsSelectedChart(chart);
+        var elementMap = ChartElementMapPlanner.Plan(chart, layout, width, height, ChartTextMeasurer);
+        var selectedElement = GetSelectedChartElement(chart);
         var container = new AvaloniaGrid
         {
             Width = Math.Max(1, width),
@@ -139,21 +142,37 @@ public sealed partial class MainWindow
         container.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(container);
+            var local = point.Position;
+            var hit = elementMap.HitTest(new LayoutPoint(local.X, local.Y)) ?? ChartElementRef.ChartArea;
             if (point.Properties.IsRightButtonPressed)
             {
-                // Right-click selects the chart, then opens the per-target Chart context menu.
-                HandleChartPointerContext(chart, container, args);
+                // Right-click selects the element under the cursor (Excel parity), then opens the
+                // per-target Chart context menu.
+                HandleChartPointerContext(chart, container, args, hit, elementMap);
                 return;
             }
 
             if (point.Properties.IsLeftButtonPressed)
             {
-                // A click on the already-selected chart may begin a move/resize drag (on a resize
-                // handle or the body); otherwise it just selects the chart.
-                if (selected && TryBeginChartDrag(chart, container, args))
+                // A resize handle or a press on the chart area of the already-selected chart begins a
+                // move/resize drag; a press on any inner element (title, legend, axis, series...)
+                // selects that element instead, like Excel.
+                var handle = ResolveChartHoverDragKind(selected, new LayoutPoint(local.X, local.Y), width, height);
+                var isResizeHandle = handle is not (ObjectDragKind.None or ObjectDragKind.Move or ObjectDragKind.Rotate);
+                if (selected && (isResizeHandle || hit.IsChartArea) && TryBeginChartDrag(chart, container, args))
+                {
+                    _selectedChartElement = null;
                     return;
+                }
 
-                SelectChart(chart);
+                if (args.ClickCount >= 2 && selected && !hit.IsChartArea && hit == selectedElement)
+                {
+                    RunGuarded(() => OpenFormatSelectedChartElementAsync(chart, hit));
+                    args.Handled = true;
+                    return;
+                }
+
+                SelectChartElement(chart, hit, elementMap);
                 args.Handled = true;
             }
         };
@@ -174,7 +193,9 @@ public sealed partial class MainWindow
             container.Children.Add(pointOverlay);
         if (BuildPivotChartFieldButtonOverlay(chart) is { } fieldButtons)
             container.Children.Add(fieldButtons);
-        if (selected)
+        if (selected && selectedElement is { } innerElement)
+            container.Children.Add(CreateChartElementHighlight(elementMap, innerElement));
+        else if (selected)
             container.Children.Add(CreateChartSelectionAdorner(width, height));
 
         return container;
@@ -199,14 +220,18 @@ public sealed partial class MainWindow
             DrawingObjectHandleHitPadding);
     }
 
-    private void SelectChart(ChartModel chart)
+    private void SelectChart(ChartModel chart) => SelectChartWithElement(chart, null, null);
+
+    private void SelectChartWithElement(ChartModel chart, ChartElementRef? element, string? status)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
         _selectedDrawingObjectKind = SelectionPaneObjectKind.Chart;
         _selectedDrawingObjectId = chart.Id;
-        RefreshShell(UiText.Format("ChartLoc_SelectedChart", ChartDisplayName(chart)));
+        _selectedChartElementChartId = chart.Id;
+        _selectedChartElement = element is { IsChartArea: false } ? element : null;
+        RefreshShell(status ?? UiText.Format("ChartLoc_SelectedChart", ChartDisplayName(chart)));
     }
 
     private bool IsSelectedChart(ChartModel chart) =>

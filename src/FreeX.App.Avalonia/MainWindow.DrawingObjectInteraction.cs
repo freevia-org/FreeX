@@ -5,6 +5,7 @@ using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.Charts.Selection;
 using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services.Ribbon;
@@ -53,12 +54,20 @@ public sealed partial class MainWindow
     /// <summary>
     /// Right-click entry point for a chart container. Selects the chart, then opens the Chart menu.
     /// </summary>
-    private void HandleChartPointerContext(ChartModel chart, Control container, PointerPressedEventArgs args)
+    private void HandleChartPointerContext(
+        ChartModel chart,
+        Control container,
+        PointerPressedEventArgs args,
+        ChartElementRef? element = null,
+        ChartElementMap? elementMap = null)
     {
         if (!args.GetCurrentPoint(container).Properties.IsRightButtonPressed)
             return;
 
-        SelectChart(chart);
+        if (element is { IsChartArea: false } inner && elementMap is not null)
+            SelectChartElement(chart, inner, elementMap);
+        else
+            SelectChart(chart);
         OpenDrawingObjectContextMenu(container, SelectionPaneObjectKind.Chart);
         args.Handled = true;
     }
@@ -190,6 +199,10 @@ public sealed partial class MainWindow
     /// </summary>
     private bool TryDeleteSelectedDrawingObject()
     {
+        // A selected inner chart element (title, legend, axis, series...) is deleted instead of the chart.
+        if (TryDeleteSelectedChartElement())
+            return true;
+
         if (_selectedDrawingObjectKind is not { } kind || _selectedDrawingObjectId is not { } objectId)
             return false;
 
