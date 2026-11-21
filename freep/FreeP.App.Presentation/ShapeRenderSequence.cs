@@ -79,7 +79,11 @@ public interface IShapeRenderSink
 /// </summary>
 public static class ShapeRenderSequence
 {
-    /// <summary>The soft-edge ring stroke is only this fraction of the planned width.</summary>
+    /// <summary>
+    /// The soft-edge ring stroke is only this fraction of the planned width: a stroke is centred on the
+    /// contour, while PowerPoint's soft edge is predominantly an inner feather, so the visible outer halo
+    /// is kept narrow. WPF is the reference; Avalonia had no documented compensation for a different value.
+    /// </summary>
     public const double SoftEdgeOuterSpreadScale = 0.20;
 
     private const double RelaxedInsetCornerFraction = 0.16;
