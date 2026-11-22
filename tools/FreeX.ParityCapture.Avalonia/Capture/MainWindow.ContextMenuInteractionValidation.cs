@@ -392,7 +392,7 @@ public sealed partial class MainWindow
     private async Task<ContextMenuDispatchEvidence> ExercisePivotHeaderContextRouteAsync(
         ContextMenuValidationDescriptor row)
     {
-        if (!Enum.TryParse<PivotHeaderMenuAction>(row.ActionKey, out var action) ||
+        if (!Enum.TryParse<PivotChartFieldContextMenuAction>(row.ActionKey, out var action) ||
             !Enum.TryParse<PivotHeaderArea>(row.VariantId.Split('.').Last(), true, out var area))
             return Failed(row, "Pivot-header route could not be parsed.");
         var pivot = EnsureParityPivot();
@@ -411,7 +411,7 @@ public sealed partial class MainWindow
             area == PivotHeaderArea.Value ? 0 : null);
         return await InvokeProductionContextRouteAsync(
             row,
-            () => InvokePivotHeaderAction(pivot, headers, target, action, BuildPivotDragValidator(pivot)));
+            () => DispatchPivotChartFieldContextMenuAction(pivot, headers, target, action));
     }
 
     private async Task<ContextMenuDispatchEvidence> ExercisePivotChartContextRouteAsync(
@@ -1130,13 +1130,18 @@ public sealed partial class MainWindow
 
     private static void AddPivotHeaderContextInventory(List<ContextMenuValidationDescriptor> rows)
     {
-        var pivot = new PivotTableModel { Name = "ValidationPivot", ShowExpandCollapseButtons = true };
+        // WPF OnPivotHeaderDropdownRequested opens the shared PivotChart field menu (summary banner, sort,
+        // More Sort Options, Select Items, Label/Value Filter, Clear Filters, Value Field Settings).
         foreach (var area in Enum.GetValues<PivotHeaderArea>())
         {
             var variant = $"context-menu.pivot-header.area.{area.ToString().ToLowerInvariant()}";
-            var target = new PivotHeaderDropdownTargetModel(pivot.Name, "Field", 0, area, false, area == PivotHeaderArea.Value ? 0 : null);
-            foreach (var item in PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target).Items.Where(item => !item.IsSeparator))
-                rows.Add(new($"{variant}:{item.Action}", PivotHeaderContextFamily, variant, item.Action.ToString(), item.Label, item.IsEnabled, "InvokePivotHeaderAction"));
+            var hasFilterState = area != PivotHeaderArea.Value;
+            var state = new PivotChartFieldContextMenuState(
+                hasFilterState, "Field: (All)", "Select Items...", "Label Filter...", "Value Filter...",
+                "Clear Filters from Field", hasFilterState, hasFilterState, true);
+            foreach (var command in PivotChartFieldContextMenuPlanner.BuildCommands(state)
+                         .Where(command => !command.IsSeparator && command.Action != PivotChartFieldContextMenuAction.Summary))
+                rows.Add(new($"{variant}:{command.Action}", PivotHeaderContextFamily, variant, command.Action.ToString(), command.Header, command.IsEnabled, "DispatchPivotChartFieldContextMenuAction"));
         }
     }
 

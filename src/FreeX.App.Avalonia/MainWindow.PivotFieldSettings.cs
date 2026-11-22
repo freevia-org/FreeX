@@ -90,6 +90,7 @@ public sealed partial class MainWindow
         SetWpfValueFieldTextBoxHeight(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotValueFieldSettingsNameBox");
         AutomationProperties.SetName(nameBox, UiText.Get("PivotValueFieldSettings_CustomName2"));
+        AutomationProperties.SetHelpText(nameBox, UiText.Get("PivotValueFieldSettings_EnterTheDisplayNameForTheValueField"));
 
         var summaryBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotValueFieldPlanner.SummaryFunctions)
@@ -98,7 +99,8 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(summaryBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(summaryBox);
         AutomationProperties.SetAutomationId(summaryBox, "PivotValueFieldSettingsSummaryBox");
-        AutomationProperties.SetName(summaryBox, UiText.Get("PivotValueFieldSettings_SummarizeByAutomationName"));
+        AutomationProperties.SetName(summaryBox, UiText.Get("PivotValueFieldSettings_SummarizeValueFieldBy2"));
+        AutomationProperties.SetHelpText(summaryBox, UiText.Get("PivotValueFieldSettings_ChooseTheSummaryCalculationForTheValueField"));
 
         var showValuesAsBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotValueFieldPlanner.ShowValuesAsOptions)
@@ -108,6 +110,7 @@ public sealed partial class MainWindow
         PivotValueFieldSettingsVisual.ApplyComboBox(showValuesAsBox);
         AutomationProperties.SetAutomationId(showValuesAsBox, "PivotValueFieldSettingsShowValuesAsBox");
         AutomationProperties.SetName(showValuesAsBox, UiText.Get("PivotValueFieldSettings_ShowValuesAs3"));
+        AutomationProperties.SetHelpText(showValuesAsBox, UiText.Get("PivotValueFieldSettings_ChooseHowTheValueFieldIsDisplayedInThePivotTable"));
 
         var baseFieldBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         baseFieldBox.Items.Add(PivotValueFieldPlanner.AutomaticBaseFieldLabel);
@@ -118,12 +121,14 @@ public sealed partial class MainWindow
         PivotValueFieldSettingsVisual.ApplyComboBox(baseFieldBox);
         AutomationProperties.SetAutomationId(baseFieldBox, "PivotValueFieldSettingsBaseFieldBox");
         AutomationProperties.SetName(baseFieldBox, UiText.Get("PivotValueFieldSettings_BaseField2"));
+        AutomationProperties.SetHelpText(baseFieldBox, UiText.Get("PivotValueFieldSettings_ChooseTheBaseFieldForTheSelectedShowValuesAsCalculation"));
 
-        var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_BaseItemPlaceholder") };
+        var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty };
         ApplyPivotTextBoxChrome(baseItemBox);
         PivotValueFieldSettingsVisual.ApplyTextBox(baseItemBox, PivotValueFieldSettingsVisual.ControlHeight);
         AutomationProperties.SetAutomationId(baseItemBox, "PivotValueFieldSettingsBaseItemBox");
         AutomationProperties.SetName(baseItemBox, UiText.Get("PivotValueFieldSettings_BaseItem2"));
+        AutomationProperties.SetHelpText(baseItemBox, UiText.Get("PivotValueFieldSettings_EnterTheBaseItemForTheSelectedShowValuesAsCalculation"));
 
         var basePanel = new StackPanel { Spacing = 0 };
         basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseField"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground, Margin = new Thickness(0, 10, 0, 6) });
@@ -151,7 +156,8 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(numberFormatButton, PivotValueFieldSettingsVisual.NumberFormatButtonWidth);
         SetWpfValueFieldButtonHeight(numberFormatButton);
         AutomationProperties.SetAutomationId(numberFormatButton, "PivotValueNumberFormatButton");
-        AutomationProperties.SetName(numberFormatButton, UiText.Get("PivotValueFieldSettings_NumberFormat2"));
+        // WPF names this button by its own content ("Number Format..."); only the help text is added.
+        AutomationProperties.SetHelpText(numberFormatButton, UiText.Get("PivotValueFieldSettings_OpenFormatCellsToChooseADetailedNumberFormat"));
 
         string CurrentNumberFormatCode() =>
             !string.IsNullOrWhiteSpace(numberFormatCode)
@@ -168,6 +174,7 @@ public sealed partial class MainWindow
         PivotValueFieldSettingsVisual.ApplyComboBox(numberFormatPresetBox);
         AutomationProperties.SetAutomationId(numberFormatPresetBox, "PivotValueNumberFormatPresetBox");
         AutomationProperties.SetName(numberFormatPresetBox, UiText.Get("PivotValueFieldSettings_NumberFormatPreset"));
+        AutomationProperties.SetHelpText(numberFormatPresetBox, UiText.Get("PivotValueFieldSettings_ChooseTheNumberFormatAppliedToTheValueField"));
         numberFormatPresetBox.SelectionChanged += (_, _) =>
         {
             var index = numberFormatPresetBox.SelectedIndex;
@@ -236,6 +243,7 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(ok, PivotValueFieldSettingsVisual.ButtonWidth, isDefault: true);
         SetWpfValueFieldButtonHeight(ok);
         AutomationProperties.SetAutomationId(ok, "PivotValueFieldSettingsOkButton");
+        AutomationProperties.SetHelpText(ok, UiText.Get("PivotValueFieldSettings_ApplyTheValueFieldSettings"));
         var cancel = new Button
         {
             Content = UiText.Get("Common_Cancel"),
@@ -246,6 +254,7 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(cancel, PivotValueFieldSettingsVisual.ButtonWidth);
         SetWpfValueFieldButtonHeight(cancel);
         AutomationProperties.SetAutomationId(cancel, "PivotValueFieldSettingsCancelButton");
+        AutomationProperties.SetHelpText(cancel, UiText.Get("PivotValueFieldSettings_CloseTheValueFieldSettingsDialogWithoutApplyingChanges"));
         cancel.Click += (_, _) => dialog.Close(false);
         ok.Click += (_, _) =>
         {

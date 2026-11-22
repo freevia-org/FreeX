@@ -36,7 +36,7 @@ public sealed class Wave191AutoFilterColorPhysicalSourceTests
         persistenceProbe.Should().Contain("criteria=\"$(verify_rendered_fill_swatch");
         persistenceProbe.Should().Contain("expected_criteria=\"${mode}:#00B050\"");
         persistenceProbe.Should().Contain("\"$criteria\" == \"$expected_criteria\"");
-        persistenceProbe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
+        persistenceProbe.Should().Contain("local button_left_offset=68 button_top_offset=221 button_width=92 button_height=24");
         persistenceProbe.Should().Contain("swatch-gate=$swatch_gate");
         persistenceProbe.Should().NotContain("criteria=\"fill:#00B050\"");
         persistenceProbe.Should().Contain("expected_package_mode=\"1\"");

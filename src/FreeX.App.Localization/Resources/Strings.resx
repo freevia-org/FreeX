@@ -21083,4 +21083,31 @@ and {0} more.</value>
   <data name="CellStyles_AppliedStatusFormat" xml:space="preserve">
     <value>Applied style '{0}' to {1}.</value>
   </data>
+  <data name="ThreadedCommentCard_ResolveThread" xml:space="preserve">
+    <value>Resolve thread</value>
+  </data>
+  <data name="ThreadedCommentCard_ReopenThread" xml:space="preserve">
+    <value>Reopen thread</value>
+  </data>
+  <data name="ThreadedCommentCard_DeleteThread" xml:space="preserve">
+    <value>Delete thread</value>
+  </data>
+  <data name="ThreadedCommentCard_ResolvedStatus" xml:space="preserve">
+    <value>Resolved</value>
+  </data>
+  <data name="ThreadedCommentCard_ProtectedNotice" xml:space="preserve">
+    <value>This sheet is protected. Unprotect it to reply to or change comments.</value>
+  </data>
+  <data name="ThreadedCommentPane_FilterAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="ThreadedCommentPane_FilterActive" xml:space="preserve">
+    <value>Active</value>
+  </data>
+  <data name="ThreadedCommentPane_FilterResolved" xml:space="preserve">
+    <value>Resolved</value>
+  </data>
+  <data name="ThreadedCommentPane_SummaryFormat" xml:space="preserve">
+    <value>{0} active, {1} resolved</value>
+  </data>
 </root>

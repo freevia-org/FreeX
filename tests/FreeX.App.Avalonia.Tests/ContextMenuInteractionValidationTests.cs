@@ -119,7 +119,11 @@ public sealed class ContextMenuInteractionValidationTests
             "context-menu.pivot-chart",
             PivotChartFieldContextMenuAction.None,
             PivotChartFieldContextMenuAction.Summary);
-        AssertActionSet<PivotHeaderMenuAction>(inventory, "context-menu.pivot-header", PivotHeaderMenuAction.Separator);
+        AssertActionSet<PivotChartFieldContextMenuAction>(
+            inventory,
+            "context-menu.pivot-header",
+            PivotChartFieldContextMenuAction.None,
+            PivotChartFieldContextMenuAction.Summary);
 
         inventory.Where(row => row.FamilyId == "context-menu.recent-files")
             .Select(row => row.ActionKey)
@@ -434,9 +438,9 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
-    public async Task ProductionDispatch_OpensAndCancelsPivotHeaderFieldSettings()
+    public async Task ProductionDispatch_OpensAndCancelsPivotHeaderValueFieldSettings()
     {
-        const string id = "context-menu.pivot-header.area.row:FieldSettings";
+        const string id = "context-menu.pivot-header.area.value:ValueFieldSettings";
 
         await Session.Dispatch(async () =>
         {
@@ -448,7 +452,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 result.Status.Should().Be("passed", $"{result.EvidenceLevel}: {result.Note}");
                 result.EvidenceLevel.Should().Be("production-dialog-opened-cancelled");
-                result.Evidence.Should().Contain("InvokePivotHeaderAction");
+                result.Evidence.Should().Contain("DispatchPivotChartFieldContextMenuAction");
             }
             finally
             {

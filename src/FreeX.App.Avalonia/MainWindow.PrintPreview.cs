@@ -1083,6 +1083,8 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
+        AutomationProperties.SetName(copiesBox, UiText.Get("PrintPreview_CopiesSectionAutomationName"));
+        AutomationProperties.SetHelpText(copiesBox, UiText.Get("PrintPreview_CopiesSectionHelpText"));
         if (interaction is not null)
         {
             copiesBox.TextChanged += (_, _) => ApplyAction(
@@ -1091,6 +1093,10 @@ public sealed partial class MainWindow
 
         var printerBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
         AutomationProperties.SetAutomationId(printerBox, "PrintPreviewSettingsPrinter");
+        // WPF PrintPreviewSettingsPanelFactory: printer selector tooltip + automation name/help.
+        ToolTip.SetTip(printerBox, UiText.Get("PrintPreview_PrinterToolTip"));
+        AutomationProperties.SetName(printerBox, UiText.Get("PrintPreview_PrinterAutomationName"));
+        AutomationProperties.SetHelpText(printerBox, UiText.Get("PrintPreview_PrinterHelpText"));
         registerPrinterBox(printerBox);
 
         if (interaction is not null)
@@ -1130,6 +1136,8 @@ public sealed partial class MainWindow
         var printWhatOptions = plan.Settings.PrintWhatOptions;
         var printWhatBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, printWhatOptions, plan.Settings.PrintWhatSelectedIndex);
         AutomationProperties.SetAutomationId(printWhatBox, "PrintPreviewSettingsPrintWhatBox");
+        AutomationProperties.SetName(printWhatBox, UiText.Get("PrintPreview_PrintWhatAutomationName"));
+        AutomationProperties.SetHelpText(printWhatBox, UiText.Get("PrintPreview_PrintWhatHelpText"));
         if (interaction is not null)
         {
             printWhatBox.SelectionChanged += (_, _) => ApplyAction(
@@ -1156,6 +1164,8 @@ public sealed partial class MainWindow
             });
 
         var sidesBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex);
+        AutomationProperties.SetName(sidesBox, UiText.Get("PrintPreview_SidesAutomationName"));
+        AutomationProperties.SetHelpText(sidesBox, UiText.Get("PrintPreview_SidesHelpText"));
         if (interaction is not null)
         {
             sidesBox.SelectionChanged += (_, _) => ApplyAction(
@@ -1164,6 +1174,8 @@ public sealed partial class MainWindow
 
         var collationBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex);
         AutomationProperties.SetAutomationId(collationBox, "PrintPreviewSettingsCollation");
+        AutomationProperties.SetName(collationBox, UiText.Get("PrintPreview_CollatedSectionAutomationName"));
+        AutomationProperties.SetHelpText(collationBox, UiText.Get("PrintPreview_CollatedSectionHelpText"));
         if (interaction is not null)
         {
             collationBox.SelectionChanged += (_, _) => ApplyAction(
@@ -1254,6 +1266,9 @@ public sealed partial class MainWindow
 
         var ignorePrintAreaBox = new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily };
         AutomationProperties.SetAutomationId(ignorePrintAreaBox, "PrintPreviewSettingsIgnorePrintAreaBox");
+        ToolTip.SetTip(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaToolTip"));
+        AutomationProperties.SetName(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaAutomationName"));
+        AutomationProperties.SetHelpText(ignorePrintAreaBox, UiText.Get("PrintPreview_IgnorePrintAreaHelpText"));
         // Print windows are outside the scoped dialog chrome (DialogControlStyles.IsOutOfScope), so
         // Fluent's disabled foreground would grey the label. WPF greys only the glyph of a disabled
         // check box (the label keeps its ink), so the disabled label brushes stay at the rail's ink.
@@ -1316,6 +1331,28 @@ public sealed partial class MainWindow
             },
         };
 
+        // WPF PrintPreviewSettingsPanelFactory ends the rail with a "Page Setup" link button that opens
+        // the Page Setup dialog and refreshes the preview.
+        if (interaction is not null)
+        {
+            var pageSetupLink = new Button
+            {
+                Content = plan.PageSetupLinkText,
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                Margin = new Thickness(0, 6, 0, 0),
+                Padding = new Thickness(4, 2),
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+            };
+            AutomationProperties.SetAutomationId(pageSetupLink, "PrintPreviewSettingsPageSetupLink");
+            AutomationProperties.SetName(pageSetupLink, UiText.Get("PrintPreview_PageSetupLinkAutomationName"));
+            AutomationProperties.SetHelpText(pageSetupLink, UiText.Get("PrintPreview_PageSetupLinkHelpText"));
+            pageSetupLink.Click += (_, _) => RunGuarded(() => ShowPrintPreviewPageSetupAsync(
+                PageLayoutPageSetupOpenSource.DialogButton,
+                interaction.Repaginate));
+            panel.Children.Add(pageSetupLink);
+        }
+
         // WPF shows the classic always-expanded vertical bar beside the rail while its rows overflow.
         // The print windows sit outside the scoped dialog chrome, so the rail carries the classic bar
         // resources and reserves the bar's lane (no overlay auto-hide) itself.
@@ -1374,8 +1411,12 @@ public sealed partial class MainWindow
         rangeFields = (fromBox, toBox);
         AutomationProperties.SetAutomationId(fromBox, "PrintPreviewSettingsFromPage");
         AutomationProperties.SetAutomationId(toBox, "PrintPreviewSettingsToPage");
-        AutomationProperties.SetName(fromBox, UiText.Get("PrintPreview_FromPageAutomationName"));
-        AutomationProperties.SetName(toBox, UiText.Get("PrintPreview_ToPageAutomationName"));
+        AutomationProperties.SetName(fromBox, UiText.Get("PrintPreview_PageRangeFromAutomationName"));
+        AutomationProperties.SetName(toBox, UiText.Get("PrintPreview_PageRangeToAutomationName"));
+        AutomationProperties.SetHelpText(fromBox, UiText.Get("PrintPreview_PageRangeFromHelpText"));
+        AutomationProperties.SetHelpText(toBox, UiText.Get("PrintPreview_PageRangeToHelpText"));
+        ToolTip.SetTip(fromBox, UiText.Get("PrintPreview_PageRangeFromHelpText"));
+        ToolTip.SetTip(toBox, UiText.Get("PrintPreview_PageRangeToHelpText"));
         if (onChanged is not null)
         {
             fromBox.TextChanged += (_, _) => onChanged(fromBox.Text ?? "", toBox.Text ?? "");

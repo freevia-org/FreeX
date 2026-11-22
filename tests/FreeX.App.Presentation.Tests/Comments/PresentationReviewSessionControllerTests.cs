@@ -56,6 +56,40 @@ public sealed class PresentationReviewSessionControllerTests
     }
 
     [Fact]
+    public void ApplyThreadedCommentCardAction_TargetsThreadOutsideSelectionAndUsesUndoableCommand()
+    {
+        var workbook = CreateWorkbook(out var sheet);
+        var selected = new CellAddress(sheet.Id, 1, 1);
+        var thread = new CellAddress(sheet.Id, 6, 2);
+        sheet.ThreadedComments[thread] = new ThreadedComment("root");
+        var adapter = new FakeAdapter(workbook, sheet.Id, new GridRange(selected, selected));
+        var controller = new PresentationReviewSessionController(adapter);
+
+        var result = controller.ApplyThreadedCommentCardAction(thread, ThreadedCommentCardAction.Resolve);
+
+        result.Success.Should().BeTrue();
+        adapter.LastFallbackRange.Should().Be(new GridRange(thread, thread));
+        adapter.LastPlan!.Label.Should().Be("Resolve Comment");
+        adapter.LastPlan.CreateCommand(adapter.LastFallbackRange!.Value).Should().BeOfType<ResolveThreadedCommentCommand>();
+    }
+
+    [Fact]
+    public void ApplyThreadedCommentCardAction_OnProtectedSheet_RefusesWithoutMutating()
+    {
+        var workbook = CreateWorkbook(out var sheet);
+        var thread = new CellAddress(sheet.Id, 2, 2);
+        sheet.ThreadedComments[thread] = new ThreadedComment("root");
+        sheet.IsProtected = true;
+        var adapter = new FakeAdapter(workbook, sheet.Id, new GridRange(thread, thread));
+        var controller = new PresentationReviewSessionController(adapter);
+
+        var result = controller.ApplyThreadedCommentCardAction(thread, ThreadedCommentCardAction.DeleteThread);
+
+        result.Success.Should().BeFalse();
+        adapter.LastPlan.Should().BeNull();
+    }
+
+    [Fact]
     public void DeleteNote_WhenSelectionHasNoNote_DoesNotAskAdapterToMutate()
     {
         var workbook = CreateWorkbook(out var sheet);

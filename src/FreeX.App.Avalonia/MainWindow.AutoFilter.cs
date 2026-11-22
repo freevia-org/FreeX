@@ -11,6 +11,7 @@ using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -29,6 +30,8 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
     private const double AutoFilterPopupContentWidth = 276;
+    private const double AutoFilterColorButtonWidth = 92;
+    private const double AutoFilterColorButtonHeight = 24;
 
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
     private static readonly IBrush AutoFilterBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(142, 153, 166));
@@ -568,9 +571,10 @@ public sealed partial class MainWindow
         var maximumLabel = UiText.Get("AutoFilter_MaximumLabel");
         var maximumBox = CreateAutoFilterCriteriaValueBox("AutoFilterCriteriaMaximumBox", maximumLabel);
         var secondSelector = CreateAutoFilterCriteriaSelector(
-            new[] { StripDisplayMnemonic(UiText.Get("FormatCells_None")) }
-                .Concat(secondOptions.Select(option => option.Label)),
-            canEditSavedRows ? secondIndex + 1 : 0,
+            secondOptions.Select(option => option.Label),
+            // WPF's second operator box has no "(None)" row: it starts on the first real operator and the
+            // second condition only applies once its value is filled in.
+            canEditSavedRows && secondIndex >= 0 ? secondIndex : 0,
             "AutoFilterSecondCriteriaOperatorBox",
             UiText.Get("AutoFilter_SecondOperator"));
         var secondValueBox = CreateAutoFilterCriteriaValueBox(
@@ -626,8 +630,50 @@ public sealed partial class MainWindow
         }
 
         panel.Children.Add(selector);
-        panel.Children.Add(valueBox);
-        panel.Children.Add(maximumBox);
+        // WPF CreateBetweenCriteriaPanel / CreateTopBottomCriteriaPanel: a horizontal "Minimum [..] Maximum [..]"
+        // row for Between and a "Show [10] Items|Percent" row for Top/Bottom; the plain value box fills the row.
+        var rangeLabel = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = HeaderForeground,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsVisible = false,
+        };
+        var maximumRangeLabel = new TextBlock
+        {
+            Text = UiText.Get("AutoFilter_MaximumLabel"),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = HeaderForeground,
+            Margin = new Thickness(10, 0, 0, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsVisible = false,
+        };
+        var unitText = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = HeaderForeground,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsVisible = false,
+        };
+        var valueRow = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,*,Auto"),
+            ColumnSpacing = 6,
+        };
+        AvaloniaGrid.SetColumn(rangeLabel, 0);
+        AvaloniaGrid.SetColumn(valueBox, 1);
+        AvaloniaGrid.SetColumn(maximumRangeLabel, 2);
+        AvaloniaGrid.SetColumn(maximumBox, 3);
+        AvaloniaGrid.SetColumn(unitText, 2);
+        valueRow.Children.Add(rangeLabel);
+        valueRow.Children.Add(valueBox);
+        valueRow.Children.Add(maximumRangeLabel);
+        valueRow.Children.Add(maximumBox);
+        valueRow.Children.Add(unitText);
+        panel.Children.Add(valueRow);
         panel.Children.Add(secondRow);
         panel.Children.Add(secondValueBox);
         panel.Children.Add(criteriaBox);
@@ -651,7 +697,9 @@ public sealed partial class MainWindow
                     valueBox.Text = null;
             }
 
-            var secondOption = secondSelector.SelectedIndex > 0 ? secondOptions[secondSelector.SelectedIndex - 1] : null;
+            var secondOption = secondSelector.SelectedIndex >= 0 && secondSelector.SelectedIndex < secondOptions.Count
+                ? secondOptions[secondSelector.SelectedIndex]
+                : null;
             var preset = datePresetSelector is { SelectedIndex: > 0 }
                 ? datePresets[datePresetSelector.SelectedIndex]
                 : null;
@@ -662,16 +710,21 @@ public sealed partial class MainWindow
 
             selector.IsEnabled = preset is null;
             valueBox.IsEnabled = preset is null && firstOption.RequiresValue;
-            valueBox.PlaceholderText = isBetween
-                ? UiText.Get("AutoFilter_MinimumLabel")
-                : isTopBottom
-                    ? UiText.Get(firstOption.CriteriaPrefix.Contains("percent:", StringComparison.Ordinal)
-                        ? "AutoFilter_Percent"
-                        : "AutoFilter_Items")
-                    : valueLabel;
-            maximumBox.IsVisible = isBetween && preset is null;
+            var showMinimumMaximum = isBetween && preset is null;
+            var showTopBottom = isTopBottom && preset is null;
+            valueBox.PlaceholderText = showMinimumMaximum ? UiText.Get("AutoFilter_MinimumLabel") : valueLabel;
+            valueBox.Width = showTopBottom ? 54 : double.NaN;
+            valueBox.HorizontalAlignment = showTopBottom ? AvaloniaHorizontalAlignment.Left : AvaloniaHorizontalAlignment.Stretch;
+            AvaloniaGrid.SetColumnSpan(valueBox, showMinimumMaximum || showTopBottom ? 1 : 4);
+            rangeLabel.IsVisible = showMinimumMaximum || showTopBottom;
+            rangeLabel.Text = UiText.Get(showTopBottom ? "AutoFilter_ShowLabel" : "AutoFilter_MinimumLabel");
+            maximumRangeLabel.IsVisible = showMinimumMaximum;
+            maximumBox.IsVisible = showMinimumMaximum;
+            unitText.IsVisible = showTopBottom;
+            unitText.Text = UiText.Get(firstOption.CriteriaPrefix.Contains("percent", StringComparison.OrdinalIgnoreCase)
+                ? "AutoFilter_Percent"
+                : "AutoFilter_Items");
             secondRow.IsVisible = canCombine && secondOptions.Count > 0;
-            connector.IsEnabled = secondOption is not null;
             secondValueBox.IsVisible = canCombine && secondOption?.RequiresValue == true;
 
             if (!writeCriteriaText)
@@ -684,7 +737,8 @@ public sealed partial class MainWindow
             }
 
             var firstCriteria = AutoFilterMenuPlanner.BuildCompletedCriteriaText(firstOption, valueBox.Text, maximumBox.Text);
-            var secondCriteria = canCombine && secondOption is not null
+            var secondCriteria = canCombine && secondOption is not null &&
+                (!secondOption.RequiresValue || !string.IsNullOrWhiteSpace(secondValueBox.Text))
                 ? AutoFilterMenuPlanner.BuildCompletedCriteriaText(secondOption, secondValueBox.Text, null)
                 : string.Empty;
             criteriaBox.Text = AutoFilterDialogCriteriaPlanner.BuildCompositeCriteriaText(
@@ -832,46 +886,71 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
         });
 
-        var swatches = new WrapPanel();
-        foreach (var option in options)
+        // WPF PopulateColorChoices: one section per kind ("Font Color" / "Cell Color" header, 0/8 top and 4
+        // bottom margin) over a wrap panel of 92x24 buttons (0,0,6,6 margin) showing a 14x14 swatch and the
+        // hex value ("No Fill" for the no-fill choice), with the colour label as tooltip.
+        var firstSection = true;
+        foreach (var section in options.GroupBy(option => option.Kind == AutoFilterColorFilterKind.FontColor
+                     ? UiText.Get("AutoFilter_FontColor")
+                     : UiText.Get("AutoFilter_CellColor")))
         {
-            var button = new Button
+            root.Children.Add(new TextBlock
             {
-                Width = 76,
-                MinWidth = 76,
-                Height = 26,
-                Margin = new Thickness(0, 0, 4, 4),
-                Content = new StackPanel
+                Text = section.Key,
+                FontSize = 12,
+                FontFamily = FormulaBarFontFamily,
+                Foreground = HeaderForeground,
+                // The panel's 4px spacing supplies WPF's 4px bottom margin; the extra 4 completes its 8px top gap.
+                Margin = new Thickness(0, firstSection ? 0 : 4, 0, 0),
+            });
+            firstSection = false;
+
+            var swatches = new WrapPanel();
+            foreach (var option in section)
+            {
+                var button = new Button
                 {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 4,
-                    Children =
+                    Width = AutoFilterColorButtonWidth,
+                    MinWidth = AutoFilterColorButtonWidth,
+                    Height = AutoFilterColorButtonHeight,
+                    Padding = new Thickness(8, 0),
+                    Margin = new Thickness(0, 0, 6, 6),
+                    Content = new StackPanel
                     {
-                        new Border
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 4,
+                        Children =
                         {
-                            Width = 14,
-                            Height = 14,
-                            BorderBrush = Brush(0x80, 0x80, 0x80),
-                            BorderThickness = new Thickness(1),
-                            Background = option.Color is { } color
-                                ? new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))
-                                : Brushes.White,
-                        },
-                        new TextBlock
-                        {
-                            Text = option.Kind == AutoFilterColorFilterKind.NoFill ? UiText.Get("AutoFilter_NoFill") : option.Label,
-                            FontSize = 11,
-                            FontFamily = FormulaBarFontFamily,
+                            new Border
+                            {
+                                Width = 14,
+                                Height = 14,
+                                BorderBrush = Brush(0x80, 0x80, 0x80),
+                                BorderThickness = new Thickness(1),
+                                Background = option.Color is { } color
+                                    ? new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B))
+                                    : Brushes.White,
+                            },
+                            new TextBlock
+                            {
+                                Text = option.Kind == AutoFilterColorFilterKind.NoFill
+                                    ? UiText.Get("AutoFilter_NoFill")
+                                    : ColorInputParser.FormatHexColor(option.Color!.Value),
+                                FontSize = 11,
+                                FontFamily = FormulaBarFontFamily,
+                                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                            },
                         },
                     },
-                },
-            };
-            AutomationProperties.SetName(button, option.Label);
-            button.Click += (_, _) => apply(option);
-            swatches.Children.Add(button);
-        }
+                };
+                AutomationProperties.SetName(button, option.Label);
+                ToolTip.SetTip(button, option.Label);
+                button.Click += (_, _) => apply(option);
+                swatches.Children.Add(button);
+            }
 
-        root.Children.Add(swatches);
+            root.Children.Add(swatches);
+        }
         return root;
     }
 

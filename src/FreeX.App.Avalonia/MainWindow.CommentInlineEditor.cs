@@ -324,6 +324,9 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(_inlineThreadedCommentResolvedBox, "GridThreadedCommentResolvedBox");
         panel.Children.Add(_inlineThreadedCommentResolvedBox);
 
+        if (existing is not null)
+            panel.Children.Add(BuildInlineThreadActionRow(existing));
+
         _inlineThreadedCommentError = new TextBlock
         {
             IsVisible = false,
@@ -348,6 +351,56 @@ public sealed partial class MainWindow
             isCancel: true);
         panel.Children.Add(CreateInlineCommentActionRow(save, cancel));
         return panel;
+    }
+
+    // Excel card actions: Resolve thread / Reopen thread and Delete thread (sheet-protection aware).
+    private StackPanel BuildInlineThreadActionRow(ThreadedComment existing)
+    {
+        var card = _inlineThreadedCommentEditAddress is { } address
+            ? ThreadedCommentCardPlanner.BuildCard(_session.ActiveSheet, address)
+            : null;
+        var toggleText = (card?.ToggleResolvedLabel
+            ?? Free.Shared.Localization.LocalizedTextDescriptor.Resource(existing.IsResolved
+                ? "ThreadedCommentCard_ReopenThread"
+                : "ThreadedCommentCard_ResolveThread")).Resolve(UiText.Get, UiText.Format);
+        var toggle = CreateInlineCommentButton(
+            toggleText,
+            "GridThreadedCommentToggleResolvedButton",
+            () => ApplyInlineThreadedCommentResult(new ThreadedCommentDialogResult(null, null, !existing.IsResolved)),
+            width: 112);
+        toggle.IsEnabled = card?.CanToggleResolved ?? true;
+        var delete = CreateInlineCommentButton(
+            UiText.Get("ThreadedCommentCard_DeleteThread"),
+            "GridThreadedCommentDeleteThreadButton",
+            () => ApplyInlineThreadedCommentResult(new ThreadedCommentDialogResult(
+                null, null, existing.IsResolved, ThreadedCommentDialogAction.DeleteThread)),
+            width: 112);
+        delete.IsEnabled = card?.CanDeleteThread ?? true;
+
+        var row = AvaloniaCompactDialogChrome.CreateActionRow(
+            [toggle, delete],
+            new Thickness(0, 6, 0, 0),
+            InlineCommentEditorChromeStyle);
+        row.HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left;
+        if (card?.ReadOnlyNotice is { } notice)
+        {
+            if (_inlineThreadedCommentRootBox is not null) _inlineThreadedCommentRootBox.IsReadOnly = true;
+            if (_inlineThreadedCommentReplyBox is not null) _inlineThreadedCommentReplyBox.IsReadOnly = true;
+            var wrap = new StackPanel();
+            wrap.Children.Add(row);
+            wrap.Children.Add(new TextBlock
+            {
+                Text = notice.Resolve(UiText.Get, UiText.Format),
+                FontFamily = FormulaBarFontFamily,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = new SolidColorBrush(Color.FromRgb(178, 34, 34)),
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+            return wrap;
+        }
+
+        return row;
     }
 
     private StackPanel BuildInlineReplyEditor(ThreadedComment existing)

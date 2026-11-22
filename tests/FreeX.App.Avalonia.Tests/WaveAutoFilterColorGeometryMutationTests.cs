@@ -29,7 +29,7 @@ public sealed class WaveAutoFilterColorGeometryMutationTests
     {
         var probe = ReadProbe();
         const string assignment =
-            "local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220";
+            "local sample_x_offset=84 sample_y_offset=233 click_x_offset=110 click_y_offset=233";
         probe.Should().Contain(assignment, "the boundary mutation must target the live color function");
 
         var mutatedProbe = probe.Replace(
@@ -44,15 +44,15 @@ public sealed class WaveAutoFilterColorGeometryMutationTests
 
     [Theory]
     [InlineData(
-        "click_x_offset=110 click_y_offset=220",
-        "click_x_offset=111 click_y_offset=220")]
-    [InlineData("click_x_offset=190", "click_x_offset=191")]
+        "click_x_offset=110 click_y_offset=233",
+        "click_x_offset=111 click_y_offset=233")]
+    [InlineData("click_x_offset=178", "click_x_offset=179")]
     [InlineData(
         "click_autofilter_control \"$click_x_offset\" \"$click_y_offset\"",
-        "click_autofilter_control \"$click_x_offset\" 221")]
+        "click_autofilter_control \"$click_x_offset\" 234")]
     [InlineData(
         "local click_x=$((a1_x + click_x_offset)) click_y=$((a1_y + click_y_offset)) before_pixel=\"\" pixel=\"\"",
-        "local click_x=110 click_y=220 before_pixel=\"\" pixel=\"\"")]
+        "local click_x=110 click_y=233 before_pixel=\"\" pixel=\"\"")]
     public void GeometryContractRejectsClickTargetMutations(string original, string mutation)
     {
         var probe = ReadProbe();

@@ -33,7 +33,7 @@ public sealed class AutoFilterCriteriaFlyoutTests
                 InvariantAutoFilterMenuTextProvider.Instance);
             var secondOptions = AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(options);
             var firstIndex = options.ToList().FindIndex(option => option.CriteriaPrefix == ">");
-            var secondIndex = secondOptions.ToList().FindIndex(option => option.CriteriaPrefix == "<") + 1;
+            var secondIndex = secondOptions.ToList().FindIndex(option => option.CriteriaPrefix == "<");
             var firstOperator = Find<ComboBox>(panel, "AutoFilterCriteriaOperatorBox");
             var secondOperator = Find<ComboBox>(panel, "AutoFilterSecondCriteriaOperatorBox");
             firstOperator.SelectedIndex = firstIndex;
@@ -102,6 +102,101 @@ public sealed class AutoFilterCriteriaFlyoutTests
             Assert.Equal(0, Find<ComboBox>(panel, "AutoFilterDatePresetBox").SelectedIndex);
             Assert.Equal(expectedCriteria, RawCriteria(panel).Text);
             Assert.Equal(expectedCriteria["date=".Length..], Find<TextBox>(panel, "AutoFilterCriteriaValueBox").Text);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SecondOperatorHasNoNoneRowAndNeedsAValueLikeWpf()
+    {
+        await Session.Dispatch(() =>
+        {
+            using var fixture = new FilterFixture([new NumberValue(10), new NumberValue(20)]);
+            var panel = fixture.Open();
+            var options = AutoFilterMenuPlanner.CreateCriteriaOptions(
+                AutoFilterMenuFilterKind.Number,
+                InvariantAutoFilterMenuTextProvider.Instance);
+            var secondOptions = AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(options);
+            var secondOperator = Find<ComboBox>(panel, "AutoFilterSecondCriteriaOperatorBox");
+            Assert.Equal(secondOptions.Count, secondOperator.ItemCount);
+            Assert.Equal(0, secondOperator.SelectedIndex);
+            Assert.True(Find<ComboBox>(panel, "AutoFilterCriteriaConnectorBox").IsEnabled);
+
+            Find<ComboBox>(panel, "AutoFilterCriteriaOperatorBox").SelectedIndex =
+                options.ToList().FindIndex(option => option.CriteriaPrefix == ">");
+            Find<TextBox>(panel, "AutoFilterCriteriaValueBox").Text = "15";
+            Assert.Equal(">15", RawCriteria(panel).Text);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BetweenAndTopBottomUseWpfHorizontalLabelledRows()
+    {
+        await Session.Dispatch(() =>
+        {
+            using var fixture = new FilterFixture([new NumberValue(10), new NumberValue(20)]);
+            var panel = fixture.Open();
+            var options = AutoFilterMenuPlanner.CreateCriteriaOptions(
+                AutoFilterMenuFilterKind.Number,
+                InvariantAutoFilterMenuTextProvider.Instance);
+            var selector = Find<ComboBox>(panel, "AutoFilterCriteriaOperatorBox");
+            var minimum = Find<TextBox>(panel, "AutoFilterCriteriaValueBox");
+            var maximum = Find<TextBox>(panel, "AutoFilterCriteriaMaximumBox");
+            var texts = () => panel.GetLogicalDescendants().OfType<TextBlock>()
+                .Where(block => block.IsVisible).Select(block => block.Text).ToList();
+
+            selector.SelectedIndex = options.ToList().FindIndex(option => AutoFilterDialogCriteriaPlanner.IsBetweenOption(option));
+            Assert.True(maximum.IsVisible);
+            Assert.Same(minimum.Parent, maximum.Parent);
+            Assert.Contains(UiText.Get("AutoFilter_MinimumLabel"), texts());
+            Assert.Contains(UiText.Get("AutoFilter_MaximumLabel"), texts());
+
+            selector.SelectedIndex = options.ToList().FindIndex(option => AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option));
+            Assert.False(maximum.IsVisible);
+            Assert.Equal(54, minimum.Width);
+            Assert.Equal("10", minimum.Text);
+            Assert.Contains(UiText.Get("AutoFilter_ShowLabel"), texts());
+            Assert.Contains(UiText.Get("AutoFilter_Items"), texts());
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ColorPanelGroupsSwatchesBySectionLikeWpf()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var create = typeof(MainWindow).GetMethod(
+                    "CreateAutoFilterColorPanel", BindingFlags.Instance | BindingFlags.NonPublic)!;
+                var options = new List<AutoFilterColorOption>
+                {
+                    new("#00B050", AutoFilterColorFilterKind.FontColor, new CellColor(0, 176, 80)),
+                    new("#FFC000", AutoFilterColorFilterKind.CellFillColor, new CellColor(255, 192, 0)),
+                    new("No Fill", AutoFilterColorFilterKind.NoFill, null),
+                };
+                var root = Assert.IsAssignableFrom<Control>(
+                    create.Invoke(window, [options, new Action<AutoFilterColorOption>(_ => { }), "AutoFilter_FilterByColor"]));
+                var headers = root.GetLogicalDescendants().OfType<TextBlock>()
+                    .Select(block => block.Text).ToList();
+                Assert.Contains(UiText.Get("AutoFilter_FontColor"), headers);
+                Assert.Contains(UiText.Get("AutoFilter_CellColor"), headers);
+                var buttons = root.GetLogicalDescendants().OfType<Button>().ToList();
+                Assert.Equal(3, buttons.Count);
+                Assert.All(buttons, button =>
+                {
+                    Assert.Equal(92, button.Width);
+                    Assert.Equal(24, button.Height);
+                });
+                var buttonTexts = buttons
+                    .Select(button => button.GetLogicalDescendants().OfType<TextBlock>().Single().Text).ToList();
+                Assert.Equal(["#00B050", "#FFC000", UiText.Get("AutoFilter_NoFill")], buttonTexts);
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
         }, CancellationToken.None);
     }
 
