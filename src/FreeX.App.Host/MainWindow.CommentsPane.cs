@@ -78,7 +78,7 @@ public partial class MainWindow
 
         var closeButton = new Button
         {
-            Content = "X",
+            Content = "×",
             Width = 22,
             Height = 22,
             Padding = new Thickness(0),

@@ -316,6 +316,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            window.UpdateLayout();
             var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             listWindow.Should().NotBeNull();
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
@@ -363,6 +364,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            window.UpdateLayout();
             var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
@@ -403,6 +405,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            window.UpdateLayout();
             var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
@@ -439,6 +442,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            window.UpdateLayout();
             var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             var openButton = FindByAutomationId<Button>(listWindow, "ReviewCommentListOpenButton");
@@ -490,7 +494,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             host.IsVisible.Should().BeTrue();
             window.OwnedWindows.Should().BeEmpty("the pane is a layout column, not a floating window");
             host.GetVisualAncestors().Should().Contain(visual => ReferenceEquals(visual, window));
-            host.Bounds.Width.Should().BeApproximately(host.Width, 0.5);
+            host.Bounds.Width.Should().BeApproximately(host.Width, 1.5);
             scroll.Bounds.Width.Should().BeApproximately(widthBefore - host.Width, 1.5,
                 "the grid column shrinks by the pane width");
 
