@@ -16099,6 +16099,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static GoToSpecialChoice[] CreateGoToSpecialChoices() =>
         GoToSpecialDialogPlanner.BuildChoices().ToArray();
 
+    private void ShowGoToSpecialNoCellsFoundMessage()
+    {
+        var owner = FindTopmostOpenModalDialog() ?? (Window)this;
+        Dispatcher.UIThread.Post(
+            () => RunGuarded(() => AvaloniaUserMessageDialog.ShowAsync(
+                owner,
+                UiText.Get("GoToSpecial_NoCellsFoundMessage"),
+                UiText.Get("GoToSpecial_GoToSpecial"),
+                UserMessageIcon.Information)),
+            DispatcherPriority.Background);
+    }
+
     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
         if (!TryCommitPendingFormulaEdit())
@@ -16106,6 +16118,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         ClearSelectedDrawingObject();
         var result = _session.GoToSpecial(kind, options);
+        if (!result.Success && result.ErrorMessage == WorkbookSession.GoToSpecialNoCellsFoundMessage)
+        {
+            // WPF reports an empty Go To Special search in an owned information message box
+            // ("No cells found." titled Go To Special) and leaves the selection untouched.
+            RefreshShell(UiText.Get("MainLoc_Ready"));
+            ShowGoToSpecialNoCellsFoundMessage();
+            return false;
+        }
+
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToSpecialFailed"));

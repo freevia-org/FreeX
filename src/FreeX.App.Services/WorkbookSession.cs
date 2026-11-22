@@ -1383,6 +1383,9 @@ public sealed partial class WorkbookSession : IDisposable
         };
     }
 
+    /// <summary>Error text of a Go To Special search that matched no cells.</summary>
+    public const string GoToSpecialNoCellsFoundMessage = "No cells found.";
+
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
         // CurrentRegion/Precedents/Dependents trace relationships from the user's true active
@@ -1396,7 +1399,7 @@ public sealed partial class WorkbookSession : IDisposable
             : ResolveGoToSpecialSearchRange();
         var matches = GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options);
         if (matches.Count == 0)
-            return WorkbookGoToSpecialResult.Failed("No cells found.");
+            return WorkbookGoToSpecialResult.Failed(GoToSpecialNoCellsFoundMessage);
 
         var ranges = SelectionRangeService.CompressAddresses(matches);
         var selectedRange = ranges[0];
