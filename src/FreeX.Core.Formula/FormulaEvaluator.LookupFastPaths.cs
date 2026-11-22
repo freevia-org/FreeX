@@ -1233,7 +1233,11 @@ public sealed partial class FormulaEvaluator
             if (Sheet is not null)
                 return Sheet.GetValue(row, col);
 
-            if (Context is SheetEvalContext)
+            // An external-workbook sheet ([1]Sheet) is not a local sheet, but it is not a #REF! either:
+            // route it through the context so it reads the link cache (or preserves the loaded value).
+            if (Context is SheetEvalContext &&
+                !(Vector.SheetName is { } externalSheetName &&
+                  ExternalSheetReferenceResolver.IsExternalReferenceSyntax(externalSheetName)))
                 return ErrorValue.Ref;
 
             return Vector.SheetName is null

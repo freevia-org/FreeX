@@ -66,8 +66,25 @@ public static class ImplicitIntersection
         if (!ContainsReference(formula))
             return range.RowCount > 0 && range.ColCount > 0 ? range.Cells[0, 0] : ErrorValue.Value;
 
+        // A function driven by an array CONSTANT as the formula's outermost operation
+        // (=SUMIF(A:A,{"x","y"},B:B), =COUNTIF(A:A,{...})) yields a value array whose positions are the
+        // constant's, not the sheet's: a legacy non-array cell shows its first element. (Reference
+        // arguments of other functions are intersected positionally per operand, which the result-based
+        // fallback below approximates; a reference-returning function keeps IsSheetReference.)
+        if (formula is FunctionCallNode f && !range.IsSheetReference && f.Arguments.Any(ContainsArrayConstant))
+            return range.RowCount > 0 && range.ColCount > 0 ? range.Cells[0, 0] : ErrorValue.Value;
+
         return Resolve(range, cellRow, cellCol);
     }
+
+    private static bool ContainsArrayConstant(FormulaNode node) => node switch
+    {
+        ArrayConstantNode => true,
+        BinaryOpNode b => ContainsArrayConstant(b.Left) || ContainsArrayConstant(b.Right),
+        UnaryOpNode u => ContainsArrayConstant(u.Operand),
+        FunctionCallNode f => f.Arguments.Any(ContainsArrayConstant),
+        _ => false,
+    };
 
     /// <summary>True when <paramref name="node"/> contains, anywhere in its tree, a node kind that
     /// resolves to a genuine worksheet position (as opposed to being purely computed from literals).</summary>

@@ -352,7 +352,7 @@ public partial class FunctionLibraryTests
         // subject to the same blank-coerces-to-"0" HYPERLINK quirk, not the link-location
         // fallback (which is reserved for a genuinely omitted argument slot).
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",)", MakeSheet())
-            .Should().Be(new TextValue("0"));
+            .Should().Be(new NumberValue(0));
     }
 
     [Fact]
@@ -365,7 +365,7 @@ public partial class FunctionLibraryTests
         var sheet = MakeSheet();
 
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",B2)", sheet)
-            .Should().Be(new TextValue("0"));
+            .Should().Be(new NumberValue(0));
     }
 
     [Fact]

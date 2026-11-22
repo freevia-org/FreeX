@@ -349,6 +349,45 @@ internal static class Program
 
         Emit("");
 
+        // Debug support: --show "Sheet!A1" prints the cell's formula, load-time cached value and post-recalc value;
+        // --eval "Sheet!A1|=formula" evaluates an ad-hoc formula with that cell as the current cell.
+        for (var ai = 0; ai + 1 < args.Length; ai++)
+        {
+            if (args[ai] == "--show")
+            {
+                var (shn, adr) = SplitSheetAddr(args[ai + 1]);
+                var sh = workbook.Sheets.FirstOrDefault(s => s.Name == shn);
+                if (sh is null) { Console.WriteLine($"SHOW {args[ai + 1]}: no sheet"); continue; }
+                var ca = ParseA1(adr);
+                var cell = sh.GetCell(ca.row, ca.col);
+                snapshots.TryGetValue((sh.Name, ca.row, ca.col), out var sn);
+                Console.WriteLine($"SHOW {args[ai + 1]}: formula={cell?.FormulaText} cached={(sn.Formula is null ? "-" : ScalarStr(sn.Cached))} now={(cell is null ? "-" : ScalarStr(cell.Value))}");
+            }
+            else if (args[ai] == "--eval")
+            {
+                var parts = args[ai + 1].Split('|', 2);
+                var (shn, adr) = SplitSheetAddr(parts[0]);
+                var sh = workbook.Sheets.First(s => s.Name == shn);
+                var ca = ParseA1(adr);
+                var r = new FormulaEvaluator().Evaluate(parts[1], sh, workbook, new CellAddress(sh.Id, ca.row, ca.col));
+                Console.WriteLine($"EVAL {args[ai + 1]} => {ScalarStr(r)}");
+            }
+        }
+
+        // Batch/corpus-sweep support: dump every genuine mismatch as TSV and optionally stop before the slow round-trip.
+        var tsvArg = Array.IndexOf(args, "--tsv");
+        if (tsvArg >= 0 && tsvArg + 1 < args.Length)
+        {
+            var tsv = new StringBuilder();
+            string Clean(string s) => s.Replace('\t', ' ').Replace('\r', ' ').Replace('\n', ' ');
+            foreach (var (sht, row, col, formula, cached, recalc) in mismatches)
+                tsv.AppendLine(string.Join('\t', Path.GetFileName(xlsxPath), Clean(sht), $"{ColToLetter(col)}{row}", ExtractLeadingFunction(formula), Clean(formula), Clean(ScalarStr(cached)), Clean(ScalarStr(recalc))));
+            File.AppendAllText(args[tsvArg + 1], tsv.ToString());
+            Console.WriteLine($"PARITY\t{Path.GetFileName(xlsxPath)}\t{workbookFormulas}\t{mismatches.Count}\t{volatileExcluded.Count}\t{vbaUdfExcluded.Count}");
+        }
+        if (args.Contains("--formula-only"))
+            return 0;
+
         // =====================================================================
         // SECTION 5 — ROUND-TRIP
         // =====================================================================
@@ -489,6 +528,20 @@ internal static class Program
     // Value-comparison helpers — delegated to FreeX.ToolsShared.FidelityValueCompare so the same
     // semantics are shared with FormatFidelity and FormatCrossCheck.
     // -------------------------------------------------------------------------
+
+    private static (string sheet, string addr) SplitSheetAddr(string s)
+    {
+        var i = s.LastIndexOf('!');
+        return (s[..i].Trim('\''), s[(i + 1)..]);
+    }
+
+    private static (uint row, uint col) ParseA1(string a)
+    {
+        var i = 0;
+        uint col = 0;
+        while (i < a.Length && char.IsLetter(a[i])) { col = col * 26 + (uint)(char.ToUpperInvariant(a[i]) - 'A' + 1); i++; }
+        return (uint.Parse(a[i..]), col);
+    }
 
     private static bool ValuesMatch(ScalarValue a, ScalarValue b)
         => FidelityValueCompare.ValuesMatch(a, b);

@@ -516,6 +516,33 @@ public sealed class Parser
             : throw new FormulaParseException($"Unexpected '#' at position {hashToken.Position}");
     }
 
+    // A chained range operator on plain cell references, e.g. C2:C3:C30 -- Excel's ':' is left-associative
+    // and yields the bounding box of its operands, so this is C2:C30. (Previously the trailing ':C30' was
+    // left unparsed and the whole formula became #VALUE!.)
+    private RangeRefNode ExtendChainedRange(RangeRefNode range)
+    {
+        while (Current.Type == TokenType.Colon && Peek().Type == TokenType.CellRef)
+        {
+            Advance();
+            if (ParseCellRef(Advance()) is not CellRefNode next)
+                break;
+
+            var minRow = Math.Min(Math.Min(range.Start.Row, range.End.Row), next.Row);
+            var maxRow = Math.Max(Math.Max(range.Start.Row, range.End.Row), next.Row);
+            var minCol = Math.Min(Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber), next.ColumnNumber);
+            var maxCol = Math.Max(Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber), next.ColumnNumber);
+            range = range with
+            {
+                Start = new CellRefNode(Model.CellAddress.NumberToColumnName(minCol), minRow,
+                    range.Start.IsColAbsolute, range.Start.IsRowAbsolute, range.Start.SheetName),
+                End = new CellRefNode(Model.CellAddress.NumberToColumnName(maxCol), maxRow,
+                    range.End.IsColAbsolute, range.End.IsRowAbsolute, range.End.SheetName),
+            };
+        }
+
+        return range;
+    }
+
     // Parses the end endpoint of an INDEX(...)/CHOOSE(...)-anchored range, e.g. the 'C3' or
     // 'INDEX(A1:C3,3,3)'/'CHOOSE(2,B5,C5)' half of INDEX(A1:C3,1,1):C3 /
     // INDEX(A1:C3,1,1):INDEX(A1:C3,3,3) / A1:CHOOSE(2,B5,C5). Mirrors the plain CellRef range path
@@ -846,7 +873,7 @@ public sealed class Parser
                     var endRef = ParseIndexRangeEndpoint();
                     return endRef switch
                     {
-                        CellRefNode rangeEndRef => new RangeRefNode(rangeStartRef, rangeEndRef),
+                        CellRefNode rangeEndRef => ExtendChainedRange(new RangeRefNode(rangeStartRef, rangeEndRef)),
                         NamedRangeNode => new NamedRangeEndpointNode(rangeStartRef, endRef),
                         _ => endRef
                     };
