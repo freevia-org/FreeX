@@ -82,6 +82,18 @@ public sealed class AccessibilityCheckerSourceTests
         captureSource.Should().Contain("AccessibilityCheckerDialogMetrics.ActionButtonSpacing");
     }
 
+    [Fact]
+    public void AccessibilityCheckerDialog_ActionButtonsAreEightPixelsApartLikeWpf()
+    {
+        var avaloniaSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
+        var wpfSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+
+        // WPF: Go To carries Margin (0,0,8,0) before Close.
+        wpfSource.Should().Contain("new() { Width = 76, Margin = new Thickness(0, 0, 8, 0) }");
+        avaloniaSource.Should().Contain("Spacing = 8,");
+        avaloniaSource.Should().NotContain("Spacing = 16");
+    }
+
     private static string RepoFile(params string[] parts) =>
         Path.Combine([TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"), .. parts]);
 }

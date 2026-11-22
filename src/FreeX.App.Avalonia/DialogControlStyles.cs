@@ -378,6 +378,11 @@ internal static class DialogWindowDefaults
     internal static readonly IBrush InactiveRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xD9, 0xD9, 0xD9));
     internal static readonly IBrush InactiveRowFrame = InactiveRowFace;
 
+    // WPF Aero2 ListBoxItem while its list is unfocused (sampled from the WPF dialog captures):
+    // a #F6F6F6 row in a 1 px #DADADA frame, lighter than the #D9D9D9 list-view inactive row above.
+    internal static readonly IBrush InactiveListBoxRowFace = new ImmutableSolidColorBrush(Color.FromRgb(0xF6, 0xF6, 0xF6));
+    internal static readonly IBrush InactiveListBoxRowFrame = new ImmutableSolidColorBrush(Color.FromRgb(0xDA, 0xDA, 0xDA));
+
     // WPF Aero2 GroupBox frame (light blue-grey) and the focused text box frame (1 px light blue).
     private static readonly Color SharedGroupBoxFrameColor = Color.Parse(global::Free.Shared.Shell.CompactDialogVisualTokens.BorderHex);
     private static readonly IBrush GroupBoxFrame = new ImmutableSolidColorBrush(Color.FromRgb(0xD5, 0xDF, 0xE5));
@@ -508,7 +513,8 @@ internal static class DialogWindowDefaults
         AvaloniaCompactDialogChrome.DefaultTextSelectionForegroundBrush = DialogControlStyles.SelectionForegroundBrush;
         AvaloniaCompactDialogChrome.DefaultListRowMinHeight = DialogListRowMinHeight;
         AvaloniaCompactDialogChrome.DefaultFocusedInputBorderBrush = FocusedTextBoxFrame;
-        AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBackgroundBrush = InactiveRowFace;
+        AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBackgroundBrush = InactiveListBoxRowFace;
+        AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBorderBrush = InactiveListBoxRowFrame;
         AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBorderBrush = InactiveRowFrame;
         AvaloniaCompactDialogChrome.CompactEditableComboOwnsEditor = true;
         AvaloniaCompactDialogChrome.DefaultComboBoxPalette = new AvaloniaCompactDialogComboBoxPalette(
@@ -1039,7 +1045,7 @@ internal static class DialogWindowDefaults
             // Lists on the shared item template get the same colours from the shared list chrome
             // (the inactive pair through the product defaults set in Install).
             SelectedListRowPresenterStyle(x => x, SelectedRowFace, SelectedRowFrame),
-            SelectedListRowPresenterStyle(InactiveList, InactiveRowFace, InactiveRowFrame),
+            SelectedListRowPresenterStyle(InactiveList, InactiveListBoxRowFace, InactiveListBoxRowFrame),
             // A WPF list box scrolls a row wider than the list horizontally (ScrollViewer default
             // Auto); Fluent disables horizontal scrolling, so long rows were cut off instead.
             new Style(x => x.OfType<ListBox>())

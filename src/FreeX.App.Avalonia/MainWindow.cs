@@ -25772,9 +25772,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         const double labelColumnWidth = DataValidationLabelColumnWidth;
         // WPF SystemColors.GrayTextBrush (#6D6D6D).
         var grayText = Brush(109, 109, 109);
-        // WPF check boxes are ~16px rows with an 8px bottom margin; the compact Avalonia check box is a
-        // 20px row, so 4px keeps the same 24px pitch.
-        var controlColumnCheckBoxMargin = new Thickness(labelColumnWidth, 0, 0, 4);
+        // WPF check boxes on the Settings page are 15px rows (13px box at a 1px offset) with an 8px
+        // bottom margin, a 23px pitch. The compact Avalonia check box is a 20px row (box at a 4px
+        // offset) and clips the descenders of the 12px text when squeezed to 15px, so these three
+        // boxes keep the 20px row and pull it up 3px / push the next one 6px instead: same box
+        // position and the same 23px pitch, local to this page (the shared check box is untouched).
+        var controlColumnCheckBoxMargin = new Thickness(labelColumnWidth, -3, 0, 6);
 
         static TabItem CreateValidationTab(string header, string automationId, Control content)
         {
