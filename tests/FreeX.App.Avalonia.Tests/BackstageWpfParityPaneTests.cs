@@ -179,6 +179,44 @@ public sealed class BackstageWpfParityPaneTests
             right.Should().BeLessThanOrEqualTo(host.Bounds.Width + 0.5, "the page preview is fitted to the width, never clipped");
         }), CancellationToken.None);
 
+    [Fact]
+    public Task PrintPane_MatchesWpfPrintButtonPageSetupLinkAndZoomToolbar() =>
+        Session.Dispatch(() => WithBackstagePane(FreeXBackstagePaneId.Print, (window, content) =>
+        {
+            // WPF SsBackstagePrintNowButton: "_Print..." content with automation name/help text.
+            var print = FindById<Button>(content, "BackstagePrintNowButton");
+            print.Content.Should().Be(UiText.Get("PrintPreview_PrintButton"));
+            AutomationProperties.GetName(print).Should().Be(UiText.Get("PrintPreview_PrintAutomationName"));
+            AutomationProperties.GetHelpText(print).Should().Be(UiText.Get("PrintPreview_PrintHelpText"));
+
+            // WPF PrintPreviewSettingsPanelFactory ends with the Page Setup link.
+            var link = FindById<Button>(content, "PrintPreviewSettingsPageSetupLink");
+            AutomationProperties.GetName(link).Should().Be(UiText.Get("PrintPreview_PageSetupLinkAutomationName"));
+
+            // WPF's DocumentViewer toolbar: zoom in/out | actual size, page width, whole page.
+            foreach (var id in new[]
+                     {
+                         "BackstagePrintZoomInButton", "BackstagePrintZoomOutButton", "BackstagePrintActualSizeButton",
+                         "BackstagePrintPageWidthButton", "BackstagePrintWholePageButton",
+                     })
+            {
+                FindById<Button>(content, id);
+            }
+
+            AutomationProperties.GetName(FindById<ComboBox>(content, "PrintPreviewSettingsPrinter"))
+                .Should().Be(UiText.Get("PrintPreview_PrinterAutomationName"));
+            AutomationProperties.GetName(FindById<TextBox>(content, "PrintPreviewSettingsFromPage"))
+                .Should().Be(UiText.Get("PrintPreview_PageRangeFromAutomationName"));
+
+            // Zooming in switches from the fitted page to a scrollable, scaled page.
+            var host = FindById<Border>(content, "BackstagePrintPreviewHost");
+            host.GetVisualDescendants().OfType<Viewbox>().Should().NotBeEmpty();
+            FindById<Button>(content, "BackstagePrintActualSizeButton")
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            host.GetVisualDescendants().OfType<LayoutTransformControl>().Should().NotBeEmpty();
+        }), CancellationToken.None);
+
     private static bool WithBackstagePane(
         FreeXBackstagePaneId pane,
         Action<MainWindow, Control> assertions)

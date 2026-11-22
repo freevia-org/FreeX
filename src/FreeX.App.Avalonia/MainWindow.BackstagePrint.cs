@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Free.Shared.Ribbon;
 using FreeX.App.Presentation.PageLayout;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
@@ -74,10 +75,79 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(previousButton, "BackstagePrintPreviousPage");
         AutomationProperties.SetAutomationId(nextButton, "BackstagePrintNextPage");
 
+        // WPF's backstage DocumentViewer keeps its stock icon toolbar: zoom in / zoom out | actual size,
+        // page width, whole page. It opens fitted to the page width (FitToWidth after every refresh).
+        var zoomMode = BackstagePreviewZoomMode.PageWidth;
+        var zoomPercent = 100d;
+        var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
+        var zoomInButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.PlusSign, UiText.Get("MainWindow_AutomationName_ZoomIn"), chrome);
+        var zoomOutButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.MinusSign, UiText.Get("MainWindow_AutomationName_ZoomOut"), chrome);
+        var actualSizeButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, "100%", chrome);
+        var pageWidthButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.View, UiText.Get("PrintPreview_ZoomPageWidth"), chrome);
+        var wholePageButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Page, UiText.Get("PrintPreview_FitToOnePage"), chrome);
+        AutomationProperties.SetAutomationId(zoomInButton, "BackstagePrintZoomInButton");
+        AutomationProperties.SetAutomationId(zoomOutButton, "BackstagePrintZoomOutButton");
+        AutomationProperties.SetAutomationId(actualSizeButton, "BackstagePrintActualSizeButton");
+        AutomationProperties.SetAutomationId(pageWidthButton, "BackstagePrintPageWidthButton");
+        AutomationProperties.SetAutomationId(wholePageButton, "BackstagePrintWholePageButton");
+        var zoomToolbar = CreatePreviewDocumentToolbar(
+        [
+            zoomInButton, zoomOutButton,
+            CreateDocumentToolbarSeparator(chrome),
+            actualSizeButton, pageWidthButton, wholePageButton,
+        ]);
+        AutomationProperties.SetAutomationId(zoomToolbar, "BackstagePrintZoomToolbar");
+
+        double EffectiveZoomPercent()
+        {
+            if (zoomMode == BackstagePreviewZoomMode.Percent)
+                return zoomPercent;
+
+            var pageWidth = context.PageCount > 0 ? context.BuildPainting(navigator.CurrentIndex)?.PageBounds.Width ?? 0 : 0;
+            var available = pageHost.Bounds.Width - 48;
+            return pageWidth > 0 && available > 0 ? available / pageWidth * 100 : 100;
+        }
+
+        void StepZoom(bool increase)
+        {
+            var current = EffectiveZoomPercent();
+            var next = increase
+                ? BackstagePreviewZoomSteps.FirstOrDefault(step => step > current + 0.5)
+                : BackstagePreviewZoomSteps.LastOrDefault(step => step < current - 0.5);
+            if (next <= 0)
+                return;
+
+            zoomMode = BackstagePreviewZoomMode.Percent;
+            zoomPercent = next;
+            Render();
+        }
+
+        zoomInButton.Click += (_, _) => StepZoom(increase: true);
+        zoomOutButton.Click += (_, _) => StepZoom(increase: false);
+        actualSizeButton.Click += (_, _) =>
+        {
+            zoomMode = BackstagePreviewZoomMode.Percent;
+            zoomPercent = 100;
+            Render();
+        };
+        pageWidthButton.Click += (_, _) =>
+        {
+            zoomMode = BackstagePreviewZoomMode.PageWidth;
+            Render();
+        };
+        wholePageButton.Click += (_, _) =>
+        {
+            zoomMode = BackstagePreviewZoomMode.WholePage;
+            Render();
+        };
+
         void Render()
         {
+            var hasPages = context.PageCount > 0;
+            zoomInButton.IsEnabled = zoomOutButton.IsEnabled = actualSizeButton.IsEnabled =
+                pageWidthButton.IsEnabled = wholePageButton.IsEnabled = hasPages;
             pageHost.Child = context.PageCount > 0
-                ? BuildBackstagePreviewFitToWidthSurface(context, navigator.CurrentIndex)
+                ? BuildBackstagePreviewSurface(context, navigator.CurrentIndex, zoomMode, zoomPercent)
                 : new TextBlock
                 {
                     Text = UiText.Get("ShellLoc_NothingToPreview"),
@@ -113,9 +183,13 @@ public sealed partial class MainWindow
         };
 
         var printButton = CreateLiveBackstageActionButton(
-            UiText.Get("MainWindow_Text_Print"),
+            // WPF SsBackstagePrintNowButton content is PrintPreview_PrintButton ("_Print...").
+            UiText.Get("PrintPreview_PrintButton"),
             "BackstagePrintNowButton",
             () => PrintWithPreviewSettingsAsync(currentSettings, canSpool, printerNames, defaultPrinterName));
+        AutomationProperties.SetName(printButton, UiText.Get("PrintPreview_PrintAutomationName"));
+        AutomationProperties.SetHelpText(printButton, UiText.Get("PrintPreview_PrintHelpText"));
+        ToolTip.SetTip(printButton, UiText.Get("PrintPreview_PrintToolTip"));
         printButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
 
         var rail = CreatePrintPreviewSettingsRail(
@@ -181,6 +255,8 @@ public sealed partial class MainWindow
             Children = { previousButton, pageStatus, nextButton },
         };
         var rightDock = new DockPanel();
+        DockPanel.SetDock(zoomToolbar, Dock.Top);
+        rightDock.Children.Add(zoomToolbar);
         DockPanel.SetDock(navigation, Dock.Bottom);
         rightDock.Children.Add(navigation);
         rightDock.Children.Add(new Border
@@ -236,20 +312,60 @@ public sealed partial class MainWindow
 
     // WPF's Backstage DocumentViewer calls FitToWidth after every refresh. The page painting has a fixed
     // paper size, so scale it to the viewport width (vertical scroll only) instead of clipping the right edge.
-    private static Control BuildBackstagePreviewFitToWidthSurface(
+    private enum BackstagePreviewZoomMode
+    {
+        PageWidth,
+        WholePage,
+        Percent,
+    }
+
+    private static readonly double[] BackstagePreviewZoomSteps = [25, 50, 75, 100, 125, 150, 200, 300, 400];
+
+    private static Control BuildBackstagePreviewSurface(
         AvaloniaPrintPreviewPaginationContext context,
-        int pageIndex) =>
-        new ScrollViewer
+        int pageIndex,
+        BackstagePreviewZoomMode mode,
+        double percent)
+    {
+        var page = BuildPreviewPageView(context, pageIndex);
+        switch (mode)
         {
-            Background = PrintPreviewSurfaceBackground,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = new Viewbox
-            {
-                Stretch = Stretch.Uniform,
-                StretchDirection = StretchDirection.Both,
-                Margin = new Thickness(16, 8),
-                Child = BuildPreviewPageView(context, pageIndex),
-            },
-        };
+            case BackstagePreviewZoomMode.WholePage:
+                return new Viewbox
+                {
+                    Stretch = Stretch.Uniform,
+                    StretchDirection = StretchDirection.Both,
+                    Margin = new Thickness(16, 8),
+                    Child = page,
+                };
+            case BackstagePreviewZoomMode.Percent:
+                return new ScrollViewer
+                {
+                    Background = PrintPreviewSurfaceBackground,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = new LayoutTransformControl
+                    {
+                        Margin = new Thickness(16, 8),
+                        HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+                        LayoutTransform = new ScaleTransform(percent / 100, percent / 100),
+                        Child = page,
+                    },
+                };
+            default:
+                return new ScrollViewer
+                {
+                    Background = PrintPreviewSurfaceBackground,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = new Viewbox
+                    {
+                        Stretch = Stretch.Uniform,
+                        StretchDirection = StretchDirection.Both,
+                        Margin = new Thickness(16, 8),
+                        Child = page,
+                    },
+                };
+        }
+    }
 }
