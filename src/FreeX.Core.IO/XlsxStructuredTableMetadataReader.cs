@@ -183,7 +183,8 @@ internal static class XlsxStructuredTableMetadataReader
             displayName,
             rangeReference,
             autoFilter is not null,
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "totalsRowShown"),
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "totalsRowShown") ||
+                (XlsxXmlAttributeReader.ReadIntAttribute(root, "totalsRowCount") ?? 0) > 0,
             XlsxXmlAttributeReader.ReadIntAttribute(root, "headerRowCount"),
             XlsxXmlAttributeReader.ReadIntAttribute(root, "totalsRowCount"),
             XlsxStructuredTableNativeMetadataReader.ReadOptionalBoolAttribute(root, "insertRow"),

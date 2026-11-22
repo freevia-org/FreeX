@@ -30,6 +30,14 @@ public sealed partial class FormulaEvaluator
         // individually (R120).
         if (left is UnionValue || right is UnionValue) return ErrorValue.Value;
 
+        if (node.Operator is BinaryOperator.Add or BinaryOperator.Subtract &&
+            left is not RangeValue && right is not RangeValue &&
+            TryCoerceToNumberValue(left, out var leftNumber) && TryCoerceToNumberValue(right, out var rightNumber))
+        {
+            s_lastAddSubNode = node;
+            s_lastAddSubOperandMagnitude = Math.Max(Math.Abs(leftNumber), Math.Abs(rightNumber));
+        }
+
         return node.Operator switch
         {
             BinaryOperator.Add => ArithOp(left, right, ArithmeticKind.Add),
@@ -182,6 +190,12 @@ public sealed partial class FormulaEvaluator
             return NumericScalarEvaluationState.Error;
         }
 
+        if (node.Operator is BinaryOperator.Add or BinaryOperator.Subtract)
+        {
+            s_lastAddSubNode = node;
+            s_lastAddSubOperandMagnitude = Math.Max(Math.Abs(left), Math.Abs(right));
+        }
+
         value = node.Operator switch
         {
             BinaryOperator.Add => left + right,
@@ -201,6 +215,32 @@ public sealed partial class FormulaEvaluator
 
         error = ErrorValue.Num;
         return NumericScalarEvaluationState.Error;
+    }
+
+    [ThreadStatic] private static BinaryOpNode? s_lastAddSubNode;
+    [ThreadStatic] private static double s_lastAddSubOperandMagnitude;
+
+    /// <summary>
+    /// Excel snaps the result of a formula's outermost +/- to 0 when it is smaller than
+    /// 2^(exponent(largest operand) - 49), i.e. within ~8 ulps of the operands (verified against
+    /// Excel: =A3-(A1+A2) with a 3.7e-9 residue on ~1e7 operands shows 0, while the same
+    /// expression nested inside another operator keeps the residue).
+    /// </summary>
+    private static ScalarValue SnapNearZeroRootAddSub(FormulaNode ast, ScalarValue result)
+    {
+        if (result is NumberValue number &&
+            number.Value != 0d &&
+            ReferenceEquals(ast, s_lastAddSubNode) &&
+            s_lastAddSubOperandMagnitude > 0d)
+        {
+            var exponent = Math.Floor(Math.Log2(s_lastAddSubOperandMagnitude));
+            // The result was already rounded to 15 significant digits, so a difference of exactly 8 ulps
+            // (2^-49 relative) can land a hair below the threshold; compare with a small tolerance.
+            if (Math.Abs(number.Value) < Math.Pow(2d, exponent - 49d) * (1d - 1e-12))
+                return NumberValueFor(0d);
+        }
+
+        return result;
     }
 
     private enum NumericScalarEvaluationState

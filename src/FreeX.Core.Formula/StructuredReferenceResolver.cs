@@ -85,6 +85,9 @@ public static class StructuredReferenceResolver
                 if (string.IsNullOrWhiteSpace(selector))
                     return DataBodyRange(sheet, table, table.Range.Start.Col, table.Range.End.Col);
 
+                if (TryResolveMultiSectionSelector(sheet, table, selector, out var multiSectionRange))
+                    return multiSectionRange;
+
                 if (TryParseCombinedColumnRangeSelector(selector, out var rangeSection, out var rangeStartColumn, out var rangeEndColumn))
                 {
                     if (IsThisRowSection(rangeSection))
@@ -249,6 +252,62 @@ public static class StructuredReferenceResolver
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Excel's multi-item specifiers such as Table1[[#Headers],[#Data],[Col]] or
+    /// Table1[[#Data],[#Totals],[Col]] (optionally without a column, or with a [A]:[B] column range):
+    /// the result is the contiguous block spanning every named section.
+    /// </summary>
+    private static bool TryResolveMultiSectionSelector(Sheet sheet, StructuredTableModel table, string selector, out GridRange? range)
+    {
+        range = null;
+        var parts = ParseCombinedSelectorParts(selector);
+        var sectionCount = 0;
+        while (sectionCount < parts.Count && parts[sectionCount].StartsWith('#') && !IsThisRowSection(parts[sectionCount]))
+            sectionCount++;
+
+        // Only the genuinely multi-section shapes; single-section forms are handled by the existing paths.
+        if (sectionCount < 2 || parts.Count - sectionCount > 1)
+            return false;
+
+        var hasColumn = parts.Count > sectionCount;
+        var sections = new List<GridRange>();
+        for (var i = 0; i < sectionCount; i++)
+        {
+            GridRange? sectionRange;
+            if (!hasColumn)
+            {
+                sectionRange = TryResolveTableSelector(sheet, table, parts[i]);
+            }
+            else if (parts[sectionCount].Contains(':') && TryParseColumnRangeSelector(parts[sectionCount], out var startColumn, out var endColumn))
+            {
+                sectionRange = ResolveSectionColumnRange(sheet, table, parts[i], startColumn, endColumn);
+            }
+            else
+            {
+                sectionRange = ResolveSectionColumn(sheet, table, parts[i], parts[sectionCount]);
+            }
+
+            if (sectionRange is not { } resolved)
+                return true; // recognised as multi-section but unresolvable -> range stays null (#REF!/#NAME? upstream)
+
+            sections.Add(resolved);
+        }
+
+        var first = sections[0];
+        var minRow = first.Start.Row;
+        var maxRow = first.End.Row;
+        foreach (var section in sections)
+        {
+            minRow = Math.Min(minRow, section.Start.Row);
+            maxRow = Math.Max(maxRow, section.End.Row);
+        }
+
+        range = new GridRange(
+            new CellAddress(sheet.Id, minRow, first.Start.Col),
+            new CellAddress(sheet.Id, maxRow, first.End.Col));
+        return true;
     }
 
     private static GridRange? TryResolveTableSelector(Sheet sheet, StructuredTableModel table, string selector)
