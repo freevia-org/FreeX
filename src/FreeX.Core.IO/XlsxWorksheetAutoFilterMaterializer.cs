@@ -92,8 +92,17 @@ internal static class XlsxWorksheetAutoFilterMaterializer
                 : [.. filter.AllowedValues];
         }
 
+        // Excel does not re-evaluate an AutoFilter when it opens a file: the persisted row "hidden"
+        // bits ARE the filtered state. When the file persists any hidden row in the data range, a row
+        // that is NOT hidden stays visible even if FreeX's own re-evaluation (cell-text formatting,
+        // locale, native criteria) would disagree. Files with no persisted visibility at all keep the
+        // re-evaluation fallback (hand-authored / third-party writers).
+        var trustPersistedVisibility = HasPersistedHiddenRows(sheet, range);
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
         {
+            if (trustPersistedVisibility && !sheet.HiddenRows.Contains(row) && !sheet.GroupHiddenRows.Contains(row))
+                continue;
+
             if (!RowMatchesAllFilters(sheet, row, filters))
             {
                 sheet.FilterHiddenRows.Add(row);
@@ -309,6 +318,10 @@ internal static class XlsxWorksheetAutoFilterMaterializer
             : null;
         return filters;
     }
+
+    private static bool HasPersistedHiddenRows(Sheet sheet, GridRange range) =>
+        sheet.HiddenRows.Any(row => row > range.Start.Row && row <= range.End.Row) ||
+        sheet.GroupHiddenRows.Any(row => row > range.Start.Row && row <= range.End.Row);
 
     private static bool HasRawHiddenRows(Sheet sheet, GridRange range) =>
         sheet.HiddenRows.Any(row => row > range.Start.Row && row <= range.End.Row);

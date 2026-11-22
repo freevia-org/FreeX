@@ -524,10 +524,10 @@ public sealed partial class FormulaEvaluator
         public bool IsRowHidden(string sheetName, uint row)
             => _workbook?.GetSheet(sheetName)?.IsRowEffectivelyHidden(row) ?? false;
 
-        public bool IsRowFilterHidden(uint row) => _sheet.FilterHiddenRows.Contains(row);
+        public bool IsRowFilterHidden(uint row) => _sheet.IsRowFilterHidden(row);
 
         public bool IsRowFilterHidden(string sheetName, uint row)
-            => _workbook?.GetSheet(sheetName)?.FilterHiddenRows.Contains(row) ?? false;
+            => _workbook?.GetSheet(sheetName)?.IsRowFilterHidden(row) ?? false;
 
         public FreeX.Core.Model.Sheet? CurrentSheet => _sheet;
 

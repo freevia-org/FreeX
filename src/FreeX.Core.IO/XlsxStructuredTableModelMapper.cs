@@ -100,8 +100,24 @@ internal static class XlsxStructuredTableModelMapper
                     : [.. filter.AllowedValues];
             }
 
+            // Excel never re-evaluates a filter on open: persisted row hidden bits are the filtered
+            // state. When the file persists any hidden data row, a visible row stays visible even if
+            // FreeX's own value-text matching disagrees (see XlsxWorksheetAutoFilterMaterializer).
+            var trustPersistedVisibility = false;
             for (var row = firstDataRow; row <= lastDataRow; row++)
             {
+                if (sheet.HiddenRows.Contains(row) || sheet.GroupHiddenRows.Contains(row))
+                {
+                    trustPersistedVisibility = true;
+                    break;
+                }
+            }
+
+            for (var row = firstDataRow; row <= lastDataRow; row++)
+            {
+                if (trustPersistedVisibility && !sheet.HiddenRows.Contains(row) && !sheet.GroupHiddenRows.Contains(row))
+                    continue;
+
                 if (!RowMatchesAllFilters(sheet, row, filters))
                 {
                     sheet.FilterHiddenRows.Add(row);
