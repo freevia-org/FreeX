@@ -62,8 +62,19 @@ public sealed class SelectionColourWpfParityTests
                 ColourOf(((Border)adorner.Children[0]).BorderBrush).Should().Be(WpfObjectBlue);
                 ColourOf(((Border)adorner.Children[1]).Background).Should().Be(WpfObjectBlue);
                 ColourOf(((global::Avalonia.Controls.Shapes.Ellipse)adorner.Children[2]).Stroke).Should().Be(WpfObjectBlue);
-                foreach (var handle in adorner.Children.Skip(3).Cast<Border>())
+                foreach (var handle in adorner.Children.Skip(3).Take(8).Cast<Border>())
+                {
                     ColourOf(handle.BorderBrush).Should().Be(WpfObjectBlue);
+                    handle.Width.Should().Be(8, "WPF draws object resize handles at 8 DIP");
+                    handle.Height.Should().Be(8);
+                }
+
+                var glyph = adorner.Children[11].Should().BeOfType<global::Avalonia.Controls.Shapes.Path>().Subject;
+                ColourOf(glyph.Stroke).Should().Be(WpfObjectBlue);
+                glyph.StrokeThickness.Should().Be(1.5, "WPF RotationGlyphPen is 1.5 DIP");
+                var grip = (global::Avalonia.Controls.Shapes.Ellipse)adorner.Children[2];
+                Canvas.GetLeft(glyph).Should().Be(Canvas.GetLeft(grip));
+                Canvas.GetTop(glyph).Should().Be(Canvas.GetTop(grip));
             }
             finally
             {

@@ -44,10 +44,10 @@ public sealed class AvaloniaChartObjectInteractionTests
                 for (var index = 0; index < expectedCenters.Length; index++)
                 {
                     var handle = adorner.Children[index + 1].Should().BeOfType<Border>().Subject;
-                    handle.Width.Should().Be(9);
-                    handle.Height.Should().Be(9);
-                    Canvas.GetLeft(handle).Should().BeApproximately(expectedCenters[index].Item1 - 4.5, 0.001);
-                    Canvas.GetTop(handle).Should().BeApproximately(expectedCenters[index].Item2 - 4.5, 0.001);
+                    handle.Width.Should().Be(8, "WPF draws chart handles at 8 DIP");
+                    handle.Height.Should().Be(8, "WPF draws chart handles at 8 DIP");
+                    Canvas.GetLeft(handle).Should().BeApproximately(expectedCenters[index].Item1 - 4, 0.001);
+                    Canvas.GetTop(handle).Should().BeApproximately(expectedCenters[index].Item2 - 4, 0.001);
                 }
             }
             finally

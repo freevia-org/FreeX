@@ -379,6 +379,28 @@ public sealed partial class MainWindow
         public bool Moved { get; set; }
     }
 
+    /// <summary>Mirrors WPF GridView.DrawRotationGrip's arc + arrow glyph, in grip-local coordinates.</summary>
+    internal static global::Avalonia.Media.StreamGeometry CreateRotationGripGlyph(double radius)
+    {
+        var center = new Point(radius, radius);
+        var arcRadius = radius - 2.5;
+        var start = new Point(center.X - arcRadius * 0.65, center.Y + arcRadius * 0.75);
+        var end = new Point(center.X + arcRadius * 0.85, center.Y - arcRadius * 0.35);
+        var glyph = new global::Avalonia.Media.StreamGeometry();
+        using (var context = glyph.Open())
+        {
+            context.BeginFigure(start, isFilled: false);
+            context.ArcTo(end, new Size(arcRadius, arcRadius), 0, true, global::Avalonia.Media.SweepDirection.Clockwise);
+            context.EndFigure(false);
+            context.BeginFigure(end, isFilled: true);
+            context.LineTo(new Point(end.X - 0.5, end.Y + 3.0));
+            context.LineTo(new Point(end.X + 2.7, end.Y + 1.2));
+            context.EndFigure(true);
+        }
+
+        return glyph;
+    }
+
     private AvaloniaCanvas CreateDrawingObjectSelectionAdorner(
         double width,
         double height,
@@ -424,6 +446,16 @@ public sealed partial class MainWindow
                 IsHitTestVisible = false,
             });
         }
+
+        // WPF DrawRotationGrip also strokes a 1.5 DIP arc with an arrow head inside the grip.
+        layer.Children.Add(new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = CreateRotationGripGlyph(DrawingObjectRotationGripDiameter / 2),
+            Stroke = ObjectSelectionAccent,
+            Fill = null,
+            StrokeThickness = 1.5,
+            IsHitTestVisible = false,
+        });
 
         LayoutDrawingObjectSelectionAdorner(layer, width, height, rotationDegrees);
         return layer;
@@ -562,6 +594,13 @@ public sealed partial class MainWindow
         {
             AvaloniaCanvas.SetLeft(rotateGrip, rotateCenter.X - (DrawingObjectRotationGripDiameter / 2));
             AvaloniaCanvas.SetTop(rotateGrip, rotateCenter.Y - (DrawingObjectRotationGripDiameter / 2));
+        }
+
+        if (layer.Children.Count > DrawingObjectResizeHandleKinds.Length + 3
+            && layer.Children[DrawingObjectResizeHandleKinds.Length + 3] is Control glyph)
+        {
+            AvaloniaCanvas.SetLeft(glyph, rotateCenter.X - (DrawingObjectRotationGripDiameter / 2));
+            AvaloniaCanvas.SetTop(glyph, rotateCenter.Y - (DrawingObjectRotationGripDiameter / 2));
         }
 
         for (var index = 0; index < DrawingObjectResizeHandleKinds.Length; index++)
@@ -1096,7 +1135,9 @@ public sealed partial class MainWindow
     // absolute pixels, so their direct drag commits through the shared object command planner below.
     // -------------------------------------------------------------------------------------------------------
 
-    private const double ChartHandleSize = 9;
+    // WPF draws chart resize handles with the shared DrawObjectSelectionHandles: 8 DIP squares whose
+    // hit target is HandleSize + 2 * HandleHitPad (GridView.ObjectDrag.cs). Draw and hit-test at the same 8 + 4.
+    private const double ChartHandleSize = DrawingObjectHandleSize;
 
     private ChartDragSession? _chartDragSession;
 
@@ -1127,7 +1168,7 @@ public sealed partial class MainWindow
             new LayoutPoint(localPoint.X, localPoint.Y),
             localRect,
             ChartHandleSize,
-            handleHitPadding: 4);
+            DrawingObjectHandleHitPadding);
 
         // Rotation is not offered for charts; treat the grip like the body.
         if (kind == ObjectDragKind.Rotate)
