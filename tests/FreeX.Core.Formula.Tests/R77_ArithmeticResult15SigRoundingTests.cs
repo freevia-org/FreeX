@@ -38,35 +38,28 @@ public sealed class R77_ArithmeticResult15SigRoundingTests
     }
 
     [Fact]
-    public void OneThird_RoundsToFifteenSignificantDigits_NotRawSeventeenDigitDouble()
+    public void OneThird_KeepsRawDouble_LikeExcel()
     {
-        // 1.0/3.0 as a raw double is 0.3333333333333333148296... (16 significant '3' digits in
-        // its shortest round-trippable form). Excel only stores/computes with 15 significant
-        // digits, so it displays and returns 0.333333333333333 (15 '3' digits, then zeroes) --
-        // this is Excel's well-documented 15-significant-figure precision limit, not truncation
-        // or a wrong answer. FreeX must match it, not merely pass through the raw 16-digit
-        // double unrounded.
+        // Excel stores arithmetic results as full IEEE-754 doubles and only DISPLAYS 15 significant
+        // digits: real Excel gives (1/3-0.333333333333333)*1 = 3.3306690738754696E-16 (verified via COM),
+        // so =1/3 must stay the raw double rather than be rounded to 0.333333333333333.
         var sheet = MakeSheet();
 
         var result = _eval.Evaluate("=1/3", sheet);
 
         result.Should().BeOfType<NumberValue>();
-        var value = ((NumberValue)result).Value;
-        value.Should().Be(0.333333333333333d, "Excel rounds arithmetic results to 15 significant digits");
-        value.Should().NotBe(1.0 / 3.0, "the raw unrounded double carries a 16th significant digit Excel would not");
+        ((NumberValue)result).Value.Should().Be(1.0 / 3.0);
     }
 
     [Fact]
-    public void LargeMagnitudeAddition_SubResolutionAddendIsAbsorbed_MatchingExcel()
+    public void LargeMagnitudeAddition_SubResolutionAddendIsKept_LikeExcel()
     {
-        // 123456789012345 already has 15 significant digits, so adding 0.4 (which would only
-        // affect the 16th+ significant digit) has no visible effect once rounded to 15 sig
-        // digits -- exactly as Excel does: the addend is below the storage resolution of the
-        // sum's magnitude.
+        // Real Excel: ((123456789012345+0.4)-123456789012345)*1 = 0.40625 (the double's own resolution
+        // near 1.2e14 is 1/64) -- the addend is NOT absorbed by a 15-digit rounding.
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=123456789012345+0.4", sheet)
-            .Should().Be(new NumberValue(123456789012345d));
+        _eval.Evaluate("=(123456789012345+0.4)-123456789012345", sheet)
+            .Should().Be(new NumberValue(0.40625));
     }
 
     [Fact]

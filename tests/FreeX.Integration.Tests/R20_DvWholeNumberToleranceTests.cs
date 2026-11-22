@@ -59,7 +59,7 @@ public class R20_dv_wholenumber_epsilon_Tests
     }
 
     [Fact]
-    public void WholeNumberDv_FreeXEvaluatedNoiseProneFormula_NowRoundsToBitExactWholeNumber()
+    public void WholeNumberDv_FreeXEvaluatedNoiseProneFormula_KeepsRawDoubleAndDvStillAccepts()
     {
         // Round 77: the exact formula the test above used to rely on for its FP-noise
         // premise now evaluates bit-exact through FreeX's own operators, matching Excel's
@@ -70,7 +70,11 @@ public class R20_dv_wholenumber_epsilon_Tests
         var result = _eval.Evaluate("=0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1+0.1", sheet);
 
         result.Should().BeOfType<NumberValue>();
-        ((NumberValue)result).Value.Should().Be(1.0, "Excel rounds arithmetic results to 15 significant digits");
+        // Excel keeps the raw double (0.9999999999999999; verified via COM); the DV tolerance accepts it.
+        double raw = 0.1;
+        for (var i = 0; i < 9; i++) raw += 0.1;
+        ((NumberValue)result).Value.Should().Be(raw);
+        DataValidationService.Validate(new DataValidation { Type = DvType.WholeNumber }, result).Should().BeNull();
     }
 
     [Fact]

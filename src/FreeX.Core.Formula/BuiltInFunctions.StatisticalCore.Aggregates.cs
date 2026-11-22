@@ -36,7 +36,7 @@ public static partial class BuiltInFunctions
         // arithmetic result (FormulaEvaluator.Operators.cs) so that SUM(range) stays
         // interchangeable with the textually-expanded chain of + over the same cells,
         // e.g. SUM(A1:A30) == A1+A2+...+A30 when every cell holds the same rounded value.
-        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(total));
+        return NumberResult(total);
     }
 
     private static ScalarValue PercentOf(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -107,8 +107,8 @@ public static partial class BuiltInFunctions
         // with SUM(range)/COUNT(range) computed via the ordinary arithmetic operators, e.g.
         // AVERAGE(0.1,0.1,0.1) == SUM(0.1,0.1,0.1)/3 == 0.1 exactly.
         if (count == 0) return ErrorValue.DivByZero;
-        double roundedTotal = FormulaEvaluator.RoundTo15SignificantDigits(total);
-        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(roundedTotal / count));
+        // Excel keeps the raw double (AVERAGE = raw SUM / COUNT; verified via COM), no 15-digit rounding.
+        return NumberResult(total / count);
     }
 
     private static ScalarValue AverageA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -128,8 +128,8 @@ public static partial class BuiltInFunctions
 
         // See the identical rounding rationale on Average() above.
         if (count == 0) return ErrorValue.DivByZero;
-        double roundedTotal = FormulaEvaluator.RoundTo15SignificantDigits(total);
-        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(roundedTotal / count));
+        // Excel keeps the raw double (AVERAGE = raw SUM / COUNT; verified via COM), no 15-digit rounding.
+        return NumberResult(total / count);
     }
 
     private static ScalarValue Min(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

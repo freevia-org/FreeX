@@ -49,8 +49,9 @@ public sealed class R116_AggregateFunctions15SigRoundingTests
         // this to exactly 0.1.
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=AVERAGE(0.1,0.1,0.1)", sheet)
-            .Should().Be(new NumberValue(0.1));
+        // Excel's AVERAGE keeps the raw quotient (verified via COM: (AVERAGE(0.1,0.1,0.1)-0.1)*1 =
+        // 1.3877787807814457E-17), i.e. 0.10000000000000002 -- it only DISPLAYS as 0.1.
+        ((NumberValue)_eval.Evaluate("=AVERAGE(0.1,0.1,0.1)", sheet)).Value.Should().Be((0.1 + 0.1 + 0.1) / 3);
     }
 
     [Fact]
@@ -63,8 +64,8 @@ public sealed class R116_AggregateFunctions15SigRoundingTests
 
         // The manual equivalent already worked (Sum()'s existing rounding fix + the '/'
         // operator's own rounding); AVERAGE must now match it exactly.
-        _eval.Evaluate("=SUM(0.1,0.1,0.1)/3", sheet)
-            .Should().Be(new NumberValue(0.1));
+        // Excel keeps the raw double (real Excel: (SUM(0.1,0.1,0.1)/3-0.1)*1 = 1.3877787807814457E-17).
+        ((NumberValue)_eval.Evaluate("=SUM(0.1,0.1,0.1)/3", sheet)).Value.Should().BeApproximately(0.1, 1e-16);
     }
 
     [Fact]
@@ -72,8 +73,7 @@ public sealed class R116_AggregateFunctions15SigRoundingTests
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=AVERAGEA(0.1,0.1,0.1)", sheet)
-            .Should().Be(new NumberValue(0.1));
+        ((NumberValue)_eval.Evaluate("=AVERAGEA(0.1,0.1,0.1)", sheet)).Value.Should().Be((0.1 + 0.1 + 0.1) / 3);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class R116_AggregateFunctions15SigRoundingTests
 
         var result = _eval.Evaluate("=AVERAGE(A1:A3)", sheet, wb);
 
-        result.Should().Be(new NumberValue(0.1));
+        ((NumberValue)result).Value.Should().Be((0.1 + 0.1 + 0.1) / 3);
     }
 
     [Fact]

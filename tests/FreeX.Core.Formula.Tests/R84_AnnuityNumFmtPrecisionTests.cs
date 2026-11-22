@@ -107,23 +107,18 @@ public sealed class R84_AnnuityNumFmtPrecisionTests
         NumberFormatter.Format(new TextValue("hello"), "@", 2).Should().Be("hello");
     }
 
-    // ── 5-2: SUM/SUMPRODUCT must apply the same 15-sig rounding as +,-,*,/,^ ───────────────────
+    // ── 5-2: SUM accumulates raw IEEE-754 doubles (verified against real Excel via COM) ─────────
 
     [Fact]
-    public void Sum_OfRepeatedTenths_RoundsToFifteenSignificantDigitsLikeArithmeticOperators()
+    public void Sum_OfRepeatedTenths_KeepsRawDoubleAccumulationLikeExcel()
     {
-        // Summing 0.1 ten times via raw sequential IEEE-754 double addition (exactly how
-        // BuiltInFunctions.Sum's `total += value` loop accumulates) drifts to
-        // 0.99999999999999989 -- 17 apparent significant digits of linear-summation noise, not
-        // the mathematically-exact 1.0. SUM must round its final total to 15 significant digits
-        // exactly like every +,-,*,/,^ result does (FormulaEvaluator.Operators.cs), instead of
-        // returning the raw unrounded accumulator.
+        // Real Excel: =(SUM(A1:A10)-1)*1 with ten 0.1 cells returns -1.1102230246251565E-16, identical to
+        // the textually-expanded A1+A2+...+A10 chain -- SUM returns the raw sequential double total
+        // (0.99999999999999989) and does NOT round it to 15 significant digits. (An unrounded total is what
+        // makes F38-SUM(...)+F31 residues in real workbooks match Excel's cached values bit-for-bit.)
         const int n = 10;
         double naiveTotal = 0;
         for (var i = 0; i < n; i++) naiveTotal += 0.1;
-        var expected = FormulaEvaluator.RoundTo15SignificantDigits(naiveTotal);
-        naiveTotal.Should().NotBe(expected, "the raw linear-accumulation total must actually carry rounding noise for this test to be meaningful");
-        expected.Should().Be(1.0);
 
         var cells = Enumerable.Range(1, n).Select(r => (r, 1, (ScalarValue)new NumberValue(0.1))).ToArray();
         var sheet = MakeSheet(cells);
@@ -131,8 +126,12 @@ public sealed class R84_AnnuityNumFmtPrecisionTests
         var sumResult = _eval.Evaluate($"=SUM(A1:A{n})", sheet);
 
         sumResult.Should().BeOfType<NumberValue>();
-        ((NumberValue)sumResult).Value.Should().Be(expected,
-            "SUM must round its total to 15 significant digits, matching the arithmetic-operator path");
+        ((NumberValue)sumResult).Value.Should().Be(naiveTotal);
+        // A parenthesized whole-formula subtraction keeps the residue (Excel only snaps an unparenthesized root +/-).
+        ((NumberValue)_eval.Evaluate($"=(SUM(A1:A{n})-1)", sheet)).Value.Should().BeApproximately(naiveTotal - 1, 1e-20);
+        _eval.Evaluate($"=SUM(A1:A{n})-1", sheet).Should().Be(new NumberValue(0));
+        // Equality still compares at 15 significant digits, so =SUM(...)=1 stays TRUE as in Excel.
+        _eval.Evaluate($"=SUM(A1:A{n})=1", sheet).Should().Be(new BoolValue(true));
     }
 
     [Fact]

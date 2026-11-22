@@ -174,7 +174,7 @@ public sealed partial class FormulaEvaluator
         // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
         // arithmetic result (FormulaEvaluator.Operators.cs / RoundTo15SignificantDigits) so this
         // range-only SUM fast path stays consistent with the general BuiltInFunctions.Sum path.
-        return double.IsFinite(total) ? NumberValueFor(RoundTo15SignificantDigits(total)) : ErrorValue.Num;
+        return double.IsFinite(total) ? NumberValueFor(total) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyAverage(IReadOnlyList<FastAggregateRange> ranges, IEvalContext context)
@@ -240,9 +240,8 @@ public sealed partial class FormulaEvaluator
         // same way the range-only SUM fast path above does, so this range-only AVERAGE fast path
         // stays consistent with both EvaluateFastRangeOnlySum and the general BuiltInFunctions
         // Average() path.
-        double roundedTotal = RoundTo15SignificantDigits(total);
-        double quotient = roundedTotal / count;
-        return double.IsFinite(quotient) ? NumberValueFor(RoundTo15SignificantDigits(quotient)) : ErrorValue.Num;
+        double quotient = total / count;
+        return double.IsFinite(quotient) ? NumberValueFor(quotient) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyMinMax(
