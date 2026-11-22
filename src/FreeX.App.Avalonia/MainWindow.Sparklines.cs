@@ -182,7 +182,7 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 3, 0, 1),
+            Margin = new Thickness(0, 0, 0, 4),
         });
         content.Children.Add(BuildSparklineRangeRow(dataRangeBox, selectDataRangeButton));
         content.Children.Add(new TextBlock
@@ -191,7 +191,7 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 3, 0, 1),
+            Margin = new Thickness(0, 0, 0, 4),
         });
         content.Children.Add(BuildSparklineRangeRow(locationBox, selectLocationRangeButton));
         content.Children.Add(new TextBlock
@@ -200,7 +200,7 @@ public sealed partial class MainWindow
             Foreground = HeaderForeground,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 3, 0, 1),
+            Margin = new Thickness(0, 0, 0, 4),
         });
         content.Children.Add(typeBox);
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 16, 0, 0)));
@@ -419,7 +419,7 @@ public sealed partial class MainWindow
             },
         };
         pickerButton.Margin = new Thickness(5, 0, 0, 0);
-        row.Margin = new Thickness(0, 0, 0, 13);
+        row.Margin = new Thickness(0, 0, 0, 10);
         row.ClipToBounds = true;
         Grid.SetColumn(rangeBox, 0);
         Grid.SetColumn(pickerButton, 1);
