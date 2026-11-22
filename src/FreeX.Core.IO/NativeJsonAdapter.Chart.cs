@@ -303,7 +303,9 @@ public sealed partial class NativeJsonAdapter
                 Height = NativeJsonValueSanitizer.PositiveFiniteOrDefault(chartDto.Height, 300),
                 DrawingAnchorKind = chartDto.DrawingAnchorKind
             };
+            MigrateLegacyChartWideAdornments(chart, chartDto);
             SanitizeLoadedChart(chart);
+            DropUnmappableLegacyAdornments(chart, chartDto);
             return chart;
         }
         catch (FormatException)
@@ -323,6 +325,29 @@ public sealed partial class NativeJsonAdapter
                 BorderThemeColor = ToThemeColorReference(dto.BorderThemeColor),
                 BorderThickness = dto.BorderThickness
             };
+
+    /// <summary>
+    /// Files saved before per-series trendlines/error bars existed carry only the chart-wide members (which
+    /// then described a single series). The per-series lists are absent (null) in such files, whereas every
+    /// current save writes them (possibly empty), so an absent list plus a chart-wide flag is converted to
+    /// one entry for the series the adornment was attached to instead of "every series".
+    /// </summary>
+    private static void MigrateLegacyChartWideAdornments(ChartModel chart, ChartDto chartDto)
+    {
+        if (chartDto.SeriesTrendlines is null && chart.ShowLinearTrendline)
+            chart.SeriesTrendlines = [ChartSeriesTrendline.FromChart(chart, Math.Max(0, chartDto.TrendlineSeriesIndex ?? 0))];
+        if (chartDto.SeriesErrorBars is null && chart.ShowErrorBars)
+            chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, Math.Max(0, chartDto.ErrorBarSeriesIndex ?? 0))];
+    }
+
+    /// <summary>A migrated entry whose series no longer exists was dropped by sanitization; do not fall back to "every series".</summary>
+    private static void DropUnmappableLegacyAdornments(ChartModel chart, ChartDto chartDto)
+    {
+        if (chartDto.SeriesTrendlines is null && chart.ShowLinearTrendline && chart.SeriesTrendlines.Count == 0)
+            chart.ShowLinearTrendline = false;
+        if (chartDto.SeriesErrorBars is null && chart.ShowErrorBars && chart.SeriesErrorBars.Count == 0)
+            chart.ShowErrorBars = false;
+    }
 
     private static List<T> NonNullChartList<T>(IEnumerable<T?>? values)
         where T : class =>

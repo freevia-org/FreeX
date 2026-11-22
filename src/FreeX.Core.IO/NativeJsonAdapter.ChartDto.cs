@@ -224,6 +224,7 @@ public sealed partial class NativeJsonAdapter
         public double DataLabelLeaderLineThickness { get; set; } = 1;
         public ChartLineDashStyle DataLabelLeaderLineDashStyle { get; set; } = ChartLineDashStyle.Solid;
         public bool ShowLinearTrendline { get; set; }
+        public int? TrendlineSeriesIndex { get; set; }
         public string? TrendlineName { get; set; }
         public ChartTrendlineType TrendlineType { get; set; } = ChartTrendlineType.Linear;
         public int TrendlinePeriod { get; set; } = 2;
@@ -250,6 +251,7 @@ public sealed partial class NativeJsonAdapter
         public double TrendlineThickness { get; set; } = 1.5;
         public ChartLineDashStyle TrendlineDashStyle { get; set; } = ChartLineDashStyle.Dash;
         public bool ShowErrorBars { get; set; }
+        public int? ErrorBarSeriesIndex { get; set; }
         public ChartErrorBarKind ErrorBarKind { get; set; } = ChartErrorBarKind.StandardError;
         public ChartErrorBarAxisDirection ErrorBarAxisDirection { get; set; } = ChartErrorBarAxisDirection.Y;
         public ChartErrorBarDirection ErrorBarDirection { get; set; } = ChartErrorBarDirection.Both;
