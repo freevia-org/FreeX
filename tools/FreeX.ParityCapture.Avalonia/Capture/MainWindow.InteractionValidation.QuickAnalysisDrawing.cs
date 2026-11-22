@@ -111,12 +111,7 @@ public sealed partial class MainWindow
     private static void AcceptInteractionValidationConditionalFormatRule(
         ConditionalFormatRuleDialogInspection probe)
     {
-        var dataBarPresetIndex = ConditionalFormatPresetChoices
-            .ToList()
-            .FindIndex(choice => choice.Preset == ConditionalFormatPreset.DataBar);
-        if (dataBarPresetIndex >= 0)
-            probe.PresetBox.SelectedIndex = dataBarPresetIndex;
-
+        // Quick Analysis opens the dedicated Data Bar rule dialog; accept it as-is.
         probe.OkButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, probe.OkButton));
     }
 

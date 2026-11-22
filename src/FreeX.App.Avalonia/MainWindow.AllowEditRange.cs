@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Protection;
 using FreeX.Core.Commands;
@@ -106,25 +107,13 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyButton(permissionsButton, AllowEditRangeDialogChromeStyle, permissionsButton.MinWidth);
         AutomationProperties.SetAutomationId(permissionsButton, "AllowEditRangePermissionsButton");
 
-        var warningText = new TextBlock
-        {
-            Foreground = Brush(180, 30, 30),
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-            FontSize = 12,
-            FontFamily = FormulaBarFontFamily,
-            Margin = new Thickness(0, 6, 0, 0),
-        };
-        AutomationProperties.SetAutomationId(warningText, "AllowEditRangeWarningText");
-
-        // The range currently loaded into the edit box for modification (null when adding a new range).
+        // WPF AllowEditRangeDialog is modal and one-shot: OK adds the typed range (or applies the modify of
+        // the loaded one), Delete closes the dialog with a remove result, and New/Modify only prepare the
+        // editor. The command runs after the dialog closes, followed by an information message box.
         GridRange? rangeBeingModified = null;
-
-        void RefreshRanges()
-        {
-            rangesList.ItemsSource = AllowEditRangePlanner.BuildExistingRangeItems(_session.ActiveSheet.AllowEditRanges);
-            UpdateButtons();
-        }
+        AllowEditRangeResult? dialogResult = null;
+        string? dialogRangePassword = null;
+        var dialogRangePasswordChanged = false;
 
         void UpdateButtons()
         {
@@ -133,10 +122,10 @@ public sealed partial class MainWindow
             deleteButton.IsEnabled = state.CanDeleteSelectedRange;
         }
 
-        void ShowWarning(string message)
+        void FocusRangeInput()
         {
-            warningText.Text = message;
-            warningText.IsVisible = true;
+            rangeBox.Focus();
+            rangeBox.SelectAll();
         }
 
         rangesList.SelectionChanged += (_, _) =>
@@ -152,119 +141,87 @@ public sealed partial class MainWindow
             UpdateButtons();
         };
 
-        bool TryExecute(IWorkbookCommand command, string status)
+        newButton.Click += (_, _) =>
         {
-            var result = _session.ExecuteReviewCommand(command);
-            if (!result.Success)
+            rangeBeingModified = null;
+            rangesList.SelectedItem = null;
+            rangePasswordBox.Text = string.Empty;
+            FocusRangeInput();
+        };
+
+        bool TryLoadSelectedRangeForModification()
+        {
+            if (rangesList.SelectedItem is not string selected ||
+                !AllowEditRangePlanner.TryParseRange(selected, sheetId, out var range))
             {
-                ShowWarning(result.ErrorMessage ?? UiText.Get("AllowEditRange_InvalidRange"));
                 return false;
             }
 
-            RefreshShell(status);
-            RefreshRanges();
+            rangeBeingModified = range;
+            rangeBox.Text = selected;
+            // An existing range password is never redisplayed (only its hash is known), so the box is
+            // cleared; a blank box on OK means "leave the stored password (if any) alone".
+            rangePasswordBox.Text = string.Empty;
+            FocusRangeInput();
             return true;
         }
 
-        newButton.Click += (_, _) =>
+        modifyButton.Click += (_, _) => TryLoadSelectedRangeForModification();
+        rangesList.DoubleTapped += (_, args) =>
         {
-            warningText.IsVisible = false;
-            if (!AllowEditRangePlanner.TryParseRange(rangeBox.Text, sheetId, out var range))
-            {
-                ShowWarning(UiText.Get("AllowEditRange_InvalidRange"));
-                return;
-            }
-
-            var result = AllowEditRangePlanner.CreateAddResult(range);
-            var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
-            var plan = AllowEditRangePlanner.CreateCommandPlan(
-                sheetId,
-                result,
-                typedPassword is null ? null : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword),
-                passwordChanged: true,
-                existingPasswords: _session.ActiveSheet.AllowEditRangePasswords);
-            if (plan is not null)
-                TryExecute(plan.Command, UiText.Format("AllowEditRange_Added", result.Range!.Value));
-            rangeBeingModified = null;
-            rangePasswordBox.Text = string.Empty;
-        };
-
-        modifyButton.Click += (_, _) =>
-        {
-            warningText.IsVisible = false;
-            if (rangesList.SelectedItem is not string selected ||
-                !AllowEditRangePlanner.TryParseRange(selected, sheetId, out var originalRange))
-            {
-                return;
-            }
-
-            // First click loads the selected range into the edit box; a second click commits the edit.
-            if (rangeBeingModified != originalRange)
-            {
-                rangeBeingModified = originalRange;
-                rangeBox.Text = selected;
-                // Mirrors Excel/WPF: an existing range password is never redisplayed (only its hash is
-                // known), so the box is always cleared here. A blank box left on commit means "leave the
-                // stored password (if any) alone" -- see the modify branch below.
-                rangePasswordBox.Text = string.Empty;
-                return;
-            }
-
-            if (!AllowEditRangePlanner.TryParseRange(rangeBox.Text, sheetId, out var updatedRange))
-            {
-                ShowWarning(UiText.Get("AllowEditRange_InvalidRange"));
-                return;
-            }
-
-            var result = AllowEditRangePlanner.CreateModifyResult(originalRange, updatedRange);
-            var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
-            var plan = AllowEditRangePlanner.CreateCommandPlan(
-                sheetId,
-                result,
-                typedPassword is null ? null : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword),
-                passwordChanged: typedPassword is not null,
-                existingPasswords: _session.ActiveSheet.AllowEditRangePasswords);
-            if (plan is not null &&
-                TryExecute(plan.Command, UiText.Format("AllowEditRange_Modified", result.Range!.Value)))
-            {
-                rangeBeingModified = null;
-                rangePasswordBox.Text = string.Empty;
-            }
+            if (TryLoadSelectedRangeForModification())
+                args.Handled = true;
         };
 
         deleteButton.Click += (_, _) =>
         {
-            warningText.IsVisible = false;
             if (rangesList.SelectedItem is not string selected ||
                 !AllowEditRangePlanner.TryParseRange(selected, sheetId, out var range))
             {
                 return;
             }
 
-            var result = AllowEditRangePlanner.CreateRemoveResult(range);
-            var plan = AllowEditRangePlanner.CreateCommandPlan(
-                sheetId,
-                result,
-                password: null,
-                passwordChanged: false,
-                existingPasswords: _session.ActiveSheet.AllowEditRangePasswords);
-            if (plan is not null)
-                TryExecute(plan.Command, UiText.Format("AllowEditRange_Removed", result.Range!.Value));
-            rangeBeingModified = null;
-            rangePasswordBox.Text = string.Empty;
+            dialogResult = AllowEditRangePlanner.CreateRemoveResult(range);
+            dialog.Close();
         };
 
-        // WPF has [OK][Cancel] at bottom; OK is an alias for Close (ranges are applied in real-time)
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
         AvaloniaCompactDialogChrome.ApplyButton(okButton, AllowEditRangeDialogChromeStyle, okButton.MinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "AllowEditRangeOkButton");
-        okButton.Click += (_, _) => dialog.Close();
+        okButton.Click += (_, _) => RunGuarded(async () =>
+        {
+            if (!AllowEditRangePlanner.TryParseRange(rangeBox.Text, sheetId, out var range))
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    UiText.Get("AllowEditRange_InvalidRangeMessage"),
+                    dialog.Title ?? string.Empty);
+                FocusRangeInput();
+                return;
+            }
+
+            var isModify = rangeBeingModified is not null;
+            dialogResult = rangeBeingModified is { } original
+                ? AllowEditRangePlanner.CreateModifyResult(original, range)
+                : AllowEditRangePlanner.CreateAddResult(range);
+            var typedPassword = string.IsNullOrEmpty(rangePasswordBox.Text) ? null : rangePasswordBox.Text;
+            dialogRangePassword = typedPassword is null
+                ? null
+                : ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash(typedPassword);
+            dialogRangePasswordChanged = !isModify || typedPassword is not null;
+            dialog.Close();
+        });
         var closeButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
         AvaloniaCompactDialogChrome.ApplyButton(closeButton, AllowEditRangeDialogChromeStyle, closeButton.MinWidth);
         AutomationProperties.SetAutomationId(closeButton, "AllowEditRangeCloseButton");
-        closeButton.Click += (_, _) => dialog.Close();
+        closeButton.Click += (_, _) =>
+        {
+            dialogResult = null;
+            dialog.Close();
+        };
 
-        RefreshRanges();
+        rangesList.ItemsSource = AllowEditRangePlanner.BuildExistingRangeItems(_session.ActiveSheet.AllowEditRanges);
+        UpdateButtons();
 
         // WPF button order: [New...][Modify...][Delete][Permissions...] in a left-aligned row.
         var rangeButtons = new StackPanel
@@ -343,7 +300,6 @@ public sealed partial class MainWindow
                 rangeGroup,
                 new TextBlock { Text = UiText.Get("AllowEditRange_Example"), Foreground = Brush(109, 109, 109), TextWrapping = TextWrapping.Wrap, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 7, 0, 12) },
                 rangePasswordPanel,
-                warningText,
             },
         };
 
@@ -375,5 +331,44 @@ public sealed partial class MainWindow
         };
 
         await dialog.ShowDialog(this);
+
+        if (dialogResult is not { } result)
+            return;
+
+        var plan = AllowEditRangePlanner.CreateCommandPlan(
+            sheetId,
+            result,
+            dialogRangePassword,
+            dialogRangePasswordChanged,
+            _session.ActiveSheet.AllowEditRangePasswords);
+        if (plan is null)
+            return;
+
+        var commandResult = _session.ExecuteReviewCommand(plan.Command);
+        if (!commandResult.Success)
+        {
+            await AvaloniaUserMessageDialog.ShowErrorAsync(
+                this,
+                commandResult.ErrorMessage ?? UiText.Get("AllowEditRange_InvalidRange"),
+                UiText.Get("MainWindowMessage_AllowEditRangesTitle"));
+            return;
+        }
+
+        var successMessage = plan switch
+        {
+            { Action: AllowEditRangeAction.Add, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeAdded", range),
+            { Action: AllowEditRangeAction.Modify, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeModified", range),
+            { Action: AllowEditRangeAction.Remove, Range: { } range } =>
+                UiText.Format("MainWindowMessage_AllowEditRangeRemoved", range),
+            _ => UiText.Get("MainWindowMessage_AllowEditRangesCleared"),
+        };
+        RefreshShell(successMessage);
+        await AvaloniaUserMessageDialog.ShowAsync(
+            this,
+            successMessage,
+            UiText.Get("MainWindowMessage_AllowEditRangesTitle"),
+            UserMessageIcon.Information);
     }
 }

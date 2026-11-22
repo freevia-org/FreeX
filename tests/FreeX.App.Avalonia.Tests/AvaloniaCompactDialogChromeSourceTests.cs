@@ -370,7 +370,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(");
         source.Should().Contain("var manageDialogChrome = ConditionalFormatDialogChromeStyle with { ButtonHeight = 22 };");
         source.Should().Contain("manageDialogChrome with { ListBoxItemPadding = new Thickness(2, 0) }");
-        source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton], new Thickness(0, 10, 0, 0));");
+        File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormatRuleEditor.cs")).Should().Contain(
+            "AvaloniaCompactDialogChrome.CreateActionRow([_okButton, _cancelButton], new Thickness(0, 10, 0, 0))");
 
         AssertNoLocalButtonChrome(source);
         AssertNoLocalTextBoxChrome(source, "tb");

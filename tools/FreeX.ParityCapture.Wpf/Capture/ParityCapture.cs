@@ -520,7 +520,7 @@ internal static class ParityCapture
             {
                 // Constructed exactly as MainWindow.ProtectWorkbookBtn_Click builds the protect dialog.
                 CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
-                    new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel")));
+                    new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel"), includeWorkbookOptions: true));
             }
             else if (string.Equals(targetSurfaceId, "dialog.FindReplace", StringComparison.Ordinal) ||
                 targetSurfaceId.StartsWith("dialog.FindReplace.", StringComparison.Ordinal))
@@ -825,7 +825,7 @@ internal static class ParityCapture
             new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectSheetTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel")));
 
         CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
-            new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel")));
+            new PasswordProtectionDialog(UiText.Get("MainWindowMessage_ProtectWorkbookTitle"), UiText.Get("MainWindowMessage_OptionalPasswordLabel"), includeWorkbookOptions: true));
 
         CaptureAccessibilityCheckerDialog(results, outDir, AccessibilityCheckerParityFixture.CreateDialogIssues(sheet.Id));
 
@@ -1212,7 +1212,6 @@ internal static class ParityCapture
         (width, height) = surfaceId switch
         {
             "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
-            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
             "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
             "dialog.Consolidate" => (ConsolidateDialogPlanner.CaptureWidth, ConsolidateDialogPlanner.CaptureHeight),
             _ => (0, 0)

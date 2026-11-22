@@ -1,3 +1,4 @@
+using Free.Shared.Shell.Avalonia;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -53,7 +54,11 @@ public sealed partial class MainWindow
         {
             Content = StripDisplayMnemonic(UiText.Get("ExportOptions_SelectedRange")),
             IsChecked = defaultScope == ExportContentScope.Selection,
-            IsEnabled = true
+            // WPF ExportOptionsDialog enables the selection scope only when a range is selected.
+            IsEnabled = WorkbookExportInteractionPlanner.CreateCommandPlan(
+                _session.Workbook,
+                _session.SelectedRange,
+                WorkbookExportPrintSurface.MacOs).HasSelection
         };
         if (!selectionButton.IsEnabled)
         {
@@ -153,14 +158,6 @@ public sealed partial class MainWindow
             Content = StripDisplayMnemonic(UiText.Get("ExportOptions_OpenAfterPublishing")),
             Margin = new Thickness(0, 6, 0, 0)
         };
-        var errorBlock = new TextBlock
-        {
-            Foreground = Brushes.Firebrick,
-            TextWrapping = TextWrapping.Wrap,
-            IsVisible = false,
-            Margin = new Thickness(0, 8, 0, 0)
-        };
-
         bookmarksBox.IsCheckedChanged += (_, _) =>
             bookmarkModeBox.IsEnabled = bookmarksBox.IsChecked == true && availability.PdfBookmarksEnabled;
         pagesButton.IsCheckedChanged += (_, _) =>
@@ -180,11 +177,16 @@ public sealed partial class MainWindow
             }
         };
 
-        void ShowError(string? message, Control? focusTarget = null)
+        // WPF reports invalid input with a warning message box titled "Export Options" and then focuses the
+        // offending field.
+        async Task ShowErrorAsync(string? message, Control focusTarget)
         {
-            errorBlock.Text = message ?? string.Empty;
-            errorBlock.IsVisible = !string.IsNullOrWhiteSpace(message);
-            focusTarget?.Focus();
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                dialog,
+                message ?? string.Empty,
+                UiText.Get("ExportOptions_ExportOptions"));
+            focusTarget.Focus();
+            (focusTarget as TextBox)?.SelectAll();
         }
 
         // WPF stacks the options with no extra spacing inside a 16px margin; the row gaps come from
@@ -225,7 +227,6 @@ public sealed partial class MainWindow
         stack.Children.Add(standardQualityButton);
         stack.Children.Add(minimumSizeButton);
         stack.Children.Add(openAfterPublishBox);
-        stack.Children.Add(errorBlock);
         foreach (var toggle in new ToggleButton[]
                  {
                      activeSheetButton, selectionButton, workbookButton, allPagesButton, pagesButton,
@@ -244,9 +245,8 @@ public sealed partial class MainWindow
         // WPF: 80px OK/Cancel buttons 8px apart, 18px below the last option and 16px above the edge.
         ApplyDialogButtonChrome(okButton, 80, isDefault: true);
         ApplyDialogButtonChrome(cancelButton, 80);
-        okButton.Click += (_, _) =>
+        okButton.Click += (_, _) => RunGuarded(async () =>
         {
-            ShowError(null);
             ExportPageRange? pageRange = null;
             if (pagesButton.IsChecked == true &&
                 !ExportPlanner.TryCreatePageRange(
@@ -263,7 +263,7 @@ public sealed partial class MainWindow
                     ? toPageBox
                     : fromPageBox;
                 pagesButton.IsChecked = true;
-                ShowError(pageRangeError, focusTarget);
+                await ShowErrorAsync(pageRangeError, focusTarget);
                 return;
             }
 
@@ -273,7 +273,7 @@ public sealed partial class MainWindow
                     out var pdfLanguageError,
                     AvaloniaExportPlannerTextResolver))
             {
-                ShowError(pdfLanguageError, pdfLanguageBox);
+                await ShowErrorAsync(pdfLanguageError, pdfLanguageBox);
                 return;
             }
 
@@ -296,7 +296,7 @@ public sealed partial class MainWindow
                 pdfLanguage,
                 format: format);
             dialog.Close();
-        };
+        });
         cancelButton.Click += (_, _) =>
         {
             result = null;

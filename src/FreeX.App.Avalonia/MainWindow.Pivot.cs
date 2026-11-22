@@ -775,32 +775,13 @@ public sealed partial class MainWindow
         Control anchor)
     {
         var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
-        var menuModel = PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target);
-        var validator = BuildPivotDragValidator(pivot);
-        var items = new List<Control>();
-        foreach (var item in menuModel.Items)
-        {
-            if (item.IsSeparator)
-            {
-                items.Add(new Separator());
-                continue;
-            }
-            var menuItem = new MenuItem { Header = item.Label, IsEnabled = item.IsEnabled };
-            if (item.IsChecked)
-                menuItem.Icon = new TextBlock { Text = "✓" };
-            var action = item.Action;
-            menuItem.Click += (_, _) => InvokePivotHeaderAction(pivot, headers, target, action, validator);
-            items.Add(menuItem);
-        }
-        if (target.Area is PivotHeaderArea.Row or PivotHeaderArea.Column or PivotHeaderArea.Page)
-        {
-            var itemFilter = new MenuItem { Header = UiText.Get("PivotLoc_FilterItemsMenu") };
-            itemFilter.Click += (_, _) => OpenPivotItemFilter(pivot, headers, target);
-            items.Add(new Separator());
-            items.Add(itemFilter);
-        }
+        // WPF OnPivotHeaderDropdownRequested opens CreatePivotFieldContextMenu (the shared
+        // PivotChartFieldContextMenuPlanner tree: summary banner, sort, More Sort Options, Select Items,
+        // Label/Value Filter, Clear Filters, Value Field Settings) for the in-grid header dropdown.
+        var items = AvaloniaPivotChartFieldContextMenu.BuildItems(
+            BuildPivotChartFieldContextMenuState(pivot, target),
+            action => DispatchPivotChartFieldContextMenuAction(pivot, headers, target, action));
         var menu = new ContextMenu { ItemsSource = items };
-        // The WPF menu chrome; a checked row keeps its tick in the icon column.
         AvaloniaContextMenuChrome.Apply(menu);
         menu.Open(anchor);
     }

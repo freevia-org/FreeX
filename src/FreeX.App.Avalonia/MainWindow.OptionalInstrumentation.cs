@@ -118,18 +118,9 @@ public sealed partial class MainWindow
 
     partial void AttachOptionalConditionalFormatRuleDialogObservation(
         Window dialog,
-        ComboBox ruleTypeBox,
-        ComboBox presetBox,
-        ComboBox operatorBox,
-        TextBox value1Box,
-        TextBox formulaBox,
-        TextBox textBox,
-        TextBox rankBox,
-        ComboBox topBottomBox,
-        ComboBox iconSetBox,
-        TextBox minColorBox,
-        TextBox maxColorBox,
-        ComboBox highlightBox,
+        Func<string, Control?> findControl,
+        Action<string> selectRuleType,
+        ListBox ruleShellList,
         Button okButton,
         Button cancelButton);
 
@@ -137,14 +128,12 @@ public sealed partial class MainWindow
         Window dialog,
         ComboBox scopeBox,
         ListBox listBox,
-        TextBox appliesToBox,
         Button newButton,
         Button editButton,
         Button deleteButton,
         Button moveUpButton,
         Button moveDownButton,
-        Button applyAppliesToButton,
-        Control appliesToRow,
+        Button applyButton,
         Button closeButton);
 
     partial void AttachOptionalPasteSpecialDialogObservation(

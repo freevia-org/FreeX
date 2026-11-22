@@ -203,6 +203,7 @@ public sealed partial class MainWindow
 
         var savedCriteria = AutoFilterDialogCriteriaPlanner.GetSavedCriteria(sheet, dropdownPlan, model.FilterKind);
         var panel = new StackPanel { Spacing = 4 };
+        var criteriaValidation = new AutoFilterCriteriaValidation();
         var checklistEdited = false;
         var allItems = AutoFilterMenuPlanner.CreateDialogItems(model).ToList();
         var visibleItems = new List<AutoFilterDialogItem>();
@@ -397,7 +398,7 @@ public sealed partial class MainWindow
                         "AutoFilter_SortByColor"));
                     break;
                 case AutoFilterMenuItemKind.FilterFamily:
-                    panel.Children.Add(CreateAutoFilterCriteriaPanel(model, criteriaBox, savedCriteria));
+                    panel.Children.Add(CreateAutoFilterCriteriaPanel(model, criteriaBox, savedCriteria, criteriaValidation));
                     break;
                 case AutoFilterMenuItemKind.Search:
                     searchBox.TextChanged += (_, _) => RefreshChecklist();
@@ -440,6 +441,17 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyButton(okButton, AutoFilterDialogChromeStyle, 72, isDefault: true);
         okButton.Click += (_, _) =>
         {
+            // WPF AutoFilterDialog.ValidateTypedCriteriaInputs: an incomplete typed criterion keeps the
+            // dialog open, warns ("Enter first between value", ...) and refocuses the offending input.
+            if (criteriaValidation.Validate() is { } issue)
+            {
+                RunGuarded(() => ShowAutoFilterCriteriaWarningAsync(
+                    UiText.Get(issue.ResourceKey),
+                    UiText.Format("AutoFilter_TitleWithHeader", menuPlan.HeaderText),
+                    issue.Target));
+                return;
+            }
+
             flyout.Hide();
             var criteriaText = criteriaBox.Text?.Trim() ?? string.Empty;
             if (savedCriteria is not null && criteriaText == savedCriteria.CriteriaText)
@@ -516,11 +528,26 @@ public sealed partial class MainWindow
         flyout.Hide();
     }
 
+    private sealed record AutoFilterCriteriaIssue(string ResourceKey, Control Target);
+
+    private sealed class AutoFilterCriteriaValidation
+    {
+        public Func<AutoFilterCriteriaIssue?> Validate { get; set; } = () => null;
+    }
+
+    private async Task ShowAutoFilterCriteriaWarningAsync(string message, string title, Control target)
+    {
+        await AvaloniaUserMessageDialog.ShowWarningAsync(this, message, title);
+        target.Focus();
+    }
+
     private Control CreateAutoFilterCriteriaPanel(
         AutoFilterMenuModel model,
         TextBox criteriaBox,
-        AutoFilterSavedCriteria? savedCriteria)
+        AutoFilterSavedCriteria? savedCriteria,
+        AutoFilterCriteriaValidation? criteriaValidation = null)
     {
+        criteriaValidation ??= new AutoFilterCriteriaValidation();
         var options = model.CriteriaOptions;
         var secondOptions = AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(options);
         var familyLabel = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
@@ -605,12 +632,25 @@ public sealed partial class MainWindow
         panel.Children.Add(secondValueBox);
         panel.Children.Add(criteriaBox);
 
+        var criteriaTouched = false;
+        var wasTopBottom = false;
         void UpdateCriteria(bool writeCriteriaText)
         {
             if (selector.SelectedIndex < 0 || selector.SelectedIndex >= options.Count)
                 return;
 
             var firstOption = options[selector.SelectedIndex];
+            // WPF's Top/Bottom "Show" box starts at 10 (items/percent); leaving it clears that default.
+            var nowTopBottom = AutoFilterDialogCriteriaPlanner.IsTopBottomOption(firstOption);
+            if (nowTopBottom != wasTopBottom)
+            {
+                wasTopBottom = nowTopBottom;
+                if (nowTopBottom && string.IsNullOrWhiteSpace(valueBox.Text))
+                    valueBox.Text = "10";
+                else if (!nowTopBottom && valueBox.Text == "10")
+                    valueBox.Text = null;
+            }
+
             var secondOption = secondSelector.SelectedIndex > 0 ? secondOptions[secondSelector.SelectedIndex - 1] : null;
             var preset = datePresetSelector is { SelectedIndex: > 0 }
                 ? datePresets[datePresetSelector.SelectedIndex]
@@ -657,18 +697,61 @@ public sealed partial class MainWindow
         if (savedCriteria is not null)
             criteriaBox.Text = savedCriteria.CriteriaText;
 
-        selector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
-        secondSelector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
-        connector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
+        // The criteria rows are always present here (WPF shows its custom panel only after a Filters
+        // submenu pick), so validate only once the user has edited an operator/value/connector.
+        criteriaValidation.Validate = () =>
+        {
+            if (!criteriaTouched || selector.SelectedIndex < 0 || selector.SelectedIndex >= options.Count)
+                return null;
+
+            if (datePresetSelector is { SelectedIndex: > 0 })
+                return null;
+
+            var firstOption = options[selector.SelectedIndex];
+            var issue = AutoFilterDialogCriteriaPlanner.ValidateTypedCriteria(
+                firstOption,
+                valueBox.Text,
+                valueBox.Text,
+                maximumBox.Text,
+                valueBox.Text);
+            if (issue is null)
+                return null;
+
+            Control target = issue.Field == AutoFilterTypedCriteriaField.Maximum ? maximumBox : valueBox;
+            return new AutoFilterCriteriaIssue(issue.ResourceKey, target);
+        };
+
+        selector.SelectionChanged += (_, _) =>
+        {
+            criteriaTouched = true;
+            UpdateCriteria(writeCriteriaText: true);
+        };
+        secondSelector.SelectionChanged += (_, _) =>
+        {
+            criteriaTouched = true;
+            UpdateCriteria(writeCriteriaText: true);
+        };
+        connector.SelectionChanged += (_, _) =>
+        {
+            criteriaTouched = true;
+            UpdateCriteria(writeCriteriaText: true);
+        };
         if (datePresetSelector is not null)
-            datePresetSelector.SelectionChanged += (_, _) => UpdateCriteria(writeCriteriaText: true);
+            datePresetSelector.SelectionChanged += (_, _) =>
+            {
+                criteriaTouched = true;
+                UpdateCriteria(writeCriteriaText: true);
+            };
 
         foreach (var input in new[] { valueBox, maximumBox, secondValueBox })
         {
             input.PropertyChanged += (_, e) =>
             {
                 if (e.Property == TextBox.TextProperty)
+                {
+                    criteriaTouched = true;
                     UpdateCriteria(writeCriteriaText: true);
+                }
             };
         }
 
