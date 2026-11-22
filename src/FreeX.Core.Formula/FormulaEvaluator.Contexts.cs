@@ -437,7 +437,16 @@ public sealed partial class FormulaEvaluator
                 }
 
                 var externalValues = CreateRangeValueList(r0, c0, r1, c1);
-                if (externalValues is null) return [new RangeMaterializationErrorValue(ErrorValue.Ref)];
+                if (externalValues is null)
+                {
+                    // A whole-column/row external reference (e.g. VLOOKUP(x,[1]Sheet!A:J,2,0)) nominally spans
+                    // far more cells than can be materialized, and an external sheet cache only holds the cells
+                    // Excel referenced at last refresh, so it can never be fully recomputed here. That is not a
+                    // genuine #REF!: preserve the cell's last-known loaded value, exactly like a cache miss.
+                    throw new FormulaParseException(
+                        $"External reference '{sheetName}' spans too many cells to recompute from the link cache; " +
+                        "preserving the last-known loaded value instead of recomputing to #REF!.");
+                }
                 for (var r = r0; r <= r1; r++)
                 {
                     for (var c = c0; c <= c1; c++)

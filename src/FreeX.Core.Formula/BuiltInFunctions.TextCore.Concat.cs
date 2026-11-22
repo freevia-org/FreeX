@@ -85,10 +85,13 @@ public static partial class BuiltInFunctions
         // reference to an empty cell) is NOT the same as omitted: real Excel coerces the blank
         // like an ordinary numeric argument and displays "0" (the documented HYPERLINK quirk,
         // worked around by wrapping the argument as `cell&""`), it does not fall back to the link.
+        // Real Excel returns the NUMBER 0 here (the cached <v>0</v> is untyped, not t="str"), so keep it numeric.
+        if (friendlyName is BlankValue)
+            return new NumberValue(0);
+
         var display = friendlyName switch
         {
             null => ToText(link),
-            BlankValue => "0",
             _ => ToText(friendlyName)
         };
         return TextResult(display);

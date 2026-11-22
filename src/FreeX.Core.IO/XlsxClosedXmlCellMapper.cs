@@ -37,6 +37,11 @@ internal static class XlsxClosedXmlCellMapper
     {
         if (xlCell.Value.IsDateTime)
         {
+            // Serial 0 ("1/0/1900") has no calendar date; ClosedXML surfaces it as 1900-01-01, which would load
+            // as serial 1. Keep the exact serial (the number format still renders it as a date).
+            if (!uses1904DateSystem && TryGetUnifiedNumber(xlCell.Value, out var zeroSerial) && zeroSerial == 0)
+                return new NumberValue(0);
+
             try { return MapDateTimeValue(xlCell.GetDateTime(), uses1904DateSystem); }
             catch (ArgumentException)
             {
@@ -125,6 +130,9 @@ internal static class XlsxClosedXmlCellMapper
         if (xlValue.IsBoolean) return new BoolValue(xlValue.GetBoolean());
         if (xlValue.IsDateTime)
         {
+            if (!uses1904DateSystem && TryGetUnifiedNumber(xlValue, out var zeroSerial) && zeroSerial == 0)
+                return new NumberValue(0);
+
             try { return MapDateTimeValue(xlValue.GetDateTime(), uses1904DateSystem); }
             catch (ArgumentException)
             {

@@ -1670,6 +1670,9 @@ public sealed class RecalcEngine
             case FunctionCallNode func when string.Equals(func.FunctionName, "AGGREGATE", StringComparison.OrdinalIgnoreCase):
                 return AggregateOptionsExcludeNestedSelf(func) || ContainsSelfExcludingCallInAny(func.Arguments);
 
+            case FunctionCallNode func when TryGetLazilyReadArgumentIndex(func, out _):
+                return true;
+
             case FunctionCallNode func:
                 return ContainsSelfExcludingCallInAny(func.Arguments);
 
@@ -1727,6 +1730,28 @@ public sealed class RecalcEngine
                 return (AggregateOptionsExcludeNestedSelf(func) &&
                         RangeArgumentsContainCell(func.Arguments, 2, defaultSheetId, formulaCell, workbook)) ||
                        AnyArgumentExcludesCell(func.Arguments, defaultSheetId, formulaCell, workbook);
+
+            case FunctionCallNode func when TryGetLazilyReadArgumentIndex(func, out var lazyIndex):
+            {
+                // The lazily-read range argument contains this very cell, and no other (eagerly read)
+                // range argument of the same call does: Excel evaluates it without a circular reference.
+                if (lazyIndex < func.Arguments.Count &&
+                    RangeArgumentsContainCell([func.Arguments[lazyIndex]], 0, defaultSheetId, formulaCell, workbook))
+                {
+                    var eagerContainsSelf = false;
+                    for (var i = 0; i < func.Arguments.Count && !eagerContainsSelf; i++)
+                    {
+                        if (i != lazyIndex &&
+                            RangeArgumentsContainCell([func.Arguments[i]], 0, defaultSheetId, formulaCell, workbook))
+                            eagerContainsSelf = true;
+                    }
+
+                    if (!eagerContainsSelf)
+                        return true;
+                }
+
+                return AnyArgumentExcludesCell(func.Arguments, defaultSheetId, formulaCell, workbook);
+            }
 
             case FunctionCallNode func:
                 return AnyArgumentExcludesCell(func.Arguments, defaultSheetId, formulaCell, workbook);
@@ -3122,8 +3147,16 @@ public sealed class RecalcEngine
             {
                 var containsVolatileFunction = FormulaVolatilityPolicy.IsVolatileCall(func);
                 var arguments = func.Arguments;
+                var firstArgIsAddressOnly = FirstArgumentIsAddressOnly(func);
                 for (var i = 0; i < arguments.Count; i++)
                 {
+                    // ROW/COLUMN/ROWS/COLUMNS/OFFSET only use their leading reference argument's
+                    // ADDRESS and never read its value, so Excel does not treat it as a precedent:
+                    // =OFFSET(A12,-1,0) or =ROW(A12) in A12 is not a circular reference.
+                    if (i == 0 && firstArgIsAddressOnly &&
+                        arguments[0] is CellRefNode or RangeRefNode or FullColumnRangeRefNode or FullRowRangeRefNode)
+                        continue;
+
                     if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames))
                         containsVolatileFunction = true;
                 }
@@ -3134,6 +3167,35 @@ public sealed class RecalcEngine
 
         return false;
     }
+
+    /// <summary>
+    /// Functions that read ONE of their range arguments lazily -- only the cells the lookup/criteria
+    /// actually selects -- so Excel does not report a circular reference when the formula's own cell lies
+    /// inside that argument and is never selected (verified against Excel: MATCH/VLOOKUP/INDEX/SUMIF's
+    /// sum_range, e.g. =SUMIF($D$3:$D$42,"invoices",E3:E42) in E41). Eagerly read ranges (criteria
+    /// ranges, SUM, COUNTIF, ...) remain circular. Returns the lazy argument's index.
+    /// </summary>
+    private static bool TryGetLazilyReadArgumentIndex(FunctionCallNode func, out int index)
+    {
+        switch (func.FunctionName.ToUpperInvariant())
+        {
+            case "MATCH" or "VLOOKUP" or "HLOOKUP":
+                index = 1;
+                return true;
+            case "INDEX" or "SUMIFS" or "AVERAGEIFS":
+                index = 0;
+                return true;
+            case "SUMIF" or "AVERAGEIF":
+                index = 2;
+                return true;
+            default:
+                index = -1;
+                return false;
+        }
+    }
+
+    private static bool FirstArgumentIsAddressOnly(FunctionCallNode func) =>
+        func.FunctionName.ToUpperInvariant() is "ROW" or "COLUMN" or "ROWS" or "COLUMNS" or "OFFSET";
 
     /// <summary>
     /// Resolves a function-call name to the RefersTo text of a Name-Manager defined name that the
