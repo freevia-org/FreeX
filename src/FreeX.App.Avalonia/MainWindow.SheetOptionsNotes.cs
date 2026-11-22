@@ -244,9 +244,19 @@ public sealed partial class MainWindow
         goToButton.Click += (_, _) => GoToSelected();
         closeButton.Click += (_, _) => dialog.Close();
 
-        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow(
-            [toggleResolvedButton, deleteThreadButton, goToButton, closeButton],
-            new Thickness(0, 10, 0, 0));
+        // The pane docks at 280-400px, narrower than the four buttons side by side, so the row wraps
+        // instead of cutting Open/Close off the right edge.
+        var bottomRow = new WrapPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(0, 10, 0, 0),
+        };
+        foreach (var actionButton in new[] { toggleResolvedButton, deleteThreadButton, goToButton, closeButton })
+        {
+            actionButton.Margin = new Thickness(8, 0, 0, 6);
+            bottomRow.Children.Add(actionButton);
+        }
         DockPanel.SetDock(bottomRow, Dock.Bottom);
         DockPanel.SetDock(emptyText, Dock.Top);
 

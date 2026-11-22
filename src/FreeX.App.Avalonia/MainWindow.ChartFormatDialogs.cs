@@ -184,8 +184,8 @@ public sealed partial class MainWindow
             },
         };
 
-        // WPF ChartDataLabelsDialog is a 420x560 window; its two groups are taller than that, so the body
-        // scrolls inside the WPF height and the button row stays visible.
+        // WPF ChartDataLabelsDialog is 420x560 as a minimum: DialogSizing grows the window to its content
+        // (803px tall at 100%), so both groups show; the body only scrolls past 92% of the work area.
         HostChartDialogContent(dialog, 420, body, buttonRow, scrollWpfHeight: 560);
 
         return await dialog.ShowDialog<ChartDataLabelsInput?>(this);
@@ -333,9 +333,8 @@ public sealed partial class MainWindow
         var dialog = NewChartDialog(commandLabel, "ChartAxisFormatDialog", minimumBox);
         // WPF ChartAxisFormatDialog is a 430x660 outer window; Avalonia sizes are client sizes, so the
         // measured Windows frame comes off both (the axis groups scroll inside the height).
-        dialog.SizeToContent = SizeToContent.Manual;
         dialog.Width = 430 - WpfNoResizeFrameWidth;
-        dialog.Height = 660 - WpfNoResizeClientFrameHeight;
+        ApplyWpfContentHeightSizing(dialog, 660);
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChartAxisFormat");
         okButton.Click += (_, _) =>
@@ -456,14 +455,13 @@ public sealed partial class MainWindow
             VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             Content = body,
         };
-        Grid.SetRow(axisScroll, 0);
-        Grid.SetRow(buttonRow, 1);
         buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
-        dialog.Content = new Grid
+        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        dialog.Content = new DockPanel
         {
             Margin = new Thickness(ChartDialogMargin),
-            RowDefinitions = new RowDefinitions("*,Auto"),
-            Children = { axisScroll, buttonRow },
+            LastChildFill = true,
+            Children = { buttonRow, axisScroll },
         };
         ApplyChartDialogTypography(dialog);
 
@@ -1257,21 +1255,31 @@ public sealed partial class MainWindow
         dialog.MinWidth = wpfWidth;
         dialog.MaxWidth = wpfWidth;
 
-        var bodyHost = body;
         if (scrollWpfHeight is { } scrollHeight)
         {
-            // A scrolled body can end mid-row, so the button row keeps its own gap below the viewport.
+            // WPF DialogSizing turns the dialog's Height into a MinHeight and grows the window to its
+            // content (up to 92% of the work area), so every group is visible; only past that cap does the
+            // body scroll above the button row.
             buttonRow.Margin = new Thickness(0, ChartDialogScrollButtonGap, 0, 0);
-            bodyHost = new ScrollViewer
+            DockPanel.SetDock(buttonRow, Dock.Bottom);
+            var scrollViewer = new ScrollViewer
             {
-                MaxHeight = scrollHeight - WpfNoResizeClientFrameHeight - (2 * ChartDialogMargin)
-                    - ChartDialogScrollButtonGap - ChartDialogChromeStyle.ButtonHeight,
                 HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                 Content = body,
             };
+            ApplyWpfContentHeightSizing(dialog, scrollHeight);
+            dialog.Content = new DockPanel
+            {
+                Margin = new Thickness(ChartDialogMargin),
+                LastChildFill = true,
+                Children = { buttonRow, scrollViewer },
+            };
+            ApplyChartDialogTypography(dialog);
+            return;
         }
 
+        var bodyHost = body;
         if (fixedWpfHeight is { } fixedHeight)
         {
             var clientHeight = fixedHeight - WpfNoResizeClientFrameHeight;
@@ -1292,6 +1300,29 @@ public sealed partial class MainWindow
             Children = { bodyHost, buttonRow },
         };
         ApplyChartDialogTypography(dialog);
+    }
+
+    /// <summary>Fraction of the work area WPF <c>DialogSizing</c> lets a content-sized dialog fill.</summary>
+    internal const double WpfDialogWorkAreaFillRatio = 0.92;
+
+    /// <summary>
+    /// Mirrors Free.Shared.Shell DialogSizing.ApplyContentHeight: the WPF outer Height becomes the minimum,
+    /// the window grows to its content and stops at 92% of the work area (Avalonia heights are client
+    /// sizes, so the Windows frame comes off both).
+    /// </summary>
+    private static void ApplyWpfContentHeightSizing(Window dialog, double wpfOuterHeight)
+    {
+        var screen = (global::Avalonia.Application.Current?.ApplicationLifetime
+                as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)
+            ?.MainWindow?.Screens?.Primary;
+        var maxHeight = screen is null
+            ? double.PositiveInfinity
+            : Math.Floor(screen.WorkingArea.Height / Math.Max(screen.Scaling, 1) * WpfDialogWorkAreaFillRatio)
+                - WpfNoResizeClientFrameHeight;
+        var minHeight = Math.Min(wpfOuterHeight - WpfNoResizeClientFrameHeight, maxHeight);
+        dialog.SizeToContent = SizeToContent.Height;
+        dialog.MinHeight = minHeight;
+        dialog.MaxHeight = maxHeight;
     }
 
     private static (Button Ok, Button Cancel, StackPanel Row) CreateChartDialogButtons(
