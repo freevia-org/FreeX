@@ -104,6 +104,8 @@ public sealed partial class MainWindow
         var selected = IsSelectedChart(chart);
         var elementMap = ChartElementMapPlanner.Plan(chart, layout, width, height, ChartTextMeasurer);
         var selectedElement = GetSelectedChartElement(chart);
+        _lastChartElementMap = elementMap;
+        _lastChartElementMapChartId = chart.Id;
         var container = new AvaloniaGrid
         {
             Width = Math.Max(1, width),
@@ -143,7 +145,7 @@ public sealed partial class MainWindow
         {
             var point = args.GetCurrentPoint(container);
             var local = point.Position;
-            var hit = elementMap.HitTest(new LayoutPoint(local.X, local.Y)) ?? ChartElementRef.ChartArea;
+            var hit = elementMap.ResolveClick(new LayoutPoint(local.X, local.Y), selectedElement) ?? ChartElementRef.ChartArea;
             if (point.Properties.IsRightButtonPressed)
             {
                 // Right-click selects the element under the cursor (Excel parity), then opens the
@@ -165,9 +167,10 @@ public sealed partial class MainWindow
                     return;
                 }
 
-                if (args.ClickCount >= 2 && selected && !hit.IsChartArea && hit == selectedElement)
+                if (args.ClickCount >= 2 && selected && selectedElement is { } current &&
+                    elementMap.IsDoubleClickOnSelection(new LayoutPoint(local.X, local.Y), current))
                 {
-                    RunGuarded(() => OpenFormatSelectedChartElementAsync(chart, hit));
+                    RunGuarded(() => OpenFormatSelectedChartElementAsync(chart, current));
                     args.Handled = true;
                     return;
                 }

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Charts.Selection;
 using FreeX.Core.Commands;
@@ -38,11 +39,25 @@ public partial class MainWindow
             case ChartElementFormatTarget.DataLabels:
                 ChartDataLabelsBtn_Click(this, new RoutedEventArgs());
                 break;
+            case ChartElementFormatTarget.Trendline:
+                ChartTrendlineBtn_Click(this, new RoutedEventArgs());
+                break;
+            case ChartElementFormatTarget.ErrorBars:
+                ChartErrorBarsBtn_Click(this, new RoutedEventArgs());
+                break;
             default:
                 FormatChartAreaBtn_Click(this, new RoutedEventArgs());
                 break;
         }
     }
+
+    private static FreeX.App.Presentation.Charts.Selection.ChartNavigationKey ToChartNavigationKey(Key key) => key switch
+    {
+        Key.Up => ChartNavigationKey.Up,
+        Key.Down => ChartNavigationKey.Down,
+        Key.Left => ChartNavigationKey.Left,
+        _ => ChartNavigationKey.Right,
+    };
 
     /// <summary>
     /// Delete on a selected inner chart element. Returns false when no inner element is selected so the

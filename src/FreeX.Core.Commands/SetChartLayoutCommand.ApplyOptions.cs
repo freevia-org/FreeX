@@ -12,6 +12,10 @@ public sealed partial class SetChartLayoutCommand
             chart.XAxisTitle = options.XAxisTitle;
         if (options.YAxisTitle is not null)
             chart.YAxisTitle = options.YAxisTitle;
+        if (options.SecondaryAxisTitle is not null)
+            chart.SecondaryAxisTitle = options.SecondaryAxisTitle;
+        if (options.LegendEntries is not null)
+            chart.LegendEntries = options.LegendEntries.ToList();
         if (options.ChartTitleTextColor is not null)
         {
             chart.ChartTitleTextColor = options.ChartTitleTextColor;
