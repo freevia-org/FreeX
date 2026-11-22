@@ -120,7 +120,9 @@ public sealed class FreeXAutomationIdCatalogTests
     [Fact]
     public void MergeWarningRenderers_UseCatalogInsteadOfRawIds()
     {
-        var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
+        var wpf = ReadSource("src", "FreeX.App.Host", "MergeCellsContentWarningDialog.cs");
+        ReadSource("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs")
+            .Should().Contain("new MergeCellsContentWarningDialog(");
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var planner = ReadSource(
             "src",

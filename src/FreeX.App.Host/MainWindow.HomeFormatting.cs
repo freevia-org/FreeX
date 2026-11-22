@@ -282,118 +282,15 @@ public partial class MainWindow
         return decision.ShouldProceed;
     }
 
-    private MergeCellContentChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
+private MergeCellContentChoice ShowMergeCellsContentWarningDialog(MergeCellContentPlan contentPlan)
     {
-        var choice = MergeCellContentChoice.Cancel;
-        var presentation = MergeCellsContentWarningPlanner.Create(
-            contentPlan.Entries.Select(entry => entry.DisplayText).ToArray());
-        var keepFirstAction = presentation.Action(MergeCellsContentWarningAction.KeepFirstCell);
-        var concatenateAction = presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells);
-        var cancelAction = presentation.Action(MergeCellsContentWarningAction.Cancel);
-        var dialog = new Window
+        var dialog = new MergeCellsContentWarningDialog(
+            contentPlan.Entries.Select(entry => entry.DisplayText).ToArray())
         {
-            Title = presentation.Title,
-            Width = 460,
-            Height = 240,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize,
             Owner = this
         };
-        AutomationProperties.SetAutomationId(
-            dialog,
-            presentation.DialogAutomationId);
-
-        var root = new StackPanel
-        {
-            Margin = new Thickness(18),
-            Orientation = Orientation.Vertical
-        };
-
-        root.Children.Add(new TextBlock
-        {
-            Text = presentation.PrimaryMessage,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
-        });
-
-        root.Children.Add(new TextBlock
-        {
-            Text = presentation.CompactGuidanceMessage,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 12)
-        });
-
-        if (!string.IsNullOrWhiteSpace(presentation.PreviewText))
-        {
-            root.Children.Add(new TextBlock
-            {
-                Text = presentation.PreviewText,
-                TextWrapping = TextWrapping.Wrap,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Margin = new Thickness(0, 0, 0, 14)
-            });
-        }
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
-        };
-
-        var keepFirstButton = new Button
-        {
-            Content = keepFirstAction.Label,
-            MinWidth = 136,
-            Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = keepFirstAction.IsDefault
-        };
-        AutomationProperties.SetAutomationId(
-            keepFirstButton,
-            keepFirstAction.AutomationId);
-        keepFirstButton.Click += (_, _) =>
-        {
-            choice = MergeCellContentChoice.KeepFirstCell;
-            dialog.DialogResult = true;
-        };
-
-        var concatenateButton = new Button
-        {
-            Content = concatenateAction.Label,
-            MinWidth = 136,
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        AutomationProperties.SetAutomationId(
-            concatenateButton,
-            concatenateAction.AutomationId);
-        concatenateButton.Click += (_, _) =>
-        {
-            choice = MergeCellContentChoice.ConcatenateAllCells;
-            dialog.DialogResult = true;
-        };
-
-        var cancelButton = new Button
-        {
-            Content = cancelAction.Label,
-            MinWidth = 82,
-            IsCancel = cancelAction.IsCancel
-        };
-        AutomationProperties.SetAutomationId(
-            cancelButton,
-            cancelAction.AutomationId);
-        cancelButton.Click += (_, _) =>
-        {
-            choice = MergeCellContentChoice.Cancel;
-            dialog.DialogResult = false;
-        };
-
-        buttonRow.Children.Add(keepFirstButton);
-        buttonRow.Children.Add(concatenateButton);
-        buttonRow.Children.Add(cancelButton);
-        root.Children.Add(buttonRow);
-
-        dialog.Content = root;
         dialog.ShowDialog();
-        return choice;
+        return dialog.Choice;
     }
 
     private void FontNameBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

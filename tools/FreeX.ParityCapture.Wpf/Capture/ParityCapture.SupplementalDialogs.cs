@@ -11,6 +11,7 @@ using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -110,6 +111,8 @@ internal static partial class ParityCapture
         // The Avalonia capture opens the picker with no recommendation list (the default gallery).
         new("dialog.InsertChart", () => new InsertChartDialog()),
         new("dialog.InsertFunction", () => new InsertFunctionDialog()),
+        // Same entries the Avalonia ShowMergeCellsWarningParityDialogAsync plan carries (North, Widget).
+        new("dialog.MergeCellsContentWarning", () => new MergeCellsContentWarningDialog(["North", "Widget"])),
         new("dialog.MoveChart", () => new MoveChartDialog(ParityDemoWorkbookFactory.SheetName)),
         new("dialog.MoveOrCopySheet", () =>
         {
@@ -151,6 +154,11 @@ internal static partial class ParityCapture
         }),
         new("dialog.ObjectSize", () =>
             new ObjectSizeDialog(150, 90, UiText.Get("MainWindowMessage_ObjectSizeTitle"))),
+        // Avalonia surface dialog.OutlineGroup opens Outline Settings (ShowOutlineSettingsDialogAsync), whose
+        // WPF counterpart is OutlineSettingsDialog -- not OutlineGroupDialog, the Group/Ungroup picker.
+        // A never-configured sheet resolves to the Excel defaults, exactly what the Avalonia capture shows.
+        new("dialog.OutlineGroup", () =>
+            new OutlineSettingsDialog(OutlineSettingsPlanner.FromStored(null, null, null))),
         new("dialog.PageBreak", () =>
         {
             var wb = ParityDemoWorkbookFactory.Create();

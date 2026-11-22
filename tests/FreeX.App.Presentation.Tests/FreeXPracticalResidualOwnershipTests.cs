@@ -90,7 +90,8 @@ public sealed class FreeXPracticalResidualOwnershipTests
             "shared",
             "Free.Shared.Shell.Avalonia",
             "AvaloniaSynchronousDialogHost.cs");
-        var pairedMergeRenderers = wpfFormatting + Environment.NewLine + avalonia;
+        var wpfMergeWarningDialog = Read("src", "FreeX.App.Host", "MergeCellsContentWarningDialog.cs");
+        var pairedMergeRenderers = wpfFormatting + Environment.NewLine + wpfMergeWarningDialog + Environment.NewLine + avalonia;
 
         avalonia.Should().Contain("AvaloniaSynchronousUserMessageDialog.ShowMessage(");
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForDataValidation(");
@@ -112,7 +113,8 @@ public sealed class FreeXPracticalResidualOwnershipTests
         (avalonia + wpfUpdate).Should().NotContain("MainWindowMessage_UpdateReadyToInstallFormat");
         (avalonia + wpfUpdate).Should().NotContain("MainLoc_RestartingToInstall");
 
-        wpfFormatting.Should().Contain("MergeCellsContentWarningPlanner.Create(");
+        wpfMergeWarningDialog.Should().Contain("MergeCellsContentWarningPlanner.Create(");
+        wpfFormatting.Should().Contain("new MergeCellsContentWarningDialog(");
         avalonia.Should().Contain("MergeCellsContentWarningPlanner.Create(");
         pairedMergeRenderers.Should().NotContain("\"Merging cells can discard cell contents.\"");
         pairedMergeRenderers.Should().NotContain("\"Keep only first cell\"");
