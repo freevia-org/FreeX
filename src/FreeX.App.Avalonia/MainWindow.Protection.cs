@@ -33,7 +33,7 @@ public sealed partial class MainWindow
     // WPF PasswordProtectionDialog (ProtectionDialogs.cs) uses a default-template PasswordBox, which
     // renders 18px tall at the 12px dialog font; the buttons keep the shared control height.
     private const double ProtectWpfPasswordBoxHeight = 18;
-    private const double ProtectWorkbookOptionsClientHeight = 236;
+    private const double ProtectWorkbookOptionsClientHeight = 237;
     // WPF ProtectionDialogs.AddSheetPermissionChecklist: twelve whole permission rows show in the
     // permission viewport; each row is a 16px check box with a 4px bottom margin.
     private const int ProtectSheetWpfVisiblePermissionRows = 12;
@@ -430,8 +430,16 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             });
+            // WPF lists these as natural-height (15px) check boxes with a 4px gap (19px pitch); the
+            // shared 20px dialog check row made the Structure/Windows pitch 24.
+            structureBox.MinHeight = 15;
+            structureBox.MaxHeight = 15;
+            windowsBox.MinHeight = 15;
+            windowsBox.MaxHeight = 15;
             structureBox.Margin = new Thickness(0, 0, 0, 4);
-            windowsBox.Margin = new Thickness(0, 0, 0, 8);
+            // WPF uses 8; the plain-window GroupBox chrome sits its header 1px higher than WPF's, so
+            // the gap carries that pixel to land the Password group on the measured WPF rows.
+            windowsBox.Margin = new Thickness(0, 0, 0, 9);
             contentChildren.Add(structureBox);
             contentChildren.Add(windowsBox);
             contentChildren.Add(ProtectionGroupBox(
@@ -609,6 +617,8 @@ public sealed partial class MainWindow
                     Foreground = HeaderForeground,
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
+                    // WPF Label's default 5px padding on every side.
+                    Padding = new Thickness(5),
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 field,
