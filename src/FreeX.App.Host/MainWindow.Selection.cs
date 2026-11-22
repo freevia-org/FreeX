@@ -880,6 +880,15 @@ public partial class MainWindow
         // object instead of moving the cell cursor underneath it. Only these two modifier states are
         // claimed here -- Shift/Alt + arrow combos (selection-extend, group outdent/indent, etc.)
         // fall through unchanged. The shared planner owns that modifier/selection enablement policy.
+        if (Keyboard.Modifiers == ModifierKeys.None &&
+            e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
+            SheetGrid.TryNavigateChartElement(ToChartNavigationKey(e.Key)))
+        {
+            // Excel: arrow keys move between the elements of a chart once an inner element is selected.
+            e.Handled = true;
+            return;
+        }
+
         if (TryPlanSelectedDrawingObjectNudge(e.Key, Keyboard.Modifiers, out var nudgePlan))
         {
             ExecuteSelectedDrawingObjectNudge(nudgePlan);

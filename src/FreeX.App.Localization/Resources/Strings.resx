@@ -3101,6 +3101,27 @@
   <data name="ChartElement_SeriesDataLabels" xml:space="preserve">
     <value>Series "{0}" Data Labels</value>
   </data>
+  <data name="ChartElement_Trendline" xml:space="preserve">
+    <value>Trendline</value>
+  </data>
+  <data name="ChartElement_SeriesTrendline" xml:space="preserve">
+    <value>Series "{0}" Trendline</value>
+  </data>
+  <data name="ChartElement_ErrorBars" xml:space="preserve">
+    <value>Error Bars</value>
+  </data>
+  <data name="ChartElement_SeriesErrorBars" xml:space="preserve">
+    <value>Series "{0}" Error Bars</value>
+  </data>
+  <data name="ChartElement_DataPoint" xml:space="preserve">
+    <value>Series "{0}" Point {1}</value>
+  </data>
+  <data name="ChartElement_LegendEntry" xml:space="preserve">
+    <value>Legend Entry "{0}"</value>
+  </data>
+  <data name="ChartElement_SecondaryAxisTitle" xml:space="preserve">
+    <value>Secondary Value Axis Title</value>
+  </data>
   <data name="ChartElement_DataLabels" xml:space="preserve">
     <value>Data Labels</value>
   </data>
