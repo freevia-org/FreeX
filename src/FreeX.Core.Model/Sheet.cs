@@ -840,7 +840,35 @@ public sealed partial class Sheet
     /// instead of <see cref="IsRowEffectivelyHidden"/>, which is intended for rendering/print/
     /// navigation, where every hiding mechanism is equally "not shown".
     /// </summary>
-    public bool IsRowFilterHidden(uint row) => FilterHiddenRows.Contains(row);
+    public bool IsRowFilterHidden(uint row) =>
+        FilterHiddenRows.Contains(row) || (IsRowEffectivelyHidden(row) && IsFilterModeActive);
+
+    /// <summary>
+    /// True when the sheet is in Excel's "FilterMode": an AutoFilter (worksheet-level or table) with at
+    /// least one filter criterion applied. Probed against real Excel: while a filter is active, EVERY
+    /// hidden row on the sheet (manually hidden, outline-collapsed, inside or outside the AutoFilter range,
+    /// hidden before or after the filter was applied, and rows loaded from a file) is treated as
+    /// filtered-out, so SUBTOTAL 1-11 (which only skip filtered rows) ignore it exactly like 101-111 do.
+    /// With no active filter (including right after Clear Filter / ShowAllData) manually hidden rows are
+    /// counted by SUBTOTAL 1-11 and only skipped by 101-111.
+    /// </summary>
+    public bool IsFilterModeActive
+    {
+        get
+        {
+            if (FilterHiddenRows.Count > 0 || ActiveValueFilterColumns.Count > 0)
+                return true;
+            if (AutoFilter is { FilterColumns.Count: > 0 })
+                return true;
+            foreach (var table in StructuredTables)
+            {
+                if (table.FilterColumns.Count > 0)
+                    return true;
+            }
+
+            return false;
+        }
+    }
 
     private readonly List<GridRange> _mergedRegions = [];
 
