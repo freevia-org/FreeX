@@ -25623,8 +25623,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             formula2Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationDialogPlanner.Formula2FieldDescriptor.LabelResourceKey));
             AutomationProperties.SetHelpText(formula2Box, DataValidationDialogPlanner.Formula2FieldDescriptor.HelpText);
             operatorField.IsVisible = plan.ShowOperator;
-            formula1Field.IsVisible = plan.ShowFormula1;
-            formula2Field.IsVisible = plan.ShowFormula2;
+            // WPF collapses the label and the box but leaves each row's DockPanel (margin 0,0,0,8)
+            // in the grid, so the two hidden formula rows still hold their 8px gap each.
+            formula1Label.IsVisible = plan.ShowFormula1;
+            formula1Box.IsVisible = plan.ShowFormula1;
+            formula2Label.IsVisible = plan.ShowFormula2;
+            formula2Box.IsVisible = plan.ShowFormula2;
             sourcePickerButton.IsVisible = plan.ShowFormula1RangePicker;
             useSelectionButton.IsVisible = plan.ShowFormula1UseSelection;
             sourcePicker2Button.IsVisible = plan.ShowFormula2RangePicker;
@@ -26103,7 +26107,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <summary>
     /// One row of the WPF Data Validation two-column form: a vertically centred label in the 120px
     /// label column (8px gap) and the editor stretched across the remaining width, with the 8px row
-    /// gap carried by the row so a collapsed row leaves no hole.
+    /// gap carried by the row (WPF keeps the formula rows' 8px gap even while their label and box are collapsed).
     /// </summary>
     private static AvaloniaGrid CreateDataValidationFormRow(TextBlock label, Control control)
     {

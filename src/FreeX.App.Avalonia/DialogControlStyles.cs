@@ -1149,7 +1149,7 @@ internal static class DialogWindowDefaults
                 {
                     new Setter(TemplatedControl.BackgroundProperty, WpfHighlightFace),
                     new Setter(TemplatedControl.BorderBrushProperty, WpfHighlightFace),
-                    new Setter(TemplatedControl.ForegroundProperty, DialogControlStyles.SelectionForegroundBrush),
+                    new Setter(TemplatedControl.ForegroundProperty, WpfHighlightInk),
                 },
             });
             listBox.Styles.Add(new Style(x => x
@@ -1163,7 +1163,7 @@ internal static class DialogWindowDefaults
                 {
                     new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.BackgroundProperty, WpfHighlightFace),
                     new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.BorderBrushProperty, WpfHighlightFace),
-                    new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, new ImmutableSolidColorBrush(Colors.White)),
+                    new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.ForegroundProperty, WpfHighlightInk),
                 },
             });
         }
@@ -1172,6 +1172,8 @@ internal static class DialogWindowDefaults
     }
 
     private static readonly IBrush WpfHighlightFace = new ImmutableSolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD7));
+
+    private static readonly IBrush WpfHighlightInk = new ImmutableSolidColorBrush(Colors.White);
 
     // A list that does not hold the keyboard focus shows WPF's inactive selection.
     private static Selector? InactiveList(Selector? selector) =>
