@@ -175,10 +175,23 @@ internal static partial class ParityCapture
         new("dialog.PivotCalculatedField", () =>
         {
             var (_, _, pivot) = CreateParityPivot();
-            return new PivotCalculatedFieldDialog(fieldNames: PivotControlPickerParityFixture.Headers);
+            return new PivotCalculatedFieldDialog(
+                fieldNames: PivotControlPickerParityFixture.Headers,
+                pivotTable: pivot);
         }),
         new("dialog.PivotCalculatedItem", () =>
-            new PivotCalculatedItemDialog(PivotControlPickerParityFixture.Headers, 0)),
+        {
+            var (wb, sheet, pivot) = CreateParityPivot();
+            var itemNames = new Dictionary<int, IEnumerable<string>>();
+            foreach (var layoutField in pivot.RowFields.Concat(pivot.ColumnFields))
+                itemNames[layoutField.SourceFieldIndex] =
+                    PivotSourceContext.ReadItems(wb, sheet, pivot, layoutField.SourceFieldIndex);
+            return new PivotCalculatedItemDialog(
+                PivotControlPickerParityFixture.Headers,
+                0,
+                itemNamesBySourceFieldIndex: itemNames,
+                pivotTable: pivot);
+        }),
         new("dialog.PivotChartOptions", () => new PivotChartOptionsDialog(CreateParityPivotChart())),
         new("dialog.PivotChartType", () => new PivotChartTypeDialog(ChartType.Column)),
         new("dialog.PivotFieldGrouping", () =>
@@ -221,7 +234,13 @@ internal static partial class ParityCapture
             var (_, _, pivot) = CreateParityPivot();
             return new PivotTableNameDialog(pivot.Name);
         }),
-        new("dialog.PivotValueFilter", () => new PivotValueFilterDialog(0)),
+        new("dialog.PivotValueFilter", () =>
+        {
+            var (_, _, pivot) = CreateParityPivot();
+            return new PivotValueFilterDialog(
+                0,
+                dataFieldNames: pivot.DataFields.Select(dataField => dataField.Name).ToList());
+        }),
         new("dialog.Rotation", () => new RotationDialog(0, UiText.Get("MainWindowMessage_RotateObjectTitle"))),
         new("dialog.RowHeight", () => new RowHeightDialog(ParityRowHeight())),
         new("dialog.ScreenTip", () => new ScreenTipDialog("Quarterly sales")),

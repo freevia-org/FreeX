@@ -591,16 +591,15 @@ public sealed partial class MainWindow
         return labelBlock;
     }
 
-    private static DockPanel CreatePivotFilterFormContent(Grid form, Button ok, Button clear, Button cancel)
+    private static DockPanel CreatePivotFilterFormContent(Grid form, Button ok, Button cancel)
     {
         ok.Margin = new Thickness(0, 0, 8, 0);
-        clear.Margin = new Thickness(0, 0, 8, 0);
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 12, 0, 0),
-            Children = { ok, clear, cancel },
+            Children = { ok, cancel },
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         var content = new DockPanel { Margin = new Thickness(14) };
@@ -674,10 +673,6 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(ok, 74, isDefault: true);
         ok.Width = 74;
         AutomationProperties.SetAutomationId(ok, "PivotLabelFilterOkButton");
-        var clear = new Button { Content = UiText.Get("Common_Clear"), IsEnabled = existing is not null };
-        ApplyPivotButtonChrome(clear, 74);
-        clear.Width = 74;
-        AutomationProperties.SetAutomationId(clear, "PivotLabelFilterClearButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
         ApplyPivotButtonChrome(cancel, 74);
         cancel.Width = 74;
@@ -695,26 +690,23 @@ public sealed partial class MainWindow
 
             dialog.Close(1);
         };
-        clear.Click += (_, _) => dialog.Close(2);
 
-        var content = CreatePivotFilterFormContent(form, ok, clear, cancel);
+        // Like the WPF dialog (and Excel's Label Filter dialog) there is no Clear button here: removing a
+        // filter goes through the field dropdown's Clear Filter or the item-filter dialog's Remove button.
+        var content = CreatePivotFilterFormContent(form, ok, cancel);
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, kindBox);
 
         var result = await dialog.ShowDialog<int>(this);
-        if (result == 0)
+        if (result != 1)
             return;
 
-        PivotLabelFilterModel? filter = null;
-        if (result == 1)
+        var kind = PivotFieldFilterPlanner.LabelKindFromIndex(kindBox.SelectedIndex);
+        if (!PivotFieldFilterPlanner.TryCreateLabelFilter(
+                target.SourceFieldIndex, kind, value1.Text, value2.Text, out var filter, out var error))
         {
-            var kind = PivotFieldFilterPlanner.LabelKindFromIndex(kindBox.SelectedIndex);
-            if (!PivotFieldFilterPlanner.TryCreateLabelFilter(
-                    target.SourceFieldIndex, kind, value1.Text, value2.Text, out filter, out var error))
-            {
-                ShowEditIssue(error ?? PivotFieldFilterPlanner.LabelValueRequiredMessage);
-                return;
-            }
+            ShowEditIssue(error ?? PivotFieldFilterPlanner.LabelValueRequiredMessage);
+            return;
         }
 
         ApplyPivotApplicationPlan(
@@ -777,7 +769,7 @@ public sealed partial class MainWindow
 
         // Layout mirrors PivotValueFilterDialog.xaml: heading (10px below), then Operator, Value and
         // And rows with 8px row gaps; a value row (label and box) only shows when the kind reads it.
-        // The value-field row above Operator is Avalonia-only.
+        // The Summarize-by (measure) row above Operator is shared with the WPF dialog, as in Excel.
         var form = CreatePivotFilterFormGrid();
         AddPivotFilterFormHeading(form, UiText.Get("PivotValueFilter_ShowItemsForWhichTheValue"));
         AddPivotFilterFormRow(form, UiText.Get("PivotFilter_SummarizeBy"), dataFieldBox, bottom: 8);
@@ -816,10 +808,6 @@ public sealed partial class MainWindow
         ApplyPivotButtonChrome(ok, 74, isDefault: true);
         ok.Width = 74;
         AutomationProperties.SetAutomationId(ok, "PivotValueFilterOkButton");
-        var clear = new Button { Content = UiText.Get("Common_Clear"), IsEnabled = existing is not null };
-        ApplyPivotButtonChrome(clear, 74);
-        clear.Width = 74;
-        AutomationProperties.SetAutomationId(clear, "PivotValueFilterClearButton");
         var cancel = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true };
         ApplyPivotButtonChrome(cancel, 74);
         cancel.Width = 74;
@@ -843,32 +831,28 @@ public sealed partial class MainWindow
 
             dialog.Close(1);
         };
-        clear.Click += (_, _) => dialog.Close(2);
 
-        var content = CreatePivotFilterFormContent(form, ok, clear, cancel);
+        // No Clear button (WPF and Excel's Value Filter dialog have none); see the label filter dialog.
+        var content = CreatePivotFilterFormContent(form, ok, cancel);
         dialog.Content = content;
         ConfigurePivotDialogLifecycle(dialog, kindBox);
 
         var result = await dialog.ShowDialog<int>(this);
-        if (result == 0)
+        if (result != 1)
             return;
 
-        PivotValueFilterModel? filter = null;
-        if (result == 1)
+        var kind = PivotFieldFilterPlanner.ValueKindFromIndex(kindBox.SelectedIndex);
+        if (!PivotFieldFilterPlanner.TryCreateValueFilter(
+                target.SourceFieldIndex,
+                dataFieldBox.SelectedIndex,
+                kind,
+                primary.Text,
+                secondary.Text,
+                out var filter,
+                out var error))
         {
-            var kind = PivotFieldFilterPlanner.ValueKindFromIndex(kindBox.SelectedIndex);
-            if (!PivotFieldFilterPlanner.TryCreateValueFilter(
-                    target.SourceFieldIndex,
-                    dataFieldBox.SelectedIndex,
-                    kind,
-                    primary.Text,
-                    secondary.Text,
-                    out filter,
-                    out var error))
-            {
-                ShowEditIssue(error ?? PivotFieldFilterPlanner.NumericValueRequiredMessage);
-                return;
-            }
+            ShowEditIssue(error ?? PivotFieldFilterPlanner.NumericValueRequiredMessage);
+            return;
         }
 
         ApplyPivotApplicationPlan(

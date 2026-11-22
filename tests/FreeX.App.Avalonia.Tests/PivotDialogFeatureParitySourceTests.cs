@@ -15,8 +15,8 @@ public sealed class PivotDialogFeatureParitySourceTests
 
         source.Should().Contain("UiText.Get(\"PivotTable_OpenPivotTableFieldsPane\")");
         source.Should().Contain("AutomationProperties.SetAutomationId(openFieldListBox, \"PivotOpenFieldListBox\");");
-        source.Should().Contain("OpenFieldList: openFieldListBox.IsChecked == true,");
-        source.Should().NotContain("OpenFieldList: true,");
+        source.Should().Contain("OpenFieldList: openFieldListBox.IsChecked == true));");
+        source.Should().NotContain("OpenFieldList: true");
         source.Should().Contain("_pivotFieldPaneUserHidden = !outcome.Transition.RefreshFieldList;");
 
         // WPF order: location editor, field-pane check box, then the button row.
@@ -24,6 +24,60 @@ public sealed class PivotDialogFeatureParitySourceTests
             .Should().BeLessThan(source.IndexOf("                openFieldListBox,", StringComparison.Ordinal));
         source.IndexOf("                openFieldListBox,", StringComparison.Ordinal)
             .Should().BeLessThan(source.IndexOf("                buttonRow,", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CreatePivotTableDialog_HasNoPerColumnRoleListLikeWpfAndExcel()
+    {
+        var source = ReadAppSource("MainWindow.PivotCreate.cs");
+
+        // The WPF dialog (and Excel's) only choose source and destination; the shared session proposes the
+        // starting layout and the field pane refines it.
+        source.Should().NotContain("PivotFieldRole");
+        source.Should().NotContain("PivotLoc_Role");
+        source.Should().NotContain("roleBoxes");
+        source.Should().NotContain("PivotCreatePlanner.FieldRole");
+        source.Should().Contain("OpenFieldList: openFieldListBox.IsChecked == true));");
+    }
+
+    [Fact]
+    public void LabelAndValueFilterDialogs_HaveOnlyOkAndCancelLikeWpf_ValueFilterKeepsSummarizeBy()
+    {
+        var source = ReadAppSource("MainWindow.PivotFilters.cs");
+
+        source.Should().NotContain("PivotLabelFilterClearButton");
+        source.Should().NotContain("PivotValueFilterClearButton");
+        source.Should().Contain("CreatePivotFilterFormContent(form, ok, cancel)");
+        source.Should().NotContain("CreatePivotFilterFormContent(form, ok, clear, cancel)");
+
+        // The measure picker is shared with the WPF dialog (Excel's Value Filter "Summarize by" row).
+        source.Should().Contain("AutomationProperties.SetAutomationId(dataFieldBox, \"PivotValueFilterDataFieldBox\");");
+        source.Should().Contain("UiText.Get(\"PivotFilter_SummarizeBy\")");
+
+        var wpfXaml = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "PivotValueFilterDialog.xaml"));
+        wpfXaml.Should().Contain("PivotFilter_SummarizeBy");
+        wpfXaml.Should().Contain("PivotValueFilterDataFieldBox");
+    }
+
+    [Fact]
+    public void CalculatedFieldAndItemDialogs_ExistingPickerAndDeleteAreSharedWithWpf()
+    {
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "PivotCalculatedDialogs.cs"));
+        var avaloniaField = ReadAppSource("MainWindow.PivotCalculatedField.cs");
+        var avaloniaItem = ReadAppSource("MainWindow.PivotCalculatedItem.cs");
+
+        foreach (var key in new[] { "PivotCalcField_ExistingLabel", "PivotCalcField_ExistingNone", "PivotCalcField_Delete",
+                     "PivotCalcItem_ExistingLabel", "PivotCalcItem_ExistingNone", "PivotCalcItem_Delete" })
+        {
+            wpf.Should().Contain($"\"{key}\"");
+        }
+
+        wpf.Should().Contain("PivotCalculatedFieldSession.Create(pivotTable");
+        wpf.Should().Contain("PivotCalculatedItemSession.Create(");
+        wpf.Should().Contain("_session.SelectExisting(");
+        wpf.Should().Contain("_session.PlanDelete(");
+        avaloniaField.Should().Contain("calculatedFieldSession.SelectExisting(");
+        avaloniaItem.Should().Contain("calculatedItemSession.SelectExisting(");
     }
 
     [Fact]

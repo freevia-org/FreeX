@@ -16241,9 +16241,6 @@ and {0} more.</value>&#xD;
   <data name="PivotChart_OptionsApplied" xml:space="preserve">
     <value>Options du graphique croisé dynamique appliquées.</value>
   </data>
-  <data name="PivotLoc_RoleRow" xml:space="preserve">
-    <value>Ligne</value>
-  </data>
   <data name="TableLoc_Ready" xml:space="preserve">
     <value>Prêt</value>
   </data>
@@ -17768,9 +17765,6 @@ and {0} more.</value>&#xD;
   <data name="InsertLoc_CreateNamesTopRow" xml:space="preserve">
     <value>Ligne du haut</value>
   </data>
-  <data name="PivotLoc_RoleValue" xml:space="preserve">
-    <value>Valeur</value>
-  </data>
   <data name="FormatPicture_SizeHeader" xml:space="preserve">
     <value>Taille</value>
   </data>
@@ -18400,9 +18394,6 @@ and {0} more.</value>&#xD;
   </data>
   <data name="PivotGroup_Ungrouped" xml:space="preserve">
     <value>Champ « {0} » dégroupé.</value>
-  </data>
-  <data name="PivotLoc_RoleUnused" xml:space="preserve">
-    <value>(Non utilisé)</value>
   </data>
   <data name="ChartLoc_ChartTitleLabel" xml:space="preserve">
     <value>Titre du graphique :</value>

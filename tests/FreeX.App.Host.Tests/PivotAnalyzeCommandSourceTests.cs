@@ -43,7 +43,10 @@ public sealed class PivotAnalyzeCommandSourceTests
         advancedSource.Should().Contain("PivotGroupFieldPlanner.BuildLayout(pivotTable, submission.Field)");
         advancedSource.Should().NotContain("PivotFieldGroupingDialogResult");
         advancedSource.Should().Contain("new PivotCalculatedFieldDialog");
-        advancedSource.Should().Contain("new PivotCalculatedItemDialog(headers, sourceIndex)");
+        advancedSource.Should().Contain("new PivotCalculatedItemDialog(");
+        advancedSource.Should().Contain("pivotTable: pivotTable)");
+        advancedSource.Should().Contain("dialog.CreateCommitPlan()");
+        advancedSource.Should().Contain("PivotApplication.ReadSourceItems(pivotTarget, layoutField.SourceFieldIndex)");
         advancedSource.Should().Contain("PivotApplication.PlanCalculatedConfiguration(");
         advancedSource.Should().NotContain("new ConfigurePivotTableCalculatedItemsCommand(");
 

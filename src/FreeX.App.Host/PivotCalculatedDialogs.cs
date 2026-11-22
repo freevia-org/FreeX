@@ -15,18 +15,40 @@ public sealed class PivotCalculatedFieldDialog : Window
     private readonly TextBox _nameBox = new();
     private readonly TextBox _formulaBox = new();
     private readonly ListBox _fieldList = new() { Height = 92 };
+    private readonly ComboBox _existingBox = new();
     private readonly PivotCalculatedFieldSession _session;
+    private readonly bool _managesExistingFields;
 
     public PivotCalculatedFieldResult Result { get; private set; }
 
-    public PivotCalculatedFieldDialog(string name = "", string formula = "", IEnumerable<string>? fieldNames = null)
+    /// <summary>
+    /// The add/modify or delete the user confirmed when the dialog was opened for a PivotTable
+    /// (see the <c>pivotTable</c> constructor argument); null for the draft-only form.
+    /// </summary>
+    public PivotCalculatedFieldSubmission? Submission { get; private set; }
+
+    /// <param name="pivotTable">
+    /// When supplied, the dialog works like Excel's Insert Calculated Field: it lists the PivotTable's existing
+    /// calculated fields so one can be modified, offers Delete, and starts new fields at "= ". The caller applies
+    /// <see cref="CreateCommitPlan"/>. Without it the dialog is a plain name/formula draft editor.
+    /// </param>
+    public PivotCalculatedFieldDialog(
+        string name = "",
+        string formula = "",
+        IEnumerable<string>? fieldNames = null,
+        PivotTableModel? pivotTable = null)
     {
         var text = PivotCalculatedFieldSessionText.Default with
         {
             EmptyNameMessage = UiText.Get("PivotCalculated_EnterCalculatedFieldName"),
-            EmptyFormulaMessage = UiText.Get("PivotCalculated_EnterCalculatedFieldFormula")
+            EmptyFormulaMessage = UiText.Get("PivotCalculated_EnterCalculatedFieldFormula"),
+            SavedStatusFormat = UiText.Get("PivotCalcField_Saved"),
+            DeletedStatusFormat = UiText.Get("PivotCalcField_Deleted")
         };
-        _session = PivotCalculatedFieldSession.CreateDraft(name, formula, fieldNames ?? [], text);
+        _managesExistingFields = pivotTable is not null;
+        _session = pivotTable is null
+            ? PivotCalculatedFieldSession.CreateDraft(name, formula, fieldNames ?? [], text)
+            : PivotCalculatedFieldSession.Create(pivotTable, (fieldNames ?? []).ToList(), text);
         Result = CreateResult(name, formula);
         Title = UiText.Get("PivotCalculated_CalculatedField");
         Width = 480;
@@ -35,8 +57,8 @@ public sealed class PivotCalculatedFieldDialog : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         Content = CreateContent();
-        _nameBox.Text = Result.Name;
-        _formulaBox.Text = Result.Formula;
+        _nameBox.Text = _managesExistingFields ? _session.Name : Result.Name;
+        _formulaBox.Text = _managesExistingFields ? _session.Formula : Result.Formula;
         _fieldList.ItemsSource = _session.FieldReferences;
         if (_session.FieldReferences.Count > 0)
             _fieldList.SelectedIndex = 0;
@@ -56,6 +78,17 @@ public sealed class PivotCalculatedFieldDialog : Window
     {
         var stack = new StackPanel { Margin = new Thickness(16) };
         var formulaPanel = PivotDialogLayout.CreateGroupPanel();
+        if (_managesExistingFields)
+        {
+            _existingBox.Items.Add(UiText.Get("PivotCalcField_ExistingNone"));
+            foreach (var existingName in _session.ExistingNames)
+                _existingBox.Items.Add(existingName);
+            _existingBox.SelectedIndex = 0;
+            _existingBox.SelectionChanged += (_, _) => LoadExistingField();
+            AutomationProperties.SetName(_existingBox, UiText.Get("PivotCalcField_ExistingLabel"));
+            PivotDialogLayout.AddLabeledControl(formulaPanel, UiText.Get("PivotCalcField_ExistingLabel"), _existingBox);
+        }
+
         AddTextBox(formulaPanel, UiText.Get("PivotCalculated_NameLabel"), _nameBox);
         AddTextBox(formulaPanel, UiText.Get("PivotCalculated_FormulaLabel"), _formulaBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_NameAndFormulaGroup"), formulaPanel));
@@ -74,9 +107,39 @@ public sealed class PivotCalculatedFieldDialog : Window
         fieldsPanel.Children.Add(insertFieldButton);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldsGroup"), fieldsPanel));
 
-        stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
+        var buttonRow = PivotDialogLayout.CreateButtonRow(Accept);
+        if (_managesExistingFields)
+        {
+            var deleteButton = new Button
+            {
+                Content = UiText.Get("PivotCalcField_Delete"),
+                MinWidth = 76,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            deleteButton.Click += (_, _) => DeleteField();
+            buttonRow.Children.Insert(1, deleteButton);
+        }
+
+        stack.Children.Add(buttonRow);
         return stack;
     }
+
+    private void LoadExistingField()
+    {
+        var selectedName = _existingBox.SelectedIndex > 0
+            ? _session.ExistingNames[_existingBox.SelectedIndex - 1]
+            : null;
+        var draft = _session.SelectExisting(selectedName);
+        _nameBox.Text = draft.Name;
+        _formulaBox.Text = draft.Formula;
+    }
+
+    /// <summary>
+    /// The calculated-field list to apply for <see cref="Submission"/> (add/modify or delete) and its status
+    /// text, or null when the dialog was not confirmed or was opened without a PivotTable.
+    /// </summary>
+    public PivotCalculatedFieldCommitPlan? CreateCommitPlan() =>
+        _managesExistingFields && Submission is not null ? _session.Commit(Submission) : null;
 
     private void Accept()
     {
@@ -92,6 +155,20 @@ public sealed class PivotCalculatedFieldDialog : Window
 
         var result = plan.Submission!.Result!;
         Result = result;
+        Submission = plan.Submission;
+        DialogResult = true;
+    }
+
+    private void DeleteField()
+    {
+        var plan = _session.PlanDelete(_nameBox.Text);
+        if (!plan.Success)
+        {
+            ShowInvalidInputWarning(plan.Issue!.Message, _nameBox);
+            return;
+        }
+
+        Submission = plan.Submission;
         DialogResult = true;
     }
 
@@ -149,29 +226,69 @@ public sealed class PivotCalculatedItemDialog : Window
     private readonly ListBox _itemList = new() { Height = 80 };
     private readonly TextBox _nameBox = new();
     private readonly TextBox _formulaBox = new();
+    private readonly ComboBox _existingBox = new();
     private readonly PivotCalculatedItemSession _session;
+    private readonly bool _managesExistingItems;
+    private bool _loading = true;
+    private bool _reloadingExistingItems;
 
     public PivotCalculatedItemResult Result { get; private set; }
 
+    /// <summary>
+    /// The add/modify or delete the user confirmed when the dialog was opened for a PivotTable
+    /// (see the <c>pivotTable</c> constructor argument); null for the draft-only form.
+    /// </summary>
+    public PivotCalculatedItemSubmission? Submission { get; private set; }
+
+    /// <summary>
+    /// Set when the PivotTable has no row or column field a calculated item could attach to; the caller shows
+    /// the message instead of the dialog. Always null for the draft-only form.
+    /// </summary>
+    public PivotCalculatedWorkflowIssue? OpenIssue => _managesExistingItems ? _session.OpenIssue : null;
+
+    /// <param name="pivotTable">
+    /// When supplied, the dialog works like Excel's Insert Calculated Item: the source fields are the
+    /// PivotTable's row and column fields, the selected field's existing calculated items can be modified,
+    /// Delete is offered, and new items start at "= ". The caller applies <see cref="CreateCommitPlan"/>.
+    /// Without it the dialog is a plain name/formula draft editor.
+    /// </param>
     public PivotCalculatedItemDialog(
         IEnumerable<string> fieldNames,
         int selectedSourceFieldIndex = 0,
         string name = "",
         string formula = "",
-        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex = null)
+        IReadOnlyDictionary<int, IEnumerable<string>>? itemNamesBySourceFieldIndex = null,
+        PivotTableModel? pivotTable = null)
     {
         var text = PivotCalculatedItemSessionText.Default with
         {
             EmptyNameMessage = UiText.Get("PivotCalculated_EnterCalculatedItemName"),
-            EmptyFormulaMessage = UiText.Get("PivotCalculated_EnterCalculatedItemFormula")
+            EmptyFormulaMessage = UiText.Get("PivotCalculated_EnterCalculatedItemFormula"),
+            NoSourceFieldMessage = UiText.Get("PivotCalcItem_NoField"),
+            SavedStatusFormat = UiText.Get("PivotCalcItem_Saved"),
+            DeletedStatusFormat = UiText.Get("PivotCalcItem_Deleted")
         };
-        _session = PivotCalculatedItemSession.CreateDraft(
-            fieldNames,
-            selectedSourceFieldIndex,
-            name,
-            formula,
-            itemNamesBySourceFieldIndex,
-            text);
+        _managesExistingItems = pivotTable is not null;
+        if (pivotTable is null)
+        {
+            _session = PivotCalculatedItemSession.CreateDraft(
+                fieldNames,
+                selectedSourceFieldIndex,
+                name,
+                formula,
+                itemNamesBySourceFieldIndex,
+                text);
+        }
+        else
+        {
+            _session = PivotCalculatedItemSession.Create(
+                pivotTable,
+                fieldNames.ToList(),
+                text,
+                itemNamesBySourceFieldIndex: itemNamesBySourceFieldIndex);
+            _session.SelectSourceField(selectedSourceFieldIndex, startNew: true);
+        }
+
         Result = CreateResult(
             _session.SelectedSourceFieldIndex,
             name,
@@ -185,6 +302,7 @@ public sealed class PivotCalculatedItemDialog : Window
         ShowInTaskbar = false;
         Content = CreateContent();
         Load(Result);
+        _loading = false;
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -209,8 +327,15 @@ public sealed class PivotCalculatedItemDialog : Window
         var itemPanel = PivotDialogLayout.CreateGroupPanel();
         _fieldBox.ItemsSource = _session.Fields;
         _fieldBox.DisplayMemberPath = nameof(PivotCalculatedItemPlanner.CalculatedItemField.Caption);
-        _fieldBox.SelectionChanged += (_, _) => RefreshItemList();
+        _fieldBox.SelectionChanged += (_, _) => OnSourceFieldChanged();
         PivotDialogLayout.AddLabeledControl(itemPanel, UiText.Get("PivotCalculated_SourceFieldLabel"), _fieldBox);
+        if (_managesExistingItems)
+        {
+            _existingBox.SelectionChanged += (_, _) => LoadExistingItem();
+            AutomationProperties.SetName(_existingBox, UiText.Get("PivotCalcItem_ExistingLabel"));
+            PivotDialogLayout.AddLabeledControl(itemPanel, UiText.Get("PivotCalcItem_ExistingLabel"), _existingBox);
+        }
+
         AddTextBox(itemPanel, UiText.Get("PivotCalculated_NameLabel"), _nameBox);
         AddTextBox(itemPanel, UiText.Get("PivotCalculated_ItemFormulaLabel"), _formulaBox);
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldAndItemGroup"), itemPanel));
@@ -228,16 +353,96 @@ public sealed class PivotCalculatedItemDialog : Window
         insertPanel.Children.Add(CreateInsertButton(UiText.Get("PivotCalculated_InsertItem"), () => InsertSelectedItem()));
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_InsertIntoFormulaGroup"), insertPanel));
 
-        stack.Children.Add(PivotDialogLayout.CreateButtonRow(Accept));
+        var buttonRow = PivotDialogLayout.CreateButtonRow(Accept);
+        if (_managesExistingItems)
+        {
+            var deleteButton = new Button
+            {
+                Content = UiText.Get("PivotCalcItem_Delete"),
+                MinWidth = 76,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+            deleteButton.Click += (_, _) => DeleteItem();
+            buttonRow.Children.Insert(1, deleteButton);
+        }
+
+        stack.Children.Add(buttonRow);
         return stack;
+    }
+
+    /// <summary>
+    /// The calculated-item list to apply for <see cref="Submission"/> (add/modify or delete) and its status
+    /// text, or null when the dialog was not confirmed or was opened without a PivotTable.
+    /// </summary>
+    public PivotCalculatedItemCommitPlan? CreateCommitPlan() =>
+        _managesExistingItems && Submission is not null ? _session.Commit(Submission) : null;
+
+    private void OnSourceFieldChanged()
+    {
+        // Switching the source field in the PivotTable form starts a new item for that field.
+        if (_managesExistingItems && !_loading && _fieldBox.SelectedItem is PivotCalculatedItemPlanner.CalculatedItemField field)
+        {
+            var draft = _session.SelectSourceField(field.SourceFieldIndex, startNew: true);
+            _nameBox.Text = draft.Name;
+            _formulaBox.Text = draft.Formula;
+        }
+
+        RefreshItemList();
+    }
+
+    private void ReloadExistingItems()
+    {
+        if (!_managesExistingItems)
+            return;
+
+        _reloadingExistingItems = true;
+        try
+        {
+            _existingBox.Items.Clear();
+            _existingBox.Items.Add(UiText.Get("PivotCalcItem_ExistingNone"));
+            foreach (var existingName in _session.ExistingNames)
+                _existingBox.Items.Add(existingName);
+            _existingBox.SelectedIndex = 0;
+        }
+        finally
+        {
+            _reloadingExistingItems = false;
+        }
+    }
+
+    private void LoadExistingItem()
+    {
+        if (_reloadingExistingItems)
+            return;
+
+        var selectedName = _existingBox.SelectedIndex > 0
+            ? _session.ExistingNames[_existingBox.SelectedIndex - 1]
+            : null;
+        var draft = _session.SelectExisting(selectedName);
+        _nameBox.Text = draft.Name;
+        _formulaBox.Text = draft.Formula;
+    }
+
+    private void DeleteItem()
+    {
+        SyncSelectedSourceField();
+        var plan = _session.PlanDelete(_nameBox.Text);
+        if (!plan.Success)
+        {
+            ShowInvalidInputWarning(plan.Issue!.Message, _nameBox);
+            return;
+        }
+
+        Submission = plan.Submission;
+        DialogResult = true;
     }
 
     private void Load(PivotCalculatedItemResult result)
     {
         _fieldBox.SelectedItem = _session.Fields.FirstOrDefault(
             field => field.SourceFieldIndex == result.SourceFieldIndex) ?? _session.Fields.FirstOrDefault();
-        _nameBox.Text = result.Name;
-        _formulaBox.Text = result.Formula;
+        _nameBox.Text = _managesExistingItems ? _session.Name : result.Name;
+        _formulaBox.Text = _managesExistingItems ? _session.Formula : result.Formula;
         _fieldList.SelectedItem = _fieldBox.SelectedItem;
         if (_fieldList.SelectedItem is null && _session.Fields.Count > 0)
             _fieldList.SelectedIndex = 0;
@@ -259,6 +464,7 @@ public sealed class PivotCalculatedItemDialog : Window
 
         var result = plan.Submission!.Result!;
         Result = result;
+        Submission = plan.Submission;
         DialogResult = true;
     }
 
@@ -280,6 +486,7 @@ public sealed class PivotCalculatedItemDialog : Window
         SyncSelectedSourceField();
         _itemList.ItemsSource = _session.ItemReferences;
         _itemList.SelectedIndex = _session.ItemReferences.Count > 0 ? 0 : -1;
+        ReloadExistingItems();
     }
 
     private void SyncSelectedSourceField()

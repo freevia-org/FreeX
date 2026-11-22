@@ -51,30 +51,31 @@ public partial class MainWindow
 
     private void PivotCalculatedFieldBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryGetActivePivotTable(out _, out var pivotTable))
+        if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var dialog = new PivotCalculatedFieldDialog { Owner = this };
-        if (dialog.ShowDialog() != true ||
-            string.IsNullOrWhiteSpace(dialog.Result.Name) ||
-            string.IsNullOrWhiteSpace(dialog.Result.Formula))
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
+        var dialog = new PivotCalculatedFieldDialog(fieldNames: headers, pivotTable: pivotTable) { Owner = this };
+        if (dialog.ShowDialog() != true || dialog.CreateCommitPlan() is not { } commit)
+            return;
+
+        if (!commit.Success)
         {
+            ShowPivotAdvancedIssue(commit.Issue!.Message);
             return;
         }
-
-        var calculatedFields = pivotTable.CalculatedFields
-            .Where(field => !string.Equals(field.Name, dialog.Result.Name, StringComparison.CurrentCultureIgnoreCase))
-            .Append(dialog.Result.ToModel())
-            .ToList();
 
         ApplyPivotAdvancedConfiguration(
             pivotTable,
             pivotTable.RowFields.ToList(),
             pivotTable.ColumnFields.ToList(),
             pivotTable.PageFields.ToList(),
-            calculatedFields,
+            commit.CalculatedFields,
             pivotTable.CalculatedItems.ToList());
     }
+
+    private void ShowPivotAdvancedIssue(string message) =>
+        DialogMessageHelper.ShowWarning(this, message, "PivotTable Calculations");
 
     private void PivotCalculatedItemBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -83,20 +84,38 @@ public partial class MainWindow
 
         var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable) ?? 0;
-        var dialog = new PivotCalculatedItemDialog(headers, sourceIndex) { Owner = this };
-        if (dialog.ShowDialog() != true ||
-            string.IsNullOrWhiteSpace(dialog.Result.Name) ||
-            string.IsNullOrWhiteSpace(dialog.Result.Formula))
+        // The source items of every row/column field a calculated item can attach to, so the dialog can
+        // offer them as formula references (the available-items list).
+        var pivotTarget = new PivotApplicationTarget(sheet, pivotTable);
+        var itemNamesBySourceFieldIndex = new Dictionary<int, IEnumerable<string>>();
+        foreach (var layoutField in pivotTable.RowFields.Concat(pivotTable.ColumnFields))
         {
+            if (!itemNamesBySourceFieldIndex.ContainsKey(layoutField.SourceFieldIndex))
+            {
+                itemNamesBySourceFieldIndex[layoutField.SourceFieldIndex] =
+                    PivotApplication.ReadSourceItems(pivotTarget, layoutField.SourceFieldIndex);
+            }
+        }
+
+        var dialog = new PivotCalculatedItemDialog(
+            headers,
+            sourceIndex,
+            itemNamesBySourceFieldIndex: itemNamesBySourceFieldIndex,
+            pivotTable: pivotTable) { Owner = this };
+        if (dialog.OpenIssue is { } openIssue)
+        {
+            ShowPivotAdvancedIssue(openIssue.Message);
             return;
         }
 
-        var calculatedItems = pivotTable.CalculatedItems
-            .Where(item =>
-                item.SourceFieldIndex != dialog.Result.SourceFieldIndex ||
-                !string.Equals(item.Name, dialog.Result.Name, StringComparison.CurrentCultureIgnoreCase))
-            .Append(dialog.Result.ToModel())
-            .ToList();
+        if (dialog.ShowDialog() != true || dialog.CreateCommitPlan() is not { } commit)
+            return;
+
+        if (!commit.Success)
+        {
+            ShowPivotAdvancedIssue(commit.Issue!.Message);
+            return;
+        }
 
         ApplyPivotAdvancedConfiguration(
             pivotTable,
@@ -104,7 +123,7 @@ public partial class MainWindow
             pivotTable.ColumnFields.ToList(),
             pivotTable.PageFields.ToList(),
             pivotTable.CalculatedFields.ToList(),
-            calculatedItems);
+            commit.CalculatedItems);
     }
 
     private void ApplyPivotGroupingResult(PivotTableModel pivotTable, PivotGroupFieldSubmission submission)

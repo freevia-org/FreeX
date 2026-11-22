@@ -3794,15 +3794,6 @@
   <data name="PivotLoc_InsertPivotChartFailed" xml:space="preserve">
     <value>Insert PivotChart failed.</value>
   </data>
-  <data name="PivotLoc_RoleUnused" xml:space="preserve">
-    <value>(Unused)</value>
-  </data>
-  <data name="PivotLoc_RoleRow" xml:space="preserve">
-    <value>Row</value>
-  </data>
-  <data name="PivotLoc_RoleValue" xml:space="preserve">
-    <value>Value</value>
-  </data>
   <data name="PivotLoc_SelectRangeForPivot" xml:space="preserve">
     <value>Select a range with a header row and at least one data row to insert a PivotTable.</value>
   </data>
