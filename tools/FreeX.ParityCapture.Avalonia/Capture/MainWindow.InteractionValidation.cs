@@ -34,6 +34,8 @@ public sealed partial class MainWindow
         // the window's save guard set, so every later dialog silently refuses to open. Cancel it by default;
         // the Save-specific probes below install their own picker and restore this one.
         _workbookSaveAsPickerOverride ??= static _ => Task.FromResult<WorkbookSaveAsPickerSelection?>(null);
+        // File > Export / Export to PDF open the save picker first; cancel it deterministically too.
+        InstallCancellingExportSavePicker();
         if (includeCoreResults)
         {
             bool Includes(string section) => coreSection is null ||
