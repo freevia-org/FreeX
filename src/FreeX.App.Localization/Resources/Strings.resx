@@ -3125,6 +3125,129 @@
   <data name="ChartElement_DataLabels" xml:space="preserve">
     <value>Data Labels</value>
   </data>
+  <data name="ChartFormatPane_Title" xml:space="preserve">
+    <value>Format {0}</value>
+  </data>
+  <data name="ChartFormatPane_MoreOptions" xml:space="preserve">
+    <value>More Options...</value>
+  </data>
+  <data name="ChartFormatPane_Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="ChartFormatPane_AutomationName" xml:space="preserve">
+    <value>Format Pane</value>
+  </data>
+  <data name="ChartFormatPane_ChartTitleText" xml:space="preserve">
+    <value>Chart title</value>
+  </data>
+  <data name="ChartFormatPane_TitleText" xml:space="preserve">
+    <value>Title text</value>
+  </data>
+  <data name="ChartFormatPane_AxisTitleText" xml:space="preserve">
+    <value>Axis title text</value>
+  </data>
+  <data name="ChartFormatPane_ShowLegend" xml:space="preserve">
+    <value>Show legend</value>
+  </data>
+  <data name="ChartFormatPane_LegendPosition" xml:space="preserve">
+    <value>Legend position</value>
+  </data>
+  <data name="ChartFormatPane_LegendOverlay" xml:space="preserve">
+    <value>Show the legend over the chart</value>
+  </data>
+  <data name="ChartFormatPane_FontSize" xml:space="preserve">
+    <value>Font size</value>
+  </data>
+  <data name="ChartFormatPane_ResetPosition" xml:space="preserve">
+    <value>Reset position and size</value>
+  </data>
+  <data name="ChartFormatPane_ShowDataLabels" xml:space="preserve">
+    <value>Show data labels</value>
+  </data>
+  <data name="ChartFormatPane_BorderThickness" xml:space="preserve">
+    <value>Border thickness</value>
+  </data>
+  <data name="ChartFormatPane_ShowAxisLabels" xml:space="preserve">
+    <value>Show axis labels</value>
+  </data>
+  <data name="ChartFormatPane_LabelFontSize" xml:space="preserve">
+    <value>Label font size</value>
+  </data>
+  <data name="ChartFormatPane_MajorGridlines" xml:space="preserve">
+    <value>Major gridlines</value>
+  </data>
+  <data name="ChartFormatPane_AxisMinimum" xml:space="preserve">
+    <value>Minimum</value>
+  </data>
+  <data name="ChartFormatPane_AxisMaximum" xml:space="preserve">
+    <value>Maximum</value>
+  </data>
+  <data name="ChartFormatPane_AxisMajorUnit" xml:space="preserve">
+    <value>Major unit</value>
+  </data>
+  <data name="ChartFormatPane_LogScale" xml:space="preserve">
+    <value>Logarithmic scale</value>
+  </data>
+  <data name="ChartFormatPane_ResetBounds" xml:space="preserve">
+    <value>Reset bounds to automatic</value>
+  </data>
+  <data name="ChartFormatPane_LabelValue" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="ChartFormatPane_LabelCategory" xml:space="preserve">
+    <value>Category name</value>
+  </data>
+  <data name="ChartFormatPane_LabelSeries" xml:space="preserve">
+    <value>Series name</value>
+  </data>
+  <data name="ChartFormatPane_LabelPercentage" xml:space="preserve">
+    <value>Percentage</value>
+  </data>
+  <data name="ChartFormatPane_LabelPosition" xml:space="preserve">
+    <value>Label position</value>
+  </data>
+  <data name="ChartFormatPane_PositionTop" xml:space="preserve">
+    <value>Top</value>
+  </data>
+  <data name="ChartFormatPane_PositionBottom" xml:space="preserve">
+    <value>Bottom</value>
+  </data>
+  <data name="ChartFormatPane_PositionLeft" xml:space="preserve">
+    <value>Left</value>
+  </data>
+  <data name="ChartFormatPane_PositionRight" xml:space="preserve">
+    <value>Right</value>
+  </data>
+  <data name="ChartFormatPane_PositionTopRight" xml:space="preserve">
+    <value>Top right</value>
+  </data>
+  <data name="ChartFormatPane_PositionBestFit" xml:space="preserve">
+    <value>Best fit</value>
+  </data>
+  <data name="ChartFormatPane_PositionCenter" xml:space="preserve">
+    <value>Center</value>
+  </data>
+  <data name="ChartFormatPane_PositionInsideEnd" xml:space="preserve">
+    <value>Inside end</value>
+  </data>
+  <data name="ChartFormatPane_PositionOutsideEnd" xml:space="preserve">
+    <value>Outside end</value>
+  </data>
+  <data name="ChartFormatPane_ShowTrendline" xml:space="preserve">
+    <value>Show trendline</value>
+  </data>
+  <data name="ChartFormatPane_TrendlineEquation" xml:space="preserve">
+    <value>Display equation on chart</value>
+  </data>
+  <data name="ChartFormatPane_TrendlineRSquared" xml:space="preserve">
+    <value>Display R-squared value on chart</value>
+  </data>
+  <data name="ChartFormatPane_ShowErrorBars" xml:space="preserve">
+    <value>Show error bars</value>
+  </data>
+  <data name="ChartFormatPane_ErrorBarCaps" xml:space="preserve">
+    <value>End caps</value>
+  </data>
   <data name="ChartLoc_InsertChartFailed" xml:space="preserve">
     <value>Insert Chart failed.</value>
   </data>
@@ -3793,15 +3916,6 @@
   </data>
   <data name="PivotLoc_InsertPivotChartFailed" xml:space="preserve">
     <value>Insert PivotChart failed.</value>
-  </data>
-  <data name="PivotLoc_RoleUnused" xml:space="preserve">
-    <value>(Unused)</value>
-  </data>
-  <data name="PivotLoc_RoleRow" xml:space="preserve">
-    <value>Row</value>
-  </data>
-  <data name="PivotLoc_RoleValue" xml:space="preserve">
-    <value>Value</value>
   </data>
   <data name="PivotLoc_SelectRangeForPivot" xml:space="preserve">
     <value>Select a range with a header row and at least one data row to insert a PivotTable.</value>
@@ -5835,6 +5949,9 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   </data>
   <data name="PrintPreview_ZoomPageWidth" xml:space="preserve">
     <value>Page Width</value>
+  </data>
+  <data name="PrintPreview_TwoPages" xml:space="preserve">
+    <value>Two Pages</value>
   </data>
   <data name="DialogReferencePicker_HelpText" xml:space="preserve">
     <value>Collapse dialog and select a worksheet range for this field.</value>
@@ -16398,7 +16515,7 @@ Continue saving?</value>
     <value>Report Layout</value>
   </data>
   <data name="PivotValueFilter_LessThanOrEqual" xml:space="preserve">
-    <value>Less Than Or Equal</value>
+    <value>Less Than Or Equal To</value>
   </data>
   <data name="FormatCells_Bottom2" xml:space="preserve">
     <value>_Bottom:</value>
@@ -16482,7 +16599,7 @@ Continue saving?</value>
     <value>Paste formulas that link to the copied cells.</value>
   </data>
   <data name="PivotValueFilter_GreaterThanOrEqual" xml:space="preserve">
-    <value>Greater Than Or Equal</value>
+    <value>Greater Than Or Equal To</value>
   </data>
   <data name="WatchWindow_Refresh" xml:space="preserve">
     <value>_Refresh</value>
@@ -21142,5 +21259,8 @@ and {0} more.</value>
   </data>
   <data name="ThreadedCommentPane_SummaryFormat" xml:space="preserve">
     <value>{0} active, {1} resolved</value>
+  </data>
+  <data name="ColorPicker_InvalidRgbMessage" xml:space="preserve">
+    <value>Enter RGB values from 0 to 255.</value>
   </data>
 </root>

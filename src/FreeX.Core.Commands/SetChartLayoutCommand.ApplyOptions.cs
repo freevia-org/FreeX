@@ -4,6 +4,32 @@ namespace FreeX.Core.Commands;
 
 public sealed partial class SetChartLayoutCommand
 {
+    private static void ApplyManualLayouts(ChartModel chart, ChartLayoutOptions options)
+    {
+        var clear = options.ClearManualLayouts;
+        if ((clear & ChartManualLayoutTargets.Title) != 0)
+            chart.TitleLayout = null;
+        if ((clear & ChartManualLayoutTargets.Legend) != 0)
+            chart.LegendLayout = null;
+        if ((clear & ChartManualLayoutTargets.PlotArea) != 0)
+            chart.PlotAreaLayout = null;
+        if ((clear & ChartManualLayoutTargets.XAxisTitle) != 0)
+            chart.XAxisTitleLayout = null;
+        if ((clear & ChartManualLayoutTargets.YAxisTitle) != 0)
+            chart.YAxisTitleLayout = null;
+
+        if (options.TitleLayout is not null)
+            chart.TitleLayout = options.TitleLayout;
+        if (options.LegendLayout is not null)
+            chart.LegendLayout = options.LegendLayout;
+        if (options.PlotAreaLayout is not null)
+            chart.PlotAreaLayout = options.PlotAreaLayout;
+        if (options.XAxisTitleLayout is not null)
+            chart.XAxisTitleLayout = options.XAxisTitleLayout;
+        if (options.YAxisTitleLayout is not null)
+            chart.YAxisTitleLayout = options.YAxisTitleLayout;
+    }
+
     private static void ApplyOptions(ChartModel chart, ChartLayoutOptions options)
     {
         if (options.Title is not null)
@@ -14,6 +40,7 @@ public sealed partial class SetChartLayoutCommand
             chart.YAxisTitle = options.YAxisTitle;
         if (options.SecondaryAxisTitle is not null)
             chart.SecondaryAxisTitle = options.SecondaryAxisTitle;
+        ApplyManualLayouts(chart, options);
         if (options.LegendEntries is not null)
             chart.LegendEntries = options.LegendEntries.ToList();
         if (options.ChartTitleTextColor is not null)
@@ -446,7 +473,7 @@ public sealed partial class SetChartLayoutCommand
                     && format.PointIndex < pointCount)
                 .GroupBy(format => (format.SeriesIndex, format.PointIndex))
                 .Select(group => ClampPointDataLabelFormat(group.Last()))
-                .Where(format => ChartFormatPresence.HasPointDataLabelFormatting(format))
+                .Where(format => ChartFormatPresence.HasPointDataLabelFormatting(format, includeLayoutAndCustomText: true))
                 .OrderBy(format => format.SeriesIndex)
                 .ThenBy(format => format.PointIndex)
                 .ToList();

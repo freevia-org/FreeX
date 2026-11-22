@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -18,9 +19,12 @@ public partial class MainWindow
         {
             AcceptsReturn = true,
             TextWrapping = TextWrapping.NoWrap,
+            // WPF's editor shows an auto vertical scrollbar and hides the horizontal one (no wrap).
             Height = 220,
             Text = CustomListsTextPlanner.Format(session.EditedCustomLists),
         };
+        ScrollViewer.SetVerticalScrollBarVisibility(editor, ScrollBarVisibility.Auto);
+        ScrollViewer.SetHorizontalScrollBarVisibility(editor, ScrollBarVisibility.Hidden);
         AutomationProperties.SetAutomationId(editor, "OptionsCustomListsEditor");
         AutomationProperties.SetName(editor, UiText.Get("Options_CustomListsEditorAutomationName"));
 
@@ -32,7 +36,8 @@ public partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("Options_CustomListsTitle"),
-            Width = 460,
+            // WPF's 460 is the outer window width; Avalonia sizes are client sizes.
+            Width = 460 - WpfNoResizeFrameWidth,
             SizeToContent = SizeToContent.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

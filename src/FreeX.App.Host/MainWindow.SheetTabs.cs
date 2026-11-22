@@ -2209,99 +2209,14 @@ public partial class MainWindow
             sheet.OutlineSummaryRight,
             sheet.ApplyOutlineStyles);
 
-        var summaryBelowBox = new CheckBox
-        {
-            Content = UiText.Get("OutlineSettings_SummaryRowsBelow"),
-            IsChecked = current.SummaryBelow,
-            Margin = new Thickness(0, 0, 0, 6)
-        };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(summaryBelowBox, "OutlineSettingsSummaryBelowCheckBox");
-
-        var summaryRightBox = new CheckBox
-        {
-            Content = UiText.Get("OutlineSettings_SummaryColumnsRight"),
-            IsChecked = current.SummaryRight,
-            Margin = new Thickness(0, 0, 0, 6)
-        };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(summaryRightBox, "OutlineSettingsSummaryRightCheckBox");
-
-        var autoStylesBox = new CheckBox
-        {
-            Content = UiText.Get("OutlineSettings_AutomaticStyles"),
-            IsChecked = current.ApplyStyles,
-            Margin = new Thickness(0, 0, 0, 6)
-        };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(autoStylesBox, "OutlineSettingsAutomaticStylesCheckBox");
-
-        var okButton = new Button
-        {
-            Content = UiText.Get("OutlineSettings_Ok"),
-            IsDefault = true,
-            MinWidth = 84,
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(okButton, "OutlineSettingsOkButton");
-
-        var cancelButton = new Button
-        {
-            Content = UiText.Get("OutlineSettings_Cancel"),
-            IsCancel = true,
-            MinWidth = 84
-        };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(cancelButton, "OutlineSettingsCancelButton");
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("OutlineSettings_Title"),
-            Width = 320,
-            SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize,
-            ShowInTaskbar = false,
-            Owner = this
-        };
-        System.Windows.Automation.AutomationProperties.SetAutomationId(dialog, "OutlineSettingsDialog");
-
-        okButton.Click += (_, _) => dialog.DialogResult = true;
-        cancelButton.Click += (_, _) => dialog.DialogResult = false;
-
-        var buttonRow = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        buttonRow.Children.Add(okButton);
-        buttonRow.Children.Add(cancelButton);
-
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = UiText.Get("OutlineSettings_Direction"),
-                    FontWeight = FontWeights.SemiBold,
-                    Margin = new Thickness(0, 0, 0, 8)
-                },
-                summaryBelowBox,
-                summaryRightBox,
-                autoStylesBox,
-                buttonRow
-            }
-        };
-
+        var dialog = new OutlineSettingsDialog(current) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
         var resolvedSheet = _workbook.GetSheet(sheetId);
         if (resolvedSheet is null) return;
 
-        var acceptedState = new OutlineSettingsState(
-            summaryBelowBox.IsChecked == true,
-            summaryRightBox.IsChecked == true,
-            autoStylesBox.IsChecked == true);
+        var acceptedState = dialog.AcceptedState;
 
         if (!OutlineSettingsPlanner.HasChanges(
                 acceptedState,

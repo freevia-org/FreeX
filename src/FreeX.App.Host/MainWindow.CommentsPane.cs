@@ -22,6 +22,10 @@ public partial class MainWindow
     /// </summary>
     private void ShowCommentsPane(IReadOnlyList<CommentListRowPlan> items)
     {
+        // Both docked panes share the right-hand layout column; opening one replaces the other.
+        if (IsChartFormatPaneOpen)
+            CloseChartFormatPane();
+
         if (_commentsPaneView is null)
         {
             _commentsPaneView = new CommentListView(

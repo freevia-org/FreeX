@@ -274,7 +274,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartTabsSource.Should().Contain("ControlHeight = 22");
         chartTabsSource.Should().Contain("TextBoxHeight = 22");
         chartTabsSource.Should().Contain("ButtonHeight = 22");
-        chartTabsSource.Should().Contain("ListBoxItemMinHeight = 22");
+        chartTabsSource.Should().Contain("ListBoxItemMinHeight = 20");
         chartTabsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, SelectDataSourceDialogChromeStyle);");
         chartTabsSource.Should().Contain("Height = 72,");
         chartTabsSource.Should().Contain("CreateChartButton(UiText.Get(addSeriesAction.LabelResourceKey), 92)");

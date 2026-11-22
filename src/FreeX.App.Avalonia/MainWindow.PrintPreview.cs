@@ -1536,7 +1536,31 @@ public sealed partial class MainWindow
         return button;
     }
 
-    private static Border CreatePreviewDocumentToolbar(IReadOnlyList<Control> controls)
+    /// <summary>The "Two pages" glyph: two portrait pages side by side.</summary>
+    private static Control CreateTwoPagesToolbarGlyph(double iconSize)
+    {
+        Border Page() => new()
+        {
+            Width = iconSize * 0.4,
+            Height = iconSize * 0.75,
+            BorderBrush = Brush(92, 92, 92),
+            BorderThickness = new Thickness(1.2),
+            Background = Brushes.White,
+        };
+
+        return new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 1.5,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Children = { Page(), Page() },
+        };
+    }
+
+    private static Border CreatePreviewDocumentToolbar(
+        IReadOnlyList<Control> controls,
+        IReadOnlyList<Control>? trailingControls = null)
     {
         var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
         var toolbar = new StackPanel
@@ -1547,18 +1571,37 @@ public sealed partial class MainWindow
         };
         toolbar.Children.AddRange(controls);
 
+        Control content = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Content = toolbar,
+        };
+        if (trailingControls is { Count: > 0 })
+        {
+            // Trailing controls (the Find group) stay pinned to the right-hand end of the row.
+            var trailing = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = chrome.ButtonSpacing,
+                Margin = new Thickness(chrome.LeftPadding, 4, chrome.LeftPadding, 4),
+                VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            };
+            trailing.Children.AddRange(trailingControls);
+            var dock = new DockPanel();
+            DockPanel.SetDock(trailing, Dock.Right);
+            dock.Children.Add(trailing);
+            dock.Children.Add(content);
+            content = dock;
+        }
+
         return new Border
         {
             MinHeight = chrome.Height,
             Background = Brush(245, 245, 245),
             BorderBrush = Brush(208, 208, 208),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = new ScrollViewer
-            {
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Content = toolbar,
-            },
+            Child = content,
         };
     }
 

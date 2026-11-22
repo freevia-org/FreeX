@@ -185,7 +185,7 @@ public sealed class ParityCaptureTests
         var routes = MainWindow.ParityInteractionDialogRoutes.ToDictionary(route => route.CatalogId);
         var expectedMappings = new (string CatalogId, string SurfaceId, string ProductionSurface)[]
         {
-            ("dialog.ActivateSheetDialog", "dialog.ActivateSheet", "ShowSwitchWindowsDialogAsync"),
+            ("dialog.ActivateSheetDialog", "dialog.ActivateSheet", "ShowActivateSheetDialogFromSheetNavAsync"),
             ("dialog.ChartAreaLegendDialog", "dialog.FormatChartArea", "ShowFormatChartAreaDialog"),
             ("dialog.CommentListWindow", "dialog.CommentList", "ShowCommentsListAsync"),
             ("dialog.ConfirmPasswordDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync (integrated confirmation field)"),
@@ -222,11 +222,6 @@ public sealed class ParityCaptureTests
                     window.Show();
                     var selectedIds = new HashSet<string>(StringComparer.Ordinal)
                     {
-                        // Dropped: its production opener (ShowSwitchWindowsDialogAsync) returns early
-                        // with a status message when only one window is visible, and the capture
-                        // fixture opens exactly one. The dialog is unreachable here, so the route can
-                        // only ever record "not-opened". Covering it needs the fixture to open a second
-                        // window first.
                         "dialog.AdvancedFilterDialog",
                         "dialog.AllowEditRangeDialog",
                         "dialog.AutoFilterDialog",

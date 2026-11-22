@@ -147,7 +147,7 @@ public sealed partial class MainWindow
     [
         Opened("AboutDialog", "dialog.About", "ShowAboutDialogAsync"),
         Opened("AccessibilityCheckerDialog", "dialog.AccessibilityChecker", "ShowAccessibilityCheckerIssuesDialogAsync"),
-        Opened("ActivateSheetDialog", "dialog.ActivateSheet", "ShowSwitchWindowsDialogAsync"),
+        Opened("ActivateSheetDialog", "dialog.ActivateSheet", "ShowActivateSheetDialogFromSheetNavAsync"),
         Opened("AddWatchDialog", "dialog.AddWatch", "ShowAddWatchDialogAsync"),
         Opened("AdvancedFilterDialog", "dialog.AdvancedFilter", "ShowAdvancedFilterInputDialogAsync"),
         Opened("AllowEditRangeDialog", "dialog.AllowEditRanges", "ShowAllowEditRangeDialogAsync"),
@@ -639,7 +639,7 @@ public sealed partial class MainWindow
     private Func<Task> ResolveSupplementalParityDialogOpener(string catalogId) =>
         catalogId switch
         {
-            "dialog.ActivateSheetDialog" => ShowActivateSheetParityDialogAsync,
+            "dialog.ActivateSheetDialog" => ShowActivateSheetDialogFromSheetNavAsync,
             "dialog.BookmarkDialog" => async () =>
             {
                 await ShowHyperlinkSubPromptAsync(this, "Bookmark", "Cell reference", "A1");
@@ -719,27 +719,6 @@ public sealed partial class MainWindow
             "dialog.WorkbookThemeDialog" => ShowThemesGalleryAsync,
             _ => throw new InvalidOperationException($"No supplemental production opener is registered for {catalogId}.")
         };
-
-    private async Task ShowActivateSheetParityDialogAsync()
-    {
-        var auxiliaryWindow = new Window
-        {
-            Title = "Parity workbook window",
-            Width = 320,
-            Height = 200,
-            ShowInTaskbar = false,
-        };
-        auxiliaryWindow.Show();
-        try
-        {
-            await ShowSwitchWindowsDialogAsync();
-        }
-        finally
-        {
-            auxiliaryWindow.Close();
-            ReactivateAfterAuxiliaryParityWindow();
-        }
-    }
 
     // The window dialogs need a second top-level window to list. Showing it takes activation from
     // this window, and closing it again does not hand activation back under the headless platform

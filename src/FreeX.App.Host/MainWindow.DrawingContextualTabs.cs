@@ -13,6 +13,7 @@ public partial class MainWindow
         RefreshChartContextualTabs();
         RefreshTableContextualTab();
         RefreshPivotFieldListPaneAfterSelectionChange();
+        RefreshChartFormatPaneForSelection();
         if (SheetGrid.IsPictureCropMode && !GetDrawingObjectContextualRibbonPlan().CropPictureEnabled)
             SheetGrid.IsPictureCropMode = false;
     }

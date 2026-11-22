@@ -61,6 +61,7 @@ public sealed partial class MainWindow
             Background = Brushes.Transparent,
             IsHitTestVisible = false,
         };
+        _chartElementHighlightLayer = layer;
 
         var bounds = map.GetHighlightBounds(element);
         foreach (var rect in bounds)
@@ -69,7 +70,7 @@ public sealed partial class MainWindow
             {
                 Width = Math.Max(1, rect.Width + (2 * ChartElementHighlightInflate)),
                 Height = Math.Max(1, rect.Height + (2 * ChartElementHighlightInflate)),
-                Stroke = SelectionBorder,
+                Stroke = ObjectSelectionAccent,
                 StrokeThickness = 1.5,
                 StrokeDashArray = [4, 2],
                 Fill = Brushes.Transparent,
@@ -83,18 +84,26 @@ public sealed partial class MainWindow
         if (bounds.Count == 1)
         {
             var r = bounds[0];
-            foreach (var corner in new[]
-                     {
-                         new LayoutPoint(r.Left, r.Top), new LayoutPoint(r.Right, r.Top),
-                         new LayoutPoint(r.Left, r.Bottom), new LayoutPoint(r.Right, r.Bottom),
-                     })
+            var corners = new List<LayoutPoint>
+            {
+                new(r.Left, r.Top), new(r.Right, r.Top),
+                new(r.Left, r.Bottom), new(r.Right, r.Bottom),
+            };
+            if (ChartElementDragPlanner.CanResize(element))
+            {
+                var mx = r.Left + (r.Width / 2);
+                var my = r.Top + (r.Height / 2);
+                corners.AddRange([new(mx, r.Top), new(mx, r.Bottom), new(r.Left, my), new(r.Right, my)]);
+            }
+
+            foreach (var corner in corners)
             {
                 var grip = new AvaloniaRectangle
                 {
                     Width = ChartElementHandleSize,
                     Height = ChartElementHandleSize,
                     Fill = Brushes.White,
-                    Stroke = SelectionBorder,
+                    Stroke = ObjectSelectionAccent,
                     StrokeThickness = 1,
                     IsHitTestVisible = false,
                 };
@@ -108,8 +117,8 @@ public sealed partial class MainWindow
     }
 
     // The element map of the chart as last painted, kept so keyboard navigation uses the same geometry.
-    private ChartElementMap? _lastChartElementMap;
-    private Guid _lastChartElementMapChartId;
+    // Keyed by chart so several charts on a sheet never navigate with another chart's geometry.
+    private readonly Dictionary<Guid, ChartElementMap> _lastChartElementMaps = new();
 
     /// <summary>
     /// Arrow-key navigation between chart elements (Excel behaviour). Returns false when no inner
@@ -121,8 +130,7 @@ public sealed partial class MainWindow
             _selectedDrawingObjectId is not { } chartId ||
             _selectedChartElement is not { IsChartArea: false } current ||
             _selectedChartElementChartId != chartId ||
-            _lastChartElementMap is not { } map ||
-            _lastChartElementMapChartId != chartId)
+            !_lastChartElementMaps.TryGetValue(chartId, out var map))
         {
             return false;
         }
@@ -187,7 +195,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>"Format Selection": opens the existing dialog that owns the selected chart element.</summary>
-    private async Task OpenFormatSelectedChartElementAsync(ChartModel chart, ChartElementRef element)
+    private async Task OpenChartElementFormatDialogAsync(ChartModel chart, ChartElementRef element)
     {
         switch (ChartElementCommandPlanner.GetFormatTarget(chart, element))
         {

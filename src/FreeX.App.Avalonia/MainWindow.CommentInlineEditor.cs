@@ -119,6 +119,14 @@ public sealed partial class MainWindow
     /// <summary>Clicking the purple corner indicator opens the editable card with the reply box focused.</summary>
     private void OpenThreadedCommentCardFromIndicator(CellAddress address)
     {
+        // WPF TryOpenThreadedCardFromIndicatorClick: an already-open (focused) editor wins; only a
+        // passive selection card is replaced by the focused one.
+        if (_inlineNoteEditAddress is not null ||
+            (_inlineThreadedCommentEditAddress is not null && !_inlineThreadedCardPassive))
+        {
+            return;
+        }
+
         Dispatcher.UIThread.Post(() =>
         {
             if (_isOpening || _isSaving || _inlineNoteEditAddress is not null ||

@@ -163,6 +163,36 @@ public sealed record ChartLayoutOptions(
 {
     /// <summary>The secondary value axis title (null leaves it unchanged; empty clears it). Init-only so the positional constructor stays binary-compatible.</summary>
     public string? SecondaryAxisTitle { get; init; }
+
+    /// <summary>Manual (dragged) position of the chart title; null leaves it unchanged. Init-only so the positional constructor stays binary-compatible.</summary>
+    public ChartManualLayoutModel? TitleLayout { get; init; }
+
+    /// <summary>Manual (dragged) position of the legend; null leaves it unchanged.</summary>
+    public ChartManualLayoutModel? LegendLayout { get; init; }
+
+    /// <summary>Manual position and size of the plot area; null leaves it unchanged.</summary>
+    public ChartManualLayoutModel? PlotAreaLayout { get; init; }
+
+    /// <summary>Manual (dragged) position of the category axis title; null leaves it unchanged.</summary>
+    public ChartManualLayoutModel? XAxisTitleLayout { get; init; }
+
+    /// <summary>Manual (dragged) position of the value axis title; null leaves it unchanged.</summary>
+    public ChartManualLayoutModel? YAxisTitleLayout { get; init; }
+
+    /// <summary>Manual layouts to drop back to automatic placement (Excel's Reset to Match Style).</summary>
+    public ChartManualLayoutTargets ClearManualLayouts { get; init; }
+}
+
+/// <summary>The chart elements whose manual layout <see cref="ChartLayoutOptions.ClearManualLayouts"/> can reset.</summary>
+[Flags]
+public enum ChartManualLayoutTargets
+{
+    None = 0,
+    Title = 1,
+    Legend = 2,
+    PlotArea = 4,
+    XAxisTitle = 8,
+    YAxisTitle = 16,
 }
 
 public sealed partial class SetChartLayoutCommand : IWorkbookCommand
@@ -371,6 +401,11 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
             LegendPositionExplicit: chart.LegendPositionExplicit)
         {
             SecondaryAxisTitle = chart.SecondaryAxisTitle,
+            TitleLayout = chart.TitleLayout,
+            LegendLayout = chart.LegendLayout,
+            PlotAreaLayout = chart.PlotAreaLayout,
+            XAxisTitleLayout = chart.XAxisTitleLayout,
+            YAxisTitleLayout = chart.YAxisTitleLayout,
         };
 
 }

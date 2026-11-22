@@ -16,14 +16,24 @@ public sealed class ColorPickerFontThemeDialogFeatureSourceTests
 
         source.Should().Contain("private readonly record struct ColorPickerChoice(CellColor? Color);");
         source.Should().Contain("private async System.Threading.Tasks.Task<CellColor?> ShowMoreColorsDialogAsync(string title, CellColor initial)");
-        source.Should().Contain("var choice = await ShowColorPickerDialogAsync(title, initial, allowNoColor: false);");
+        // WPF TryShowColorPicker passes the live workbook theme so the Theme Colors gallery shows this
+        // workbook's accents (WPF ColorPickerDialog theme parameter); the generic picker keeps Office
+        // when a caller (like the WPF chart/theme-editor callers) passes none.
+        normalized.Should().Contain(
+            "var choice = await ShowColorPickerDialogAsync(\n" +
+            "            title,\n" +
+            "            initial,\n" +
+            "            allowNoColor: false,\n" +
+            "            theme: _session.Workbook.Theme);");
         normalized.Should().Contain(
             "private System.Threading.Tasks.Task<ColorPickerChoice?> ShowColorPickerDialogAsync(\n" +
             "        string title,\n" +
             "        CellColor? initial,\n" +
             "        bool allowNoColor,\n" +
-            "        Window? owner = null)");
-        source.Should().Contain("if (allowNoColor)");
+            "        Window? owner = null,\n" +
+            "        WorkbookTheme? theme = null)");
+        normalized.Should().Contain("CellColorPalettePlanner.BuildThemePalette(theme);");
+        source.Should().Contain("UiText.Get(\"ColorPicker_InvalidRgbMessage\")");        source.Should().Contain("if (allowNoColor)");
         source.Should().Contain("UiText.Get(\"ColorPicker_NoColor\")");
         source.Should().Contain("\"NoColorButton\"");
         source.Should().Contain("dialog.Close((ColorPickerChoice?)new ColorPickerChoice(null));");

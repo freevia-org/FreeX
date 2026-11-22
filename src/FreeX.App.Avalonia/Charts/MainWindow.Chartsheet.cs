@@ -90,7 +90,7 @@ public sealed partial class MainWindow
 
         try
         {
-            var layout = ChartLayoutEngine.Layout(request);
+            var layout = ChartLayoutEngine.Layout(request.WithChartSize(width, height));
             var visual = new AvaloniaChartRenderer(chart, _session.Workbook.Theme).Render(layout, width, height);
             var container = new AvaloniaGrid
             {

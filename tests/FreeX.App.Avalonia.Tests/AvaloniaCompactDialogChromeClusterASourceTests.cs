@@ -64,8 +64,8 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         sparklineSource.Should().Contain("typeBox.Width = 347;");
         sparklineSource.Should().Contain("typeBox.Margin = new Thickness(-1, 0, 0, 0);");
         sparklineSource.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left,");
-        sparklineSource.Should().Contain("Margin = new Thickness(0, 3, 0, 1),");
-        sparklineSource.Should().Contain("row.Margin = new Thickness(0, 0, 0, 13);");
+        sparklineSource.Should().Contain("Margin = new Thickness(0, 0, 0, 4),");
+        sparklineSource.Should().Contain("row.Margin = new Thickness(0, 0, 0, 10);");
         sparklineSource.Should().Contain("row.ClipToBounds = true;");
         sparklineSource.Should().Contain("ApplySparklineButtonChrome(ok, 72, isDefault: true);");
         sparklineSource.Should().Contain("ApplySparklineButtonChrome(cancel, 72);");

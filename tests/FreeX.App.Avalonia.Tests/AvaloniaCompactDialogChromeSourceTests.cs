@@ -411,7 +411,11 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         sheetOptionsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SheetOptionsDialogChromeStyle, minWidth, isDefault);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyListBox(listBox, SheetOptionsDialogChromeStyle);");
-        sheetOptionsSource.Should().Contain("[toggleResolvedButton, deleteThreadButton, goToButton, closeButton],");
+        // The comment-list action row wraps (the pane docks narrower than four buttons side by side),
+        // so the four buttons are added to a WrapPanel instead of a CreateActionRow call.
+        sheetOptionsSource.Should().Contain("var bottomRow = new WrapPanel");
+        sheetOptionsSource.Should().Contain("foreach (var actionButton in actionButtons)");
+        sheetOptionsSource.Should().Contain("bottomRow.Children.Add(actionButton);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(filterBox, SheetOptionsDialogChromeStyle);");
         // The gridlines/headings sheet-options dialog that owned the check box and the ok/cancel
         // action row was not moved by "Share FreeX sheet options ribbon state" -- it was removed, in

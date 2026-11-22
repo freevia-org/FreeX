@@ -148,7 +148,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                     text.LineHeight.Should().Be(14.6);
                 else
                     double.IsNaN(text.LineHeight).Should().BeTrue();
-                text.FontFamily.Should().Be(new FontFamily("Consolas, Menlo, Courier New"));
+                text.FontFamily.Should().Be(new FontFamily("Consolas, Menlo, Courier New, DejaVu Sans Mono, Liberation Mono, monospace"));
                 text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
                 text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
                 ((ISolidColorBrush)text.Foreground!).Color.Should().Be(Colors.Black);

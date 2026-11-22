@@ -30,6 +30,7 @@ public static partial class ChartRenderer
         if (model == null) return null;
 
         renderScale = NormalizeRenderScale(renderScale);
+        ApplyManualLayouts(model, chart, renderScale);
         var exporter = new PngExporter
         {
             Width  = Math.Max(1, (int)Math.Ceiling(chart.Width * renderScale)),

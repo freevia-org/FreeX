@@ -54,12 +54,12 @@ public static class ChartElementMapPlanner
         var plot = layout?.PlotArea ?? plotOverride ?? frame?.PlotAndAxisBounds ?? new LayoutRect(0, 0, width, height);
 
         AddDataLabels(regions, layout);
-        AddChartTitle(regions, chart, plot, width, measurer, frame);
-        AddLegend(regions, layout, frame);
+        AddChartTitle(regions, chart, plot, width, height, measurer, frame);
+        AddLegend(regions, chart, layout, width, height, frame);
 
         if (layout is not null)
         {
-            AddAxisTitles(regions, chart, layout, plot, measurer, frame);
+            AddAxisTitles(regions, chart, layout, plot, width, height, measurer, frame);
             AddAxes(regions, chart, layout, plot, measurer, frame);
             AddOverlays(regions, layout);
             AddSeries(regions, layout);
@@ -73,7 +73,7 @@ public static class ChartElementMapPlanner
 
         var nested = new List<ChartElementRegion>();
         var legendLabels = new Dictionary<int, string?>();
-        AddNestedLegendEntries(nested, legendLabels, layout, frame);
+        AddNestedLegendEntries(nested, legendLabels, chart, layout, width, height, frame);
         AddNestedDataPoints(nested, layout);
 
         return new ChartElementMap(width, height, regions)
@@ -81,6 +81,7 @@ public static class ChartElementMapPlanner
             SeriesNames = CollectSeriesNames(layout),
             NestedRegions = nested,
             LegendEntryLabels = legendLabels,
+            DataLabelBoxes = layout?.DataLabels ?? [],
         };
     }
 
@@ -109,6 +110,7 @@ public static class ChartElementMapPlanner
         ChartModel chart,
         LayoutRect plot,
         double width,
+        double height,
         ITextMeasurer measurer,
         ChartElementFrame? frame)
     {
@@ -135,14 +137,27 @@ public static class ChartElementMapPlanner
             rect = new LayoutRect((width - w) / 2, ChartTitleTopMargin, w, h);
         }
 
+        rect = ApplyManualOrigin(chart.TitleLayout, rect, width, height);
         regions.Add(Region(ChartElementKind.ChartTitle, new RectHitShape(rect, TitlePadding)));
     }
 
-    private static void AddLegend(List<ChartElementRegion> regions, ChartLayout? layout, ChartElementFrame? frame)
+    /// <summary>Moves <paramref name="rect"/> to a manual layout's position (a dragged element), keeping it inside the chart.</summary>
+    internal static LayoutRect ApplyManualOrigin(ChartManualLayoutModel? layout, LayoutRect rect, double width, double height) =>
+        ChartManualLayoutGeometry.TryResolveOrigin(layout, width, height, new LayoutPoint(rect.Left, rect.Top), out var origin)
+            ? ChartManualLayoutGeometry.ClampInside(new LayoutRect(origin.X, origin.Y, rect.Width, rect.Height), width, height)
+            : rect;
+
+    private static void AddLegend(
+        List<ChartElementRegion> regions,
+        ChartModel chart,
+        ChartLayout? layout,
+        double width,
+        double height,
+        ChartElementFrame? frame)
     {
         if (frame?.LegendBounds is { } given)
         {
-            regions.Add(Region(ChartElementKind.Legend, new RectHitShape(given)));
+            regions.Add(Region(ChartElementKind.Legend, new RectHitShape(ApplyManualOrigin(chart.LegendLayout, given, width, height))));
             return;
         }
 
@@ -160,15 +175,17 @@ public static class ChartElementMapPlanner
         ChartModel chart,
         ChartLayout layout,
         LayoutRect plot,
+        double width,
+        double height,
         ITextMeasurer measurer,
         ChartElementFrame? frame)
     {
-        AddAxisTitle(regions, chart, layout.ValueAxis, ChartElementKind.ValueAxisTitle, plot, measurer, frame);
-        AddAxisTitle(regions, chart, layout.CategoryAxis, ChartElementKind.CategoryAxisTitle, plot, measurer, frame);
+        AddAxisTitle(regions, chart, layout.ValueAxis, ChartElementKind.ValueAxisTitle, plot, width, height, measurer, frame);
+        AddAxisTitle(regions, chart, layout.CategoryAxis, ChartElementKind.CategoryAxisTitle, plot, width, height, measurer, frame);
         if (layout.SecondaryValueAxis is { } secondary &&
             !string.IsNullOrWhiteSpace(chart.SecondaryAxisTitle))
         {
-            AddAxisTitle(regions, chart, secondary, ChartElementKind.SecondaryAxisTitle, plot, measurer, frame);
+            AddAxisTitle(regions, chart, secondary, ChartElementKind.SecondaryAxisTitle, plot, width, height, measurer, frame);
         }
     }
 
@@ -178,6 +195,8 @@ public static class ChartElementMapPlanner
         AxisLayout? axis,
         ChartElementKind kind,
         LayoutRect plot,
+        double width,
+        double height,
         ITextMeasurer measurer,
         ChartElementFrame? frame)
     {
@@ -215,6 +234,8 @@ public static class ChartElementMapPlanner
             rect = new LayoutRect(left, centerY - (textW / 2), textH, textW);
         }
 
+        if (kind != ChartElementKind.SecondaryAxisTitle)
+            rect = ApplyManualOrigin(horizontal ? chart.XAxisTitleLayout : chart.YAxisTitleLayout, rect, width, height);
         regions.Add(Region(kind, new RectHitShape(rect, TitlePadding)));
     }
 
@@ -393,7 +414,10 @@ public static class ChartElementMapPlanner
     private static void AddNestedLegendEntries(
         List<ChartElementRegion> nested,
         Dictionary<int, string?> labels,
+        ChartModel chart,
         ChartLayout? layout,
+        double width,
+        double height,
         ChartElementFrame? frame)
     {
         var legend = layout?.Legend;
@@ -401,8 +425,9 @@ public static class ChartElementMapPlanner
             return;
 
         var rects = new List<LayoutRect>(legend.Entries.Count);
-        if (frame?.LegendBounds is { } host)
+        if (frame?.LegendBounds is { } rawHost)
         {
+            var host = ApplyManualOrigin(chart.LegendLayout, rawHost, width, height);
             // The host's own legend (OxyPlot) decided where the legend sits, so the portable per-entry
             // rectangles are meaningless: divide the host legend among the entries instead.
             var count = legend.Entries.Count;

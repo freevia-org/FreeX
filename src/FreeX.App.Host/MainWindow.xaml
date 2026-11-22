@@ -1,4 +1,4 @@
-﻿<Window x:Class="FreeX.App.Host.MainWindow"
+<Window x:Class="FreeX.App.Host.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -509,6 +509,41 @@
                     KeyboardNavigation.ControlTabNavigation="Cycle"
                     AutomationProperties.AutomationId="ReviewCommentsPane"
                     AutomationProperties.Name="{local:Loc Key=MainWindowMessage_CommentsTitle}"/>
+
+            <!-- Docked Format pane (Excel's Format Chart Area / Title / Legend / Axis / Series pane): a layout
+                 column on the right of the grid, opened by double-clicking a chart element or Format Selection. -->
+            <Border x:Name="ChartFormatPane"
+                    Grid.Column="4"
+                    Width="300"
+                    Background="#FFFFFF"
+                    BorderBrush="#C8C8C8"
+                    BorderThickness="1,0,0,0"
+                    Visibility="Collapsed"
+                    KeyboardNavigation.TabNavigation="Cycle"
+                    KeyboardNavigation.ControlTabNavigation="Cycle"
+                    AutomationProperties.AutomationId="ChartFormatPane"
+                    AutomationProperties.Name="{local:Loc Key=ChartFormatPane_AutomationName}">
+                <DockPanel LastChildFill="True" Margin="10">
+                    <DockPanel DockPanel.Dock="Top" LastChildFill="True" Margin="0,0,0,8">
+                        <Button x:Name="ChartFormatPaneCloseBtn"
+                                Content="X"
+                                Width="22"
+                                Height="22"
+                                DockPanel.Dock="Right"
+                                Padding="0"
+                                Click="ChartFormatPaneCloseBtn_Click"
+                                AutomationProperties.Name="{local:Loc Key=ChartFormatPane_Close}" ribbonWpf:RibbonMetadata.CommandName="X"/>
+                        <TextBlock x:Name="ChartFormatPaneTitle"
+                                   FontWeight="SemiBold"
+                                   FontSize="14"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="ChartFormatPaneBody"/>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
 
             <Border x:Name="SlicerTimelinePane"
                     Grid.Column="3"

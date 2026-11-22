@@ -5,6 +5,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Free.Shared.Drawing;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.Core.Model;
@@ -63,6 +64,10 @@ public sealed class AvaloniaChartRenderer
     // Lazily-built theme-derived palette (same algorithm as WPF BuildExcelSeriesPalette).
     private CellColor[]? _themePalette;
 
+    // The chart object's pixel height, kept for manual (dragged) title layouts that are fractions of it.
+    private double _canvasWidth = 1;
+    private double _canvasHeight = 1;
+
     public AvaloniaChartRenderer(ChartModel chart, WorkbookTheme theme)
     {
         _chart = chart ?? throw new ArgumentNullException(nameof(chart));
@@ -78,6 +83,8 @@ public sealed class AvaloniaChartRenderer
     public Canvas Render(ChartLayout layout, double width, double height)
     {
         ArgumentNullException.ThrowIfNull(layout);
+        _canvasWidth = Math.Max(1, width);
+        _canvasHeight = Math.Max(1, height);
 
         // Resolve chart-area fill (canvas background).
         // R44-meta-1: "No Fill" is an explicit user choice distinct from "nothing set" -- paint
@@ -130,7 +137,7 @@ public sealed class AvaloniaChartRenderer
         RenderAxisTitle(canvas, layout.ValueAxis, layout.PlotArea);
         RenderAxisTitle(canvas, layout.CategoryAxis, layout.PlotArea);
         if (layout.SecondaryValueAxis is not null)
-            RenderAxisTitle(canvas, layout.SecondaryValueAxis, layout.PlotArea);
+            RenderAxisTitle(canvas, layout.SecondaryValueAxis, layout.PlotArea, isSecondary: true);
 
         var isTreemap = layout.Type == ModelChartType.Treemap;
         // Excel only applies "Vary colors by point" (c:varyColors) to bar/column charts when there
@@ -223,8 +230,20 @@ public sealed class AvaloniaChartRenderer
 
         var labelWidth = tb.DesiredSize.Width > 0 ? tb.DesiredSize.Width : canvasWidth * 0.8;
 
-        Canvas.SetLeft(tb, (canvasWidth - labelWidth) / 2);
-        Canvas.SetTop(tb, topMargin);
+        var titleLeft = (canvasWidth - labelWidth) / 2;
+        var titleTop = topMargin;
+        if (ChartManualLayoutGeometry.TryResolveOrigin(_chart.TitleLayout, canvasWidth, _canvasHeight, new LayoutPoint(titleLeft, titleTop), out var manualTitle))
+        {
+            var moved = ChartManualLayoutGeometry.ClampInside(
+                new LayoutRect(manualTitle.X, manualTitle.Y, labelWidth, tb.DesiredSize.Height),
+                canvasWidth,
+                _canvasHeight);
+            titleLeft = moved.Left;
+            titleTop = moved.Top;
+        }
+
+        Canvas.SetLeft(tb, titleLeft);
+        Canvas.SetTop(tb, titleTop);
         canvas.Children.Add(tb);
     }
 
@@ -1416,7 +1435,7 @@ public sealed class AvaloniaChartRenderer
     }
 
     // Fix 2: Axis title rendering.
-    private void RenderAxisTitle(Canvas canvas, AxisLayout? axis, LayoutRect plot)
+    private void RenderAxisTitle(Canvas canvas, AxisLayout? axis, LayoutRect plot, bool isSecondary = false)
     {
         if (axis is null || string.IsNullOrWhiteSpace(axis.Title))
             return;
@@ -1444,7 +1463,17 @@ public sealed class AvaloniaChartRenderer
             var centerX = (plot.Left + plot.Right) / 2;
             // Place below the axis line + tick (TickLength) + label height (~14) + 2px gap.
             var top = axis.LinePosition + TickLength + 14 + 2;
-            Canvas.SetLeft(tb, centerX - labelW / 2);
+            var left = centerX - labelW / 2;
+            if (!isSecondary &&
+                ChartManualLayoutGeometry.TryResolveOrigin(_chart.XAxisTitleLayout, _canvasWidth, _canvasHeight, new LayoutPoint(left, top), out var manualX))
+            {
+                var movedX = ChartManualLayoutGeometry.ClampInside(
+                    new LayoutRect(manualX.X, manualX.Y, labelW, tb.DesiredSize.Height), _canvasWidth, _canvasHeight);
+                left = movedX.Left;
+                top = movedX.Top;
+            }
+
+            Canvas.SetLeft(tb, left);
             Canvas.SetTop(tb, top);
             canvas.Children.Add(tb);
         }
@@ -1477,8 +1506,19 @@ public sealed class AvaloniaChartRenderer
                 // Left axis title: rotated 90° counter-clockwise (upward reading).
                 tb.RenderTransform = new RotateTransform(-90);
                 // After -90° rotation the text's left edge becomes its top, so offset accordingly.
-                Canvas.SetLeft(tb, axis.LinePosition - TickLength - 18 - textH);
-                Canvas.SetTop(tb, centerY + textW / 2);
+                var leftX = axis.LinePosition - TickLength - 18 - textH;
+                var topY = centerY + textW / 2;
+                if (!isSecondary &&
+                    ChartManualLayoutGeometry.TryResolveOrigin(_chart.YAxisTitleLayout, _canvasWidth, _canvasHeight, new LayoutPoint(leftX, topY - textW), out var manualY))
+                {
+                    var movedY = ChartManualLayoutGeometry.ClampInside(
+                        new LayoutRect(manualY.X, manualY.Y, textH, textW), _canvasWidth, _canvasHeight);
+                    leftX = movedY.Left;
+                    topY = movedY.Top + textW;
+                }
+
+                Canvas.SetLeft(tb, leftX);
+                Canvas.SetTop(tb, topY);
             }
             canvas.Children.Add(tb);
         }

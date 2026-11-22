@@ -419,7 +419,7 @@ public sealed partial class MainWindow
         };
         foreach (var actionButton in actionButtons)
         {
-            actionButton.Margin = new Thickness(4, 2, 0, 2);
+            actionButton.Margin = new Thickness(8, 0, 0, 6);
             bottomRow.Children.Add(actionButton);
         }
         DockPanel.SetDock(bottomRow, Dock.Bottom);
