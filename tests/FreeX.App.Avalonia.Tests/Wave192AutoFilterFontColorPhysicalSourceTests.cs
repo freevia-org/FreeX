@@ -34,7 +34,7 @@ public sealed class Wave192AutoFilterFontColorPhysicalSourceTests
         probe.Should().Contain("expected_package_mode");
         probe.Should().Contain("expected_package_color");
         probe.Should().Contain("copy_cell_formula_by_address A4");
-        probe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
+        probe.Should().Contain("local button_left_offset=68 button_top_offset=221 button_width=92 button_height=24");
         probe.Should().Contain("swatch-gate=$swatch_gate");
         probe.Should().Contain("status\":\"failed\"");
         fixture.Should().Contain("<fonts count=\"2\">");

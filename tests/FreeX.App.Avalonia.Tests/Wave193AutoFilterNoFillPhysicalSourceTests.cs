@@ -36,9 +36,9 @@ public sealed class Wave193AutoFilterNoFillPhysicalSourceTests
         probe.Should().Contain("probe_autofilter_color_persistence_physical nofill");
         probe.Should().Contain("verify_rendered_color_swatch");
         probe.Should().Contain("mode=${swatch_mode}");
-        probe.Should().Contain("local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27");
-        probe.Should().Contain("button_left_offset=148");
-        probe.Should().Contain("click_x_offset=190");
+        probe.Should().Contain("local button_left_offset=68 button_top_offset=221 button_width=92 button_height=24");
+        probe.Should().Contain("button_left_offset=166");
+        probe.Should().Contain("click_x_offset=178");
         probe.Should().Contain("open-changed-pixels=${open_changed}");
         probe.Should().Contain("dismissed-changed-pixels=${dismissed_changed}");
         probe.Should().Contain("restored-change-maximum=${restored_change_maximum}");
