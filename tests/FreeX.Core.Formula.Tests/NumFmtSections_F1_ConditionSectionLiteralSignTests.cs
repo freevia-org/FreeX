@@ -58,7 +58,8 @@ public sealed class NumFmtSections_F1_ConditionSectionLiteralSignTests
         // sign of its own must keep receiving the SIGNED value, so .NET's auto-prepended '-'
         // remains the only sign shown. Applying Math.Abs unconditionally here would silently
         // drop the sign instead of doubling it -- a worse regression than the original bug.
-        NumberFormatter.Format(new NumberValue(-2.5), "[Red][<0]0.00;[Blue]0.00").Should().Be("-2.50");
+        // Excel (verified via COM) shows "2.50": a negative-only [<0] section drops the implicit minus.
+        NumberFormatter.Format(new NumberValue(-2.5), "[Red][<0]0.00;[Blue]0.00").Should().Be("2.50");
     }
 
     [Fact]
@@ -68,7 +69,8 @@ public sealed class NumFmtSections_F1_ConditionSectionLiteralSignTests
         // "[<0]??.??" on -5.5 must still render "- 5.5 " (auto sign + blanked leading zero),
         // which depends on FormatQuestionPlaceholderNumber still receiving the SIGNED value
         // because "??.??" carries no literal sign of its own.
-        NumberFormatter.Format(new NumberValue(-5.5), "[<0]??.??").Should().Be("- 5.5 ");
+        // Excel (verified via COM): the implicit minus is dropped, the blanked leading zero kept.
+        NumberFormatter.Format(new NumberValue(-5.5), "[<0]??.??").Should().Be(" 5.5 ");
     }
 
     [Fact]

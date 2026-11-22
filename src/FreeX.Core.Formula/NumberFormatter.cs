@@ -202,8 +202,8 @@ public static partial class NumberFormatter
         // (reached when a cell literally holds a date-typed value, e.g. one the user typed or
         // that a formula returned, rather than a raw number handed to TEXT()) that needed the
         // same correction applied to the format string it hands down.
-        var effectiveFormatString = !uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(oaDate)
-            ? OverridePhantomLeapDayOfMonthTokens(formatString)
+        var effectiveFormatString = NeedsLegacy1900DateOverride(oaDate, uses1904DateSystem)
+            ? OverrideLegacy1900DateTokens(formatString, oaDate)
             : formatString;
 
         var text = TryFormatCachedSimpleDateTime(oaDate, effectiveFormatString, uses1904DateSystem, out var cachedText)
@@ -231,17 +231,51 @@ public static partial class NumberFormatter
     }
 
     /// <summary>
-    /// Rewrites the bare day-of-month tokens ("d" or "dd", outside quotes/escapes) in an Excel
-    /// date/time format string to a literal "29", leaving the "ddd"/"dddd" weekday-name tokens
-    /// (and every other token) untouched. Used only for Excel's phantom 1900-02-29 (serial 60),
-    /// whose collapsed-onto-1900-02-28 DateTime (see <see cref="ExcelDateSystem.SerialToDate(double)"/>)
-    /// is otherwise correct -- month, year, and weekday all already render right -- so this is the
-    /// minimal correction needed rather than a full reimplementation of date-token formatting.
+    /// Excel's 1900 date system serials 0..60 are not real calendar dates: serial 0 is the
+    /// non-date "1900-01-00", serial 60 is the phantom 1900-02-29, and every weekday name for a
+    /// serial below 61 is that of the OLE date (<c>DateTime.FromOADate</c>), one day earlier than
+    /// the calendar date <see cref="ExcelDateSystem.SerialToDate(double)"/> returns (serial 1 shows
+    /// "Sunday", serial 59 "Tuesday"). True when the value needs <see cref="OverrideLegacy1900DateTokens"/>.
+    /// </summary>
+    private static bool NeedsLegacy1900DateOverride(double serial, bool uses1904DateSystem) =>
+        !uses1904DateSystem && serial >= 0 && serial < 61;
+
+    /// <summary>
+    /// Serial to calendar date for formatting: serial 0 (the non-date 1900-01-00) is mapped onto
+    /// 1900-01-01 (keeping its time-of-day) so month/year tokens read January 1900; the day-of-month
+    /// tokens are then corrected by <see cref="OverrideLegacy1900DateTokens"/>.
+    /// </summary>
+    private static DateTime SerialToFormatDate(double serial, bool uses1904DateSystem) =>
+        !uses1904DateSystem && serial >= 0 && serial < 1
+            ? ExcelDateSystem.SerialToDate(serial + 1, false)
+            : ExcelDateSystem.SerialToDate(serial, uses1904DateSystem);
+
+    private static readonly Regex Legacy1900PhantomDayRegex = new(@"(?<!\d)28(?!\d)");
+    private static readonly Regex Legacy1900DayOneRegex = new(@"(?<!\d)0?1(?!\d)");
+
+    private static string EscapeFormatLiteral(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length * 2);
+        foreach (var ch in text)
+            sb.Append('\\').Append(ch);
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Rewrites the day-of-month tokens ("d"/"dd") for serial 0 ("0") and the phantom 1900-02-29
+    /// (serial 60, "29"), and the weekday-name tokens ("ddd"/"dddd") for any serial below 61 to
+    /// Excel's weekday (the OLE date's weekday), as backslash-escaped literals. Backslash escapes
+    /// (not quotes) are used so the month-vs-minute detection still sees the literal as a
+    /// date-side neighbour. Names are the invariant English ones.
     /// Mirrors the token scan quotes/escapes are given in <see cref="ExcelDateTimeFormatConverter.ToNetDateFormat"/>.
     /// </summary>
-    private static string OverridePhantomLeapDayOfMonthTokens(string format)
+    private static string OverrideLegacy1900DateTokens(string format, double serial)
     {
-        var sb = new System.Text.StringBuilder(format.Length + 4);
+        var whole = Math.Floor(serial);
+        string? dayLiteral = whole == 60 ? "29" : whole == 0 ? "0" : null;
+        var excelWeekday = DateTime.FromOADate(whole).DayOfWeek;
+        var dayNames = CultureInfo.InvariantCulture.DateTimeFormat;
+        var sb = new System.Text.StringBuilder(format.Length + 8);
         var i = 0;
         while (i < format.Length)
         {
@@ -268,8 +302,12 @@ public static partial class NumberFormatter
                 while (i < format.Length && format[i] is 'd' or 'D')
                     i++;
                 var runLength = i - runStart;
-                if (runLength <= 2)
-                    sb.Append("\"29\"");
+                if (runLength >= 4)
+                    sb.Append(EscapeFormatLiteral(dayNames.GetDayName(excelWeekday)));
+                else if (runLength == 3)
+                    sb.Append(EscapeFormatLiteral(dayNames.GetAbbreviatedDayName(excelWeekday)));
+                else if (dayLiteral is not null)
+                    sb.Append(EscapeFormatLiteral(runLength == 2 ? dayLiteral.PadLeft(2, '0') : dayLiteral));
                 else
                     sb.Append(format, runStart, runLength);
                 continue;
@@ -280,6 +318,38 @@ public static partial class NumberFormatter
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Long-date / long-time locale tokens ([$-F800], [$-F400]) for the 1900 serials below 61,
+    /// which <c>DateTime.FromOADate</c> misplaces by one day. Corrects the date and the weekday
+    /// name afterwards (English names), see <see cref="NeedsLegacy1900DateOverride"/>.
+    /// </summary>
+    private static string FormatSpecialDateTimeLocaleValueExcel1900(double serial, bool uses1904DateSystem, SpecialDateTimeLocaleToken token)
+    {
+        if (!NeedsLegacy1900DateOverride(serial, uses1904DateSystem))
+        {
+            var plain = uses1904DateSystem ? ExcelDateSystem.SerialToDate(serial, uses1904DateSystem) : DateTime.FromOADate(serial);
+            return FormatSpecialDateTimeLocaleValue(plain, token);
+        }
+
+        var whole = Math.Floor(serial);
+        var dt = SerialToFormatDate(serial, false);
+        var text = FormatSpecialDateTimeLocaleValue(dt, token);
+        var names = CultureInfo.InvariantCulture.DateTimeFormat;
+        var realWeekday = dt.DayOfWeek;
+        var excelWeekday = DateTime.FromOADate(whole).DayOfWeek;
+        if (realWeekday != excelWeekday)
+        {
+            text = text.Replace(names.GetDayName(realWeekday), names.GetDayName(excelWeekday), StringComparison.Ordinal);
+            text = text.Replace(names.GetAbbreviatedDayName(realWeekday), names.GetAbbreviatedDayName(excelWeekday), StringComparison.Ordinal);
+        }
+
+        if (whole == 60)
+            text = Legacy1900PhantomDayRegex.Replace(text, "29");
+        else if (whole == 0)
+            text = Legacy1900DayOneRegex.Replace(text, "0");
+        return text;
     }
 
     private static FormatResult FormatNumber(
@@ -376,10 +446,19 @@ public static partial class NumberFormatter
                 : TryFormatPlainNumericSection(magnitude, effectiveFormat, out var plainNumericText)
                     ? plainNumericText
                     : ApplyNumericFormat(magnitude, effectiveFormat, uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
-            singleSectionText = ApplyAccountingTargetWidth(singleSectionText, effectiveFormat, targetWidthCharacters);
+            // The leading minus is prepended after the fill is sized, so reserve its column
+            // (otherwise "-" + a full-width accounting fill overflows into the '#####' indicator).
+            singleSectionText = ApplyAccountingTargetWidth(
+                singleSectionText,
+                effectiveFormat,
+                sign.Length > 0 && targetWidthCharacters is > 0 ? targetWidthCharacters - sign.Length : targetWidthCharacters);
             // Excel never displays negative zero: if sign is "-" but the formatted text
             // is all zeros (after magnitude formatting), drop the sign.
-            if (sign == "-" && IsAllZeroText(singleSectionText))
+            // A format whose digit placeholders all render empty (e.g. "#.##" for -0.0001, or a
+            // "#,," scale that rounds the value away) likewise shows no sign.
+            if (sign == "-" &&
+                (IsAllZeroText(singleSectionText) ||
+                 (HasUnquotedDigitPlaceholder(effectiveFormat) && !singleSectionText.Any(char.IsDigit))))
                 sign = "";
             return new FormatResult(sign + singleSectionText, colorHex);
         }
@@ -388,6 +467,7 @@ public static partial class NumberFormatter
 
         ParsedSection section;
         double displayValue = value;
+        var conditionalLiteralSign = "";
 
         if (hasConditions)
         {
@@ -421,8 +501,23 @@ public static partial class NumberFormatter
             // magnitude there would silently drop the sign entirely, which is exactly what
             // NumberFormatterTests' "[Red][<0]0.00;[Blue]0.00" on -2.5 => "-2.50" (and R94's
             // "[<0]??.??" / "[<0]???" cases) pin as correct.
-            if (value < 0 && SectionHasLeadingLiteralSign(section.Format))
+            // Excel (verified via COM) drops the implicit minus when the selected section can only
+            // ever hold negatives: a [<0]/[<-1]/[<=-5] condition, or the unconditioned second
+            // section ("[<-1]0.0;0" shows -0.5 as "1"). Every other conditioned section keeps it
+            // ("[>100]0;[<=100]0.0" shows -5 as "-5.0", and a literal-only "small" section "-small").
+            if (value < 0 &&
+                !IsDateTimeFormat(section.Format) &&
+                (SectionHasLeadingLiteralSign(section.Format) ||
+                 (section.Condition is { } negativeOnly && IsNegativeOnlyCondition(negativeOnly)) ||
+                 (section.Condition is null && selectedIndex == 1 &&
+                  parsedSections[0].Condition is { Operator: "<" or "<=" })))
+            {
                 displayValue = Math.Abs(value);
+            }
+            else if (value < 0 && section.Format != "" && !HasUnquotedDigitPlaceholder(section.Format))
+            {
+                conditionalLiteralSign = "-";
+            }
         }
         else
         {
@@ -433,7 +528,7 @@ public static partial class NumberFormatter
             ? ""
             : ApplyNumericFormat(displayValue, section.Format, uses1904DateSystem: uses1904DateSystem, targetWidthCharacters: targetWidthCharacters);
         text = ApplyAccountingTargetWidth(text, section.Format, targetWidthCharacters);
-        return new FormatResult(text, section.ColorHex);
+        return new FormatResult(conditionalLiteralSign + text, section.ColorHex);
     }
 
     // True when a [condition]-selected section's own (directive-stripped) text supplies a
@@ -531,6 +626,26 @@ public static partial class NumberFormatter
         return -1;
     }
 
+    private static bool IsNegativeOnlyCondition(FormatCondition condition) =>
+        (condition.Operator == "<" && condition.Value <= 0) ||
+        (condition.Operator == "<=" && condition.Value < 0) ||
+        (condition.Operator == "=" && condition.Value < 0);
+
+    private static bool HasUnquotedDigitPlaceholder(string format)
+    {
+        var inQuote = false;
+        for (var i = 0; i < format.Length; i++)
+        {
+            var c = format[i];
+            if (c == '"') { inQuote = !inQuote; continue; }
+            if (inQuote) continue;
+            if (c == '\\' && i + 1 < format.Length) { i++; continue; }
+            if (c is '0' or '#' or '?') return true;
+        }
+
+        return false;
+    }
+
     private static bool TryFormatPlainNumericSection(double value, string format, out string text)
     {
         text = "";
@@ -544,6 +659,10 @@ public static partial class NumberFormatter
         try
         {
             text = value.ToString(format, CultureInfo.InvariantCulture);
+            // Excel always shows the decimal point written in the format even when no fraction
+            // digit is displayed ("#.##" shows 5 as "5." and 0 as "."); .NET drops it.
+            if (format.Contains('.') && !text.Contains('.'))
+                text += ".";
             return true;
         }
         catch
@@ -699,8 +818,7 @@ public static partial class NumberFormatter
                 // ExcelDateSystem.SerialToDate is used for the regular date-format path
                 // (where the 1900 phantom-leap-day correction matters), and also here when
                 // the workbook uses the 1904 date system (where the epoch itself differs).
-                var dt = uses1904DateSystem ? ExcelDateSystem.SerialToDate(value, uses1904DateSystem) : DateTime.FromOADate(value);
-                return NativeDigits(FormatSpecialDateTimeLocaleValue(dt, specialDateTimeToken));
+                return NativeDigits(FormatSpecialDateTimeLocaleValueExcel1900(value, uses1904DateSystem, specialDateTimeToken));
             }
             catch { return value.ToString(CultureInfo.InvariantCulture); }
         }
@@ -775,8 +893,10 @@ public static partial class NumberFormatter
             // bare day-of-month tokens ("d"/"dd", not the "ddd"/"dddd" weekday-name tokens, which
             // are already correct) to a literal "29" before formatting, mirroring the correction
             // YEAR()/MONTH()/DAY() already apply for this same value via IsExcelFakeLeapDay.
-            var effectiveFormat = !uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(value)
-                ? OverridePhantomLeapDayOfMonthTokens(format)
+            if (!uses1904DateSystem && value < 1)
+                dt = SerialToFormatDate(value, false);
+            var effectiveFormat = NeedsLegacy1900DateOverride(value, uses1904DateSystem)
+                ? OverrideLegacy1900DateTokens(format, value)
                 : format;
 
             try

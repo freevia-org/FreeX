@@ -73,17 +73,20 @@ public static partial class NumberFormatter
     {
         if (TryGetFillDirective(format, out var fillChar, out var fillPlacement, out var fillDirectiveIndex))
         {
-            var fill = new string(fillChar, fillWidth);
-            if (fillPlacement == FillDirectivePlacement.AfterNumber)
+            // The "_x" skip directives around the number reserve the width of x (a space here):
+            // Excel's cell text carries them ("_(* #,##0_)" -> " ... 5 "), so they are taken out
+            // of the fill budget and re-added at the edges.
+            var edgePadLeading = CountLeadingSkipDirectives(format);
+            var edgePadTrailing = CountTrailingSkipDirectives(format);
+            if (edgePadLeading + edgePadTrailing > 0 && fillWidth > edgePadLeading + edgePadTrailing)
             {
-                int insertionIndex = FindFillAfterNumberInsertionIndex(text, format, fillDirectiveIndex);
-                return text.Insert(insertionIndex, fill);
+                fillWidth -= edgePadLeading + edgePadTrailing;
+                return new string(' ', edgePadLeading) +
+                       ApplyFillDirectiveCore(text, format, fillWidth, fillChar, fillPlacement, fillDirectiveIndex) +
+                       new string(' ', edgePadTrailing);
             }
 
-            int directiveFillIndex = FindAccountingFillInsertionIndex(text);
-            return directiveFillIndex < 0
-                ? text.PadLeft(text.Length + fillWidth, fillChar)
-                : text.Insert(directiveFillIndex, fill);
+            return ApplyFillDirectiveCore(text, format, fillWidth, fillChar, fillPlacement, fillDirectiveIndex);
         }
 
         // No asterisk anywhere in the format (TryGetFillDirective above already handles
@@ -95,6 +98,66 @@ public static partial class NumberFormatter
         return trailingSkipSpaces > 0
             ? text + new string(' ', trailingSkipSpaces)
             : text;
+    }
+
+    private static int CountLeadingSkipDirectives(string format)
+    {
+        var count = 0;
+        for (var i = 0; i + 1 < format.Length; i++)
+        {
+            if (format[i] == '_')
+            {
+                count++;
+                i++;
+                continue;
+            }
+
+            if (format[i] == '[')
+            {
+                var close = format.IndexOf(']', i + 1);
+                if (close < 0)
+                    break;
+                i = close;
+                continue;
+            }
+
+            break;
+        }
+
+        return count;
+    }
+
+    private static string ApplyFillDirectiveCore(
+        string text,
+        string format,
+        int fillWidth,
+        char fillChar,
+        FillDirectivePlacement fillPlacement,
+        int fillDirectiveIndex)
+    {
+        {
+            var fill = new string(fillChar, fillWidth);
+            if (fillPlacement == FillDirectivePlacement.AfterNumber)
+            {
+                int insertionIndex = FindFillAfterNumberInsertionIndex(text, format, fillDirectiveIndex);
+                return text.Insert(insertionIndex, fill);
+            }
+
+            int directiveFillIndex = FindAccountingFillInsertionIndex(text);
+            // A literal sign written before the asterisk ("-* #,##0.00") stays at the left edge and
+            // the fill goes after it, not before it (verified against Excel).
+            var signPrefix = ExtractRenderedLiteralPrefix(format, fillDirectiveIndex);
+            if (signPrefix is "-" or "+")
+            {
+                var at = text.IndexOf(signPrefix, StringComparison.Ordinal);
+                if (at >= 0 && text[..at].Trim().Length == 0)
+                    directiveFillIndex = at + signPrefix.Length;
+            }
+
+            return directiveFillIndex < 0
+                ? text.PadLeft(text.Length + fillWidth, fillChar)
+                : text.Insert(directiveFillIndex, fill);
+        }
     }
 
     private static int CountTrailingSkipDirectives(string format)
@@ -271,6 +334,40 @@ public static partial class NumberFormatter
                 i++;
                 continue;
             }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    private static string ExtractRenderedLiteralPrefix(string format, int endExclusive)
+    {
+        var sb = new System.Text.StringBuilder();
+        bool inQuote = false;
+        for (int i = 0; i < endExclusive && i < format.Length; i++)
+        {
+            char c = format[i];
+            if (c == '"')
+            {
+                inQuote = !inQuote;
+                continue;
+            }
+
+            if (!inQuote && c == '\\' && i + 1 < format.Length)
+            {
+                sb.Append(format[++i]);
+                continue;
+            }
+
+            if (!inQuote && c == '_' && i + 1 < format.Length)
+            {
+                i++;
+                continue;
+            }
+
+            if (!inQuote && (IsValuePlaceholderAt(format, i) || c == '*'))
+                return "";
 
             sb.Append(c);
         }

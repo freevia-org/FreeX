@@ -97,10 +97,7 @@ public static partial class NumberFormatter
                 // The 1900 phantom-leap-day correction only matters for regular date formats;
                 // under the 1904 date system the epoch itself differs, so route through
                 // ExcelDateSystem.SerialToDate there instead.
-                var specialDt = uses1904DateSystem
-                    ? ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem)
-                    : DateTime.FromOADate(oaDate);
-                return NativeDigits(FormatSpecialDateTimeLocaleValue(specialDt, specialDateTimeToken));
+                return NativeDigits(FormatSpecialDateTimeLocaleValueExcel1900(oaDate, uses1904DateSystem, specialDateTimeToken));
             }
             catch { return oaDate.ToString(CultureInfo.InvariantCulture); }
         }
@@ -118,7 +115,7 @@ public static partial class NumberFormatter
         cleanFmt = RemoveSpacingAndFillDirectives(directiveFormat.Format);
         try
         {
-            var dt = ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem);
+            var dt = SerialToFormatDate(oaDate, uses1904DateSystem);
             if (IsDateTimeFormat(cleanFmt))
             {
                 // Excel's phantom 1900-02-29 (serial 60) collides with serial 59 on the same
@@ -128,8 +125,8 @@ public static partial class NumberFormatter
                 // FormatDateTimeWithColor's SelectDateTimeSection above); the single-section fast
                 // path applies the identical correction in NumberFormatter.cs's
                 // TryFormatSimpleDateTime before it ever reaches here.
-                var effectiveCleanFmt = !uses1904DateSystem && ExcelDateSystem.IsPhantomLeapDaySerial(oaDate)
-                    ? OverridePhantomLeapDayOfMonthTokens(cleanFmt)
+                var effectiveCleanFmt = NeedsLegacy1900DateOverride(oaDate, uses1904DateSystem)
+                    ? OverrideLegacy1900DateTokens(cleanFmt, oaDate)
                     : cleanFmt;
                 return NativeDigits(FormatDateTimeValue(dt, effectiveCleanFmt, dateTimeFormat));
             }
@@ -152,7 +149,7 @@ public static partial class NumberFormatter
 
         try
         {
-            var dt = ExcelDateSystem.SerialToDate(oaDate, uses1904DateSystem);
+            var dt = SerialToFormatDate(oaDate, uses1904DateSystem);
             if (plan.FractionalSecondPrecision > 0)
                 dt = RoundToFractionalSecondPrecision(dt, plan.FractionalSecondPrecision);
             else if (plan.HasSecond)
@@ -353,6 +350,8 @@ public static partial class NumberFormatter
         SpecialDateTimeLocaleToken token)
     {
         var dateTimeFormat = CultureInfo.CurrentCulture.DateTimeFormat;
+        if (token == SpecialDateTimeLocaleToken.LongTime)
+            dateTime = RoundToNearestSecond(dateTime);
         var netFormat = token == SpecialDateTimeLocaleToken.LongDate
             ? dateTimeFormat.LongDatePattern
             : dateTimeFormat.LongTimePattern;

@@ -11,7 +11,10 @@ internal static class ExcelDateTimeFormatConverter
         if (string.IsNullOrEmpty(monthName))
             monthName = dateTime.ToString("MMMM", dateTimeFormat);
 
-        string initial = monthName[..1].Replace("'", "''", StringComparison.Ordinal);
+        // Emitted as a double-quoted literal: ToNetDateFormat copies "..." verbatim, whereas a
+        // single-quoted initial was re-scanned token-by-token and 'D'/'S' (December/September)
+        // were mistaken for the d / s date-time tokens.
+        string initial = monthName[..1].Replace("\"", "", StringComparison.Ordinal);
         for (int i = 0; i < excelFormat.Length;)
         {
             if (excelFormat[i] == '"')
@@ -33,9 +36,9 @@ internal static class ExcelDateTimeFormatConverter
             if (i + 5 <= excelFormat.Length &&
                 string.Compare(excelFormat, i, "mmmmm", 0, 5, StringComparison.OrdinalIgnoreCase) == 0)
             {
-                result.Append('\'');
+                result.Append('"');
                 result.Append(initial);
-                result.Append('\'');
+                result.Append('"');
                 i += 5;
                 continue;
             }

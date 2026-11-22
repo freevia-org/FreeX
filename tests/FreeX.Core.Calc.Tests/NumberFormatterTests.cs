@@ -46,9 +46,9 @@ public class NumberFormatterTests
     }
 
     [Theory]
-    [InlineData(1234.5, 14, "$     1,234.50")]
-    [InlineData(-1234.5, 14, "$   (1,234.50)")]
-    [InlineData(0, 14, "$          -  ")]
+    [InlineData(1234.5, 14, " $   1,234.50 ")]
+    [InlineData(-1234.5, 14, " $  (1,234.50)")]
+    [InlineData(0, 14, " $        -   ")]
     // Round-41 fix (R41-render-number-overflow-hash-3-1): "$ 123,456,789.00" (17 chars) no longer
     // fits an 8-character-wide column, so NumberFormatter now shows Excel's width-overflow
     // indicator ("#" x 8) instead of the un-clipped (and column-overflowing) formatted text.
@@ -284,9 +284,9 @@ public class NumberFormatterTests
     }
 
     [Theory]
-    [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "-2.50", "#FF0000")]
+    [InlineData("[Red][<0]0.00;[Blue]0.00", -2.5, "2.50", "#FF0000")]
     [InlineData("[Red][<0]0.00;[Blue]0.00", 2.5, "2.50", "#0000FF")] // [Blue] = legacy palette pure blue
-    [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "-2.50", "#FF0000")]
+    [InlineData("[Color3][<0]0.00;[Color5]0.00", -2.5, "2.50", "#FF0000")]
     [InlineData("[Color3][<0]0.00;[Color5]0.00", 2.5, "2.50", "#0000FF")]
     [InlineData("[Color6]0.00", 2.5, "2.50", "#FFFF00")]
     [InlineData("[Color9]0.00", 2.5, "2.50", "#800000")]

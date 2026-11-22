@@ -27,7 +27,8 @@ public sealed class R94_QuestionMarkConditionSignAlignmentTests
         // signed value un-Math.Abs'd before it reaches FormatQuestionPlaceholderNumber.
         var result = NumberFormatter.Format(new NumberValue(-5.5), "[<0]??.??");
 
-        result.Should().Be("- 5.5 ");
+        // Excel (verified via COM): a negative-only [<0] section drops the implicit minus.
+        result.Should().Be(" 5.5 ");
     }
 
     [Fact]
@@ -59,6 +60,7 @@ public sealed class R94_QuestionMarkConditionSignAlignmentTests
         // fix alone (not some decimal-side interaction) accounts for the corrected output.
         var result = NumberFormatter.Format(new NumberValue(-5.0), "[<0]???");
 
-        result.Should().Be("-  5");
+        // Excel (verified via COM): "[<0]???" shows -5 as "  5".
+        result.Should().Be("  5");
     }
 }

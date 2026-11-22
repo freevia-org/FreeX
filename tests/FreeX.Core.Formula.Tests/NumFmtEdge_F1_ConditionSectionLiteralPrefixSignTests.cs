@@ -50,8 +50,10 @@ public sealed class NumFmtEdge_F1_ConditionSectionLiteralPrefixSignTests
     [InlineData("[<0]\"Total(est)\"0.00;[>=0]\"Total(est)\"0.00")]
     public void ConditionedNegativeSection_QuotedLabelContainingASignCharacter_StillShowsTheMinus(string format)
     {
+        // Excel (verified via COM): a [<0] section only ever holds negatives, so the implicit minus
+        // is dropped and the label renders exactly like the positive section.
         NumberFormatter.FormatWithColor(new NumberValue(-5), format).Text
-            .Should().NotBe(
+            .Should().Be(
                 NumberFormatter.FormatWithColor(new NumberValue(5), format).Text,
                 "a quoted label is text, not the author writing the sign");
     }
@@ -66,10 +68,10 @@ public sealed class NumFmtEdge_F1_ConditionSectionLiteralPrefixSignTests
     [Fact]
     public void ConditionedNegativeSection_HyphenatedLabelWord_KeepsTheRealMinus()
     {
+        // Excel (verified via COM): the [<0] section drops the implicit minus.
         NumberFormatter.FormatWithColor(new NumberValue(-5), "[<0]Ref-No 0.00;[>=0]Ref-No 0.00")
-            .Text.Should().NotBe(
-                NumberFormatter.FormatWithColor(new NumberValue(5), "[<0]Ref-No 0.00;[>=0]Ref-No 0.00").Text,
-                "a negative value must not render identically to a positive one");
+            .Text.Should().Be(
+                NumberFormatter.FormatWithColor(new NumberValue(5), "[<0]Ref-No 0.00;[>=0]Ref-No 0.00").Text);
     }
 
     /// <summary>
@@ -118,7 +120,7 @@ public sealed class NumFmtEdge_F1_ConditionSectionLiteralPrefixSignTests
         // value so .NET's auto-prepended '-' remains the only sign shown -- the scan must stop
         // at the numeric placeholder and return false, not skip through it looking for a sign.
         NumberFormatter.FormatWithColor(new NumberValue(-5), "[<0]\"Owed \"0.00;[>=0]0.00")
-            .Text.Should().Be("Owed -5.00");
+            .Text.Should().Be("Owed 5.00");
     }
 
     [Fact]
