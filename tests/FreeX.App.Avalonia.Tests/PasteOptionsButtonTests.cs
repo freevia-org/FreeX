@@ -23,6 +23,28 @@ public sealed class PasteOptionsButtonTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
+    [Theory]
+    [InlineData(100, 50, 40, 500, 400, 100, 50)]
+    [InlineData(490, 50, 40, 500, 400, 460, 50)]
+    [InlineData(100, 395, 40, 500, 400, 100, 380)]
+    [InlineData(100, 395, 40, 0, 0, 100, 395)]
+    [InlineData(10, 10, 600, 500, 400, 0, 10)]
+    public void ClampPasteOptionsButtonPosition_KeepsButtonInsideOverlayLikeWpf(
+        double left,
+        double top,
+        double buttonWidth,
+        double overlayWidth,
+        double overlayHeight,
+        double expectedLeft,
+        double expectedTop)
+    {
+        var (clampedLeft, clampedTop) = MainWindow.ClampPasteOptionsButtonPosition(
+            left, top, buttonWidth, overlayWidth, overlayHeight);
+
+        clampedLeft.Should().Be(expectedLeft);
+        clampedTop.Should().Be(expectedTop);
+    }
+
     [Fact]
     public async Task Paste_ShowsTheButton_AndValuesReplacesThePasteWithValues()
     {

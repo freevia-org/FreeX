@@ -87,6 +87,10 @@ public sealed partial class MainWindow
 
     internal async Task<InteractionValidationResult> RunContextMenuInteractionValidationForTestAsync(string id)
     {
+        // Routes such as File > Export or Save As open a native save panel that never returns under
+        // validation; cancel those pickers unless a probe installed its own.
+        _workbookSaveAsPickerOverride ??= static _ => Task.FromResult<WorkbookSaveAsPickerSelection?>(null);
+        InstallCancellingExportSavePicker();
         var row = BuildContextMenuValidationInventory().Single(candidate => candidate.Id == id);
         var evidence = row.IsEnabled
             ? await ExerciseContextMenuProductionRouteAsync(row)
@@ -388,7 +392,7 @@ public sealed partial class MainWindow
     private async Task<ContextMenuDispatchEvidence> ExercisePivotHeaderContextRouteAsync(
         ContextMenuValidationDescriptor row)
     {
-        if (!Enum.TryParse<PivotHeaderMenuAction>(row.ActionKey, out var action) ||
+        if (!Enum.TryParse<PivotChartFieldContextMenuAction>(row.ActionKey, out var action) ||
             !Enum.TryParse<PivotHeaderArea>(row.VariantId.Split('.').Last(), true, out var area))
             return Failed(row, "Pivot-header route could not be parsed.");
         var pivot = EnsureParityPivot();
@@ -407,7 +411,7 @@ public sealed partial class MainWindow
             area == PivotHeaderArea.Value ? 0 : null);
         return await InvokeProductionContextRouteAsync(
             row,
-            () => InvokePivotHeaderAction(pivot, headers, target, action, BuildPivotDragValidator(pivot)));
+            () => DispatchPivotChartFieldContextMenuAction(pivot, headers, target, action));
     }
 
     private async Task<ContextMenuDispatchEvidence> ExercisePivotChartContextRouteAsync(
@@ -641,6 +645,9 @@ public sealed partial class MainWindow
         return parts.Length == 2 &&
             parts[0] == "file" &&
             Enum.TryParse<NativeFileMenuItemId>(parts[1], out var fileId) &&
+            // File > Export now opens the save picker first (WPF order); with the harness's cancelling picker
+            // (or no native storage provider) no owned dialog is expected for it.
+            fileId != NativeFileMenuItemId.BackstageExport &&
             IsOwnedNativeFileMenuValidationRoute(fileId);
     }
 
@@ -725,7 +732,16 @@ public sealed partial class MainWindow
         }
         if (dialog is not null)
         {
-            try { dialog.Close(); } catch { /* best-effort validation cleanup */ }
+            try
+            {
+                // Message boxes are ShowDialog<UserMessageResult> windows: a bare Close() leaves no result
+                // for the awaiting caller to unbox and crashes the host, so close them with a result.
+                if (dialog is Free.Shared.Shell.Avalonia.AvaloniaUserMessageDialog)
+                    dialog.Close(Free.Shared.AppServices.UserMessageResult.Cancel);
+                else
+                    dialog.Close();
+            }
+            catch { /* best-effort validation cleanup */ }
             await Task.Delay(25);
             return Passed(row, "production-dialog-opened-cancelled", row.ProductionRoute, "The owned dialog opened and was closed without submitting changes.");
         }
@@ -1114,13 +1130,18 @@ public sealed partial class MainWindow
 
     private static void AddPivotHeaderContextInventory(List<ContextMenuValidationDescriptor> rows)
     {
-        var pivot = new PivotTableModel { Name = "ValidationPivot", ShowExpandCollapseButtons = true };
+        // WPF OnPivotHeaderDropdownRequested opens the shared PivotChart field menu (summary banner, sort,
+        // More Sort Options, Select Items, Label/Value Filter, Clear Filters, Value Field Settings).
         foreach (var area in Enum.GetValues<PivotHeaderArea>())
         {
             var variant = $"context-menu.pivot-header.area.{area.ToString().ToLowerInvariant()}";
-            var target = new PivotHeaderDropdownTargetModel(pivot.Name, "Field", 0, area, false, area == PivotHeaderArea.Value ? 0 : null);
-            foreach (var item in PivotHeaderDropdownMenuBuilder.BuildMenu(pivot, target).Items.Where(item => !item.IsSeparator))
-                rows.Add(new($"{variant}:{item.Action}", PivotHeaderContextFamily, variant, item.Action.ToString(), item.Label, item.IsEnabled, "InvokePivotHeaderAction"));
+            var hasFilterState = area != PivotHeaderArea.Value;
+            var state = new PivotChartFieldContextMenuState(
+                hasFilterState, "Field: (All)", "Select Items...", "Label Filter...", "Value Filter...",
+                "Clear Filters from Field", hasFilterState, hasFilterState, true);
+            foreach (var command in PivotChartFieldContextMenuPlanner.BuildCommands(state)
+                         .Where(command => !command.IsSeparator && command.Action != PivotChartFieldContextMenuAction.Summary))
+                rows.Add(new($"{variant}:{command.Action}", PivotHeaderContextFamily, variant, command.Action.ToString(), command.Header, command.IsEnabled, "DispatchPivotChartFieldContextMenuAction"));
         }
     }
 

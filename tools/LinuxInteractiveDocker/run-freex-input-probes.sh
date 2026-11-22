@@ -6441,12 +6441,12 @@ probe_autofilter_color_persistence_physical() {
     fi
     # Keep the rendered swatch bounds, sampled pixel, and real click in one
     # mode-selected geometry contract. The outer click must use these values.
-    local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27
-    local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220
+    local button_left_offset=68 button_top_offset=221 button_width=92 button_height=24
+    local sample_x_offset=84 sample_y_offset=233 click_x_offset=110 click_y_offset=233
     if [[ "$mode" == "nofill" ]]; then
-        button_left_offset=148
-        sample_x_offset=164
-        click_x_offset=190
+        button_left_offset=166
+        sample_x_offset=182
+        click_x_offset=178
     fi
     local artifacts="${prefix}-before.png;${prefix}-menu-open.png;${prefix}-swatch-gate.txt;${prefix}-applied.png;${prefix}-reopened.png;${prefix}-reopen-diagnostics.txt;${prefix}-postcondition.txt"
     if [[ "$mode" == "nofill" ]]; then
@@ -7059,8 +7059,8 @@ PY
     sample_color_swatch() {
         local before="$1" opened="$2" sample_x_offset="$3" expected="$4"
         local before_pixel pixel
-        before_pixel="$(convert "$before" -format "%[hex:p{$((a1_x + sample_x_offset)),$((a1_y + 216))}]" info: 2>/dev/null || true)"
-        pixel="$(convert "$opened" -format "%[hex:p{$((a1_x + sample_x_offset)),$((a1_y + 216))}]" info: 2>/dev/null || true)"
+        before_pixel="$(convert "$before" -format "%[hex:p{$((a1_x + sample_x_offset)),$((a1_y + 233))}]" info: 2>/dev/null || true)"
+        pixel="$(convert "$opened" -format "%[hex:p{$((a1_x + sample_x_offset)),$((a1_y + 233))}]" info: 2>/dev/null || true)"
         before_pixel="${before_pixel^^}"; pixel="${pixel^^}"
         [[ "$pixel" == "$expected" && "$before_pixel" != "$expected" ]]
     }
@@ -7133,7 +7133,7 @@ PY
         green_menu_open=true
         if sample_color_swatch "$output/${prefix}-before.png" "$output/${prefix}-green-menu-open.png" 84 00B050; then
             green_gate=true; green_criteria="fill:#00B050"
-            click_autofilter_control 110 220
+            click_autofilter_control 110 233
             green_visible="$(read_color_values)"
             capture "${prefix}-green-applied.png"
         fi
@@ -7147,9 +7147,9 @@ PY
         capture "${prefix}-yellow-menu-open.png"
         if screen_changed "$output/${prefix}-green-applied.png" "$output/${prefix}-yellow-menu-open.png" 500; then
             yellow_menu_open=true
-            if sample_color_swatch "$output/${prefix}-green-applied.png" "$output/${prefix}-yellow-menu-open.png" 164 FFC000; then
+            if sample_color_swatch "$output/${prefix}-green-applied.png" "$output/${prefix}-yellow-menu-open.png" 182 FFC000; then
                 yellow_gate=true; yellow_criteria="fill:#FFC000"
-                click_autofilter_control 190 220
+                click_autofilter_control 178 233
                 yellow_visible="$(read_color_values)"
                 capture "${prefix}-yellow-applied.png"
             fi

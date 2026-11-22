@@ -11,11 +11,11 @@ public sealed class InteractiveValidationInventoryTests
     {
         InteractiveValidationInventory.KeyboardShortcuts.Should().HaveCount(94);
         InteractiveValidationInventory.KeyboardShortcuts.Sum(scenario => scenario.Interactions.Count)
-            .Should().Be(281);
+            .Should().Be(284);
         InteractiveValidationInventory.KeyboardShortcuts
             .SelectMany(scenario => scenario.Interactions)
             .Count(interaction => interaction.Steps.Any(step => step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)))
-            .Should().Be(30);
+            .Should().Be(33);
 
         AreaCounts(InteractiveValidationInventory.KeyboardShortcuts, scenario => scenario.Area)
             .Should().BeEquivalentTo(new Dictionary<string, int>(StringComparer.Ordinal)

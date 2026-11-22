@@ -119,7 +119,11 @@ public sealed class ContextMenuInteractionValidationTests
             "context-menu.pivot-chart",
             PivotChartFieldContextMenuAction.None,
             PivotChartFieldContextMenuAction.Summary);
-        AssertActionSet<PivotHeaderMenuAction>(inventory, "context-menu.pivot-header", PivotHeaderMenuAction.Separator);
+        AssertActionSet<PivotChartFieldContextMenuAction>(
+            inventory,
+            "context-menu.pivot-header",
+            PivotChartFieldContextMenuAction.None,
+            PivotChartFieldContextMenuAction.Summary);
 
         inventory.Where(row => row.FamilyId == "context-menu.recent-files")
             .Select(row => row.ActionKey)
@@ -174,7 +178,11 @@ public sealed class ContextMenuInteractionValidationTests
             ownedIds.Contains(id)).ToArray();
 
         ownedRows.Should().HaveCount(ownedIds.Count);
-        ownedRows.Should().OnlyContain(row => MainWindow.MayOpenOwnedContextDialog(row));
+        // File > Export opens the (harness-cancelled) save picker first, so it is not an owned-dialog route.
+        ownedRows.Where(row => row.ActionKey != "file:BackstageExport")
+            .Should().OnlyContain(row => MainWindow.MayOpenOwnedContextDialog(row));
+        ownedRows.Single(row => row.ActionKey == "file:BackstageExport")
+            .Should().Match<ContextMenuValidationDescriptor>(row => !MainWindow.MayOpenOwnedContextDialog(row));
         nativeRows.Except(ownedRows).Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
     }
 
@@ -416,7 +424,8 @@ public sealed class ContextMenuInteractionValidationTests
                         $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
                 results.Should().OnlyContain(result =>
                     result.EvidenceLevel == "production-dialog-opened-cancelled" ||
-                    result.EvidenceLevel == "production-dispatch-completed");
+                    result.EvidenceLevel == "production-dispatch-completed" ||
+                    result.EvidenceLevel == "production-status-observed");
             }
             finally
             {
@@ -429,9 +438,9 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
-    public async Task ProductionDispatch_OpensAndCancelsPivotHeaderFieldSettings()
+    public async Task ProductionDispatch_OpensAndCancelsPivotHeaderValueFieldSettings()
     {
-        const string id = "context-menu.pivot-header.area.row:FieldSettings";
+        const string id = "context-menu.pivot-header.area.value:ValueFieldSettings";
 
         await Session.Dispatch(async () =>
         {
@@ -443,7 +452,7 @@ public sealed class ContextMenuInteractionValidationTests
 
                 result.Status.Should().Be("passed", $"{result.EvidenceLevel}: {result.Note}");
                 result.EvidenceLevel.Should().Be("production-dialog-opened-cancelled");
-                result.Evidence.Should().Contain("InvokePivotHeaderAction");
+                result.Evidence.Should().Contain("DispatchPivotChartFieldContextMenuAction");
             }
             finally
             {

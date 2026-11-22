@@ -468,6 +468,29 @@ public partial class MainWindow
         _allRecentItems = plan.AllItems.ToList();
         SsRecentList.ItemsSource = plan.RecentItems;
         SsPinnedList.ItemsSource = plan.PinnedItems;
+        _ssRecentRowCount = plan.RecentItems.Count;
+        _ssPinnedRowCount = plan.PinnedItems.Count;
+        _ssHomeFilterActive = !string.IsNullOrWhiteSpace(filter);
+        RefreshSsHomeEmptyState();
+    }
+
+    private int _ssRecentRowCount;
+    private int _ssPinnedRowCount;
+    private bool _ssHomeFilterActive;
+
+    // Shared policy (FreeXBackstageHomePanePlanner.ResolveEmptyStateKey) decides which explanatory line the
+    // active Home tab shows when it has no rows; the Avalonia live pane resolves the same key.
+    private void RefreshSsHomeEmptyState()
+    {
+        if (SsHomeEmptyText is null)
+            return;
+
+        var key = FreeXBackstageHomePanePlanner.ResolveEmptyStateKey(
+            _showingPinnedList ? FreeXBackstageRecentTabId.Pinned : FreeXBackstageRecentTabId.Recent,
+            _ssHomeFilterActive,
+            _showingPinnedList ? _ssPinnedRowCount : _ssRecentRowCount);
+        SsHomeEmptyText.Text = key is null ? string.Empty : UiText.Get(key);
+        SsHomeEmptyText.Visibility = key is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     /// <summary>
@@ -543,6 +566,7 @@ public partial class MainWindow
         SsPinnedTabText.Foreground = plan.ActiveTab == BackstageRecentTab.Pinned
             ? activeBrush
             : inactiveBrush;
+        RefreshSsHomeEmptyState();
     }
 
     // Startup and test paths create the initial Book1; the user-facing File > New path passes the

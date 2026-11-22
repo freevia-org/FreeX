@@ -108,8 +108,62 @@ public sealed partial class MainWindow
 
         IReadOnlyList<CommentListRowPlan> currentComments = comments;
 
+        // Excel Comments pane parity: All / Active / Resolved filter, a live summary and per-thread
+        // Resolve/Reopen + Delete, driven by the shared ThreadedCommentCardPlanner view-model.
+        var filterBox = new ComboBox { MinWidth = 110 };
+        filterBox.Items.Add(UiText.Get("ThreadedCommentPane_FilterAll"));
+        filterBox.Items.Add(UiText.Get("ThreadedCommentPane_FilterActive"));
+        filterBox.Items.Add(UiText.Get("ThreadedCommentPane_FilterResolved"));
+        filterBox.SelectedIndex = 0;
+        AvaloniaCompactDialogChrome.ApplyComboBox(filterBox, SheetOptionsDialogChromeStyle);
+        AutomationProperties.SetAutomationId(filterBox, "ReviewCommentListFilter");
+        AutomationProperties.SetName(filterBox, UiText.Get("MainWindowMessage_CommentsTitle"));
+        var summaryText = new TextBlock
+        {
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Foreground = Brush(110, 110, 110),
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(summaryText, "ReviewCommentListSummary");
+        var toggleResolvedButton = new Button { Content = UiText.Get("ThreadedCommentCard_ResolveThread"), MinWidth = 112, IsEnabled = false };
+        ApplySheetOptionButtonChrome(toggleResolvedButton, 112);
+        AutomationProperties.SetAutomationId(toggleResolvedButton, "ReviewCommentListToggleResolvedButton");
+        var deleteThreadButton = new Button { Content = UiText.Get("ThreadedCommentCard_DeleteThread"), MinWidth = 104, IsEnabled = false };
+        ApplySheetOptionButtonChrome(deleteThreadButton, 104);
+        AutomationProperties.SetAutomationId(deleteThreadButton, "ReviewCommentListDeleteThreadButton");
+
+        ThreadedCommentPaneFilter CurrentFilter() => filterBox.SelectedIndex switch
+        {
+            1 => ThreadedCommentPaneFilter.Active,
+            2 => ThreadedCommentPaneFilter.Resolved,
+            _ => ThreadedCommentPaneFilter.All,
+        };
+
+        void UpdateThreadButtons()
+        {
+            var index = listBox.SelectedIndex;
+            var sheetNow = _session.ActiveSheet;
+            if (index < 0 || index >= currentComments.Count ||
+                ThreadedCommentCardPlanner.BuildCard(sheetNow, currentComments[index].Address) is not { } card)
+            {
+                toggleResolvedButton.IsEnabled = false;
+                deleteThreadButton.IsEnabled = false;
+                return;
+            }
+
+            toggleResolvedButton.Content = card.ToggleResolvedLabel.Resolve(UiText.Get, UiText.Format);
+            toggleResolvedButton.IsEnabled = card.CanToggleResolved;
+            deleteThreadButton.IsEnabled = card.CanDeleteThread;
+        }
+
         void RefreshList(IReadOnlyList<CommentListRowPlan> refreshedComments)
         {
+            var paneSheet = _session.ActiveSheet;
+            var pane = ThreadedCommentCardPlanner.BuildPane(paneSheet, CurrentFilter());
+            var visibleAddresses = pane.Rows.Select(row => row.Address).ToHashSet();
+            refreshedComments = refreshedComments.Where(row => visibleAddresses.Contains(row.Address)).ToList();
+            summaryText.Text = UiText.Format("ThreadedCommentPane_SummaryFormat", pane.ActiveCount, pane.ResolvedCount);
             var selectedAddress = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count
                 ? currentComments[listBox.SelectedIndex].Address
                 : (CellAddress?)null;
@@ -125,6 +179,31 @@ public sealed partial class MainWindow
                 listBox.SelectedIndex = 0;
             emptyText.IsVisible = currentComments.Count == 0;
             goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count;
+            UpdateThreadButtons();
+        }
+
+        void ApplyThreadAction(bool delete)
+        {
+            var index = listBox.SelectedIndex;
+            if (index < 0 || index >= currentComments.Count)
+                return;
+
+            var address = currentComments[index].Address;
+            if (ThreadedCommentCardPlanner.BuildCard(_session.ActiveSheet, address) is not { } card)
+                return;
+
+            var result = ReviewSessionController.ApplyThreadedCommentCardAction(
+                address,
+                delete ? ThreadedCommentCardAction.DeleteThread : card.ToggleResolvedAction);
+            if (!result.Success)
+            {
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
+                return;
+            }
+
+            ApplyReviewRefreshPlan(
+                result.RefreshPlan,
+                UiText.Format("Comment_CommentUpdated", FormatCellReference(address)));
         }
 
         void GoToSelected()
@@ -138,7 +217,13 @@ public sealed partial class MainWindow
         }
 
         listBox.SelectionChanged += (_, _) =>
+        {
             goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count;
+            UpdateThreadButtons();
+        };
+        filterBox.SelectionChanged += (_, _) => RefreshList(CollectThreadedComments(_session.ActiveSheet));
+        toggleResolvedButton.Click += (_, _) => ApplyThreadAction(delete: false);
+        deleteThreadButton.Click += (_, _) => ApplyThreadAction(delete: true);
         listBox.DoubleTapped += (_, _) => GoToSelected();
         listBox.KeyDown += (_, args) =>
         {
@@ -151,17 +236,25 @@ public sealed partial class MainWindow
         goToButton.Click += (_, _) => GoToSelected();
         closeButton.Click += (_, _) => dialog.Close();
 
-        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([goToButton, closeButton], new Thickness(0, 10, 0, 0));
+        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [toggleResolvedButton, deleteThreadButton, goToButton, closeButton],
+            new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(bottomRow, Dock.Bottom);
         DockPanel.SetDock(emptyText, Dock.Top);
 
         var header = BuildCommentListHeader();
         DockPanel.SetDock(header, Dock.Top);
+        var filterRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 6) };
+        filterRow.Children.Add(filterBox);
+        filterRow.Children.Add(summaryText);
+        summaryText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        summaryText.Margin = new Thickness(0);
+        DockPanel.SetDock(filterRow, Dock.Top);
 
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(16),
-            Children = { bottomRow, emptyText, header, listBox },
+            Children = { bottomRow, emptyText, filterRow, header, listBox },
         };
 
         RefreshList(comments);

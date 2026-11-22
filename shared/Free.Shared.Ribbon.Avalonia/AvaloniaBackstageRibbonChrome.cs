@@ -33,6 +33,7 @@ public static class AvaloniaBackstageRibbonChrome
         BackstageIconKind.Print => RibbonCommandIconKind.Print,
         BackstageIconKind.View => RibbonCommandIconKind.View,
         BackstageIconKind.WindowClose => windowCloseIcon,
+        BackstageIconKind.Feedback => RibbonCommandIconKind.Comment,
         _ => RibbonCommandIconKind.Generic,
     };
 

@@ -1294,15 +1294,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Unhide Columns"] = UnhideSelectedColumns,
                     ["Protect Sheet"] = () => RunGuarded(ShowProtectSheetDialogAsync),
                     ["Unhide Sheet"] = () => RunGuarded(UnhideSheetAsync),
-                    // Home ▸ Styles ▸ Conditional Formatting dropdown items backed by existing presets/handlers
-                    // (canonical ids from HomeRibbonMenus.ConditionalFormatting). The remaining Highlight/Top-Bottom/
-                    // Icon-Set variants stay NoOp until their presets exist.
+                    // Home ▸ Styles ▸ Conditional Formatting dropdown items (canonical ids from
+                    // HomeRibbonMenus.ConditionalFormatting). Like WPF's ShowCfDialog, the Highlight Cells, Top/Bottom,
+                    // Data Bars, Color Scales and More Rules entries open their dedicated rule dialogs.
                     ["New Rule"] = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
                     ["Clear Rules"] = ClearConditionalFormatsFromSelection,
-                    ["Data Bars"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.DataBar),
-                    ["Color Scales"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.ColorScale),
-                    ["Greater Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightGreaterThan),
-                    ["Top 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10),
+                    ["Data Bars"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.DataBarRule)),
+                    ["Color Scales"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.ColorScaleRule)),
+                    ["Greater Than"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.GreaterThanRule)),
+                    ["Top 10 Items"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Top10ItemsRule)),
                     // Insert tab (Links / Text groups).
                     ["Insert Link"] = () => RunGuarded(ShowInsertHyperlinkDialogAsync),
                     // Home Font group (added buttons).
@@ -1421,19 +1421,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["More Accounting Formats"] = () => RunGuarded(() => ShowFormatCellsDialogAsync()),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Highlight Cells Rules detail items.
-                    ["Less Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightLessThan),
-                    ["Between"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightBetween),
-                    ["Equal To"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightEqualTo),
-                    ["Text that Contains"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightTextContains),
-                    ["A Date Occurring"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightDateOccurring),
-                    ["Duplicate Values"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightDuplicateValues),
+                    ["Less Than"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.LessThanRule)),
+                    ["Between"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.BetweenRule)),
+                    ["Equal To"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.EqualToRule)),
+                    ["Text that Contains"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.TextContainsRule)),
+                    ["A Date Occurring"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.DateOccurringRule)),
+                    ["Duplicate Values"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.DuplicateValuesRule)),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Top/Bottom Rules detail items.
-                    ["Top 10%"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10Percent),
-                    ["Bottom 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Bottom10Items),
-                    ["Bottom 10%"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Bottom10Percent),
-                    ["Above Average"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.AboveAverage),
-                    ["Below Average"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.BelowAverage),
+                    ["Top 10%"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Top10PercentRule)),
+                    ["Bottom 10 Items"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Bottom10ItemsRule)),
+                    ["Bottom 10%"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.Bottom10PercentRule)),
+                    ["Above Average"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.AboveAverageRule)),
+                    ["Below Average"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.BelowAverageRule)),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ Icon Sets submenu.
                     ["3 Arrows"] = () => ApplyConditionalFormatIconSet("3Arrows"),
@@ -1454,7 +1454,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["5 Ratings"] = () => ApplyConditionalFormatIconSet("5Rating"),
                     ["5 Quarters"] = () => ApplyConditionalFormatIconSet("5Quarters"),
                     ["5 Boxes"] = () => ApplyConditionalFormatIconSet("5Boxes"),
-                    ["More Rules"] = () => RunGuarded(ShowConditionalFormatNewRuleDialogAsync),
+                    ["More Rules"] = () => RunGuarded(() => ShowConditionalFormatRuleDialogAndApplyAsync(ConditionalFormatDialogCatalog.IconSetRule)),
 
                     // Home ▸ Styles ▸ Conditional Formatting ▸ New Formula Rule / Manage Rules.
                     ["New Formula Rule"] = () => RunGuarded(() => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Formula)),
@@ -3086,6 +3086,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             NativeMenuGestureKey.N => Key.N,
             NativeMenuGestureKey.O => Key.O,
             NativeMenuGestureKey.S => Key.S,
+            NativeMenuGestureKey.T => Key.T,
             NativeMenuGestureKey.P => Key.P,
             NativeMenuGestureKey.G => Key.G,
             NativeMenuGestureKey.H => Key.H,
@@ -14753,8 +14754,41 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool MatchCase() => options.MatchCaseBox.IsChecked == true;
         bool MatchEntire() => options.MatchEntireCellBox.IsChecked == true;
 
+        // WPF: a blank "Find what" is allowed only when a Format criterion narrows the search; otherwise an
+        // owned warning titled with the dialog is shown and focus returns to the search box.
+        bool BlankSearchBlocked()
+        {
+            if (!string.IsNullOrEmpty(CurrentFindText()) || findFormat is not null)
+                return false;
+
+            RunGuarded(() => ShowFindWhatRequiredAsync());
+            return true;
+        }
+
+        Task ShowFindWhatRequiredAsync() => ShowFindReplaceWarningAsync(Fr(FindReplaceDialogText.FindWhatRequired));
+
+        // WPF DialogMessageHelper.ShowWarning(this, message, Title) followed by FocusSearchBox().
+        async Task ShowFindReplaceWarningAsync(string message)
+        {
+            try
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    message,
+                    dialog.Title ?? string.Empty);
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            if (dialog.IsVisible)
+                FocusSearchBox();
+        }
+
         void DoFindNext()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             // WPF HideFindAllResults: Find Next collapses the Find All list.
             resultsList.ItemsSource = null;
@@ -14762,19 +14796,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.FindFailed);
+                // WPF FindNext: every failed search reports the plain "No matches found." status.
+                statusLabel.Text = Fr(FindReplaceDialogText.NoMatchesFound);
                 return;
             }
-            statusLabel.Text = Fr(
-                FindReplaceDialogText.FoundRangeStatus,
-                FormatRangeReference(r.SelectedRange!.Value),
-                r.MatchIndex,
-                r.MatchCount);
+            // WPF FindNext status: "Match {i} of {n}".
+            statusLabel.Text = Fr(FindReplaceDialogText.MatchStatus, r.MatchIndex, r.MatchCount);
             RefreshShell(statusLabel.Text);
         }
 
         void DoFindAll()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             var search = new FindDialogResult(CurrentFindText(), FindDialogAction.FindAll, BuildOptions(), MatchCase(), MatchEntire());
             var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);
@@ -14793,38 +14826,53 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void DoReplace()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
-            var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
+            // WPF ReplaceOne uses the submitted-dialog behaviour: skip non-replaceable matches and
+            // advance to the following match after a replacement.
+            var r = _session.ReplaceNextValue(
+                CurrentFindText(),
+                replaceWithBox.Text ?? "",
+                BuildOptions(),
+                MatchCase(),
+                MatchEntire(),
+                replacementFormat,
+                FindReplaceNextBehavior.SubmittedDialogStyle);
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.ReplaceFailed);
+                // WPF ShowReplaceFailureWarning: a modal warning titled with the dialog.
+                if (!string.IsNullOrWhiteSpace(r.ErrorMessage))
+                    RunGuarded(() => ShowFindReplaceWarningAsync(r.ErrorMessage));
                 return;
             }
-            statusLabel.Text = r.ReplacedCount == 0
-                ? (r.MatchCount == 0
+            if (r.ReplacedCount == 0)
+            {
+                statusLabel.Text = r.MatchCount == 0
                     ? Fr(FindReplaceDialogText.NoMatchesFound)
-                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound))
-                : Fr(
-                    FindReplaceDialogText.ReplacedRangeStatus,
-                    FormatRangeReference(r.ReplacedRange!.Value),
-                    r.MatchIndex,
-                    r.MatchCount);
+                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound);
+                RefreshShell(statusLabel.Text);
+                return;
+            }
+            statusLabel.Text = r.NextMatchIndex >= 0
+                ? Fr(FindReplaceDialogText.MatchStatus, r.NextMatchIndex + 1, r.RemainingMatchCount)
+                : Fr(FindReplaceDialogText.ReplacedOneCell);
             RefreshShell(statusLabel.Text);
         }
 
         void DoReplaceAll()
         {
+            if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
             var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.ReplaceFailed);
+                if (!string.IsNullOrWhiteSpace(r.ErrorMessage))
+                    RunGuarded(() => ShowFindReplaceWarningAsync(r.ErrorMessage));
                 return;
             }
+            // WPF ReplaceAll: "No matches found." when nothing was replaced, else "Replaced N cell(s).".
             statusLabel.Text = r.ReplacedCount == 0
-                ? (r.MatchCount == 0
-                    ? Fr(FindReplaceDialogText.NoMatchesFound)
-                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound))
+                ? Fr(FindReplaceDialogText.NoMatchesFound)
                 : Fr(FindReplaceDialogText.ReplacedCellsStatus, r.ReplacedCount);
             RefreshShell(statusLabel.Text);
         }
@@ -16051,6 +16099,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static GoToSpecialChoice[] CreateGoToSpecialChoices() =>
         GoToSpecialDialogPlanner.BuildChoices().ToArray();
 
+    private void ShowGoToSpecialNoCellsFoundMessage()
+    {
+        var owner = FindTopmostOpenModalDialog() ?? (Window)this;
+        Dispatcher.UIThread.Post(
+            () => RunGuarded(() => AvaloniaUserMessageDialog.ShowAsync(
+                owner,
+                UiText.Get("GoToSpecial_NoCellsFoundMessage"),
+                UiText.Get("GoToSpecial_GoToSpecial"),
+                UserMessageIcon.Information)),
+            DispatcherPriority.Background);
+    }
+
     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
         if (!TryCommitPendingFormulaEdit())
@@ -16058,6 +16118,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         ClearSelectedDrawingObject();
         var result = _session.GoToSpecial(kind, options);
+        if (!result.Success && result.ErrorMessage == WorkbookSession.GoToSpecialNoCellsFoundMessage)
+        {
+            // WPF reports an empty Go To Special search in an owned information message box
+            // ("No cells found." titled Go To Special) and leaves the selection untouched.
+            RefreshShell(UiText.Get("MainLoc_Ready"));
+            ShowGoToSpecialNoCellsFoundMessage();
+            return false;
+        }
+
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_GoToSpecialFailed"));
@@ -16273,10 +16342,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     out var plan,
                     out var validationError))
             {
-                validationText.Text = GetHyperlinkValidationErrorText(validationError);
-                validationText.IsVisible = true;
-                targetBox.Focus();
-                targetBox.SelectAll();
+                RunGuarded(() => ShowDialogWarningAndFocusAsync(dialog, GetHyperlinkValidationErrorText(validationError), targetBox));
                 return;
             }
 
@@ -17455,9 +17521,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // WPF FormatCellsDialog.xaml: item padding 2,0 (16 px rows) and a solid system-highlight selection.
         DialogWindowDefaults.ApplyWpfSolidHighlightRows(numberCategoryList, 16);
 
+        // WPF NumberFormatCombo is IsEditable="True": the Custom category's code is typed straight into it.
         var numberFormatBox = new ComboBox
         {
             MinWidth = 260,
+            IsEditable = true,
         };
         AutomationProperties.SetName(
             numberFormatBox,
@@ -17591,7 +17659,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             return FormatCellsNumberFormatPlanner.ResolveSelectedNumberFormat(
                 numberCategoryList.SelectedItem as string,
-                numberFormatBox.SelectedItem as string ?? string.Empty,
+                numberFormatBox.Text ?? numberFormatBox.SelectedItem as string ?? string.Empty,
                 numberFormatBox.SelectedIndex,
                 numberDecimalPlacesBox.Text,
                 numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
@@ -17615,7 +17683,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            var typeText = numberFormatBox.SelectedItem as string ?? string.Empty;
+            var typeText = numberFormatBox.SelectedItem as string ?? numberFormatBox.Text ?? string.Empty;
             var resolved = ResolveSelectedNumberFormatCode();
             numberPreview.Text = FormatCellsNumberFormatPlanner.PreviewForFormat(
                 resolved ?? (string.IsNullOrEmpty(typeText) ? currentNumberFormat : typeText));
@@ -18246,10 +18314,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // style + color, composed alongside the whole-cell preset buttons (None/Outline/Inside).
         // The toggle state and the chosen line style/color flow into the shared
         // FormatCellsCompactRequest per-side fields so WPF/macOS map identically.
-        var borderTopToggle = CreateFormatCellsBorderSideToggle("Top", "FormatCellsBorderTopToggle");
-        var borderBottomToggle = CreateFormatCellsBorderSideToggle("Bottom", "FormatCellsBorderBottomToggle");
-        var borderLeftToggle = CreateFormatCellsBorderSideToggle("Left", "FormatCellsBorderLeftToggle");
-        var borderRightToggle = CreateFormatCellsBorderSideToggle("Right", "FormatCellsBorderRightToggle");
+        var borderTopToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Top")), "FormatCellsBorderTopToggle", UiText.Get("FormatCells_ApplyTopBorder"));
+        var borderBottomToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Bottom")), "FormatCellsBorderBottomToggle", UiText.Get("FormatCells_ApplyBottomBorder"));
+        var borderLeftToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Left")), "FormatCellsBorderLeftToggle", UiText.Get("FormatCells_ApplyLeftBorder"));
+        var borderRightToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Right")), "FormatCellsBorderRightToggle", UiText.Get("FormatCells_ApplyRightBorder"));
         var borderInsideHorizontalToggle = CreateFormatCellsBorderSideToggle("Inside horizontal", "FormatCellsBorderInsideHorizontalToggle");
         var borderInsideVerticalToggle = CreateFormatCellsBorderSideToggle("Inside vertical", "FormatCellsBorderInsideVerticalToggle");
         // WPF exposes interior borders through the Inside preset and renders the resulting
@@ -18621,11 +18689,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsVisible = false,
         };
 
-        void ShowFormatCellsError(string message, Control? target = null)
+        TabControl? formatCellsTabStrip = null;
+
+        // WPF ShowPlannerValidation: select the tab that owns the field, then an owned modal warning
+        // titled with the dialog, then focus the offending field.
+        void ShowFormatCellsError(string message, Control? target = null, FormatCellsDialogPlannerTab? tab = null)
         {
-            errorText.Text = message;
-            errorText.IsVisible = true;
-            target?.Focus();
+            errorText.IsVisible = false;
+            if (formatCellsTabStrip is not null && tab is { } plannerTab)
+            {
+                formatCellsTabStrip.SelectedIndex = plannerTab switch
+                {
+                    FormatCellsDialogPlannerTab.Alignment => 1,
+                    FormatCellsDialogPlannerTab.Font => 2,
+                    FormatCellsDialogPlannerTab.Border => 3,
+                    FormatCellsDialogPlannerTab.Fill => 4,
+                    FormatCellsDialogPlannerTab.Protection => 5,
+                    _ => 0,
+                };
+            }
+
+            RunGuarded(() => ShowDialogWarningAndFocusAsync(dialog, message, target));
         }
 
         void Accept()
@@ -18656,7 +18740,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 InitialMergeCells: currentMergeCells,
                 Number: new FormatCellsDialogNumberInput(
                     numberCategoryList.SelectedItem as string,
-                    numberFormatBox.SelectedItem as string ?? numberFormatBox.Text,
+                    numberFormatBox.Text ?? numberFormatBox.SelectedItem as string,
                     numberFormatBox.SelectedIndex,
                     numberDecimalPlacesBox.Text,
                     numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
@@ -18710,7 +18794,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     FormatCellsDialogValidationTarget.TextRotation => textRotationBox,
                     _ => null,
                 };
-                ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);
+                ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target, validation.Tab);
                 return;
             }
 
@@ -19344,6 +19428,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 protectionTab,
             },
         };
+        formatCellsTabStrip = tabStrip;
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
         // WPF FormatCellsDialog.xaml: plain TabItems sized to their header text (no minimum width).
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
@@ -19444,6 +19529,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result;
     }
 
+    private static async Task ShowDialogWarningAndFocusAsync(Window dialog, string message, Control? target)
+    {
+        try
+        {
+            await AvaloniaUserMessageDialog.ShowWarningAsync(dialog, message, dialog.Title ?? string.Empty);
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+
+        if (dialog.IsVisible)
+        {
+            target?.Focus();
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+        }
+    }
+
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)
     {
         var tab = new TabItem
@@ -19533,7 +19637,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return comboBox;
     }
 
-    private static ToggleButton CreateFormatCellsBorderSideToggle(string label, string automationId)
+    private static ToggleButton CreateFormatCellsBorderSideToggle(string label, string automationId, string? toolTip = null)
     {
         var toggle = new ToggleButton
         {
@@ -19548,6 +19652,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetName(toggle, label);
         AutomationProperties.SetAutomationId(toggle, automationId);
+        // WPF DlgBorderPreview{Top,Left,Right,Bottom}Button: "Apply <side> border" tooltip.
+        if (toolTip is not null)
+            ToolTip.SetTip(toggle, toolTip);
         return toggle;
     }
 
@@ -25511,15 +25618,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             errorMessageBox.IsEnabled = plan.ErrorEditorsEnabled;
         }
 
-        void Accept()
+        TabControl? validationTabStrip = null;
+
+        void Accept() => RunGuarded(AcceptAsync);
+
+        async Task AcceptAsync()
         {
             var type = SelectedType();
             var op = SelectedOperator();
             var validation = DataValidationDialogPlanner.ValidateCriteria(type, op, formula1Box.Text, formula2Box.Text);
             if (!validation.IsValid)
             {
-                errorText.Text = DataValidationValidationErrorText(validation.FirstError);
-                errorText.IsVisible = !string.IsNullOrEmpty(errorText.Text);
+                // WPF DataValidationDialog.OkButton_Click: switch to the Settings tab, show the problem
+                // in a warning box titled with the dialog title, then focus the offending criteria input.
+                if (validationTabStrip is not null)
+                    validationTabStrip.SelectedIndex = 0;
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    DataValidationValidationErrorText(validation.FirstError) ?? string.Empty,
+                    dialog.Title ?? string.Empty);
+                var focusSecond = DataValidationDialogPlanner.FocusTargetForInvalidCriteria(
+                    type, op, formula1Box.Text, formula2Box.Text) == DvRuleEditorFocusTarget.Formula2;
+                var focusBox = focusSecond ? formula2Box : formula1Box;
+                focusBox.Focus();
+                focusBox.SelectAll();
                 return;
             }
 
@@ -25749,6 +25871,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(tabStrip, "DataValidationTabStrip");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabStrip);
+        validationTabStrip = tabStrip;
 
         var buttonRow = new StackPanel
         {
@@ -25864,8 +25987,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return choices[0];
     }
 
+    // Same localized wording as WPF DataValidationDialog.LocalizeValidationError.
     private static string DataValidationValidationErrorText(DvValidationError? error) =>
-        error?.Message ?? "";
+        error?.Kind switch
+        {
+            null => "",
+            DvValidationErrorKind.SourceRequired => UiText.Get("DataValidation_SourceRequired"),
+            DvValidationErrorKind.FormulaRequired => UiText.Get("DataValidation_FormulaRequired"),
+            DvValidationErrorKind.ValueRequired => UiText.Get("DataValidation_ValueRequired"),
+            DvValidationErrorKind.MaximumRequired => UiText.Get("DataValidation_MaximumRequired"),
+            DvValidationErrorKind.InvalidWholeNumberCriteria => UiText.Get("DataValidation_InvalidWholeNumberCriteria"),
+            DvValidationErrorKind.InvalidDecimalCriteria => UiText.Get("DataValidation_InvalidDecimalCriteria"),
+            DvValidationErrorKind.InvalidDateCriteria => UiText.Get("DataValidation_InvalidDateCriteria"),
+            DvValidationErrorKind.InvalidTimeCriteria => UiText.Get("DataValidation_InvalidTimeCriteria"),
+            DvValidationErrorKind.InvalidTextLengthCriteria => UiText.Get("DataValidation_InvalidTextLengthCriteria"),
+            DvValidationErrorKind.InvalidListCriteria => UiText.Get("DataValidation_InvalidListCriteria"),
+            DvValidationErrorKind.InvalidCustomCriteria => UiText.Get("DataValidation_InvalidCustomCriteria"),
+            _ => error.Message,
+        };
 
     private static StackPanel CreateDataValidationField(string label, Control control) =>
         CreateDataValidationField(new TextBlock { Text = StripDisplayMnemonic(label) }, control);
@@ -30116,7 +30255,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task ExportWorkbookFixedLayoutAsync(
         WorkbookExportPrintScope scope,
-        WorkbookExportPrintOutputKind outputKind)
+        WorkbookExportPrintOutputKind outputKind,
+        bool offerXpsInSavePicker = false)
     {
         if (!TryBeginFileOperation())
             return;
@@ -30143,21 +30283,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);
-            if (exportOptions is null)
-                return;
-
-            var storageFile = isXps
+            // WPF ExportPdfAsync order: the save picker comes first, then the Export Options dialog, then
+            // the normalized-overwrite confirmation.
+            // File > Export mirrors WPF's single "Export as PDF / XPS" save dialog that lists both types.
+            var storageFile = offerXpsInSavePicker
                 ? await ShowPortableExportSavePickerAsync(
-                    UiText.Get("MainWindowMessage_ExportXpsTitle"),
-                    ExportFilePickerPlanner.BuildPortablePickerPlan(_session.DisplayName, ApplicationTitle, format.FileFormat))
-                : await ShowPortablePdfSavePickerAsync("Export to PDF");
+                    UiText.Get("MainWindowDialog_ExportPdfXpsTitle"),
+                    ExportFilePickerPlanner.BuildPortablePdfXpsPickerPlan(_session.DisplayName, ApplicationTitle))
+                : isXps
+                    ? await ShowPortableExportSavePickerAsync(
+                        UiText.Get("MainWindowMessage_ExportXpsTitle"),
+                        ExportFilePickerPlanner.BuildPortablePickerPlan(_session.DisplayName, ApplicationTitle, format.FileFormat))
+                    : await ShowPortablePdfSavePickerAsync(UiText.Get("MainWindowDialog_ExportPdfXpsTitle"));
 
             if (storageFile is null)
                 return;
 
             using (storageFile)
             {
+                if (offerXpsInSavePicker &&
+                    string.Equals(Path.GetExtension(storageFile.LocalPath), ExportFilePickerPlanner.XpsExtensionWithDot, StringComparison.OrdinalIgnoreCase))
+                {
+                    outputKind = WorkbookExportPrintOutputKind.Xps;
+                    format = ExportFormatCatalog.Get(outputKind);
+                    isXps = true;
+                }
+
+                var exportOptions = await ShowExportOptionsDialogAsync(selectionPlan.ContentScope, format.Format);
+                if (exportOptions is null)
+                    return;
+
                 var path = storageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
@@ -30318,7 +30473,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             title,
             ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle));
 
+    // Test-only seam (implemented in the parity-capture/test support partial): lets validation harnesses
+    // replace the native export save panel with a deterministic, cancelling picker. Null in production.
+    partial void ResolveExportSavePicker(
+        ref Func<string, ExportSavePickerPlan, Task<AvaloniaPickedStorageFile?>>? picker);
+
     private Task<AvaloniaPickedStorageFile?> ShowPortableExportSavePickerAsync(
+        string title,
+        ExportSavePickerPlan pickerPlan)
+    {
+        Func<string, ExportSavePickerPlan, Task<AvaloniaPickedStorageFile?>>? pickerOverride = null;
+        ResolveExportSavePicker(ref pickerOverride);
+        return pickerOverride is not null
+            ? pickerOverride(title, pickerPlan)
+            : PickExportSaveFileAsync(title, pickerPlan);
+    }
+
+    private Task<AvaloniaPickedStorageFile?> PickExportSaveFileAsync(
         string title,
         ExportSavePickerPlan pickerPlan) =>
         AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(

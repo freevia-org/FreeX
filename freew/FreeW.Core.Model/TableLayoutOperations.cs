@@ -175,6 +175,7 @@ public static class TableLayoutOperations
         else if (mode == AutoFitMode.Window)
         {
             table.PreferredWidthPt = windowWidthPt;
+            table.PreferredWidthPercent = null;
         }
 
         return true;
@@ -250,6 +251,7 @@ public static class TableLayoutOperations
             TableStyleId = source.TableStyleId,
             Borders = source.Borders,
             PreferredWidthPt = source.PreferredWidthPt,
+            PreferredWidthPercent = source.PreferredWidthPercent,
             Alignment = source.Alignment,
             IndentFromLeftPt = source.IndentFromLeftPt,
             FloatingPosition = source.FloatingPosition,

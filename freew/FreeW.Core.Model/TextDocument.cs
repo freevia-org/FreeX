@@ -3170,6 +3170,13 @@ public sealed class Table : Block
     public double? PreferredWidthPt { get; set; }
 
     /// <summary>
+    /// Authored preferred width as a percentage of the text column (<c>w:tblW</c> with <c>type="pct"</c>,
+    /// 5000 = 100%), expressed in percent (113.2 = 113.2%). Null when the width is not percentage-based.
+    /// Only meaningful with <see cref="AutoFitMode.Window"/>; cleared whenever the width is edited.
+    /// </summary>
+    public double? PreferredWidthPercent { get; set; }
+
+    /// <summary>
     /// Horizontal alignment of the table (<c>tbl/tblPr/w:jc</c>). <see cref="TableAlignment.Left"/> is the
     /// default, so it is not emitted and existing tables are unaffected.
     /// </summary>

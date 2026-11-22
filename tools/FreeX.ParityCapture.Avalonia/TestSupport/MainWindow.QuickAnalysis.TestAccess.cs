@@ -31,9 +31,7 @@ public sealed partial class MainWindow
         var previousProbe = _conditionalFormatRuleDialogInspectionCallback;
         _conditionalFormatRuleDialogInspectionCallback = probe =>
         {
-            var presetIndex = ConditionalFormatPresetChoices.ToList().FindIndex(choice => choice.Preset == preset);
-            if (presetIndex >= 0)
-                probe.PresetBox.SelectedIndex = presetIndex;
+            // Quick Analysis already opened the dedicated rule dialog for the item's rule type.
             probe.OkButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, probe.OkButton));
         };
         try

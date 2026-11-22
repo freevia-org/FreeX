@@ -292,6 +292,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
                 var rangeMode = Find<ComboBox>(dialog, "PrintPreviewToolbarPageRange");
                 rangeMode.SelectedIndex.Should().Be((int)PrintPreviewPageRangeMode.AllPages);
 
+                await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(dialog);
                 Find<Button>(dialog, PrintPreviewDialogPlanner.NextPageButtonAutomationId)
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Find<TextBox>(dialog, PrintPreviewDialogPlanner.PageNumberBoxAutomationId).Text.Should().Be("2");
@@ -400,6 +401,7 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
 
                     default:
                         root = await OpenModalAsync(window, "ShowPrintPreviewDialogAsync", [null, null, null]);
+                        await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(root);
                         submitId = PrintPreviewDialogPlanner.ExportPdfButtonAutomationId;
                         nextId = PrintPreviewDialogPlanner.NextPageButtonAutomationId;
                         break;

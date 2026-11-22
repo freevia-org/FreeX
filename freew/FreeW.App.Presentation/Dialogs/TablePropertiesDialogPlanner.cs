@@ -626,6 +626,8 @@ public static class TablePropertiesDialogPlanner
 
         var table = context.Table;
 
+        if (table.PreferredWidthPt != values.PreferredWidthPt)
+            table.PreferredWidthPercent = null;
         table.PreferredWidthPt = values.PreferredWidthPt;
         table.Alignment = values.Alignment;
         table.IndentFromLeftPt = values.IndentFromLeftPt;

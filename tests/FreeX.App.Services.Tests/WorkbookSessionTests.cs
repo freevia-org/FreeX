@@ -1905,6 +1905,36 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void ReplaceNextValue_SubmittedDialogStyle_AdvancesSelectionToNextMatchAndReportsIt()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var b1 = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(a1, new TextValue("foo one"));
+        sheet.SetCell(b1, new TextValue("foo two"));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        var result = session.ReplaceNextValue(
+            "foo",
+            "bar",
+            options: null,
+            behavior: FindReplaceNextBehavior.SubmittedDialogStyle);
+
+        result.Success.Should().BeTrue();
+        result.ReplacedCount.Should().Be(1);
+        result.NextMatchIndex.Should().Be(0);
+        result.RemainingMatchCount.Should().Be(1);
+        result.ReplacedRange.Should().Be(new GridRange(b1, b1));
+        // The replaced cell is B1 (the match after the active A1); the remaining match wraps to A1.
+        session.SelectedRange.Should().Be(new GridRange(a1, a1));
+    }
+
+    [Fact]
     public void ReplaceNextValue_WithWorkbookScopeCanMoveToNextSheet()
     {
         var workbook = CreateWorkbook();

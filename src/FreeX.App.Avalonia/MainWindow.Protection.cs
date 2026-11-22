@@ -33,6 +33,7 @@ public sealed partial class MainWindow
     // WPF PasswordProtectionDialog (ProtectionDialogs.cs) uses a default-template PasswordBox, which
     // renders 18px tall at the 12px dialog font; the buttons keep the shared control height.
     private const double ProtectWpfPasswordBoxHeight = 18;
+    private const double ProtectWorkbookOptionsClientHeight = 237;
     // WPF ProtectionDialogs.AddSheetPermissionChecklist: twelve whole permission rows show in the
     // permission viewport; each row is a 16px check box with a 4px bottom margin.
     private const int ProtectSheetWpfVisiblePermissionRows = 12;
@@ -301,7 +302,11 @@ public sealed partial class MainWindow
             // *outer* minimum (DialogSizing.ApplyContentHeight). Avalonia sizes the client area, so the
             // Windows caption/frame comes off both.
             Width = ProtectionDialogPlanner.ProtectWorkbookCaptureWidth - WpfNoResizeFrameWidth,
-            Height = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight,
+            // The protect form (label + Structure/Windows + Password group + buttons) is taller than the
+            // 250 minimum, so the seed height is the content's own client height (WPF grows the same way).
+            Height = state.IsStructureProtected
+                ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight
+                : ProtectWorkbookOptionsClientHeight,
             MinHeight = ProtectionDialogPlanner.ProtectWorkbookCaptureHeight - WpfNoResizeClientFrameHeight,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
@@ -315,6 +320,13 @@ public sealed partial class MainWindow
         var passwordBox = new TextBox { PasswordChar = '•', MinWidth = 200 };
         ApplyProtectTextBoxChrome(passwordBox);
         AutomationProperties.SetAutomationId(passwordBox, "ProtectWorkbookPasswordBox");
+
+        var structureBox = new CheckBox { Content = UiText.Get("ShellLoc_StructureCheckbox"), IsChecked = true };
+        ApplyProtectCheckBoxChrome(structureBox);
+        AutomationProperties.SetAutomationId(structureBox, "ProtectWorkbookStructureBox");
+        var windowsBox = new CheckBox { Content = UiText.Get("ShellLoc_WindowsCheckbox") };
+        ApplyProtectCheckBoxChrome(windowsBox);
+        AutomationProperties.SetAutomationId(windowsBox, "ProtectWorkbookWindowsBox");
 
         var warningText = new TextBlock
         {
@@ -418,6 +430,18 @@ public sealed partial class MainWindow
                 FontSize = 12,
                 FontFamily = FormulaBarFontFamily,
             });
+            // WPF lists these as natural-height (15px) check boxes with a 4px gap (19px pitch); the
+            // shared 20px dialog check row made the Structure/Windows pitch 24.
+            structureBox.MinHeight = 15;
+            structureBox.MaxHeight = 15;
+            windowsBox.MinHeight = 15;
+            windowsBox.MaxHeight = 15;
+            structureBox.Margin = new Thickness(0, 0, 0, 4);
+            // WPF uses 8; the plain-window GroupBox chrome sits its header 1px higher than WPF's, so
+            // the gap carries that pixel to land the Password group on the measured WPF rows.
+            windowsBox.Margin = new Thickness(0, 0, 0, 9);
+            contentChildren.Add(structureBox);
+            contentChildren.Add(windowsBox);
             contentChildren.Add(ProtectionGroupBox(
                 UiText.Get("ShellLoc_PasswordGroupHeader"),
                 new StackPanel
@@ -441,16 +465,15 @@ public sealed partial class MainWindow
             {
                 warningText.IsVisible = false;
 
-                // WPF PasswordProtectionDialog: Protect Workbook has only the password (structure is
-                // always protected) and re-confirms a non-empty password in a second modal dialog.
+                // WPF PasswordProtectionDialog: a non-empty password is re-confirmed in a second modal dialog.
                 var password = passwordBox.Text;
                 if (!string.IsNullOrEmpty(password) && !await ShowConfirmPasswordDialogAsync(dialog, password))
                     return;
 
                 var options = new ProtectWorkbookOptions
                 {
-                    ProtectStructure = true,
-                    ProtectWindows = false,
+                    ProtectStructure = structureBox.IsChecked == true,
+                    ProtectWindows = windowsBox.IsChecked == true,
                     Password = password,
                     PasswordConfirmation = password,
                 };
@@ -594,6 +617,8 @@ public sealed partial class MainWindow
                     Foreground = HeaderForeground,
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
+                    // WPF Label's default 5px padding on every side.
+                    Padding = new Thickness(5),
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 field,

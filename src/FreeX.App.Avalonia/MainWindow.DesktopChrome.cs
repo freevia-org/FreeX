@@ -29,6 +29,11 @@ public sealed partial class MainWindow
             return true;
         }
 
+        // A bare Alt/Option press is a standalone-Alt candidate that toggles on release (see
+        // TryTrackStandaloneAltKeyTip); it must never toggle the mode on key-down like F10 does.
+        if (IsStandaloneAltKeyTipKey(args.Key))
+            return false;
+
         var transition = AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
             args.Key,
             args.KeyModifiers,

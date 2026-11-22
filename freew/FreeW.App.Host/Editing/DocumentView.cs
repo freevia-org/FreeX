@@ -12464,6 +12464,28 @@ public sealed partial class DocumentView : RichTextBox
                 ? DocumentViewLayoutPlanner.BuildColumnPlan(
                     document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
                 : metrics.ContentWidthDip;
+            // An authored percentage width (w:tblW pct, e.g. 60%) is a share of the text column. Word lets a
+            // share above 100% (and a negative w:tblInd outdent) run into the margins, but a FlowDocument
+            // clips blocks to the column and a Block margin cannot be negative, so the table is capped at the
+            // column's remaining width rather than drawn clipped away at the page column's edge.
+            if (table.AutoFit == AutoFitMode.Window
+                && table.PreferredWidthPercent is > 0 and { } percent
+                && double.IsFinite(percent)
+                && Math.Abs(percent - 100.0) > 0.5)
+            {
+                var percentWidth = Math.Min(
+                    contentWidth * percent / 100.0,
+                    contentWidth - Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint);
+                var percentTarget = percentWidth
+                    - spacingTotal - (cellSpacingDip > 0 ? tableBorderDip : 0);
+                if (total > 0 && percentTarget > 0 && Math.Abs(percentTarget - total) >= 0.01)
+                {
+                    var percentScale = percentTarget / total;
+                    for (var c = 0; c < columns; c++)
+                        widths[c] = widths[c]!.Value * percentScale;
+                }
+                return widths;
+            }
             var available = contentWidth - Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint
                 - spacingTotal - tableBorderDip;
             // Word keeps the authored widths of a grid that is clearly wider than the text column (the

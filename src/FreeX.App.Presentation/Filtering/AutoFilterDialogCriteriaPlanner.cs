@@ -4,6 +4,16 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Filtering;
 
+public enum AutoFilterTypedCriteriaField
+{
+    Value,
+    Minimum,
+    Maximum,
+    Count,
+}
+
+public sealed record AutoFilterTypedCriteriaIssue(string ResourceKey, AutoFilterTypedCriteriaField Field);
+
 public sealed record AutoFilterSavedCondition(string CriteriaPrefix, string Value);
 
 public sealed record AutoFilterSavedCriteria(
@@ -177,6 +187,49 @@ public static class AutoFilterDialogCriteriaPlanner
 
     public static string BuildTopBottomCriteriaText(AutoFilterCriteriaOption option, string? count) =>
         $"{option.CriteriaPrefix}{count?.Trim() ?? string.Empty}";
+
+    /// <summary>
+    /// The WPF AutoFilter dialog's OK-time validation of the typed criteria controls: the resource key of the
+    /// warning to show (Enter first/second between value, valid top or bottom count, filter value) and which
+    /// input to refocus, or null when the typed criteria are complete. <paramref name="valueText"/> is the
+    /// operator's single value, <paramref name="minimumText"/>/<paramref name="maximumText"/> the Between pair and
+    /// <paramref name="countText"/> the Top/Bottom count.
+    /// </summary>
+    public static AutoFilterTypedCriteriaIssue? ValidateTypedCriteria(
+        AutoFilterCriteriaOption option,
+        string? valueText,
+        string? minimumText,
+        string? maximumText,
+        string? countText)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+
+        if (IsBetweenOption(option))
+        {
+            if (string.IsNullOrWhiteSpace(minimumText))
+                return new AutoFilterTypedCriteriaIssue("AutoFilter_EnterFirstBetweenValue", AutoFilterTypedCriteriaField.Minimum);
+
+            return string.IsNullOrWhiteSpace(maximumText)
+                ? new AutoFilterTypedCriteriaIssue("AutoFilter_EnterSecondBetweenValue", AutoFilterTypedCriteriaField.Maximum)
+                : null;
+        }
+
+        if (IsTopBottomOption(option))
+        {
+            return FilterInputParser.TryParseTopBottom(
+                BuildTopBottomCriteriaText(option, countText),
+                out _,
+                out _,
+                out _,
+                out _)
+                ? null
+                : new AutoFilterTypedCriteriaIssue("AutoFilter_EnterValidTopOrBottomCount", AutoFilterTypedCriteriaField.Count);
+        }
+
+        return option.RequiresValue && string.IsNullOrWhiteSpace(valueText)
+            ? new AutoFilterTypedCriteriaIssue("AutoFilter_EnterFilterValue", AutoFilterTypedCriteriaField.Value)
+            : null;
+    }
 
     public static string BuildDatePresetCriteriaText(string preset, DateTime today)
     {

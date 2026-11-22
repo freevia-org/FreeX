@@ -5103,7 +5103,17 @@ public static partial class DocxReader
             var isWindowAutoFit = string.Equals(tblW?.Attribute(W + "type")?.Value, "pct", StringComparison.OrdinalIgnoreCase);
             table.AutoFit = isWindowAutoFit ? AutoFitMode.Window : AutoFitMode.Contents;
             if (isWindowAutoFit)
+            {
                 table.PreferredWidthPt = TableLayoutOperations.DefaultAutoFitWindowWidthPt;
+                // w:tblW pct is in fiftieths of a percent (5000 = 100%); keep the authored share so it
+                // survives a save and the renderer can size the table by it. A "50%" style value (strict
+                // ST_MeasurementOrPercent) is not a fiftieths count and is left to the default.
+                var rawWidth = tblW!.Attribute(W + "w")?.Value;
+                if (double.TryParse(rawWidth, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var rawPct)
+                    && double.IsFinite(rawPct) && rawPct > 0 && rawPct <= 50000)
+                    table.PreferredWidthPercent = rawPct / 50.0;
+            }
         }
 
         // Table alignment (w:jc); absent → Left.
@@ -5383,6 +5393,17 @@ public static partial class DocxReader
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
             }
+            // Row-level table property exception (w:tblPrEx/w:tblCellMar): this row's cells take its margins
+            // instead of the table default, unless a cell carries its own w:tcMar. An edge the exception
+            // omits keeps the table default for that edge.
+            if (tr.Element(W + "tblPrEx")?.Element(W + "tblCellMar") is { } rowMargins)
+            {
+                var rowFallback = table.DefaultCellMargins ?? TableCellMargins.Default;
+                var rowOverride = ReadCellMargins(rowMargins, rowFallback);
+                foreach (var rowCell in row.Cells)
+                    rowCell.Margins ??= rowOverride;
+            }
+
             table.Rows.Add(row);
             rowIndex++;
         }
@@ -5397,20 +5418,21 @@ public static partial class DocxReader
 
     // Reads a cell-margins container (w:tblCellMar or w:tcMar) into a TableCellMargins, or null when the
     // element is absent. Each edge defaults to the model's default if missing from the element.
-    private static TableCellMargins? ReadCellMargins(XElement? container)
+    private static TableCellMargins? ReadCellMargins(XElement? container, TableCellMargins? fallback = null)
     {
         if (container is null)
             return null;
-        double Edge(string edge, double fallback)
+        var baseline = fallback ?? TableCellMargins.Default;
+        double Edge(string edge, double fallbackPt)
         {
             var w = container.Element(W + edge)?.Attribute(W + "w")?.Value;
-            return w is null ? fallback : DxaToPoints(w);
+            return w is null ? fallbackPt : DxaToPoints(w);
         }
         return new TableCellMargins(
-            TopPt: Edge("top", TableCellMargins.Default.TopPt),
-            LeftPt: Edge("left", TableCellMargins.Default.LeftPt),
-            BottomPt: Edge("bottom", TableCellMargins.Default.BottomPt),
-            RightPt: Edge("right", TableCellMargins.Default.RightPt));
+            TopPt: Edge("top", baseline.TopPt),
+            LeftPt: Edge("left", baseline.LeftPt),
+            BottomPt: Edge("bottom", baseline.BottomPt),
+            RightPt: Edge("right", baseline.RightPt));
     }
 
     // Reads a w:tcBorders element into a CellBorders, or null when absent.

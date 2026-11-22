@@ -68,6 +68,34 @@ public sealed class PivotValueFieldSettingsParitySourceTests
     }
 
     [Fact]
+    public void AvaloniaValueFieldSettings_CarriesTheWpfAutomationNamesAndHelpText()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "PivotValueFieldSettingsDialog.xaml"));
+
+        foreach (var helpKey in new[]
+                 {
+                     "EnterTheDisplayNameForTheValueField",
+                     "ChooseTheSummaryCalculationForTheValueField",
+                     "ChooseHowTheValueFieldIsDisplayedInThePivotTable",
+                     "ChooseTheBaseFieldForTheSelectedShowValuesAsCalculation",
+                     "EnterTheBaseItemForTheSelectedShowValuesAsCalculation",
+                     "ChooseTheNumberFormatAppliedToTheValueField",
+                     "OpenFormatCellsToChooseADetailedNumberFormat",
+                     "ApplyTheValueFieldSettings",
+                     "CloseTheValueFieldSettingsDialogWithoutApplyingChanges",
+                 })
+        {
+            wpf.Should().Contain($"PivotValueFieldSettings_{helpKey}");
+            source.Should().Contain($"\"PivotValueFieldSettings_{helpKey}\"");
+        }
+
+        // WPF names the summary box "Summarize value field by" and has no base-item placeholder.
+        source.Should().Contain("\"PivotValueFieldSettings_SummarizeValueFieldBy2\"");
+        source.Should().NotContain("PlaceholderText");
+    }
+
+    [Fact]
     public void AvaloniaValueFieldSettings_UsesTheSharedLocalizedNumberFormatCatalog()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));

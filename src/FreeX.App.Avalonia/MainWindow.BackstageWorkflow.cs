@@ -1,5 +1,6 @@
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
@@ -43,5 +44,11 @@ public sealed partial class MainWindow
             {
                 ShowOptions();
                 return Task.CompletedTask;
-            });
+            })
+        {
+            // Same prefilled issue form as Help > Feedback (see BuildContextualTabCommands).
+            FeedbackAsync = () => OpenExternalHelpLinkAsync(
+                AppIssueReporter.CreateIssueUrl(CreateIssueReportContext()),
+                UiText.Get("MainWindow_Content_Feedback")),
+        };
 }

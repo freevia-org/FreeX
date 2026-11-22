@@ -55,10 +55,13 @@ public sealed class LinuxInteractionParityTests
         {
             var window = new MainWindow([]);
 
-            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.LeftAlt });
+            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.LeftAlt, KeyModifiers = KeyModifiers.Alt });
+            window.RibbonKeyTipsVisibleForTest.Should().BeFalse("WPF toggles on Alt release, not press");
+            window.RaiseKeyUpForTest(new KeyEventArgs { Key = Key.LeftAlt });
             window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
 
-            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.LeftAlt });
+            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.LeftAlt, KeyModifiers = KeyModifiers.Alt });
+            window.RaiseKeyUpForTest(new KeyEventArgs { Key = Key.LeftAlt });
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();

@@ -82,6 +82,12 @@ public sealed partial class MainWindow
         out KeyboardCommandShortcut shortcut)
     {
         shortcut = default;
+        if (TryMapMacExcelShortcutAlias(OperatingSystem.IsMacOS(), key, modifiers, out var aliasKey, out var aliasModifiers))
+        {
+            key = aliasKey;
+            modifiers = aliasModifiers;
+        }
+
         if (TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
             WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
                 shortcutKey,
@@ -374,11 +380,51 @@ public sealed partial class MainWindow
     private static Key NormalizeWorkbookShortcutKey(Key key, PhysicalKey physicalKey) =>
         NormalizeWorkbookShortcut(key, physicalKey, KeyModifiers.None).Key;
 
+    /// <summary>
+    /// Excel for Mac documents Cmd-based chords for commands whose Windows chord uses Ctrl/Alt and
+    /// which the shared catalog carries only in Windows form. Maps those Mac chords onto the
+    /// Windows chord the shared catalog already routes (Cmd+Y Redo, Ctrl+Cmd+V Paste Special,
+    /// Cmd+Shift+F Filter, Cmd+; current time, Cmd+Shift+K/J Group/Ungroup). The Windows chords
+    /// stay live; chords with no clear Mac Excel equivalent are left alone.
+    /// </summary>
+    internal static bool TryMapMacExcelShortcutAlias(
+        bool isMacOS,
+        Key key,
+        KeyModifiers modifiers,
+        out Key mappedKey,
+        out KeyModifiers mappedModifiers)
+    {
+        mappedKey = key;
+        mappedModifiers = modifiers;
+        if (!isMacOS)
+            return false;
+
+        (Key Key, KeyModifiers Modifiers)? mapped = (key, modifiers) switch
+        {
+            (Key.Y, KeyModifiers.Meta) => (Key.Y, KeyModifiers.Control),
+            (Key.V, KeyModifiers.Control | KeyModifiers.Meta) => (Key.V, KeyModifiers.Meta | KeyModifiers.Alt),
+            (Key.F, KeyModifiers.Meta | KeyModifiers.Shift) => (Key.L, KeyModifiers.Control | KeyModifiers.Shift),
+            (Key.OemSemicolon, KeyModifiers.Meta) => (Key.OemSemicolon, KeyModifiers.Control | KeyModifiers.Shift),
+            (Key.K, KeyModifiers.Meta | KeyModifiers.Shift) => (Key.Right, KeyModifiers.Alt | KeyModifiers.Shift),
+            (Key.J, KeyModifiers.Meta | KeyModifiers.Shift) => (Key.Left, KeyModifiers.Alt | KeyModifiers.Shift),
+            _ => null
+        };
+        if (mapped is not { } value)
+            return false;
+
+        mappedKey = value.Key;
+        mappedModifiers = value.Modifiers;
+        return true;
+    }
+
     private static EffectiveWorkbookShortcut NormalizeWorkbookShortcut(
         Key key,
         PhysicalKey physicalKey,
         KeyModifiers modifiers)
     {
+        if (TryMapMacExcelShortcutAlias(OperatingSystem.IsMacOS(), key, modifiers, out var aliasKey, out var aliasModifiers))
+            return new EffectiveWorkbookShortcut(aliasKey, aliasModifiers);
+
         if (physicalKey == PhysicalKey.F12)
             return new EffectiveWorkbookShortcut(Key.F12, modifiers);
 

@@ -328,7 +328,7 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider)");
         source.Should().Contain("private Task ExportActiveSheetPdfAsync() =>");
         source.Should().Contain("ExportWorkbookFixedLayoutAsync(");
-        source.Should().Contain("await ShowPortablePdfSavePickerAsync(\"Export to PDF\");");
+        source.Should().Contain("await ShowPortablePdfSavePickerAsync(UiText.Get(\"MainWindowDialog_ExportPdfXpsTitle\"))");
         source.Should().Contain("private Task<AvaloniaPickedStorageFile?> ShowPortablePdfSavePickerAsync(string title)");
         source.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfPickerPlan(_session.DisplayName, ApplicationTitle)");
         source.Should().Contain("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(");
@@ -4848,7 +4848,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*,*\")");
         source.Should().Contain("borderDetailsGrid.ColumnDefinitions[0].MinWidth = 80;");
-        source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);");
+        source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target, validation.Tab);");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +
             "            {\n" +
@@ -5546,6 +5546,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.ReplaceAllValues(");
         source.Should().Contain("CreateFindOptions(options, findFormat, selectionScopeAtOpen)");
         source.Should().Contain("MatchEntire(), replacementFormat)");
+        source.Should().Contain("FindReplaceNextBehavior.SubmittedDialogStyle);");
+        source.Should().Contain("ShowFindReplaceWarningAsync(r.ErrorMessage)");
         source.Should().Contain("var result = _session.GoToReference(reference);");
         source.Should().Contain("var result = _session.GoToSpecial(kind, options);");
         source.Should().Contain("result.SelectedRanges.Count == 1");
@@ -5833,31 +5835,34 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresConditionalFormatRuleAndManageDialogsToLaunchSmoke()
     {
         var cfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
+        var ruleEditorSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormatRuleEditor.cs"));
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
-        // New Formatting Rule editor: rule-type picker, presets, per-type controls, automation ids.
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ConditionalFormatRuleDialog\");");
-        cfSource.Should().Contain("Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth");
-        cfSource.Should().Contain("Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
-        cfSource.Should().Contain("MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth");
+        // Rule editor: a port of the WPF ConditionalFormatDialog (shell list + rebuilt description), automation ids.
+        ruleEditorSource.Should().Contain("AutomationProperties.SetAutomationId(_dialog, \"ConditionalFormatRuleDialog\");");
+        ruleEditorSource.Should().Contain("Width = ConditionalFormatDialogCatalog.RuleEditorCaptureWidth");
+        ruleEditorSource.Should().Contain("Height = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
+        ruleEditorSource.Should().Contain("MinWidth = ConditionalFormatDialogCatalog.RuleEditorMinWidth");
         // WPF sizes the rule editor to its content (SizeToContent.Height) above the capture height.
-        cfSource.Should().Contain("MinHeight = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
-        cfSource.Should().Contain("SizeToContent = SizeToContent.Height");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(ruleTypeBox, \"ConditionalFormatRuleTypeBox\");");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(presetBox, \"ConditionalFormatPresetBox\");");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(topBottomBox, \"ConditionalFormatTopBottomBox\");");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(minColorBox, \"ConditionalFormatMinColorBox\");");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(maxColorBox, \"ConditionalFormatMaxColorBox\");");
-        cfSource.Should().Contain("ConditionalFormatPresetFactory.BuildInput(preset)");
-        cfSource.Should().Contain("ConditionalFormatRuleBuilder.TryBuildApplyCommand(");
+        ruleEditorSource.Should().Contain("MinHeight = ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");
+        ruleEditorSource.Should().Contain("SizeToContent = SizeToContent.Height");
+        ruleEditorSource.Should().Contain("\"ConditionalFormatRuleTypeBox\"");
+        ruleEditorSource.Should().Contain("\"ConditionalFormatRuleShellList\"");
+        ruleEditorSource.Should().Contain("\"ConditionalFormatDataBarMinTypeBox\"");
+        ruleEditorSource.Should().Contain("\"ConditionalFormatMinColorBox\"");
+        ruleEditorSource.Should().Contain("\"ConditionalFormatMaxColorBox\"");
+        ruleEditorSource.Should().Contain("ConditionalFormatRuleBuilder.Build(");
+        ruleEditorSource.Should().Contain("ConditionalFormatRuleSchema.ForRuleType(input.RuleType).Validate(input)");
+        cfSource.Should().Contain("ConditionalFormatRuleDialogTitle(");
+        cfSource.Should().Contain("new ConditionalFormatRuleEditor(");
 
         // Manage Rules dialog: New / reorder / change applies-to, automation ids.
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ManageConditionalFormatsDialog\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveUpButton, \"ManageConditionalFormatsMoveUpButton\");");
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(moveDownButton, \"ManageConditionalFormatsMoveDownButton\");");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBox, \"ManageConditionalFormatsAppliesToBox\");");
-        cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyAppliesToButton, \"ManageConditionalFormatsApplyAppliesToButton\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(appliesToBoxCell, \"ManageConditionalFormatsAppliesToBox\");");
+        cfSource.Should().Contain("AutomationProperties.SetAutomationId(applyChangesButton, \"ManageConditionalFormatsApplyButton\");");
         // The Manage dialog now stages edits against a working copy and commits on OK (H32):
         // moves/applies-to mutate the working copy via the shared session, and OK replaces the
         // sheet's rules in one undoable command.
@@ -5866,7 +5871,7 @@ public sealed class AvaloniaShellSourceTests
         cfSource.Should().Contain("manageSession.ApplyRange(item.Id, range)");
         cfSource.Should().Contain("manageSession.CreateApplyPlan(");
         cfSource.Should().Contain("[_session.ActiveSheet.Id]");
-        cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out var range)");
+        cfSource.Should().Contain("_session.TryResolveReferenceRange(reference, out range)");
 
         // Launch-smoke probe wiring for both dialogs.
         var validationAccessSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "RendererHost", "MainWindow.DialogInspectionAccess.cs"));

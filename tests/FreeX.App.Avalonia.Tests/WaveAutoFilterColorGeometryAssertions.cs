@@ -12,21 +12,21 @@ internal static class WaveAutoFilterColorGeometryAssertions
         var body = ExtractFunctionBody(normalized, FunctionName);
 
         body.Should().Contain(
-            "local button_left_offset=68 button_top_offset=203 button_width=75 button_height=27\n" +
-            "    local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220",
+            "local button_left_offset=68 button_top_offset=221 button_width=92 button_height=24\n" +
+            "    local sample_x_offset=84 sample_y_offset=233 click_x_offset=110 click_y_offset=233",
             "fill and font colors must use the expected rendered button geometry");
         body.Should().Contain(
             "if [[ \"$mode\" == \"nofill\" ]]; then\n" +
-            "        button_left_offset=148\n" +
-            "        sample_x_offset=164\n" +
-            "        click_x_offset=190\n" +
+            "        button_left_offset=166\n" +
+            "        sample_x_offset=182\n" +
+            "        click_x_offset=178\n" +
             "    fi",
             "No Fill must select its expected rendered button geometry");
         Count(body, "click_x_offset=").Should().Be(2,
             "the default and No Fill assignments must be the only click-x geometry sources");
         Count(body, "click_y_offset=").Should().Be(1,
             "the shared click-y geometry must not be duplicated in a mode branch or helper");
-        Count(body, "local sample_x_offset=84 sample_y_offset=216 click_x_offset=110 click_y_offset=220").Should().Be(1,
+        Count(body, "local sample_x_offset=84 sample_y_offset=233 click_x_offset=110 click_y_offset=233").Should().Be(1,
             "the shared default geometry must not be redeclared inside a helper");
         Count(body, "click_autofilter_control \"$click_x_offset\" \"$click_y_offset\"").Should().Be(1,
             "the actual click must consume the validated mode-selected geometry");
@@ -40,7 +40,7 @@ internal static class WaveAutoFilterColorGeometryAssertions
             clickGeometry + "\n" +
             "        local before_crop=",
             "the No Fill popup transition guard must validate the same click target");
-        body.Should().NotContain("click_autofilter_control \"$click_x_offset\" 220",
+        body.Should().NotContain("click_autofilter_control \"$click_x_offset\" 233",
             "the real click must not hide a second hard-coded y coordinate");
     }
 

@@ -641,6 +641,12 @@ public sealed partial class MainWindow
     /// </summary>
     internal Task RaiseKeyDownForTest(KeyEventArgs e) => MainWindow_KeyDownAsync(e);
 
+    /// <summary>Drives the tunnelled key-up path (standalone Alt/Option key-tip toggle on release).</summary>
+    internal void RaiseKeyUpForTest(KeyEventArgs e) => StandaloneAltKeyTip_KeyUp(this, e);
+
+    /// <summary>Simulates the window losing activation (WPF MainWindow_Deactivated).</summary>
+    internal void RaiseDeactivatedForTest() => HandleKeyTipWindowDeactivated();
+
     /// <summary>
     /// Lets the headless parity-capture coordinator close the window without the dirty-workbook
     /// save prompt. The capture seeds/edits the workbook (so it is dirty by the end); without this

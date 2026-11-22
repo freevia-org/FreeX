@@ -2844,7 +2844,7 @@ public static partial class DocxWriter
         // back: non-fixed layout + tblW type="pct" => Window, anything else non-fixed => Contents. See
         // TableLayoutOperations.SetAutoFit for the model-layer distinction this preserves.
         tblPr.Add(table.AutoFit == AutoFitMode.Window
-            ? new XElement(W + "tblW", new XAttribute(W + "w", 5000), new XAttribute(W + "type", "pct"))
+            ? new XElement(W + "tblW", new XAttribute(W + "w", table.PreferredWidthPercent is > 0 and <= 1000 ? (int)Math.Round(table.PreferredWidthPercent.Value * 50) : 5000), new XAttribute(W + "type", "pct"))
             : table.PreferredWidthPt is { } widthPt
                 ? new XElement(W + "tblW", new XAttribute(W + "w", PointsToDxa(widthPt)), new XAttribute(W + "type", "dxa"))
                 : new XElement(W + "tblW", new XAttribute(W + "w", 0), new XAttribute(W + "type", "auto")));

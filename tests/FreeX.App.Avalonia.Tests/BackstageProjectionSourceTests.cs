@@ -37,12 +37,9 @@ public sealed class BackstageProjectionSourceTests
         source.Should().NotContain("foreach (var action in pane.Actions)");
         source.Should().NotContain("ResolveBackstageInfoDetailValue");
 
-        source.Should().Contain("FreeXBackstageExportPanePlanner.Build(");
-        source.Should().Contain("FreeXBackstageExportPanePlanner.CreateRequest(");
-        source.Should().Contain("new FreeXBackstageExportScopeOptionSource<WorkbookExportPrintScope>(");
-        source.Should().Contain("FreeXBackstageExportPanePlanner.ToExternalScope<WorkbookExportPrintScope>(scope)");
-        source.Should().Contain("FreeXBackstageExportPanePlanner.ToExternalOutputKind<WorkbookExportPrintOutputKind>(outputKind)");
-        source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane)");
+        // File > Export and File > Account follow the WPF flows (save dialog / message box) and no longer
+        // project a bespoke pane dialog.
+        source.Should().NotContain("FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane)");
         source.Should().NotContain("CreateBackstageExportPaneRequest(");
         source.Should().NotContain("ToBackstageExportScopeId(");
         source.Should().NotContain("ToBackstageExportOutputKindId(");
@@ -52,7 +49,8 @@ public sealed class BackstageProjectionSourceTests
         source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
 
         source.Should().Contain("LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(");
-        source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        source.Should().Contain("FreeXBackstageAccountPanePlanner.FormatMessageBody(");
+        source.Should().NotContain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
         source.Should().NotContain("foreach (var detail in plan.Details)");
         source.Should().NotContain("foreach (var action in plan.Actions)");
         source.Should().NotContain("foreach (var notice in pane.Notices)");
@@ -96,8 +94,8 @@ public sealed class BackstageProjectionSourceTests
         source.Should().Contain("AvaloniaBackstageChrome.CreatePane(");
         source.Should().Contain("new AvaloniaBackstagePaneSpec(elements)");
         source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildInfoDialog(pane)");
-        source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane)");
-        source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
+        source.Should().NotContain("FreeXBackstagePaneProjectionPlanner.BuildExportDialog(exportPane)");
+        source.Should().NotContain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
         source.Should().Contain("AvaloniaBackstageDetailRowsElementSpec");
         source.Should().Contain("AvaloniaBackstageActionRowElementSpec");
         source.Should().Contain("AvaloniaBackstageRadioGroupElementSpec");

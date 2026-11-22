@@ -8,7 +8,8 @@ public enum ThreadedCommentDialogAction
 {
     ApplyThread,
     EditReply,
-    DeleteReply
+    DeleteReply,
+    DeleteThread
 }
 
 public enum ThreadedCommentDialogValidationError
@@ -235,10 +236,12 @@ public static class ThreadedCommentDialogPlanner
     public static string FormatReplyChoice(int index, CommentReply reply) =>
         DescribeReply(index, reply).ChoiceText;
 
-    public static string SummarizeReplyText(string text)
+    public static string SummarizeReplyText(string text) => SummarizeReplyText(text, 60);
+
+    public static string SummarizeReplyText(string text, int maxLength)
     {
         var normalized = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
-        return normalized.Length <= 60 ? normalized : normalized[..57] + "...";
+        return normalized.Length <= maxLength ? normalized : normalized[..(maxLength - 3)] + "...";
     }
 
     public static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc) =>

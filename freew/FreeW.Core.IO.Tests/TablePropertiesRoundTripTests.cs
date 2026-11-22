@@ -71,6 +71,32 @@ public class TablePropertiesRoundTripTests
     }
 
     [Fact]
+    public void Table_PercentageWidth_IsReadAsAShareOfTheTextColumn_AndRoundTrips()
+    {
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Window;
+        table.PreferredWidthPercent = 113.2;
+
+        var tblW = DocumentXml(table).Descendants(W + "tblW").Single();
+        tblW.Attribute(W + "type")!.Value.Should().Be("pct");
+        tblW.Attribute(W + "w")!.Value.Should().Be("5660");
+
+        var read = SingleTableAfterRoundTrip(table);
+        read.AutoFit.Should().Be(AutoFitMode.Window);
+        read.PreferredWidthPercent.Should().BeApproximately(113.2, 0.001);
+    }
+
+    [Fact]
+    public void Table_FitToWindowWithoutPercentage_StillWritesFullWidth()
+    {
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Window;
+
+        DocumentXml(table).Descendants(W + "tblW").Single().Attribute(W + "w")!.Value.Should().Be("5000");
+        SingleTableAfterRoundTrip(table).PreferredWidthPercent.Should().BeApproximately(100, 0.001);
+    }
+
+    [Fact]
     public void Cell_RemovedBorderEdges_RoundTripAsNil_DistinctFromInheritedEdges()
     {
         var table = Table.Create(1, 2);

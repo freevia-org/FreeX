@@ -266,7 +266,10 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Address);
         UpdateViewport();
-        SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment);
+        var card = _workbook.GetSheet(_currentSheetId) is { } cardSheet
+            ? ThreadedCommentCardPlanner.BuildCard(cardSheet, target.Address)
+            : null;
+        SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment, card);
     }
 
     private void SheetGrid_NoteInlineEditSubmitted(object? sender, GridNoteInlineEditSubmittedEventArgs e)
@@ -400,7 +403,14 @@ public partial class MainWindow
     {
         if (window is null || !window.IsLoaded)
         {
-            window = new CommentListWindow(title, items, NavigateToCell) { Owner = this };
+            window = new CommentListWindow(
+                title,
+                items,
+                NavigateToCell,
+                getPane: filter => ThreadedCommentCardPlanner.BuildPane(CurrentCommentSheet(), filter),
+                getCard: address => ThreadedCommentCardPlanner.BuildCard(CurrentCommentSheet(), address),
+                applyAction: ApplyThreadedCommentCardActionFromPane)
+            { Owner = this };
             window.Closed += (_, _) => setWindow(null);
             window.Show();
             return window;
@@ -411,6 +421,22 @@ public partial class MainWindow
             window.WindowState = WindowState.Normal;
         window.Activate();
         return window;
+    }
+
+    private Sheet CurrentCommentSheet() => _workbook.GetSheet(_currentSheetId) ?? new Sheet(_currentSheetId, "");
+
+    private void ApplyThreadedCommentCardActionFromPane(CellAddress address, ThreadedCommentCardAction action)
+    {
+        var result = ReviewSessionController.ApplyThreadedCommentCardAction(address, action);
+        if (!result.Success)
+        {
+            _messageService.ShowInfo(
+                result.ErrorMessage ?? UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
+                UiText.Get("MainWindowMessage_CommentsTitle"));
+            return;
+        }
+
+        ApplyReviewRefreshPlan(result.RefreshPlan);
     }
 
     private void ExecuteShowHideNote(CellAddress address)
@@ -547,20 +573,31 @@ public partial class MainWindow
     {
         var state = ProtectionSession.ProjectWorkbook();
         string? pwd = null;
+        ProtectWorkbookOptions? protectOptions = null;
         if (!state.IsStructureProtected)
         {
             var dialog = new PasswordProtectionDialog(
                 UiText.Get("MainWindowMessage_ProtectWorkbookTitle"),
-                UiText.Get("MainWindowMessage_OptionalPasswordLabel")) { Owner = this };
+                UiText.Get("MainWindowMessage_OptionalPasswordLabel"),
+                includeWorkbookOptions: true) { Owner = this };
             if (dialog.ShowDialog() != true) return;
             pwd = dialog.Password;
+            protectOptions = new ProtectWorkbookOptions
+            {
+                ProtectStructure = dialog.ProtectStructure,
+                ProtectWindows = dialog.ProtectWindows,
+                Password = pwd,
+                PasswordConfirmation = pwd,
+            };
         }
         else if (!TryConfirmWorkbookUnprotectPassword(out pwd))
         {
             return;
         }
 
-        var outcome = ProtectionSession.ExecuteWorkbook(pwd);
+        var outcome = protectOptions is null
+            ? ProtectionSession.ExecuteWorkbook(pwd)
+            : ProtectionSession.ExecuteWorkbook(protectOptions);
         if (!outcome.Success)
         {
             var failure = outcome.ErrorMessage ?? (outcome.ErrorResourceKey is { } key ? UiText.Get(key) : null);

@@ -216,7 +216,7 @@ public sealed partial class MainWindow
     private async Task ShowQuickAnalysisConditionalFormatDialogAsync(
         QuickAnalysisConditionalFormatDialogPlan dialogPlan)
     {
-        var built = await ShowConditionalFormatRuleEditorAsync(dialogPlan.Seed);
+        var built = await ShowConditionalFormatRuleDialogAsync(dialogPlan.Title);
         if (built is null)
             return;
 

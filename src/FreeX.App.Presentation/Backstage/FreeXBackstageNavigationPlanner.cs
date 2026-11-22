@@ -27,7 +27,8 @@ public enum FreeXBackstageCommandId
     Export,
     Close,
     Account,
-    Options
+    Options,
+    Feedback
 }
 
 public sealed record FreeXBackstageNavigationEntry(
@@ -91,18 +92,6 @@ public static class FreeXBackstageNavigationPlanner
             "MainWindow_TooltipDescription_OpenAnExistingWorkbook",
             "MainWindow_TooltipTitle_Open"),
 
-        Command(
-            FreeXBackstageCommandId.Share,
-            "MainWindow_Text_Share",
-            BackstageIconKind.Share,
-            "Share",
-            "R",
-            "BackstageShareButton",
-            "MainWindow_Text_Share",
-            "MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile",
-            "MainWindow_TooltipTitle_Share",
-            "MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile"),
-
         Divider(),
 
         Pane(
@@ -151,6 +140,18 @@ public static class FreeXBackstageNavigationPlanner
             "MainWindow_TooltipDescription_OpenThePrintPreviewAndNativePrintDialogForTheRenderedWorksheet"),
 
         Command(
+            FreeXBackstageCommandId.Share,
+            "MainWindow_Text_Share",
+            BackstageIconKind.Share,
+            "Share",
+            "R",
+            "BackstageShareButton",
+            "MainWindow_Text_Share",
+            "MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile",
+            "MainWindow_TooltipTitle_Share",
+            "MainWindow_TooltipDescription_SaveTheWorkbookIfNeededAndOpenWindowsShareForTheFile"),
+
+        Command(
             FreeXBackstageCommandId.Export,
             "MainWindow_Text_Export",
             BackstageIconKind.Share,
@@ -186,6 +187,21 @@ public static class FreeXBackstageNavigationPlanner
             "MainWindow_AutomationHelpText_ShowLocalAccountInformationForFreeX",
             "MainWindow_TooltipTitle_LocalAccount",
             "MainWindow_TooltipDescription_MicrosoftAccountIntegrationIsNotImplementedFreeXUsesLocalFilesAndLocalOp_EC989658",
+            dockBottom: true),
+
+        // Excel's bottom rail is Account / Feedback / Options. Feedback routes to the same prefilled
+        // issue form as Help > Feedback; there is no cloud feedback service to talk to.
+        Command(
+            FreeXBackstageCommandId.Feedback,
+            "MainWindow_Content_Feedback",
+            BackstageIconKind.Feedback,
+            "Feedback",
+            "K",
+            "BackstageFeedbackButton",
+            "MainWindow_AutomationName_Feedback",
+            "Backstage_Feedback_AutomationHelpText",
+            "MainWindow_TooltipTitle_Feedback",
+            "Backstage_Feedback_TooltipDescription",
             dockBottom: true),
 
         Command(

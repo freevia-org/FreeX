@@ -57,11 +57,11 @@ public sealed class ReleaseResilienceWorkflowTests
         // upstream result, not because of any cancellation special case.
         var gate = Job(workflow, "publication-gate");
         gate.Should().Contain("if: always()");
-        gate.Should().Contain("needs: [prepare, release-gate, package, suite-package]");
+        gate.Should().Contain("needs: [resolve, prepare, release-gate, package, suite-package]");
         gate.Should().Contain("$releaseGateResult -ne 'success'");
         gate.Should().Contain("$packageResult -ne 'success'");
-        Job(workflow, "publish").Should().Contain("needs: [prepare, publication-gate]");
-        Job(workflow, "publish-suite").Should().Contain("needs: [suite-package, publication-gate]");
+        Job(workflow, "publish").Should().Contain("needs: [resolve, prepare, publication-gate]");
+        Job(workflow, "publish-suite").Should().Contain("needs: [resolve, suite-package, publication-gate]");
         Job(workflow, "release-gate").Should().Contain("-not $releaseTestsAcceptable");
     }
 
@@ -165,8 +165,8 @@ public sealed class ReleaseResilienceWorkflowTests
         var candidate = Job(workflow, "candidate");
         candidate.Should().Contain("name: Verify the Artifact Signing metadata before any package is built");
         candidate.Should().Contain("if: ${{ !inputs.dry_run && (inputs.platform == 'all' || inputs.platform == 'windows') }}");
-        Job(workflow, "package").Should().Contain("needs: [prepare, candidate]");
-        Job(workflow, "release-tests").Should().Contain("needs: [prepare, candidate]");
+        Job(workflow, "package").Should().Contain("needs: [resolve, prepare, candidate]");
+        Job(workflow, "release-tests").Should().Contain("needs: [resolve, prepare, candidate]");
 
         // The early check must apply exactly the rules the signing script applies at the end.
         var signing = WorkspaceFileLocator.ReadAllText("tools", "Invoke-WindowsArtifactSigning.ps1");
@@ -189,21 +189,54 @@ public sealed class ReleaseResilienceWorkflowTests
     {
         var workflow = FullRelease();
 
-        // Optional, empty by default: the default dispatch behaves exactly as before.
+        // Optional, empty by default; an explicit value always wins over the default selection.
         Regex.IsMatch(workflow, @"(?s)source_sha:\s+description:.*?required: false\s+default: ''\s+type: string").Should().BeTrue();
-        workflow.Should().Contain("RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}");
+        Regex.IsMatch(workflow, @"(?s)release_head:\s+description:.*?required: false\s+default: false\s+type: boolean").Should().BeTrue("release_head must default to false");
 
-        // The untrusted input reaches only the env expression and checkout depth, never script text.
+        // RELEASE_SHA is no longer a workflow-level expression: the resolve job decides it and every
+        // consumer takes it from that job's output through its own env.
+        workflow.Should().NotContain("RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}");
+        Regex.IsMatch(workflow, @"(?m)^env:\r?\n(?:  .*\r?\n)*?  RELEASE_SHA:").Should().BeFalse("RELEASE_SHA must not be a workflow-level env");
+
+        // The untrusted input reaches only env expressions, never script text.
         var uses = workflow.Split('\n').Where(line => line.Contains("inputs.source_sha") && line.Contains("${{")).Select(line => line.Trim()).ToList();
-        uses.Should().BeEquivalentTo(new[]
-        {
-            "RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}",
-            "fetch-depth: ${{ inputs.source_sha != '' && 0 || 1 }}",
-        });
+        uses.Should().BeEquivalentTo(new[] { "SOURCE_SHA: ${{ inputs.source_sha }}" });
+        var headUses = workflow.Split('\n').Where(line => line.Contains("inputs.release_head") && line.Contains("${{")).Select(line => line.Trim()).ToList();
+        headUses.Should().BeEquivalentTo(new[] { "RELEASE_HEAD: ${{ inputs.release_head }}" });
+
+        // The resolve job: first, no needs, default = newest readiness-green ancestor via the helper,
+        // fail closed to the head, validated before it is published as an output.
+        var resolve = Job(workflow, "resolve");
+        resolve.Should().NotContain("needs:");
+        resolve.Should().Contain("release_sha: ${{ steps.resolve.outputs.release_sha }}");
+        resolve.Should().Contain("tools/Get-LatestReadinessGreenSha.ps1");
+        resolve.Should().Contain("-HeadSha $head");
+        resolve.Should().Contain("-Json");
+        resolve.Should().Contain("$LASTEXITCODE -ne 0");
+        resolve.Should().Contain("$mode = 'fallback-head'");
+        resolve.Should().Contain("$mode = 'default-readiness-green'");
+        resolve.Should().Contain("$mode = 'release-head'");
+        resolve.Should().Contain("$mode = 'explicit-source-sha'");
+        resolve.Should().Contain("$mode = 'tag-continuation'");
+        resolve.Should().Contain("-cnotmatch '^[0-9a-f]{40}$'");
+        resolve.Should().Contain("source_sha is only allowed on a dispatch from refs/heads/main");
+        resolve.Should().Contain("fetch-depth: 1");
+        resolve.Should().NotContain("sparse-checkout", "the helper needs its sibling scripts from a real checkout");
+        resolve.Should().NotContain("${{ github.sha }}");
+        // The summary names the commit, how far behind the head it is, the evidence run and warns.
+        resolve.Should().Contain("Commits behind the head");
+        resolve.Should().Contain("Readiness evidence run");
+        resolve.Should().Contain("WARNING: THIS RELEASE IS AN ANCESTOR OF MAIN");
+        resolve.Should().Contain("WARNING: FALLBACK TO THE HEAD");
+        resolve.Should().Contain("GITHUB_STEP_SUMMARY");
+        // Fallback precedes publication of the output and the output is only written after validation.
+        resolve.IndexOf("The resolved release commit is not a 40-character lowercase SHA", StringComparison.Ordinal)
+            .Should().BeLessThan(resolve.IndexOf("\"release_sha=$sha\"", StringComparison.Ordinal));
 
         // The candidate job owns validation, and everything that builds or releases needs it.
         var candidate = Job(workflow, "candidate");
         candidate.Should().Contain("ref: ${{ env.RELEASE_SHA }}");
+        candidate.Should().Contain("fetch-depth: ${{ needs.resolve.outputs.needs_history == 'true' && 0 || 1 }}");
         candidate.Should().Contain("$isMainRelease = $env:GITHUB_REF -eq \"refs/heads/main\"");
         candidate.Should().Contain("source_sha is only allowed on a dispatch from refs/heads/main");
         candidate.Should().Contain("-cnotmatch '^[0-9a-f]{40}$'");
@@ -221,17 +254,30 @@ public sealed class ReleaseResilienceWorkflowTests
         candidate.Should().Contain("tools/Resolve-GitHubReleaseCandidate.ps1");
         candidate.Should().Contain("-CommitSha $env:RELEASE_SHA");
         candidate.Should().Contain("tools/Resolve-ReleaseGateEvidence.ps1");
-        Job(workflow, "package").Should().Contain("needs: [prepare, candidate]");
-        Job(workflow, "release-tests").Should().Contain("needs: [prepare, candidate]");
+        Job(workflow, "package").Should().Contain("needs: [resolve, prepare, candidate]");
+        Job(workflow, "release-tests").Should().Contain("needs: [resolve, prepare, candidate]");
 
-        // Evidence reuse stays the only way to skip the gates: a source_sha without proof runs them all.
+        // Evidence reuse stays the only way to skip the gates: an ancestor without proof runs them all.
         Job(workflow, "release-tests").Should().Contain("needs.candidate.outputs.gate_evidence_reuse != 'true'");
 
-        // The dispatched head is consulted only by the candidate job's ancestry proof.
+        // The dispatched head is consulted only by the resolve job and the candidate's ancestry proof.
         foreach (var job in new[] { "prepare", "publish-permission", "early-abort", "release-tests", "release-gate", "package", "suite-package", "publication-gate", "publish", "publish-suite", "verify-publication" })
         {
             Job(workflow, job).Should().NotContain("GITHUB_SHA", $"{job} must use RELEASE_SHA");
             Job(workflow, job).Should().NotContain("github.sha", $"{job} must use RELEASE_SHA");
+        }
+
+        // Every job that uses RELEASE_SHA gets it from the resolve output through its own env, and
+        // waits for the resolve job.
+        foreach (var job in new[] { "candidate", "fault-injection", "release-tests", "package", "suite-package", "publication-gate", "publish", "publish-suite", "verify-publication" })
+        {
+            var body = Job(workflow, job);
+            body.Should().Contain("RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}", $"{job} must take RELEASE_SHA from the resolve job");
+            Regex.IsMatch(body, @"(?m)^    needs: \[[^\]]*\bresolve\b").Should().BeTrue($"{job} must need resolve");
+        }
+        foreach (var job in new[] { "prepare", "publish-permission", "early-abort", "release-gate" })
+        {
+            Job(workflow, job).Should().NotContain("RELEASE_SHA", $"{job} does not use the release commit");
         }
 
         // Every job that builds, tests or publishes the tree checks out exactly RELEASE_SHA.
@@ -241,6 +287,13 @@ public sealed class ReleaseResilienceWorkflowTests
         }
     }
 
+    [Fact]
+    public void ReleasePackagingRehearsal_ReleasesTheHeadSoThePackagingPathStaysRehearsedAtHead()
+    {
+        var rehearsal = WorkspaceFileLocator.ReadAllText(".github", "workflows", "release-packaging-rehearsal.yml");
+        rehearsal.Should().Contain("-f dry_run=true");
+        rehearsal.Should().Contain("-f release_head=true");
+    }
     [Fact]
     public void FullRelease_FaultInjectionIsDryRunOnlyMainOnlyAndOffByDefault()
     {
@@ -262,7 +315,7 @@ public sealed class ReleaseResilienceWorkflowTests
         // The injected job is itself gated on dry run + main, runs nothing it does not name, and the
         // injected failures apply to the first attempt only so the automatic re-run can pass.
         var job = Job(workflow, "fault-injection");
-        job.Should().Contain("needs: [candidate]");
+        job.Should().Contain("needs: [resolve, candidate]");
         job.Should().Contain("if: ${{ inputs.dry_run && inputs.inject_fault != 'none' && github.ref == 'refs/heads/main' }}");
         job.Should().Contain("contents: read");
         job.Should().NotContain("contents: write");

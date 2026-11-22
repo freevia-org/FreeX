@@ -78,15 +78,24 @@ on:
           - selftest
       source_sha:
         description: >-
-          Optional full 40-character lowercase commit SHA to release instead of the dispatched main
-          head. It must be an ancestor of (or equal to) the dispatched main head. The release is
-          built, packaged and tagged at THIS commit, and the release-only test gates are skipped
-          only when a fully green release-readiness run on exactly this commit is found (otherwise
-          every gate runs against it). Leave empty to release the dispatched head. Find a value with
-          tools/Get-LatestReadinessGreenSha.ps1.
+          Optional full 40-character lowercase commit SHA to release. It must be an ancestor of (or
+          equal to) the dispatched main head. The release is built, packaged and tagged at THIS
+          commit, and the release-only test gates are skipped only when a fully green
+          release-readiness run on exactly this commit is found (otherwise every gate runs against
+          it). An explicit value always wins over the default selection. Leave EMPTY (the default) on
+          a dispatch from main to release the NEWEST READINESS-GREEN ancestor of main
+          (tools/Get-LatestReadinessGreenSha.ps1), or the head with every gate when none is found.
         required: false
         default: ''
         type: string
+      release_head:
+        description: >-
+          Release the dispatched main head itself and run every release gate against it, instead of
+          the newest readiness-green ancestor chosen by default when source_sha is empty. Ignored
+          when source_sha is set (an explicit SHA wins).
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -99,10 +108,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # The commit this run builds, packages, tags and attests. Empty source_sha (the default) is the
-  # dispatched head. A non-empty one is validated by the candidate job BEFORE any package or test
-  # job runs (they all need it), and every other job consumes only this variable.
-  RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}
+  # RELEASE_SHA, the commit this run builds, packages, tags and attests, is NOT defined here: it is
+  # resolved by the first job (`resolve`) and every job that uses it declares
+  #   env: RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
+  # and lists `resolve` in its needs. The candidate job validates the resolved value BEFORE any
+  # package or test job runs (they all need it).
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
   # This workflow runs the same per-project test gates as ci.yml through Invoke-TestGate.ps1, so it
@@ -113,6 +123,135 @@ env:
   MSBUILDDISABLENODEREUSE: "1"
 
 jobs:
+  resolve:
+    # Decides WHICH commit this run releases, before anything else needs to know. The default for a
+    # dispatch from main with an empty source_sha is the NEWEST READINESS-GREEN ancestor of the head
+    # (tools/Get-LatestReadinessGreenSha.ps1, which judges commits with Resolve-ReleaseGateEvidence.ps1),
+    # so the release-only tests a readiness run already proved are reused instead of re-run. Fail
+    # closed: no green commit, a helper error or an unparseable answer releases the dispatched head and
+    # every gate runs, and the job summary says so. An explicit source_sha wins; release_head=true
+    # forces the head; a tag continuation always releases the tagged commit.
+    #
+    # Nothing here is trusted: the resolved value is only ever published as a job output after it
+    # matches ^[0-9a-f]{40}$, every consumer takes it through the RELEASE_SHA environment variable
+    # (never script text), and the candidate job still proves it is an ancestor of the dispatched head.
+    name: Resolve the release commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      release_sha: ${{ steps.resolve.outputs.release_sha }}
+      release_mode: ${{ steps.resolve.outputs.release_mode }}
+      needs_history: ${{ steps.resolve.outputs.needs_history }}
+    steps:
+      # A real (shallow) checkout of the dispatched head: the helper needs its sibling scripts and the
+      # gate manifest. The head's own copy of the tooling decides, never an older commit's.
+      - name: Checkout release tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Resolve the commit to release
+        id: resolve
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_HEAD: ${{ inputs.release_head }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = [string]$env:GITHUB_SHA
+          $explicit = ([string]$env:SOURCE_SHA).Trim()
+          $onMain = $env:GITHUB_REF -ceq 'refs/heads/main'
+          $sha = ''
+          $mode = ''
+          $behind = 'unknown'
+          $evidence = 'none'
+          $note = ''
+
+          if (-not $onMain) {
+            if ($explicit -ne '') {
+              throw 'source_sha is only allowed on a dispatch from refs/heads/main; a tag continuation must release the tagged commit.'
+            }
+            $sha = $head
+            $mode = 'tag-continuation'
+            $note = 'A tag continuation releases the tagged commit.'
+          }
+          elseif ($explicit -ne '') {
+            if ($explicit -cnotmatch '^[0-9a-f]{40}$') {
+              throw 'source_sha must be a full 40-character lowercase commit SHA.'
+            }
+            $sha = $explicit
+            $mode = 'explicit-source-sha'
+            $note = 'source_sha was given explicitly and wins over the default selection.'
+            if ($sha -ceq $head) { $behind = '0' }
+            else {
+              $ahead = & gh api "repos/$($env:GITHUB_REPOSITORY)/compare/$sha...$head" --jq '.ahead_by' 2>$null
+              if ($LASTEXITCODE -eq 0 -and "$ahead" -match '^\d+$') { $behind = "$ahead" }
+            }
+          }
+          elseif ([string]$env:RELEASE_HEAD -ceq 'true') {
+            $sha = $head
+            $mode = 'release-head'
+            $behind = '0'
+            $note = 'release_head=true: the dispatched head is released and every release gate runs against it.'
+          }
+          else {
+            $found = $null
+            try {
+              $out = @(& pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1 `
+                  -Repository $env:GITHUB_REPOSITORY -Branch main -HeadSha $head -Json)
+              if ($LASTEXITCODE -ne 0) { throw "the helper exited with $LASTEXITCODE (no readiness-green commit)" }
+              $found = ($out -join "`n") | ConvertFrom-Json
+              if ([string]$found.sha -cnotmatch '^[0-9a-f]{40}$') { throw 'the helper did not return a 40-character lowercase SHA' }
+              if ([string]$found.commitsBehindHead -notmatch '^\d+$') { throw 'the helper did not return a commit count' }
+            }
+            catch {
+              $found = $null
+              Write-Warning "No readiness-green commit could be selected: $($_.Exception.Message)"
+            }
+
+            if ($null -ne $found) {
+              $sha = [string]$found.sha
+              $mode = 'default-readiness-green'
+              $behind = [string]$found.commitsBehindHead
+              $evidence = [string]$found.evidenceRunId
+              $note = 'Default selection: the newest readiness-green ancestor of main.'
+            }
+            else {
+              $sha = $head
+              $mode = 'fallback-head'
+              $behind = '0'
+              $note = 'FALLBACK: no readiness-green commit could be selected, so the dispatched head is released and EVERY release gate runs.'
+            }
+          }
+
+          if ($sha -cnotmatch '^[0-9a-f]{40}$') { throw 'The resolved release commit is not a 40-character lowercase SHA; refusing to continue.' }
+          $needsHistory = if ($sha -ceq $head) { 'false' } else { 'true' }
+
+          "release_sha=$sha" >> $env:GITHUB_OUTPUT
+          "release_mode=$mode" >> $env:GITHUB_OUTPUT
+          "needs_history=$needsHistory" >> $env:GITHUB_OUTPUT
+
+          $lines = @("### Release commit: ``$sha``", '', "- Mode: **$mode**", "- $note", "- Dispatched main head: ``$head``", "- Commits behind the head: **$behind**", "- Readiness evidence run: $evidence")
+          if ($evidence -match '^\d+$') {
+            $lines += "- Evidence: https://github.com/$($env:GITHUB_REPOSITORY)/actions/runs/$evidence"
+          }
+          if ($mode -eq 'fallback-head') {
+            $lines += ''
+            $lines += '> **WARNING: FALLBACK TO THE HEAD.** No readiness-green commit was found (or the lookup failed), so this run releases the dispatched head and runs ALL release-only test gates.'
+            Write-Host '::warning title=Releasing the head::No readiness-green commit could be selected; releasing the dispatched head with every release gate.'
+          }
+          elseif ($needsHistory -eq 'true') {
+            $lines += ''
+            $lines += "> **WARNING: THIS RELEASE IS AN ANCESTOR OF MAIN, NOT THE HEAD.** It ships ``$sha``, which is $behind commit(s) behind main head ``$head``; changes after it are NOT in this release. Re-dispatch with ``release_head=true`` to release the head."
+            Write-Host "::warning title=Releasing an ancestor of main::Releasing $sha, $behind commit(s) behind main head $head. Later commits are not in this release."
+          }
+          $lines -join "`n" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host ($lines -join "`n")
+
   prepare:
     name: Select release lanes
     runs-on: ubuntu-latest
@@ -215,9 +354,11 @@ jobs:
 
   candidate:
     name: Verify immutable release candidate
-    needs: [prepare, publish-permission]
+    needs: [resolve, prepare, publish-permission]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     permissions:
       contents: read
       actions: read
@@ -256,7 +397,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.RELEASE_SHA }}
-          fetch-depth: ${{ inputs.source_sha != '' && 0 || 1 }}
+          fetch-depth: ${{ needs.resolve.outputs.needs_history == 'true' && 0 || 1 }}
           persist-credentials: false
 
       - name: Validate latest release source
@@ -273,8 +414,10 @@ jobs:
             throw "Full app releases must start from refs/heads/main or continue from an immutable tag for the requested version."
           }
 
-          # source_sha: release an older, already readiness-proven commit of main. The value only ever
-          # reaches this script through the RELEASE_SHA environment variable, never through script text.
+          # An older commit of main (an explicit source_sha, or the readiness-green ancestor the
+          # resolve job selects by default). The value only ever reaches this script through the
+          # RELEASE_SHA environment variable, never through script text, and is re-validated here
+          # whatever resolve decided.
           if ($env:RELEASE_SHA -cne $env:GITHUB_SHA) {
             if (-not $isMainRelease) {
               throw "source_sha is only allowed on a dispatch from refs/heads/main; a tag continuation must release the tagged commit."
@@ -295,7 +438,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "source_sha $env:RELEASE_SHA is not an ancestor of the dispatched main head $env:GITHUB_SHA; refusing to release a commit that is not on main."
             }
-            Write-Host "Releasing the readiness-proven ancestor $env:RELEASE_SHA of main head $env:GITHUB_SHA (source_sha)."
+            Write-Host "Releasing the ancestor $env:RELEASE_SHA of main head $env:GITHUB_SHA (selected by the resolve job)."
           }
           Write-Host "Pinned immutable release candidate $env:RELEASE_SHA from $env:GITHUB_REF. Later main commits do not invalidate this run."
 
@@ -512,13 +655,14 @@ jobs:
     # already failed the run unless that was a dry run from refs/heads/main; the condition repeats
     # both so the job can never run otherwise. Nothing depends on it and it publishes nothing.
     name: Inject a rehearsal fault
-    needs: [candidate]
+    needs: [resolve, candidate]
     if: ${{ inputs.dry_run && inputs.inject_fault != 'none' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
       INJECT_FAULT: ${{ inputs.inject_fault }}
     steps:
       - name: Checkout
@@ -551,7 +695,9 @@ jobs:
 
   release-tests:
     name: Release test ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
-    needs: [prepare, candidate]
+    needs: [resolve, prepare, candidate]
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     # A dry run (including the weekly packaging rehearsal) rehearses PACKAGING and publishes nothing,
     # so re-running the fifteen release-only test gates there only burns ~97 runner-minutes and holds
     # macOS slots that the macOS package legs then queue for (FreeW osx-x64 waited 4.9 minutes for
@@ -669,7 +815,9 @@ jobs:
     name: Package ${{ matrix.app }} ${{ matrix.runtime }}
     # Packaging is immutable-candidate work and can overlap release-only tests. Publication still
     # waits for release-gate, so a failed test can never publish the speculative package artifacts.
-    needs: [prepare, candidate]
+    needs: [resolve, prepare, candidate]
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     runs-on: ${{ matrix.runner }}
     # A dry run publishes nothing and signs nothing, so it needs neither the approval gate nor the Azure
     # federated credential (both of which belong to PUBLISHING). The expression is written with the
@@ -865,7 +1013,9 @@ jobs:
 
   suite-package:
     name: Package Free Suite ${{ matrix.runtime }}
-    needs: [prepare, package]
+    needs: [resolve, prepare, package]
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     if: inputs.app == 'all'
     runs-on: ${{ matrix.runner }}
     # A dry run publishes nothing and signs nothing, so it needs neither the approval gate nor the Azure
@@ -1101,8 +1251,10 @@ jobs:
 
   publication-gate:
     name: Validate complete release inventory
-    needs: [prepare, release-gate, package, suite-package]
+    needs: [resolve, prepare, release-gate, package, suite-package]
     if: always()
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1152,7 +1304,9 @@ jobs:
 
   publish:
     name: Publish ${{ matrix.app }} release
-    needs: [prepare, publication-gate]
+    needs: [resolve, prepare, publication-gate]
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     # A dry run rehearses packaging only; nothing is tagged or published.
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
@@ -1304,7 +1458,9 @@ jobs:
 
   publish-suite:
     name: Publish Free Suite release
-    needs: [suite-package, publication-gate]
+    needs: [resolve, suite-package, publication-gate]
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     if: ${{ !inputs.dry_run && inputs.app == 'all' }}
     runs-on: ubuntu-latest
     environment: public-preview
@@ -1417,7 +1573,9 @@ jobs:
 
   verify-publication:
     name: Verify published release inventory
-    needs: [publish, publish-suite]
+    needs: [resolve, publish, publish-suite]
+    env:
+      RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
     if: ${{ always() && !inputs.dry_run && needs.publish.result == 'success' && (inputs.app != 'all' || needs.publish-suite.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15

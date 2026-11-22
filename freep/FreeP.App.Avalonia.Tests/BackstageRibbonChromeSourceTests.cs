@@ -62,7 +62,8 @@ public sealed class BackstageRibbonChromeSourceTests
                 RibbonCommandIconKind.Save,
                 RibbonCommandIconKind.Print,
                 RibbonCommandIconKind.View,
-                RibbonCommandIconKind.Delete);
+                RibbonCommandIconKind.Delete,
+                RibbonCommandIconKind.Comment);
 
         AvaloniaBackstageRibbonChrome.ResolveIconKind(
                 BackstageIconKind.WindowClose,

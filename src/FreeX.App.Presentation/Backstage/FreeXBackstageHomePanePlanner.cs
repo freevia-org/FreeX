@@ -66,6 +66,31 @@ public sealed record FreeXBackstageHomePanePlan(
 /// </summary>
 public static class FreeXBackstageHomePanePlanner
 {
+    /// <summary>
+    /// String key of the explanatory line a Home list shows when it has no rows, or null when the list
+    /// should stay blank. A filter that hides every row reports "no matches" on either tab so an empty
+    /// search result is never mistaken for an empty history; otherwise Recent explains that nothing was
+    /// opened yet and Pinned (as in Excel) explains how to pin a file.
+    /// </summary>
+    public static string? ResolveEmptyStateKey(
+        FreeXBackstageRecentTabId tab,
+        bool hasFilter,
+        int rowCount)
+    {
+        if (rowCount > 0)
+            return null;
+
+        if (hasFilter)
+            return "Backstage_Home_NoMatchingWorkbooks";
+
+        return tab switch
+        {
+            FreeXBackstageRecentTabId.Recent => "Backstage_Home_NoRecentWorkbooks",
+            FreeXBackstageRecentTabId.Pinned => "Backstage_Home_NoPinnedWorkbooks",
+            _ => throw new ArgumentOutOfRangeException(nameof(tab), tab, null),
+        };
+    }
+
     public static FreeXBackstageHomePanePlan Build() =>
         new(
             new FreeXBackstageRecentTabDescriptor(
