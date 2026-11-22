@@ -25,9 +25,10 @@ public sealed class ChartTrendlineOptionsDialog : Window
 
     public ChartTrendlineInput Result { get; private set; }
 
-    public ChartTrendlineOptionsDialog(ChartModel chart)
+    /// <param name="seriesIndex">The series whose trendline the dialog edits (Excel trendlines are per series); null edits the chart-wide trendline.</param>
+    public ChartTrendlineOptionsDialog(ChartModel chart, int? seriesIndex = null)
     {
-        Result = FromChart(chart);
+        Result = FromChart(chart, seriesIndex);
         Title = UiText.Get("ChartTrendline_Title");
         Width = 380;
         Height = 430;
@@ -40,9 +41,9 @@ public sealed class ChartTrendlineOptionsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartTrendlineInput FromChart(ChartModel chart)
+    public static ChartTrendlineInput FromChart(ChartModel chart, int? seriesIndex = null)
     {
-        var input = ChartTrendlinePlanner.Read(chart);
+        var input = ChartTrendlinePlanner.Read(chart, seriesIndex);
         return CreateResult(
             input.ShowTrendline,
             input.Type,

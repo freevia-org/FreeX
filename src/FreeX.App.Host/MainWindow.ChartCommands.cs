@@ -665,7 +665,7 @@ public partial class MainWindow
         ShowChartTrendlineDialog();
     }
 
-    private void ShowChartTrendlineDialog()
+    private void ShowChartTrendlineDialog(int? seriesIndex = null)
     {
         var command = ChartWorkflowCommandCatalog.FormatTrendline;
         var caption = ChartWorkflowCaption(command);
@@ -678,11 +678,11 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ChartTrendlineOptionsDialog(chart) { Owner = this };
+        var dialog = new ChartTrendlineOptionsDialog(chart, seriesIndex) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, ChartTrendlinePlanner.Plan(dialog.Result));
+        ApplyChartLayoutDialogResult(caption, chart, ChartTrendlinePlanner.Plan(dialog.Result, seriesIndex));
     }
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
@@ -727,6 +727,11 @@ public partial class MainWindow
 
     private void ChartErrorBarsBtn_Click(object sender, RoutedEventArgs e)
     {
+        ShowChartErrorBarsDialog();
+    }
+
+    private void ShowChartErrorBarsDialog(int? seriesIndex = null)
+    {
         var command = ChartWorkflowCommandCatalog.FormatErrorBars;
         var caption = ChartWorkflowCaption(command);
         if (!TryGetFirstChartForDialog(command, out var chart))
@@ -738,11 +743,11 @@ public partial class MainWindow
             return;
         }
 
-        var dialog = new ChartErrorBarsDialog(chart) { Owner = this };
+        var dialog = new ChartErrorBarsDialog(chart, seriesIndex) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult(caption, chart, ChartErrorBarsPlanner.Plan(dialog.Result)))
+        if (!ApplyChartLayoutDialogResult(caption, chart, ChartErrorBarsPlanner.Plan(dialog.Result, seriesIndex)))
             return;
 
         UpdateViewport();

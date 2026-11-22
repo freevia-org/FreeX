@@ -526,24 +526,41 @@ public sealed class ChartModel
     /// <c>&lt;c:errBars&gt;</c> elements on the same series when both horizontal (X) and vertical
     /// (Y) error bars are configured (common for scatter/statistical charts), but only one set is
     /// modeled by the scalar <c>ErrorBar*</c> properties above. Every <c>&lt;c:errBars&gt;</c>
-    /// beyond the first one captured chart-wide — whether a second set on the SAME series or the
-    /// first set on a LATER series — is preserved here verbatim, keyed by the 0-based series index
-    /// it belongs to, so it survives an open/save round-trip instead of being silently dropped.
-    /// This is a stop-gap round-trip fix, not a full per-series error-bar model: FreeX cannot yet
-    /// render or edit these extra error bars; that remains a follow-up.
+    /// beyond the first one on a series (the second set on the SAME series) is preserved here
+    /// verbatim, keyed by the 0-based series index it belongs to, so it survives an open/save
+    /// round-trip instead of being silently dropped. The first set on every series is modeled per
+    /// series by <see cref="SeriesErrorBars"/>; FreeX cannot yet render or edit these extra sets.
     /// </summary>
     public List<ChartSeriesRawXmlEntry> AdditionalSeriesErrorBarsXml { get; set; } = [];
 
     /// <summary>
-    /// R41-io-chart-errorbars-trendline-3-3 passthrough: only the FIRST series (in document order)
-    /// carrying a <c>&lt;c:trendline&gt;</c> is modeled by the scalar <c>Trendline*</c> properties
-    /// above. Every additional <c>&lt;c:trendline&gt;</c> — a second trendline on that same series,
-    /// or any trendline on a LATER series — is preserved here verbatim, keyed by the 0-based series
-    /// index it belongs to, so it survives an open/save round-trip instead of being silently and
-    /// permanently dropped. This is a stop-gap round-trip fix, not a full per-series trendline
-    /// model: FreeX cannot yet render or edit these extra trendlines; that remains a follow-up.
+    /// R41-io-chart-errorbars-trendline-3-3 passthrough: the first <c>&lt;c:trendline&gt;</c> of every
+    /// series is modeled per series by <see cref="SeriesTrendlines"/>. Every additional
+    /// <c>&lt;c:trendline&gt;</c> on that SAME series (Excel allows several) is preserved here verbatim,
+    /// keyed by the 0-based series index it belongs to, so it survives an open/save round-trip instead of
+    /// being silently dropped. FreeX cannot yet render or edit these extra trendlines.
     /// </summary>
     public List<ChartSeriesRawXmlEntry> AdditionalSeriesTrendlinesXml { get; set; } = [];
+
+    /// <summary>
+    /// Per-series trendlines, the way Excel stores them (one optional trendline on each series). While
+    /// this is empty the chart-wide <see cref="ShowLinearTrendline"/>/<c>Trendline*</c> members mean
+    /// "every series carries this trendline" (old files and legacy commands); once it holds entries they
+    /// are authoritative and <see cref="ShowLinearTrendline"/> only says whether any entry exists. A series
+    /// is resolved with <see cref="ChartSeriesAdornmentExtensions.ResolveTrendline"/>. Always replace the
+    /// list rather than mutating it so undo snapshots stay valid.
+    /// </summary>
+    public List<ChartSeriesTrendline> SeriesTrendlines { get; set; } = [];
+
+    /// <summary>Per-series error bars; the error-bar counterpart of <see cref="SeriesTrendlines"/>.</summary>
+    public List<ChartSeriesErrorBars> SeriesErrorBars { get; set; } = [];
+
+    /// <summary>
+    /// A shallow copy (collections are shared, not cloned). Used for read-only per-series projections
+    /// (<see cref="ChartSeriesAdornmentExtensions.ResolveTrendline"/>); never mutate a copy's lists.
+    /// </summary>
+    public ChartModel ShallowClone() => (ChartModel)MemberwiseClone();
+
     public bool ShowDropLines { get; set; }
     public CellColor? DropLineColor { get; set; }
     public WorkbookThemeColorReference? DropLineThemeColor { get; set; }

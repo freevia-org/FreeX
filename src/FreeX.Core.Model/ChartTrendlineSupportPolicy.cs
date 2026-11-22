@@ -19,6 +19,7 @@ public static class ChartTrendlineSupportPolicy
             return;
 
         chart.ShowLinearTrendline = false;
+        chart.SeriesTrendlines = [];
         chart.TrendlineType = ChartTrendlineType.Linear;
         chart.TrendlinePeriod = 2;
         chart.TrendlineOrder = 2;

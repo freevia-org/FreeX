@@ -804,46 +804,53 @@ public static partial class ChartRenderer
     /// </summary>
     private static void AddErrorBarsIfRequested(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
-        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!chart.HasAnyErrorBars())
             return;
 
-        var barColor = chart.ErrorBarThemeColor?.Resolve(theme) ?? chart.ErrorBarColor;
-        var oxyColor = barColor is { } color ? OxyColor.FromRgb(color.R, color.G, color.B) : OxyColors.Black;
-        var customPlus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(chart.ErrorBarPlusRangeCacheXml);
-        var customMinus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(chart.ErrorBarMinusRangeCacheXml) ?? customPlus;
-
-        // ChartModel has no per-series error-bar list: the reader keeps only the FIRST <c:ser> that
-        // carried <c:errBars> in the source file, chart-wide (XlsxChartTrendlineErrorBarReader.
-        // ApplyErrorBars). For Standard Error/Percentage/Fixed Value that spec is either recomputed
-        // from each series' own values or a single chart-wide constant, so annotating every supporting
-        // series still matches Excel's "select the whole chart, add error bars" gesture. Custom-kind
-        // amounts, however, are a specific cached plus/minus value PER POINT read off the one series
-        // that owned the <c:errBars> element, so painting that exact cache onto unrelated series would
-        // fabricate whiskers Excel never drew there. Since the series identity itself wasn't kept, the
-        // best we can do here is restrict Custom to the single series whose own point count matches
-        // the cached range's length (the only series the cache could possibly belong to) instead of
-        // stamping it onto every series that happens to support error bars.
-        var isCustomKind = chart.ErrorBarKind == ChartErrorBarKind.Custom;
-        var customLength = customPlus?.Count ?? customMinus?.Count ?? 0;
+        // Excel stores error bars per series, so every plotted series resolves its own settings
+        // (ChartSeriesAdornmentExtensions.ResolveErrorBars): only series that carry error bars are
+        // annotated, each in its own kind/direction/format. Series are matched by the chart series index
+        // tagged on them while the model was built; untagged series (builders that do not tag) fall back
+        // to their position among the plotted series.
         var customApplied = false;
 
         // Snapshot first: we're about to append whisker LineSeries entries to model.Series and must
         // not walk into those while iterating the series this pass is meant to annotate.
         var targets = model.Series.ToArray();
+        var ordinal = 0;
         foreach (var series in targets)
         {
             var points = GetErrorBarAnchorPoints(series, out var isBarOrientedHorizontal);
             if (points is null || points.Count == 0)
                 continue;
 
-            if (isCustomKind && (customApplied || points.Count != customLength))
+            var seriesIndex = series.Tag is int tagged && tagged >= 0 ? tagged : ordinal;
+            ordinal++;
+            if (chart.ResolveErrorBars(seriesIndex) is not { } errorChart)
                 continue;
+
+            var barColor = errorChart.ErrorBarThemeColor?.Resolve(theme) ?? errorChart.ErrorBarColor;
+            var oxyColor = barColor is { } color ? OxyColor.FromRgb(color.R, color.G, color.B) : OxyColors.Black;
+            var customPlus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(errorChart.ErrorBarPlusRangeCacheXml);
+            var customMinus = ChartRenderPolicyPlanner.ParseErrorBarRangeCache(errorChart.ErrorBarMinusRangeCacheXml) ?? customPlus;
+
+            // A Custom-kind amount is a specific cached plus/minus value PER POINT. With per-series
+            // settings the cache belongs to exactly this series, so it is applied here without the old
+            // "guess which series owns the cache" heuristic; chart-wide (legacy) custom error bars still
+            // fall back to the single series whose point count matches the cached range.
+            var isCustomKind = errorChart.ErrorBarKind == ChartErrorBarKind.Custom;
+            if (isCustomKind && ReferenceEquals(errorChart, chart))
+            {
+                var customLength = customPlus?.Count ?? customMinus?.Count ?? 0;
+                if (customApplied || points.Count != customLength)
+                    continue;
+            }
 
             // A horizontal Bar chart always whiskers along its value axis (X). Everything else
             // whiskers along Y unless the chart XML explicitly requested X-direction error bars
             // (errDir="x" — only meaningful, and only ever set by Excel, for Scatter/Bubble, whose
             // X axis carries real values rather than a category index).
-            var isHorizontal = isBarOrientedHorizontal || chart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X;
+            var isHorizontal = isBarOrientedHorizontal || errorChart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X;
             var values = new double[points.Count];
             for (var i = 0; i < points.Count; i++)
                 values[i] = isHorizontal ? points[i].X : points[i].Y;
@@ -853,8 +860,8 @@ public static partial class ChartRenderer
             const double endCapHalfWidth = 0.08;
             var whiskers = new LineSeries
             {
-                LineStyle = ToOxyLineStyle(chart.ErrorBarDashStyle),
-                StrokeThickness = chart.ErrorBarThickness,
+                LineStyle = ToOxyLineStyle(errorChart.ErrorBarDashStyle),
+                StrokeThickness = errorChart.ErrorBarThickness,
                 Color = oxyColor,
                 MarkerType = MarkerType.None,
                 YAxisKey = (series as XYAxisSeries)?.YAxisKey
@@ -864,7 +871,7 @@ public static partial class ChartRenderer
             for (var i = 0; i < points.Count; i++)
             {
                 var amounts = ChartRenderPolicyPlanner.ResolveErrorBarAmounts(
-                    chart,
+                    errorChart,
                     values,
                     i,
                     customPlus,
@@ -876,7 +883,7 @@ public static partial class ChartRenderer
 
                 any = true;
                 var point = points[i];
-                AddWhisker(whiskers, point, plus, minus, isHorizontal, chart.ErrorBarEndCaps, endCapHalfWidth);
+                AddWhisker(whiskers, point, plus, minus, isHorizontal, errorChart.ErrorBarEndCaps, endCapHalfWidth);
             }
 
             if (any)

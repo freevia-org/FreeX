@@ -176,6 +176,30 @@ public static class ChartTrendlinePlanner
             chart.TrendlineDashStyle));
 
     /// <summary>
+    /// Reads the trendline state of one series (Excel stores trendlines per series). A series without a
+    /// trendline reads as "not shown" with the chart-wide settings as the starting point for a new one.
+    /// A null/negative <paramref name="seriesIndex"/> reads the chart-wide state.
+    /// </summary>
+    public static ChartTrendlineInput Read(ChartModel chart, int? seriesIndex)
+    {
+        if (seriesIndex is not >= 0)
+            return Read(chart);
+
+        return chart.ResolveTrendline(seriesIndex.Value) is { } projection
+            ? Read(projection)
+            : Read(chart) with { ShowTrendline = false };
+    }
+
+    /// <summary>
+    /// Like <see cref="Plan(ChartTrendlineInput)"/> but addressed to one series' trendline, so editing or
+    /// hiding it leaves the other series' trendlines alone. A null/negative index keeps the chart-wide meaning.
+    /// </summary>
+    public static ChartLayoutOptions Plan(ChartTrendlineInput input, int? seriesIndex) =>
+        seriesIndex is >= 0
+            ? Plan(input) with { TrendlineTargetSeriesIndex = seriesIndex }
+            : Plan(input);
+
+    /// <summary>
     /// Normalizes the trendline dialog state that is safe to normalize before command execution: unknown
     /// trendline types fall back to Linear, and period/order are clamped into Excel's accepted ranges.
     /// Optional line styling is left unchanged so shells that do not surface it can omit those options.

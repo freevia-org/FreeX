@@ -1616,8 +1616,9 @@ public static class ChartLayoutEngine
 
     // ---- Trendline overlay ----------------------------------------------------------------
 
-    // Computes the trendline overlay for the first plotted series (matching the source renderer,
-    // which fits the trendline to the first series' points) and attaches it to that series' layout.
+    // Computes the trendline overlay for every plotted series that carries one (Excel stores trendlines
+    // per series: ChartSeriesAdornmentExtensions.ResolveTrendline) and attaches each to its own series'
+    // layout.
     private static void AttachTrendline(
         ChartLayoutRequest request,
         List<SeriesLayout> seriesLayouts,
@@ -1628,36 +1629,39 @@ public static class ChartLayoutEngine
         double[]? categoryPositions = null)
     {
         var chart = request.Chart;
-        if (request.Series.Count == 0 || seriesLayouts.Count == 0)
-            return;
-
-        var first = request.Series[0];
-        var sourcePoints = new List<TrendPoint>(first.Values.Count);
-        for (var i = 0; i < first.Values.Count; i++)
+        for (var s = 0; s < request.Series.Count && s < seriesLayouts.Count; s++)
         {
-            // R131-render-chart-date-category-axis: the trendline regression's X is the same
-            // date-proportional position the plotted points use when this is a date category axis,
-            // mirroring the WPF renderer's trendPoints (ChartRenderer.cs), so the fitted line stays
-            // consistent with the actual (unevenly spaced) plotted geometry instead of the plain index.
-            if (first.Values[i] is { } v && !double.IsNaN(v))
-                sourcePoints.Add(new TrendPoint(CategoryX(categoryPositions, i), v));
+            var series = request.Series[s];
+            if (chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart)
+                continue;
+
+            var sourcePoints = new List<TrendPoint>(series.Values.Count);
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                // R131-render-chart-date-category-axis: the trendline regression's X is the same
+                // date-proportional position the plotted points use when this is a date category axis,
+                // mirroring the WPF renderer's trendPoints (ChartRenderer.cs), so the fitted line stays
+                // consistent with the actual (unevenly spaced) plotted geometry instead of the plain index.
+                if (series.Values[i] is { } v && !double.IsNaN(v))
+                    sourcePoints.Add(new TrendPoint(CategoryX(categoryPositions, i), v));
+            }
+
+            var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints);
+            if (plan is null)
+                continue;
+
+            var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex) && secondaryScale is not null;
+            var yScale = onSecondary ? secondaryScale! : primaryScale;
+            var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+            foreach (var point in plan.Points)
+                pixelPoints.Add(new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y)));
+
+            seriesLayouts[s] = seriesLayouts[s] with
+            {
+                Trendline = BuildTrendlineLayout(plan, pixelPoints,
+                    point => new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y)), trendChart),
+            };
         }
-
-        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints);
-        if (plan is null)
-            return;
-
-        var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, first.SeriesIndex) && secondaryScale is not null;
-        var yScale = onSecondary ? secondaryScale! : primaryScale;
-        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
-        foreach (var point in plan.Points)
-            pixelPoints.Add(new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y)));
-
-        seriesLayouts[0] = seriesLayouts[0] with
-        {
-            Trendline = BuildTrendlineLayout(plan, pixelPoints,
-                point => new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y))),
-        };
     }
 
     // Trendline overlay for horizontal Bar/StackedBar/PercentStackedBar/ThreeDBar charts: the category
@@ -1672,31 +1676,34 @@ public static class ChartLayoutEngine
         AxisScale valueScale)
     {
         var chart = request.Chart;
-        if (request.Series.Count == 0 || seriesLayouts.Count == 0)
-            return;
-
-        var first = request.Series[0];
-        var sourcePoints = new List<TrendPoint>(first.Values.Count);
-        for (var i = 0; i < first.Values.Count; i++)
+        for (var s = 0; s < request.Series.Count && s < seriesLayouts.Count; s++)
         {
-            if (first.Values[i] is { } v && !double.IsNaN(v))
-                sourcePoints.Add(new TrendPoint(i, v));
+            var series = request.Series[s];
+            if (chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart)
+                continue;
+
+            var sourcePoints = new List<TrendPoint>(series.Values.Count);
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is { } v && !double.IsNaN(v))
+                    sourcePoints.Add(new TrendPoint(i, v));
+            }
+
+            var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints, swapAxes: true);
+            if (plan is null)
+                continue;
+
+            // The portable plan projects bar points to (value, category) display-axis order.
+            var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+            foreach (var point in plan.Points)
+                pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y)));
+
+            seriesLayouts[s] = seriesLayouts[s] with
+            {
+                Trendline = BuildTrendlineLayout(plan, pixelPoints,
+                    point => new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y)), trendChart),
+            };
         }
-
-        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints, swapAxes: true);
-        if (plan is null)
-            return;
-
-        // The portable plan projects bar points to (value, category) display-axis order.
-        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
-        foreach (var point in plan.Points)
-            pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y)));
-
-        seriesLayouts[0] = seriesLayouts[0] with
-        {
-            Trendline = BuildTrendlineLayout(plan, pixelPoints,
-                point => new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y))),
-        };
     }
 
     // Trendline overlay for scatter/bubble: x comes from the explicit x value, mapped through the
@@ -1708,32 +1715,35 @@ public static class ChartLayoutEngine
         AxisScale yScale)
     {
         var chart = request.Chart;
-        if (request.Series.Count == 0 || seriesLayouts.Count == 0)
-            return;
-
-        var first = request.Series[0];
-        var sourcePoints = new List<TrendPoint>(first.Values.Count);
-        for (var i = 0; i < first.Values.Count; i++)
+        for (var s = 0; s < request.Series.Count && s < seriesLayouts.Count; s++)
         {
-            if (first.Values[i] is not { } y || double.IsNaN(y))
+            var series = request.Series[s];
+            if (chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart)
                 continue;
-            var x = first.XValues is { } xs && i < xs.Count ? xs[i] : i;
-            sourcePoints.Add(new TrendPoint(x, y));
+
+            var sourcePoints = new List<TrendPoint>(series.Values.Count);
+            for (var i = 0; i < series.Values.Count; i++)
+            {
+                if (series.Values[i] is not { } y || double.IsNaN(y))
+                    continue;
+                var x = series.XValues is { } xs && i < xs.Count ? xs[i] : i;
+                sourcePoints.Add(new TrendPoint(x, y));
+            }
+
+            var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints);
+            if (plan is null)
+                continue;
+
+            var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+            foreach (var point in plan.Points)
+                pixelPoints.Add(new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y)));
+
+            seriesLayouts[s] = seriesLayouts[s] with
+            {
+                Trendline = BuildTrendlineLayout(plan, pixelPoints,
+                    point => new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y)), trendChart),
+            };
         }
-
-        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints);
-        if (plan is null)
-            return;
-
-        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
-        foreach (var point in plan.Points)
-            pixelPoints.Add(new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y)));
-
-        seriesLayouts[0] = seriesLayouts[0] with
-        {
-            Trendline = BuildTrendlineLayout(plan, pixelPoints,
-                point => new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y))),
-        };
     }
 
     // Maps the portable data-space plan to layout pixels; projection and annotation semantics stay
@@ -1741,7 +1751,8 @@ public static class ChartLayoutEngine
     private static TrendlineLayout BuildTrendlineLayout(
         TrendlineProjectionPlan plan,
         IReadOnlyList<LayoutPoint> pixelPoints,
-        Func<TrendPoint, LayoutPoint> toPixel)
+        Func<TrendPoint, LayoutPoint> toPixel,
+        ChartModel style)
     {
         var anchor = plan.AnnotationAnchor is { } dataAnchor
             ? toPixel(dataAnchor)
@@ -1753,6 +1764,7 @@ public static class ChartLayoutEngine
             Points = pixelPoints,
             AnnotationLines = plan.AnnotationLines,
             AnnotationAnchor = anchor,
+            Style = style,
         };
     }
 
@@ -1771,9 +1783,9 @@ public static class ChartLayoutEngine
 
     // Uses the shared error-amount policy so every plotted series on every chart family that
     // supports error bars (column/bar/line/scatter/bubble/area — ChartTypeSupport.SupportsTrendlines)
-    // draws identical whiskers on the portable rendering path. Unlike the trendline overlay (fitted
-    // once for the first series only), error bars are attached per plotted series, matching Excel
-    // (every series in the plot can carry its own error bars).
+    // draws identical whiskers on the portable rendering path. Like the trendline overlay, error bars are
+    // attached per plotted series that carries them (ChartSeriesAdornmentExtensions.ResolveErrorBars),
+    // matching Excel (every series in the plot can carry its own error bars).
 
     /// <summary>
     /// Attaches the error-bar overlay to <paramref name="seriesLayouts"/> for the column/line/area
@@ -1791,12 +1803,15 @@ public static class ChartLayoutEngine
         double[]? categoryPositions = null)
     {
         var chart = request.Chart;
-        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!chart.HasAnyErrorBars())
             return;
 
         for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
         {
             var series = request.Series[s];
+            if (chart.ResolveErrorBars(series.SeriesIndex) is not { } errorChart)
+                continue;
+
             var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex) && secondaryScale is not null;
             var yScale = onSecondary ? secondaryScale! : primaryScale;
 
@@ -1820,7 +1835,7 @@ public static class ChartLayoutEngine
                 anchors.Add((i, v, new LayoutPoint(xToPixel(CategoryX(categoryPositions, i)), yScale.Transform(v))));
             }
 
-            var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal: false, yScale);
+            var whiskers = BuildErrorBarWhiskers(errorChart, anchors, isHorizontal: false, yScale);
             if (whiskers is not null)
                 seriesLayouts[s] = seriesLayouts[s] with { ErrorBars = whiskers };
         }
@@ -1840,12 +1855,15 @@ public static class ChartLayoutEngine
         AxisScale valueScale)
     {
         var chart = request.Chart;
-        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!chart.HasAnyErrorBars())
             return;
 
         for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
         {
             var series = request.Series[s];
+            if (chart.ResolveErrorBars(series.SeriesIndex) is not { } errorChart)
+                continue;
+
             // Mirrors LayoutBar's own blank-handling (BlankDisplayMode.Zero ⇒ zero-valued anchor,
             // otherwise skipped) so the overlay never draws a whisker at a point with no bar.
             var anchors = new List<(int Index, double Value, LayoutPoint Pixel)>(series.Values.Count);
@@ -1862,7 +1880,7 @@ public static class ChartLayoutEngine
                 anchors.Add((i, v, new LayoutPoint(valueScale.Transform(v), categoryScale.Transform(i))));
             }
 
-            var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal: true, valueScale);
+            var whiskers = BuildErrorBarWhiskers(errorChart, anchors, isHorizontal: true, valueScale);
             if (whiskers is not null)
                 seriesLayouts[s] = seriesLayouts[s] with { ErrorBars = whiskers };
         }
@@ -1882,13 +1900,16 @@ public static class ChartLayoutEngine
         AxisScale yScale)
     {
         var chart = request.Chart;
-        if (!chart.ShowErrorBars || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+        if (!chart.HasAnyErrorBars())
             return;
 
-        var isHorizontal = chart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X;
         for (var s = 0; s < seriesLayouts.Count && s < request.Series.Count; s++)
         {
             var series = request.Series[s];
+            if (chart.ResolveErrorBars(series.SeriesIndex) is not { } errorChart)
+                continue;
+
+            var isHorizontal = errorChart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X;
             var anchors = new List<(int Index, double Value, LayoutPoint Pixel)>(series.Values.Count);
             for (var i = 0; i < series.Values.Count; i++)
             {
@@ -1902,7 +1923,7 @@ public static class ChartLayoutEngine
                 anchors.Add((i, isHorizontal ? x : y, pixel));
             }
 
-            var whiskers = BuildErrorBarWhiskers(chart, anchors, isHorizontal, isHorizontal ? xScale : yScale);
+            var whiskers = BuildErrorBarWhiskers(errorChart, anchors, isHorizontal, isHorizontal ? xScale : yScale);
             if (whiskers is not null)
                 seriesLayouts[s] = seriesLayouts[s] with { ErrorBars = whiskers };
         }
@@ -1986,7 +2007,7 @@ public static class ChartLayoutEngine
         if (!any)
             return null;
 
-        return new ErrorBarLayout { Whiskers = whiskers, EndCaps = chart.ErrorBarEndCaps };
+        return new ErrorBarLayout { Whiskers = whiskers, EndCaps = chart.ErrorBarEndCaps, Style = chart };
     }
 
     // ---- Data-label helpers ---------------------------------------------------------------

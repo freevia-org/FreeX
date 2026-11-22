@@ -47,10 +47,10 @@ public partial class MainWindow
                 ChartDataLabelsBtn_Click(this, new RoutedEventArgs());
                 break;
             case ChartElementFormatTarget.Trendline:
-                ChartTrendlineBtn_Click(this, new RoutedEventArgs());
+                ShowChartTrendlineDialog(element.SeriesIndex >= 0 ? element.SeriesIndex : null);
                 break;
             case ChartElementFormatTarget.ErrorBars:
-                ChartErrorBarsBtn_Click(this, new RoutedEventArgs());
+                ShowChartErrorBarsDialog(element.SeriesIndex >= 0 ? element.SeriesIndex : null);
                 break;
             default:
                 FormatChartAreaBtn_Click(this, new RoutedEventArgs());

@@ -388,6 +388,8 @@ internal static partial class RowColumnShiftHelpers
         public required List<ChartSeriesRangeDataLabels> SeriesRangeDataLabels { get; init; }
         public required List<ChartSeriesRawXmlEntry> AdditionalSeriesErrorBarsXml { get; init; }
         public required List<ChartSeriesRawXmlEntry> AdditionalSeriesTrendlinesXml { get; init; }
+        public required List<ChartSeriesTrendline> SeriesTrendlines { get; init; }
+        public required List<ChartSeriesErrorBars> SeriesErrorBars { get; init; }
     }
 
     private static ChartSeriesFormattingSnapshot CaptureChartSeriesFormatting(ChartModel chart) => new()
@@ -412,7 +414,9 @@ internal static partial class RowColumnShiftHelpers
         RangeDataLabels               = new List<ChartRangeDataLabel>(chart.RangeDataLabels),
         SeriesRangeDataLabels         = new List<ChartSeriesRangeDataLabels>(chart.SeriesRangeDataLabels),
         AdditionalSeriesErrorBarsXml  = new List<ChartSeriesRawXmlEntry>(chart.AdditionalSeriesErrorBarsXml),
-        AdditionalSeriesTrendlinesXml = new List<ChartSeriesRawXmlEntry>(chart.AdditionalSeriesTrendlinesXml)
+        AdditionalSeriesTrendlinesXml = new List<ChartSeriesRawXmlEntry>(chart.AdditionalSeriesTrendlinesXml),
+        SeriesTrendlines              = new List<ChartSeriesTrendline>(chart.SeriesTrendlines),
+        SeriesErrorBars               = new List<ChartSeriesErrorBars>(chart.SeriesErrorBars)
     };
 
     private static void RestoreChartSeriesFormatting(ChartModel chart, ChartSeriesFormattingSnapshot snapshot)
@@ -438,6 +442,8 @@ internal static partial class RowColumnShiftHelpers
         chart.SeriesRangeDataLabels         = snapshot.SeriesRangeDataLabels;
         chart.AdditionalSeriesErrorBarsXml  = snapshot.AdditionalSeriesErrorBarsXml;
         chart.AdditionalSeriesTrendlinesXml = snapshot.AdditionalSeriesTrendlinesXml;
+        chart.SeriesTrendlines              = snapshot.SeriesTrendlines;
+        chart.SeriesErrorBars               = snapshot.SeriesErrorBars;
     }
 
     /// <summary>
@@ -536,6 +542,8 @@ internal static partial class RowColumnShiftHelpers
         chart.SeriesRangeDataLabels = RemapIndexedItemsForInsert(chart.SeriesRangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, boundary, delta);
         chart.AdditionalSeriesErrorBarsXml = RemapIndexedItemsForInsert(chart.AdditionalSeriesErrorBarsXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, boundary, delta);
         chart.AdditionalSeriesTrendlinesXml = RemapIndexedItemsForInsert(chart.AdditionalSeriesTrendlinesXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, boundary, delta);
+        chart.SeriesTrendlines = RemapIndexedItemsForInsert(chart.SeriesTrendlines, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, boundary, delta);
+        chart.SeriesErrorBars = RemapIndexedItemsForInsert(chart.SeriesErrorBars, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, boundary, delta);
 
         if (chart.TrendlineSeriesIndex >= boundary)
             chart.TrendlineSeriesIndex += delta;
@@ -584,14 +592,30 @@ internal static partial class RowColumnShiftHelpers
         chart.SeriesRangeDataLabels = RemapIndexedItemsForDelete(chart.SeriesRangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, posLo, posHi, removedCount);
         chart.AdditionalSeriesErrorBarsXml = RemapIndexedItemsForDelete(chart.AdditionalSeriesErrorBarsXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
         chart.AdditionalSeriesTrendlinesXml = RemapIndexedItemsForDelete(chart.AdditionalSeriesTrendlinesXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
-
-        if (chart.TrendlineSeriesIndex >= posLo && chart.TrendlineSeriesIndex <= posHi)
+        var hadSeriesTrendlines = chart.SeriesTrendlines.Count > 0;
+        var hadSeriesErrorBars = chart.SeriesErrorBars.Count > 0;
+        chart.SeriesTrendlines = RemapIndexedItemsForDelete(chart.SeriesTrendlines, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesErrorBars = RemapIndexedItemsForDelete(chart.SeriesErrorBars, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+        if (hadSeriesTrendlines && chart.SeriesTrendlines.Count == 0)
             chart.ShowLinearTrendline = false;
+        if (hadSeriesErrorBars && chart.SeriesErrorBars.Count == 0)
+            chart.ShowErrorBars = false;
+
+        // Per-series entries decide for themselves (above); the chart-wide primary index only needs to keep
+        // pointing at the same series. Without entries the legacy single-series bookkeeping applies.
+        if (chart.TrendlineSeriesIndex >= posLo && chart.TrendlineSeriesIndex <= posHi)
+        {
+            if (!hadSeriesTrendlines)
+                chart.ShowLinearTrendline = false;
+        }
         else if (chart.TrendlineSeriesIndex > posHi)
             chart.TrendlineSeriesIndex -= removedCount;
 
         if (chart.ErrorBarSeriesIndex >= posLo && chart.ErrorBarSeriesIndex <= posHi)
-            chart.ShowErrorBars = false;
+        {
+            if (!hadSeriesErrorBars)
+                chart.ShowErrorBars = false;
+        }
         else if (chart.ErrorBarSeriesIndex > posHi)
             chart.ErrorBarSeriesIndex -= removedCount;
 

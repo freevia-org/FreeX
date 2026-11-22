@@ -26,6 +26,8 @@ public sealed class R30_ChartSeriesCacheDeepTests
         chart.ShowLinearTrendline = true;
         chart.TrendlineSeriesIndex = 2;
         chart.TrendlineType = ChartTrendlineType.Linear;
+        // Excel stores trendlines per series: only series 2 carries one.
+        chart.SeriesTrendlines = [ChartSeriesTrendline.FromChart(chart, 2)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -39,6 +41,7 @@ public sealed class R30_ChartSeriesCacheDeepTests
         var reloaded = ReloadSingleChart(saved);
         reloaded.ShowLinearTrendline.Should().BeTrue();
         reloaded.TrendlineSeriesIndex.Should().Be(2);
+        reloaded.SeriesTrendlines.Should().ContainSingle().Which.SeriesIndex.Should().Be(2);
     }
 
     [Fact]
@@ -51,6 +54,7 @@ public sealed class R30_ChartSeriesCacheDeepTests
         chart.ShowLinearTrendline = true;
         chart.TrendlineSeriesIndex = 0;
         chart.TrendlineType = ChartTrendlineType.Linear;
+        chart.SeriesTrendlines = [ChartSeriesTrendline.FromChart(chart, 0)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -74,6 +78,7 @@ public sealed class R30_ChartSeriesCacheDeepTests
         chart.ErrorBarSeriesIndex = 1;
         chart.ErrorBarKind = ChartErrorBarKind.Percentage;
         chart.ErrorBarValue = 10;
+        chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, 1)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -86,6 +91,7 @@ public sealed class R30_ChartSeriesCacheDeepTests
         var reloaded = ReloadSingleChart(saved);
         reloaded.ShowErrorBars.Should().BeTrue();
         reloaded.ErrorBarSeriesIndex.Should().Be(1);
+        reloaded.SeriesErrorBars.Should().ContainSingle().Which.SeriesIndex.Should().Be(1);
     }
 
     [Fact]
@@ -98,6 +104,7 @@ public sealed class R30_ChartSeriesCacheDeepTests
         chart.ShowErrorBars = true;
         chart.ErrorBarKind = ChartErrorBarKind.Percentage;
         chart.ErrorBarValue = 10;
+        chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, 0)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);

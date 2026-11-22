@@ -300,6 +300,8 @@ public sealed partial class NativeJsonAdapter
         public double? SecondaryAxisMinorUnit { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }
         public List<ChartSeriesFormat>? SeriesFormats { get; set; }
+        public List<ChartSeriesTrendline>? SeriesTrendlines { get; set; }
+        public List<ChartSeriesErrorBars>? SeriesErrorBars { get; set; }
         public List<ChartSeriesDataLabelFormat>? SeriesDataLabelFormats { get; set; }
         public List<ChartPointDataLabelFormat>? PointDataLabelFormats { get; set; }
         public List<ChartSeriesRangeDataLabels>? SeriesRangeDataLabels { get; set; }

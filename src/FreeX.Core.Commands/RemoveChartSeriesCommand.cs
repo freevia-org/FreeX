@@ -57,6 +57,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
     private List<ChartPointDataLabelFormat>? _previousPointDataLabelFormats;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesErrorBarsXml;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
+    private List<ChartSeriesTrendline>? _previousSeriesTrendlines;
+    private List<ChartSeriesErrorBars>? _previousSeriesErrorBars;
     private List<int>? _previousSeriesPlotOrder;
     private List<ChartLegendEntryModel>? _previousLegendEntries;
 
@@ -120,6 +122,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousPointDataLabelFormats = chart.PointDataLabelFormats;
         _previousAdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml;
         _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
+        _previousSeriesTrendlines = chart.SeriesTrendlines;
+        _previousSeriesErrorBars = chart.SeriesErrorBars;
         _previousSeriesPlotOrder = chart.SeriesPlotOrder;
         _previousLegendEntries = chart.LegendEntries;
         _applied = true;
@@ -194,12 +198,23 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
             .Select(x => x.SeriesIndex > removedSeriesIndex ? x with { SeriesIndex = x.SeriesIndex - 1 } : x)
             .ToList();
 
-        if (chart.TrendlineSeriesIndex == removedSeriesIndex)
+        chart.SeriesTrendlines = ChartSeriesAdornmentExtensions.RemapAfterSeriesRemoval(
+            chart.SeriesTrendlines, t => t.SeriesIndex, (t, i) => t with { SeriesIndex = i }, removedSeriesIndex);
+        chart.SeriesErrorBars = ChartSeriesAdornmentExtensions.RemapAfterSeriesRemoval(
+            chart.SeriesErrorBars, t => t.SeriesIndex, (t, i) => t with { SeriesIndex = i }, removedSeriesIndex);
+        // Per-series entries are authoritative once present: the chart-wide flag then only says whether
+        // any series still carries one. The legacy single-series bookkeeping below covers the rest.
+        if (_previousSeriesTrendlines is { Count: > 0 } && chart.SeriesTrendlines.Count == 0)
+            chart.ShowLinearTrendline = false;
+        if (_previousSeriesErrorBars is { Count: > 0 } && chart.SeriesErrorBars.Count == 0)
+            chart.ShowErrorBars = false;
+
+        if (chart.TrendlineSeriesIndex == removedSeriesIndex && _previousSeriesTrendlines is not { Count: > 0 })
             chart.ShowLinearTrendline = false;
         else if (chart.TrendlineSeriesIndex > removedSeriesIndex)
             chart.TrendlineSeriesIndex--;
 
-        if (chart.ErrorBarSeriesIndex == removedSeriesIndex)
+        if (chart.ErrorBarSeriesIndex == removedSeriesIndex && _previousSeriesErrorBars is not { Count: > 0 })
             chart.ShowErrorBars = false;
         else if (chart.ErrorBarSeriesIndex > removedSeriesIndex)
             chart.ErrorBarSeriesIndex--;
@@ -238,6 +253,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         chart.PointDataLabelFormats = _previousPointDataLabelFormats ?? [];
         chart.AdditionalSeriesErrorBarsXml = _previousAdditionalSeriesErrorBarsXml ?? [];
         chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
+        chart.SeriesTrendlines = _previousSeriesTrendlines ?? [];
+        chart.SeriesErrorBars = _previousSeriesErrorBars ?? [];
         chart.SeriesPlotOrder = _previousSeriesPlotOrder ?? [];
         chart.LegendEntries = _previousLegendEntries ?? [];
 
@@ -259,6 +276,8 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousPointDataLabelFormats = null;
         _previousAdditionalSeriesErrorBarsXml = null;
         _previousAdditionalSeriesTrendlinesXml = null;
+        _previousSeriesTrendlines = null;
+        _previousSeriesErrorBars = null;
         _previousSeriesPlotOrder = null;
         _previousLegendEntries = null;
     }

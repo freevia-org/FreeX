@@ -726,10 +726,12 @@ public sealed class AvaloniaChartRenderer
     // every other Render* method in this class.
     private void RenderErrorBars(Canvas canvas, ErrorBarLayout errorBars)
     {
-        var barColor = _chart.ErrorBarThemeColor?.Resolve(_theme) ?? _chart.ErrorBarColor;
+        // Each series carries its own error-bar formatting (errorBars.Style = that series' projection).
+        var style = errorBars.Style ?? _chart;
+        var barColor = style.ErrorBarThemeColor?.Resolve(_theme) ?? style.ErrorBarColor;
         IBrush stroke = barColor is { } color ? SolidBrush(color) : Brushes.Black;
-        var strokeThickness = _chart.ErrorBarThickness > 0 ? _chart.ErrorBarThickness : 1;
-        var dashArray = ToAvaloniaStrokeDashArray(_chart.ErrorBarDashStyle);
+        var strokeThickness = style.ErrorBarThickness > 0 ? style.ErrorBarThickness : 1;
+        var dashArray = ToAvaloniaStrokeDashArray(style.ErrorBarDashStyle);
 
         Line NewLine(LayoutPoint start, LayoutPoint end)
         {
@@ -814,11 +816,13 @@ public sealed class AvaloniaChartRenderer
         if (tl.Points.Count < 2)
             return;
 
-        IBrush brush = _chart.ResolveTrendlineColor(_theme) is { } tlColor
+        // Each series carries its own trendline formatting (tl.Style = that series' projection).
+        var style = tl.Style ?? _chart;
+        IBrush brush = style.ResolveTrendlineColor(_theme) is { } tlColor
             ? SolidBrush(tlColor)
             : TrendlineBrush;
 
-        var dashArray = ToAvaloniaStrokeDashArray(_chart.TrendlineDashStyle);
+        var dashArray = ToAvaloniaStrokeDashArray(style.TrendlineDashStyle);
 
         var points = new Points();
         foreach (var pt in tl.Points)
@@ -827,7 +831,7 @@ public sealed class AvaloniaChartRenderer
         var polyline = new AvaloniaPolyline
         {
             Stroke = brush,
-            StrokeThickness = _chart.TrendlineThickness > 0 ? _chart.TrendlineThickness : 1.5,
+            StrokeThickness = style.TrendlineThickness > 0 ? style.TrendlineThickness : 1.5,
             StrokeJoin = PenLineJoin.Round,
             Points = points,
         };

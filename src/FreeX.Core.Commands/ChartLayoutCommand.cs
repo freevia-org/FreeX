@@ -181,6 +181,23 @@ public sealed record ChartLayoutOptions(
 
     /// <summary>Manual layouts to drop back to automatic placement (Excel's Reset to Match Style).</summary>
     public ChartManualLayoutTargets ClearManualLayouts { get; init; }
+
+    /// <summary>
+    /// When set, the <c>ShowLinearTrendline</c>/<c>Trendline*</c> options edit (or add, or with
+    /// <c>ShowLinearTrendline: false</c> remove) only the trendline of this series (the <c>c:idx</c>),
+    /// the way Excel's per-series trendlines work; other series keep theirs. When null the options keep
+    /// their chart-wide "every series" meaning.
+    /// </summary>
+    public int? TrendlineTargetSeriesIndex { get; init; }
+
+    /// <summary>Error-bar counterpart of <see cref="TrendlineTargetSeriesIndex"/>.</summary>
+    public int? ErrorBarTargetSeriesIndex { get; init; }
+
+    /// <summary>Replaces the per-series trendline entries wholesale (also the undo snapshot); null leaves them unchanged.</summary>
+    public IReadOnlyList<ChartSeriesTrendline>? SeriesTrendlines { get; init; }
+
+    /// <summary>Replaces the per-series error-bar entries wholesale (also the undo snapshot); null leaves them unchanged.</summary>
+    public IReadOnlyList<ChartSeriesErrorBars>? SeriesErrorBars { get; init; }
 }
 
 /// <summary>The chart elements whose manual layout <see cref="ChartLayoutOptions.ClearManualLayouts"/> can reset.</summary>
@@ -406,6 +423,8 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
             PlotAreaLayout = chart.PlotAreaLayout,
             XAxisTitleLayout = chart.XAxisTitleLayout,
             YAxisTitleLayout = chart.YAxisTitleLayout,
+            SeriesTrendlines = chart.SeriesTrendlines.ToArray(),
+            SeriesErrorBars = chart.SeriesErrorBars.ToArray(),
         };
 
 }
