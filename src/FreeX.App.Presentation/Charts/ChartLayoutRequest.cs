@@ -66,4 +66,26 @@ public sealed class ChartLayoutRequest
     /// so the series are laid out inside <see cref="PlotArea"/> unchanged.
     /// </summary>
     public bool ReserveLegendGutter { get; init; } = true;
+
+    /// <summary>
+    /// The chart object's full pixel size. Manual (dragged) plot-area, legend and data-label layouts are
+    /// fractions of the chart space, so they are honored only when both are positive (0 = unknown).
+    /// </summary>
+    public double ChartWidth { get; init; }
+
+    public double ChartHeight { get; init; }
+
+    /// <summary>A copy of this request that carries the chart object's pixel size.</summary>
+    public ChartLayoutRequest WithChartSize(double chartWidth, double chartHeight) =>
+        new()
+        {
+            Chart = Chart,
+            Categories = Categories,
+            Series = Series,
+            PlotArea = PlotArea,
+            TextMeasurer = TextMeasurer,
+            ReserveLegendGutter = ReserveLegendGutter,
+            ChartWidth = chartWidth,
+            ChartHeight = chartHeight,
+        };
 }

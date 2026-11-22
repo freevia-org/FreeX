@@ -1835,6 +1835,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var slicerTimelinePane = BuildSlicerTimelinePaneChrome();
         DockPanel.SetDock(slicerTimelinePane, Dock.Right);
         workArea.Children.Add(slicerTimelinePane);
+        var chartFormatPane = BuildChartFormatPaneChrome();
+        DockPanel.SetDock(chartFormatPane, Dock.Right);
+        workArea.Children.Add(chartFormatPane);
 
         workArea.Children.Add(BuildWorksheetViewportChrome());
 
@@ -4477,6 +4480,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
         RefreshSlicerTimelinePane();
+        RefreshChartFormatPane();
         RefreshPivotContextualTab();
         UpdateSaveButton();
         WorkbookHomeFormatRibbonStatePublisher.Publish(

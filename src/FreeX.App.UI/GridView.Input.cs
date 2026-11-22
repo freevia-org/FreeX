@@ -30,6 +30,12 @@ public partial class GridView
         }
 
         var pos = e.GetPosition(this);
+        if (TryUpdateChartElementDrag(pos))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // F1 fix (round 159): tracked independently of WPF's IsMouseOver (which reflects live
         // hit-test/hardware state and isn't something a data-driven refresh can reliably re-derive)
         // so RefreshHyperlinkScreenTipAfterViewportChanged below can re-run the ScreenTip's
@@ -1068,6 +1074,12 @@ public partial class GridView
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
+        if (TryCommitChartElementDrag())
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_shapePlacementDragging)
         {
             CommitShapePlacement(e.GetPosition(this));
@@ -1394,6 +1406,13 @@ public partial class GridView
 
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
+        if (_chartElementDrag is not null)
+        {
+            _chartElementDrag = null;
+            _chartElementDragChartId = Guid.Empty;
+            InvalidateVisual();
+        }
+
         CancelActiveCapturedGridDrag();
         RestoreSelectedCommentPreview();
         base.OnLostMouseCapture(e);
@@ -1401,6 +1420,13 @@ public partial class GridView
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && _chartElementDrag is not null)
+        {
+            CancelChartElementDrag();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape && (_selectionMoveDragging || _autofillDragging))
         {
             // F2 fix (round 160): Escape must abort an in-progress border-drag range

@@ -21,6 +21,50 @@ internal static class LegendLayoutBuilder
     /// </summary>
     public static LegendLayout Build(ChartLayoutRequest request, out PlotRect plot)
     {
+        var legend = BuildAutomatic(request, out plot);
+        return ApplyManualLayouts(request, legend, ref plot);
+    }
+
+    private static LegendLayout ApplyManualLayouts(ChartLayoutRequest request, LegendLayout legend, ref PlotRect plot)
+    {
+        var chart = request.Chart;
+        var w = request.ChartWidth;
+        var h = request.ChartHeight;
+        if (!(w > 0) || !(h > 0))
+            return legend;
+
+        // A dragged legend no longer owns a gutter: the plot reclaims the space (Excel keeps the plot
+        // where the user left it, which is the automatic plot when it was not dragged too).
+        if (legend.Position != ChartLegendPosition.None &&
+            legend.Entries.Count > 0 &&
+            ChartManualLayoutGeometry.TryResolveOrigin(chart.LegendLayout, w, h, new(legend.Bounds.Left, legend.Bounds.Top), out var origin))
+        {
+            var moved = ChartManualLayoutGeometry.ClampInside(
+                new(origin.X, origin.Y, legend.Bounds.Width, legend.Bounds.Height), w, h);
+            var dx = moved.Left - legend.Bounds.Left;
+            var dy = moved.Top - legend.Bounds.Top;
+            var entries = legend.Entries
+                .Select(e => new LegendEntry(e.SeriesIndex, e.Label, Shift(e.SwatchRect, dx, dy), Shift(e.LabelRect, dx, dy)))
+                .ToList();
+            legend = new LegendLayout { Position = legend.Position, Bounds = moved, Entries = entries };
+            plot = request.PlotArea;
+        }
+
+        if (chart.PlotAreaLayout is { } plotLayout &&
+            string.Equals(plotLayout.LayoutTarget, ChartManualLayoutGeometry.InnerTarget, StringComparison.OrdinalIgnoreCase) &&
+            ChartManualLayoutGeometry.TryResolveRect(plotLayout, w, h, plot.ToRect(), out var rect) &&
+            rect.Width > 1 && rect.Height > 1)
+        {
+            plot = new PlotRect(rect.Left, rect.Top, rect.Width, rect.Height);
+        }
+
+        return legend;
+    }
+
+    private static LayoutRect Shift(LayoutRect r, double dx, double dy) => new(r.X + dx, r.Y + dy, r.Width, r.Height);
+
+    private static LegendLayout BuildAutomatic(ChartLayoutRequest request, out PlotRect plot)
+    {
         var chart = request.Chart;
         plot = request.PlotArea;
 

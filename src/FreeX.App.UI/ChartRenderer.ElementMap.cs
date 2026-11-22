@@ -48,6 +48,8 @@ public static partial class ChartRenderer
             var model = BuildPlotModel(chart, viewport, theme ?? WorkbookTheme.Office);
             if (model is not null)
             {
+                ApplyManualLayouts(model, chart, scale);
+
                 // Exporting runs OxyPlot's layout pass, which fills PlotArea/TitleArea/LegendArea.
                 using var stream = new MemoryStream();
                 new PngExporter

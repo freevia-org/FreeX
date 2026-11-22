@@ -65,7 +65,7 @@ public sealed partial class MainWindow
             ChartLayout layout;
             try
             {
-                layout = ChartLayoutEngine.Layout(request);
+                layout = ChartLayoutEngine.Layout(request.WithChartSize(width, height));
                 var renderer = new AvaloniaChartRenderer(chart, _session.Workbook.Theme);
                 visual = renderer.Render(layout, width, height);
             }
@@ -159,6 +159,17 @@ public sealed partial class MainWindow
                 // A resize handle or a press on the chart area of the already-selected chart begins a
                 // move/resize drag; a press on any inner element (title, legend, axis, series...)
                 // selects that element instead, like Excel.
+                var localPoint = new LayoutPoint(local.X, local.Y);
+                // A press on a grip of the selected plot area resizes it.
+                if (selected && selectedElement is { } plotElement && ChartElementDragPlanner.CanResize(plotElement) &&
+                    ChartElementDragPlanner.HitTestHandle(elementMap, plotElement, localPoint) is var plotGrip and not ChartResizeHandle.None &&
+                    args.ClickCount < 2 &&
+                    TryBeginChartElementDrag(chart, elementMap, plotElement, localPoint, args, plotGrip))
+                {
+                    args.Handled = true;
+                    return;
+                }
+
                 var handle = ResolveChartHoverDragKind(selected, new LayoutPoint(local.X, local.Y), width, height);
                 var isResizeHandle = handle is not (ObjectDragKind.None or ObjectDragKind.Move or ObjectDragKind.Rotate);
                 if (selected && (isResizeHandle || hit.IsChartArea) && TryBeginChartDrag(chart, container, args))
@@ -170,10 +181,14 @@ public sealed partial class MainWindow
                 if (args.ClickCount >= 2 && selected && selectedElement is { } current &&
                     elementMap.IsDoubleClickOnSelection(new LayoutPoint(local.X, local.Y), current))
                 {
-                    RunGuarded(() => OpenFormatSelectedChartElementAsync(chart, current));
+                    ShowChartFormatPane(chart, current);
                     args.Handled = true;
                     return;
                 }
+
+                // Pressing on a draggable element and moving repositions it (Excel); a plain click never moves.
+                if (args.ClickCount < 2)
+                    TryBeginChartElementDrag(chart, elementMap, hit, localPoint, args, ChartResizeHandle.None);
 
                 SelectChartElement(chart, hit, elementMap);
                 args.Handled = true;

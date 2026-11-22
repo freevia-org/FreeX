@@ -61,6 +61,7 @@ public sealed partial class MainWindow
             Background = Brushes.Transparent,
             IsHitTestVisible = false,
         };
+        _chartElementHighlightLayer = layer;
 
         var bounds = map.GetHighlightBounds(element);
         foreach (var rect in bounds)
@@ -83,11 +84,19 @@ public sealed partial class MainWindow
         if (bounds.Count == 1)
         {
             var r = bounds[0];
-            foreach (var corner in new[]
-                     {
-                         new LayoutPoint(r.Left, r.Top), new LayoutPoint(r.Right, r.Top),
-                         new LayoutPoint(r.Left, r.Bottom), new LayoutPoint(r.Right, r.Bottom),
-                     })
+            var corners = new List<LayoutPoint>
+            {
+                new(r.Left, r.Top), new(r.Right, r.Top),
+                new(r.Left, r.Bottom), new(r.Right, r.Bottom),
+            };
+            if (ChartElementDragPlanner.CanResize(element))
+            {
+                var mx = r.Left + (r.Width / 2);
+                var my = r.Top + (r.Height / 2);
+                corners.AddRange([new(mx, r.Top), new(mx, r.Bottom), new(r.Left, my), new(r.Right, my)]);
+            }
+
+            foreach (var corner in corners)
             {
                 var grip = new AvaloniaRectangle
                 {
@@ -187,7 +196,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>"Format Selection": opens the existing dialog that owns the selected chart element.</summary>
-    private async Task OpenFormatSelectedChartElementAsync(ChartModel chart, ChartElementRef element)
+    private async Task OpenChartElementFormatDialogAsync(ChartModel chart, ChartElementRef element)
     {
         switch (ChartElementCommandPlanner.GetFormatTarget(chart, element))
         {

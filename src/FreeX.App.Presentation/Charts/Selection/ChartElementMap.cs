@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using FreeX.App.Presentation.Charts;
 
 namespace FreeX.App.Presentation.Charts.Selection;
 
@@ -47,6 +48,9 @@ public sealed class ChartElementMap
 
     /// <summary>Legend entry labels keyed by entry index (series index; point index for pie charts).</summary>
     public IReadOnlyDictionary<int, string?> LegendEntryLabels { get; init; } = new Dictionary<int, string?>();
+
+    /// <summary>Every laid-out data label with its series/point identity (drives dragging one label).</summary>
+    public IReadOnlyList<DataLabelBox> DataLabelBoxes { get; init; } = [];
 
     /// <summary>
     /// Elements reachable only by a second click inside an already-selected parent (a data point inside

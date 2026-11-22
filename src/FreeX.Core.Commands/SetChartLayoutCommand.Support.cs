@@ -215,6 +215,11 @@ public sealed partial class SetChartLayoutCommand
         chart.XAxisTitle = snapshot.XAxisTitle;
         chart.YAxisTitle = snapshot.YAxisTitle;
         chart.SecondaryAxisTitle = snapshot.SecondaryAxisTitle;
+        chart.TitleLayout = snapshot.TitleLayout;
+        chart.LegendLayout = snapshot.LegendLayout;
+        chart.PlotAreaLayout = snapshot.PlotAreaLayout;
+        chart.XAxisTitleLayout = snapshot.XAxisTitleLayout;
+        chart.YAxisTitleLayout = snapshot.YAxisTitleLayout;
         chart.ChartTitleTextColor = snapshot.ChartTitleTextColor;
         chart.ChartTitleTextThemeColor = snapshot.ChartTitleTextThemeColor;
         chart.ChartTitleFontSize = snapshot.ChartTitleFontSize ?? 16;

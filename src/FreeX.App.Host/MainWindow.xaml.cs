@@ -474,6 +474,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         SheetGrid.ObjectMoved   += OnObjectMoved;
         SheetGrid.ChartBoundsChanged += OnChartBoundsChanged;
         SheetGrid.ChartElementFormatRequested += OnChartElementFormatRequested;
+        SheetGrid.ChartElementSelected += OnChartElementSelectedForPane;
+        SheetGrid.ChartElementLayoutChanged += OnChartElementLayoutChanged;
         SheetGrid.ObjectResized += OnObjectResized;
         SheetGrid.ObjectResizedWithAnchor += OnObjectResizedWithAnchor;
         SheetGrid.ObjectRotated += OnObjectRotated;

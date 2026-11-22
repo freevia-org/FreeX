@@ -26,7 +26,7 @@ public partial class GridView
     private Guid _selectedChartElementChartId;
     private string? _selectedChartElementSeriesName;
 
-    /// <summary>Raised when an inner chart element (not the whole chart) becomes selected.</summary>
+    /// <summary>Raised when the selected chart element changes (the chart area itself when the inner selection is cleared).</summary>
     public event Action<Guid, ChartElementRef, string?>? ChartElementSelected;
 
     /// <summary>Raised when the user double-clicks the already-selected inner chart element (Format Selection).</summary>
@@ -52,6 +52,9 @@ public partial class GridView
         _selectedChartElement = null;
         _selectedChartElementSeriesName = null;
         InvalidateVisual();
+
+        // Lets an open Format pane fall back to the Chart Area (the whole chart is selected again).
+        ChartElementSelected?.Invoke(_selectedChartElementChartId, ChartElementRef.ChartArea, null);
     }
 
     private void OnSelectedObjectIdChangedForChartElement(Guid newId)
@@ -88,6 +91,17 @@ public partial class GridView
             return true;
         }
 
+        // A press on a grip of the selected plot area starts a resize instead of re-selecting.
+        if (!isDoubleClick &&
+            SelectedChartElement is { } selectedForResize &&
+            ChartElementDragPlanner.CanResize(selectedForResize) &&
+            HitTestSelectedPlotHandle(chart, map, local) is var handle and not ChartResizeHandle.None &&
+            TryBeginChartElementDrag(chart, map, selectedForResize, local, handle))
+        {
+            InvalidateVisual();
+            return true;
+        }
+
         var element = map.ResolveClick(local, SelectedChartElement) ?? ChartElementRef.ChartArea;
 
         if (element.IsChartArea)
@@ -103,6 +117,10 @@ public partial class GridView
         _selectedChartElementSeriesName = seriesName;
         InvalidateVisual();
         ChartElementSelected?.Invoke(chart.Id, element, seriesName);
+
+        // Pressing on a draggable element and moving repositions it (Excel); a plain click never moves.
+        if (!isDoubleClick)
+            TryBeginChartElementDrag(chart, map, element, local, ChartResizeHandle.None);
         return true;
     }
 
@@ -201,11 +219,27 @@ public partial class GridView
                     Math.Max(1, (b.Height * sy) + (2 * ChartElementHighlightInflate))));
         }
 
+        if (GetChartElementDragPreview() is { } ghost)
+        {
+            dc.DrawRectangle(
+                null,
+                ChartElementHighlightPen,
+                new Rect(chartRect.Left + (ghost.Left * sx), chartRect.Top + (ghost.Top * sy), Math.Max(1, ghost.Width * sx), Math.Max(1, ghost.Height * sy)));
+        }
+
         if (bounds.Count == 1)
         {
             var b = bounds[0];
             var half = ChartElementHandleSize / 2;
-            foreach (var (cx, cy) in new[] { (b.Left, b.Top), (b.Right, b.Top), (b.Left, b.Bottom), (b.Right, b.Bottom) })
+            var grips = new List<(double, double)> { (b.Left, b.Top), (b.Right, b.Top), (b.Left, b.Bottom), (b.Right, b.Bottom) };
+            if (ChartElementDragPlanner.CanResize(element))
+            {
+                var mx = b.Left + (b.Width / 2);
+                var my = b.Top + (b.Height / 2);
+                grips.AddRange([(mx, b.Top), (mx, b.Bottom), (b.Left, my), (b.Right, my)]);
+            }
+
+            foreach (var (cx, cy) in grips)
             {
                 dc.DrawRectangle(
                     HandleFill,
