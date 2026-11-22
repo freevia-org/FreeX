@@ -21,7 +21,6 @@ public sealed class FlashFillExcelCorpusTests(ITestOutputHelper output)
         "currency-dollars-part|1", "currency-dollars-part|2",
         "state-lookup-abbrev-unpatterned|1", "state-lookup-abbrev-unpatterned|2",
         "h-id-digits-strip-zeros|1", // Excel emits unrelated digit pairs
-        "h-sentence-case|1", "h-sentence-case|2", // KNOWN GAP: Excel copies "the rest of the string"; FreeX keeps a fixed word count
         "h-url-path|1", // Excel emits a truncated "/cc/" for a "/a/b" example
     ];
 

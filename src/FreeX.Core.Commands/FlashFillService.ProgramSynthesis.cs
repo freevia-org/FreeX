@@ -110,6 +110,11 @@ public static partial class FlashFillService
                 // Pure character-offset slices are the weakest evidence (short ones are usually coincidence).
                 if (Start is SynthAbsPos && End is SynthAbsPos)
                     cost += 0.8 + 12.0 / (1 + SampleLength);
+                // "The rest of the string after the first letter" is how Excel reads sentence-case examples
+                // (first letter upper-cased, everything after it copied verbatim), so favour it over a fixed word count.
+                if (Case == SynthCase.None && Start is SynthTokenPos { Class: SynthTokenClass.Alpha, N: 1, End: false, Offset: > 0 } &&
+                    End is SynthAbsPos { FromEnd: true, K: 0 })
+                    cost -= 1.2;
                 return cost;
             }
         }
