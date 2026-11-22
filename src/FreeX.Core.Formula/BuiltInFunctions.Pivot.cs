@@ -35,7 +35,7 @@ public static partial class BuiltInFunctions
             if (args[index + 1] is ErrorValue itemError)
                 return itemError;
             var fieldName = PivotText(args[index]);
-            var itemName = PivotText(args[index + 1]);
+            var itemName = PivotItemText(args[index + 1]);
             if (string.IsNullOrWhiteSpace(fieldName))
                 return ErrorValue.Value;
             if (filters.TryGetValue(fieldName, out var existingItem) &&
@@ -61,7 +61,7 @@ public static partial class BuiltInFunctions
             return ErrorValue.Ref;
 
         var materialized = PivotTableTargetRangeResolver.GetOccupiedRange(pivotSheet, pivotTable);
-        var headerRows = (uint)Math.Max(1, pivotTable.ColumnFields.Count);
+        var headerRows = (uint)Math.Max(1, pivotTable.ColumnFields.Count) + PivotMatrixHeaderPreambleRows(pivotSheet, pivotTable);
         var firstDataRow = pivotTable.TargetRange.Start.Row + headerRows;
         var outputRow = ResolveGetPivotDataRow(pivotSheet, pivotTable, headers, filters, firstDataRow, materialized.End.Row);
         if (outputRow is null)
@@ -86,7 +86,10 @@ public static partial class BuiltInFunctions
             return ErrorValue.Ref;
         }
 
-        return pivotSheet.GetCell(outputRow.Value, outputColumn.Value)?.Value ?? ErrorValue.Ref;
+        // An empty cell inside the pivot body (no source rows for that item pair) reads as 0 in Excel.
+        return pivotSheet.GetCell(outputRow.Value, outputColumn.Value)?.Value is { } cellValue and not BlankValue
+            ? cellValue
+            : new NumberValue(0);
     }
 
     /// <summary>
@@ -152,7 +155,7 @@ public static partial class BuiltInFunctions
             foreach (var (col, expected) in pageConstraints)
             {
                 var actual = PivotText(sourceSheet.GetCell(row, col)?.Value);
-                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                if (!PivotItemEquals(actual, expected))
                 {
                     included = false;
                     break;
@@ -224,7 +227,7 @@ public static partial class BuiltInFunctions
 
             if (!string.IsNullOrWhiteSpace(pageField.SelectedItem))
             {
-                if (!string.Equals(pageField.SelectedItem, expected, StringComparison.OrdinalIgnoreCase))
+                if (!PivotItemEquals(pageField.SelectedItem, expected))
                     return false;
                 continue;
             }
@@ -239,7 +242,7 @@ public static partial class BuiltInFunctions
                 // matching real Excel) instead of silently returning the multi-item combined
                 // total as if it were that single item's figure. See
                 // R57-formula-getpivotdata-5-3.
-                if (selectedItems.Count != 1 || !selectedItems.Contains(expected, StringComparer.OrdinalIgnoreCase))
+                if (selectedItems.Count != 1 || !selectedItems.Any(item => PivotItemEquals(item, expected)))
                     return false;
                 continue;
             }
@@ -387,7 +390,7 @@ public static partial class BuiltInFunctions
                     continue;
 
                 var actual = ReadPivotRowItem(sheet, pivotTable, row, firstDataRow, index, rowFields.Count);
-                if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+                if (!PivotItemEquals(actual, expected))
                 {
                     matches = false;
                     break;
@@ -421,7 +424,7 @@ public static partial class BuiltInFunctions
             var header = PivotHeader(headers, field.SourceFieldIndex);
             if (!filters.TryGetValue(header, out var expected))
                 return false;
-            expectedParts.Add(expected);
+            expectedParts.Add(PivotItemPlainText(expected));
         }
 
         var actual = PivotText(sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value);
@@ -439,6 +442,7 @@ public static partial class BuiltInFunctions
     {
         var rowFieldColumns = PivotRowFieldOutputColumnCount(pivotTable);
         var firstValueColumn = pivotTable.TargetRange.Start.Col + (uint)rowFieldColumns;
+        var headerTop = pivotTable.TargetRange.Start.Row + PivotMatrixHeaderPreambleRows(sheet, pivotTable);
         if (pivotTable.ColumnFields.Count == 0)
             return firstValueColumn + (uint)dataFieldIndex <= lastColumn ? firstValueColumn + (uint)dataFieldIndex : null;
 
@@ -451,7 +455,7 @@ public static partial class BuiltInFunctions
                     continue;
                 for (var level = 0; level < pivotTable.ColumnFields.Count; level++)
                 {
-                    if (IsPivotGrandTotalText(pivotTable, sheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, col)?.Value))
+                    if (IsPivotGrandTotalText(pivotTable, sheet.GetCell(headerTop + (uint)level, col)?.Value))
                         return col;
                 }
             }
@@ -481,7 +485,7 @@ public static partial class BuiltInFunctions
                 if (!filters.TryGetValue(header, out var expected))
                     continue;
 
-                var caption = PivotText(sheet.GetCell(pivotTable.TargetRange.Start.Row + (uint)level, col)?.Value);
+                var caption = PivotItemText(sheet.GetCell(headerTop + (uint)level, col)?.Value);
                 if (pivotTable.DataFields.Count > 1 && level == pivotTable.ColumnFields.Count - 1)
                 {
                     var dataFieldName = pivotTable.DataFields[dataFieldIndex].Name;
@@ -489,7 +493,7 @@ public static partial class BuiltInFunctions
                         caption = caption[..^dataFieldName.Length].TrimEnd();
                 }
 
-                if (!string.Equals(caption, expected, StringComparison.OrdinalIgnoreCase))
+                if (!PivotItemEquals(caption, expected))
                 {
                     matches = false;
                     break;
@@ -525,7 +529,7 @@ public static partial class BuiltInFunctions
             else if (index < requestedRowFieldCount)
                 actual = ReadPivotRowItem(sheet, pivotTable, subtotalRow - 1, firstDataRow, index, pivotTable.RowFields.Count);
 
-            if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+            if (!PivotItemEquals(actual, expected))
                 return false;
         }
 
@@ -541,14 +545,14 @@ public static partial class BuiltInFunctions
         int rowFieldCount)
     {
         if (pivotTable.ReportLayout == PivotReportLayout.Compact && rowFieldCount > 1)
-            return PivotText(sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value);
+            return PivotItemText(sheet.GetCell(row, pivotTable.TargetRange.Start.Col)?.Value);
 
         var col = pivotTable.TargetRange.Start.Col + (uint)fieldIndex;
         for (var current = row; current >= firstDataRow; current--)
         {
             var value = sheet.GetCell(current, col)?.Value;
             if (value is not null)
-                return PivotText(value);
+                return PivotItemText(value);
             if (current == firstDataRow)
                 break;
         }
@@ -598,6 +602,79 @@ public static partial class BuiltInFunctions
 
         item = text.Value[..^" Total".Length];
         return item.Length > 0;
+    }
+
+
+    /// <summary>
+    /// Excel's natively written matrix pivots (column field + row field) place a caption row
+    /// ("Sum of X" plus the column-field caption) above the row-labels/column-items header row.
+    /// Returns 1 when the pivot's top-left cell is such a data-field caption, else 0 (FreeX's own
+    /// layout starts the column items on the first row).
+    /// </summary>
+    private static uint PivotMatrixHeaderPreambleRows(Sheet sheet, PivotTableModel pivotTable)
+    {
+        if (pivotTable.RowFields.Count == 0 || pivotTable.ColumnFields.Count == 0 || pivotTable.PageFields.Count > 0)
+            return 0;
+        if (sheet.GetCell(pivotTable.TargetRange.Start.Row, pivotTable.TargetRange.Start.Col)?.Value is not TextValue first)
+            return 0;
+        return pivotTable.DataFields.Any(field => string.Equals(field.Name, first.Value, StringComparison.OrdinalIgnoreCase)) ? 1u : 0u;
+    }
+
+    private const char PivotItemMarker = '';
+
+    /// <summary>
+    /// Text form of an item argument or rendered pivot label. Date and numeric values carry their
+    /// serial after a marker so DATE(2016,1,1) / 42370 can match a date label (Excel accepts a date
+    /// serial for a date item) while a text argument such as "1/1/2016" stays a plain-text compare.
+    /// </summary>
+    private static string PivotItemText(ScalarValue? value)
+    {
+        switch (value)
+        {
+            case ReferencedScalarValue referenced:
+                return PivotItemText(referenced.Value);
+            case RangeValue { Cells.Length: > 0 } range:
+                return PivotItemText(range.Cells[0, 0]);
+            case DateTimeValue date:
+                return PivotText(value) + PivotItemMarker + "D" + date.Value.ToString("R", CultureInfo.InvariantCulture);
+            case NumberValue number:
+                return PivotText(value) + PivotItemMarker + "N" + number.Value.ToString("R", CultureInfo.InvariantCulture);
+            default:
+                return PivotText(value);
+        }
+    }
+
+    private static string PivotItemPlainText(string item)
+    {
+        var marker = item.IndexOf(PivotItemMarker);
+        return marker < 0 ? item : item[..marker];
+    }
+
+    private static (string Text, char Kind, double Serial) SplitPivotItem(string item)
+    {
+        var marker = item.IndexOf(PivotItemMarker);
+        if (marker < 0 || marker + 2 > item.Length)
+            return (item, ' ', 0);
+        return double.TryParse(item[(marker + 2)..], NumberStyles.Float, CultureInfo.InvariantCulture, out var serial)
+            ? (item[..marker], item[marker + 1], serial)
+            : (item[..marker], ' ', 0);
+    }
+
+    /// <summary>
+    /// Item comparison for GETPIVOTDATA: case-insensitive text equality, or equal numeric/date serials.
+    /// A text argument never matches a date label (Excel returns #REF! for "1/1/2016" against a date item).
+    /// </summary>
+    private static bool PivotItemEquals(string? actual, string? expected)
+    {
+        if (actual is null || expected is null)
+            return actual is null && expected is null;
+        var a = SplitPivotItem(actual);
+        var e = SplitPivotItem(expected);
+        if (a.Kind != ' ' && e.Kind != ' ' && Math.Abs(a.Serial - e.Serial) < 1e-9)
+            return true;
+        if (!string.Equals(a.Text, e.Text, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !(a.Kind == 'D' && e.Kind == ' ');
     }
 
     private static string PivotText(ScalarValue? value) => value switch
