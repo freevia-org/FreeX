@@ -66,13 +66,12 @@ public sealed class R84_PrecisionAsDisplayedTests
 
         engine.RecalculateAllFormulas(workbook);
 
-        // Formula evaluation already normalizes every arithmetic result to Excel's ~15
-        // significant-digit storage ceiling regardless of this option (see
-        // FormulaEvaluator.Operators.cs), so the untouched value is 0.333333333333333, not the raw
-        // IEEE double 1.0/3.0 -- the point of this assertion is that it is NOT further rounded down
-        // to the format's 2 displayed decimals (0.33) the way the "on" test above requires.
-        ((NumberValue)sheet.GetCell(a1)!.Value).Value.Should().Be(0.333333333333333);
-        ((NumberValue)sheet.GetCell(b1)!.Value).Value.Should().Be(0.999999999999999);
+        // Excel stores arithmetic results as full IEEE doubles (it only displays 15 digits), so the
+        // untouched value is the raw 1.0/3.0 and A1*3 is exactly 1 -- the point of this assertion is
+        // that it is NOT further rounded down to the format's 2 displayed decimals (0.33) the way the
+        // "on" test above requires.
+        ((NumberValue)sheet.GetCell(a1)!.Value).Value.Should().Be(1.0 / 3.0);
+        ((NumberValue)sheet.GetCell(b1)!.Value).Value.Should().Be(1.0);
     }
 
     [Fact]
