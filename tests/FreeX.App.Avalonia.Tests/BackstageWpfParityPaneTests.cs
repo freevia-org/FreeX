@@ -217,6 +217,24 @@ public sealed class BackstageWpfParityPaneTests
             host.GetVisualDescendants().OfType<LayoutTransformControl>().Should().NotBeEmpty();
         }), CancellationToken.None);
 
+    [Fact]
+    public Task PrintPane_PreviewToolbarHasPrintCopyFindAndScrollsContinuously() =>
+        Session.Dispatch(() => WithBackstagePane(FreeXBackstagePaneId.Print, (window, content) =>
+        {
+            // WPF's DocumentViewer toolbar leads with Print and Copy and ends with a Find box.
+            FindById<Button>(content, "BackstagePrintToolbarPrintButton");
+            FindById<Button>(content, "BackstagePrintCopyButton").IsEnabled.Should().BeFalse("nothing is selected");
+            FindById<TextBox>(content, "BackstagePrintFindBox");
+            FindById<Button>(content, "BackstagePrintFindNextButton").IsEnabled.Should().BeFalse("no query yet");
+
+            // Pages live in one continuous vertical scroll surface (a single stack), not one page at a time.
+            var host = FindById<Border>(content, "BackstagePrintPreviewHost");
+            var scroll = host.Child.Should().BeOfType<ScrollViewer>().Subject;
+            scroll.VerticalScrollBarVisibility.Should().Be(global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+            scroll.GetVisualDescendants().OfType<StackPanel>()
+                .Should().Contain(panel => panel.Children.Count > 0 && panel.Children.All(c => c is Border));
+        }), CancellationToken.None);
+
     private static bool WithBackstagePane(
         FreeXBackstagePaneId pane,
         Action<MainWindow, Control> assertions)
