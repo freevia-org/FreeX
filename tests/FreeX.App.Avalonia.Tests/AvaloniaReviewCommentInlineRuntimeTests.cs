@@ -499,10 +499,10 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             var narrowGrid = scroll.Bounds.Width;
             var startWidth = host.Width;
             var gripCenter = grip.TranslatePoint(new Point(grip.Bounds.Width / 2, 10), window)!.Value;
-            window.MouseMove(gripCenter, global::Avalonia.Input.Raw.RawInputModifiers.None);
-            window.MouseDown(gripCenter, MouseButton.Left, global::Avalonia.Input.Raw.RawInputModifiers.LeftMouseButton);
-            window.MouseMove(gripCenter - new Vector(40, 0), global::Avalonia.Input.Raw.RawInputModifiers.LeftMouseButton);
-            window.MouseUp(gripCenter - new Vector(40, 0), MouseButton.Left, global::Avalonia.Input.Raw.RawInputModifiers.None);
+            window.MouseMove(gripCenter, RawInputModifiers.None);
+            window.MouseDown(gripCenter, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+            window.MouseMove(gripCenter - new Vector(40, 0), RawInputModifiers.LeftMouseButton);
+            window.MouseUp(gripCenter - new Vector(40, 0), MouseButton.Left, RawInputModifiers.None);
             window.UpdateLayout();
             host.Width.Should().BeApproximately(startWidth + 40, 1);
             scroll.Bounds.Width.Should().BeLessThan(narrowGrid);
