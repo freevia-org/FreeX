@@ -325,6 +325,8 @@ public sealed partial class SetChartLayoutCommand
         chart.DataLabelLeaderLineThickness = snapshot.DataLabelLeaderLineThickness ?? 1;
         chart.DataLabelLeaderLineDashStyle = snapshot.DataLabelLeaderLineDashStyle ?? ChartLineDashStyle.Solid;
         chart.ShowLinearTrendline = snapshot.ShowLinearTrendline ?? false;
+        chart.SeriesTrendlines = snapshot.SeriesTrendlines?.ToList() ?? [];
+        chart.SeriesErrorBars = snapshot.SeriesErrorBars?.ToList() ?? [];
         chart.TrendlineType = snapshot.TrendlineType ?? ChartTrendlineType.Linear;
         chart.TrendlinePeriod = snapshot.TrendlinePeriod ?? 2;
         chart.TrendlineOrder = snapshot.TrendlineOrder ?? 2;

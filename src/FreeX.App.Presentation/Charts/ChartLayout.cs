@@ -196,6 +196,14 @@ public sealed class TrendlineLayout
     /// the source data's (min X, max Y). Meaningless when <see cref="AnnotationLines"/> is empty.
     /// </summary>
     public LayoutPoint AnnotationAnchor { get; init; }
+
+    /// <summary>
+    /// The per-series projection of the chart (<see cref="ChartSeriesAdornmentExtensions.ResolveTrendline"/>)
+    /// whose <c>Trendline*</c> members describe THIS series' trendline line style. Renderers read the
+    /// color/thickness/dash from here rather than from the chart so each series keeps its own trendline
+    /// formatting. Null falls back to the chart-wide members.
+    /// </summary>
+    public ChartModel? Style { get; init; }
 }
 
 /// <summary>
@@ -300,6 +308,13 @@ public sealed class ErrorBarLayout
 {
     public required IReadOnlyList<ErrorBarWhisker> Whiskers { get; init; }
     public bool EndCaps { get; init; }
+
+    /// <summary>
+    /// The per-series projection of the chart (<see cref="ChartSeriesAdornmentExtensions.ResolveErrorBars"/>)
+    /// whose <c>ErrorBar*</c> members describe THIS series' whisker line style. Null falls back to the
+    /// chart-wide members.
+    /// </summary>
+    public ChartModel? Style { get; init; }
 }
 
 /// <summary>A single laid-out legend entry: its swatch rectangle and its label box.</summary>

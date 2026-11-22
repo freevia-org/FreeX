@@ -160,6 +160,30 @@ public static class ChartErrorBarsPlanner
             chart.ErrorBarEndCaps));
 
     /// <summary>
+    /// Reads the error-bar state of one series (Excel stores error bars per series). A series without
+    /// error bars reads as "not shown" with the chart-wide settings as the starting point for new ones.
+    /// A null/negative <paramref name="seriesIndex"/> reads the chart-wide state.
+    /// </summary>
+    public static ChartErrorBarsInput Read(ChartModel chart, int? seriesIndex)
+    {
+        if (seriesIndex is not >= 0)
+            return Read(chart);
+
+        return chart.ResolveErrorBars(seriesIndex.Value) is { } projection
+            ? Read(projection)
+            : Read(chart) with { ShowErrorBars = false };
+    }
+
+    /// <summary>
+    /// Like <see cref="Plan(ChartErrorBarsInput)"/> but addressed to one series' error bars. A null/negative
+    /// index keeps the chart-wide meaning.
+    /// </summary>
+    public static ChartLayoutOptions Plan(ChartErrorBarsInput input, int? seriesIndex) =>
+        seriesIndex is >= 0
+            ? Plan(input) with { ErrorBarTargetSeriesIndex = seriesIndex }
+            : Plan(input);
+
+    /// <summary>
     /// Normalizes error-bar dialog state: unknown kind/direction values fall back to Excel defaults, and the
     /// amount is clamped into Excel's accepted range.
     /// </summary>

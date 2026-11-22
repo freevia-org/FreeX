@@ -175,6 +175,26 @@ public sealed partial class NativeJsonAdapter
 
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
         ChartSeriesIndexSanitizer.SanitizeSecondaryAxisAndComboLineIndexes(chart, seriesCount);
+        chart.SeriesTrendlines = chart.SeriesTrendlines
+            .Where(entry => entry.SeriesIndex >= 0 && entry.SeriesIndex < seriesCount)
+            .GroupBy(entry => entry.SeriesIndex)
+            .Select(group => group.Last())
+            .Select(t => t with
+            {
+                Type = NativeJsonValueSanitizer.ValidEnumOrDefault(t.Type, ChartTrendlineType.Linear),
+                Period = Math.Max(2, t.Period),
+                Order = Math.Clamp(t.Order, 2, 6),
+                Thickness = double.IsFinite(t.Thickness) ? Math.Clamp(t.Thickness, 0.5, 10) : 1.5,
+                DashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(t.DashStyle, ChartLineDashStyle.Dash),
+            })
+            .OrderBy(entry => entry.SeriesIndex)
+            .ToList();
+        chart.SeriesErrorBars = chart.SeriesErrorBars
+            .Where(entry => entry.SeriesIndex >= 0 && entry.SeriesIndex < seriesCount)
+            .GroupBy(entry => entry.SeriesIndex)
+            .Select(group => group.Last())
+            .OrderBy(entry => entry.SeriesIndex)
+            .ToList();
         chart.SeriesFormats = chart.SeriesFormats
             .Where(format => format.SeriesIndex >= 0 && format.SeriesIndex < seriesCount)
             .GroupBy(format => format.SeriesIndex)

@@ -201,12 +201,13 @@ internal static partial class XlsxChartXmlWriter
     }
 
     private static XElement? ToTrendlineXml(
-        ChartModel chart,
+        ChartModel sourceChart,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (!chart.ShowLinearTrendline || seriesIndex != chart.TrendlineSeriesIndex || !ChartTypeSupport.SupportsTrendlines(chart.Type))
+        // Excel stores trendlines per series: only the series that carries one gets a <c:trendline>.
+        if (sourceChart.ResolveTrendline(seriesIndex) is not { } chart)
             return null;
 
         return new XElement(chartNs + "trendline",
@@ -357,12 +358,12 @@ internal static partial class XlsxChartXmlWriter
         };
 
     private static XElement? ToErrorBarsXml(
-        ChartModel chart,
+        ChartModel sourceChart,
         int seriesIndex,
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        if (!chart.ShowErrorBars || seriesIndex != chart.ErrorBarSeriesIndex || !SupportsErrorBars(chart.Type))
+        if (!SupportsErrorBars(sourceChart.Type) || sourceChart.ResolveErrorBars(seriesIndex) is not { } chart)
             return null;
 
         return new XElement(chartNs + "errBars",

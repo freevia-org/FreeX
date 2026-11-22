@@ -279,6 +279,8 @@ public sealed partial class NativeJsonAdapter
         SecondaryAxisMinorUnit = chart.SecondaryAxisMinorUnit,
         ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes?.ToList() ?? [],
         SeriesFormats = NonNullChartList(chart.SeriesFormats),
+        SeriesTrendlines = NonNullChartList(chart.SeriesTrendlines),
+        SeriesErrorBars = NonNullChartList(chart.SeriesErrorBars),
         SeriesDataLabelFormats = NonNullChartList(chart.SeriesDataLabelFormats),
         PointDataLabelFormats = NonNullChartList(chart.PointDataLabelFormats),
         SeriesRangeDataLabels = NonNullChartList(chart.SeriesRangeDataLabels),

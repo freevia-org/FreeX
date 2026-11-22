@@ -14,25 +14,26 @@ public static partial class ChartRenderer
         ChartModel chart,
         WorkbookTheme theme,
         IReadOnlyList<DataPoint>? points,
-        bool swapTrendlineAxes = false)
+        bool swapTrendlineAxes = false,
+        int trendlineSeriesIndex = 0)
     {
-        if (points is null)
+        if (points is null || chart.ResolveTrendline(trendlineSeriesIndex) is not { } trendChart)
             return;
 
         var sourcePoints = new TrendPoint[points.Count];
         for (var i = 0; i < points.Count; i++)
             sourcePoints[i] = new TrendPoint(points[i].X, points[i].Y);
 
-        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints, swapTrendlineAxes);
+        var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints, swapTrendlineAxes);
         if (plan is null)
             return;
 
         var trendline = new LineSeries
         {
             Title = plan.Title,
-            LineStyle = ToOxyLineStyle(chart.TrendlineDashStyle),
-            StrokeThickness = chart.TrendlineThickness,
-            Color = chart.ResolveTrendlineColor(theme) is { } color
+            LineStyle = ToOxyLineStyle(trendChart.TrendlineDashStyle),
+            StrokeThickness = trendChart.TrendlineThickness,
+            Color = trendChart.ResolveTrendlineColor(theme) is { } color
                 ? OxyColor.FromRgb(color.R, color.G, color.B)
                 : OxyColors.Gray,
         };

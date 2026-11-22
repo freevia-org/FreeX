@@ -29,6 +29,7 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         chart.ShowErrorBars = true;
         chart.ErrorBarKind = ChartErrorBarKind.StdDev;
         chart.ErrorBarValue = 2;
+        chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, 0)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -51,6 +52,7 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         var chart = workbook.GetSheetAt(0).Charts.Single();
         chart.ShowErrorBars = true;
         chart.ErrorBarKind = ChartErrorBarKind.StandardError;
+        chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, 0)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -73,6 +75,7 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         chart.ErrorBarAxisDirection = ChartErrorBarAxisDirection.X;
         chart.ErrorBarKind = ChartErrorBarKind.Percentage;
         chart.ErrorBarValue = 10;
+        chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, 0)];
         // Simulate Excel's second sibling <c:errBars> (the Y direction) that the old single-slot
         // model/writer had no way to carry.
         chart.AdditionalSeriesErrorBarsXml.Add(new ChartSeriesRawXmlEntry(0,
@@ -107,6 +110,7 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         chart.ShowErrorBars = true;
         chart.ErrorBarKind = ChartErrorBarKind.Percentage;
         chart.ErrorBarValue = 10;
+        chart.SeriesErrorBars = [ChartSeriesErrorBars.FromChart(chart, 0)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -126,12 +130,13 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         chart.ShowLinearTrendline = true;
         chart.TrendlineSeriesIndex = 0;
         chart.TrendlineType = ChartTrendlineType.Linear;
-        // Simulate Excel's second <c:trendline> living on a DIFFERENT series that the old
-        // single-slot model/writer had no way to carry.
-        chart.AdditionalSeriesTrendlinesXml.Add(new ChartSeriesRawXmlEntry(1,
-            "<trendline xmlns=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">" +
-            "<trendlineType val=\"poly\"/><order val=\"3\"/><dispRSqr val=\"1\"/>" +
-            "</trendline>"));
+        // A different trendline on a DIFFERENT series: now a first-class per-series entry (it used to be
+        // preserved as opaque raw XML that FreeX could neither render nor edit).
+        chart.SeriesTrendlines =
+        [
+            ChartSeriesTrendline.FromChart(chart, 0),
+            new ChartSeriesTrendline { SeriesIndex = 1, Type = ChartTrendlineType.Polynomial, Order = 3, ShowRSquared = true },
+        ];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -148,7 +153,35 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         reloaded.ShowLinearTrendline.Should().BeTrue();
         reloaded.TrendlineSeriesIndex.Should().Be(0);
         reloaded.TrendlineType.Should().Be(ChartTrendlineType.Linear);
-        reloaded.AdditionalSeriesTrendlinesXml.Should().ContainSingle(entry => entry.SeriesIndex == 1);
+        reloaded.SeriesTrendlines.Select(t => t.SeriesIndex).Should().Equal(0, 1);
+        var second = reloaded.SeriesTrendlines.Single(t => t.SeriesIndex == 1);
+        second.Type.Should().Be(ChartTrendlineType.Polynomial);
+        second.Order.Should().Be(3);
+        second.ShowRSquared.Should().BeTrue();
+        reloaded.AdditionalSeriesTrendlinesXml.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Trendline_SecondTrendlineOnSameSeries_IsStillPreservedAsPassthrough()
+    {
+        // The model holds one trendline per series; Excel allows several on one series, so the extra one
+        // keeps riding along verbatim.
+        var workbook = CreateThreeSeriesColumnWorkbook();
+        var chart = workbook.GetSheetAt(0).Charts.Single();
+        chart.ShowLinearTrendline = true;
+        chart.SeriesTrendlines = [ChartSeriesTrendline.FromChart(chart, 0)];
+        chart.AdditionalSeriesTrendlinesXml.Add(new ChartSeriesRawXmlEntry(0,
+            "<trendline xmlns=\"http://schemas.openxmlformats.org/drawingml/2006/chart\">" +
+            "<trendlineType val=\"poly\"/><order val=\"3\"/><dispRSqr val=\"1\"/>" +
+            "</trendline>"));
+
+        var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
+        var seriesElements = LoadChartXml(saved).Descendants(ChartNs + "barChart").Single().Elements(ChartNs + "ser").ToList();
+        seriesElements[0].Elements(ChartNs + "trendline").Should().HaveCount(2);
+
+        var reloaded = ReloadSingleChart(saved);
+        reloaded.SeriesTrendlines.Should().ContainSingle().Which.SeriesIndex.Should().Be(0);
+        reloaded.AdditionalSeriesTrendlinesXml.Should().ContainSingle(entry => entry.SeriesIndex == 0);
         reloaded.AdditionalSeriesTrendlinesXml.Single().RawXml.Should().Contain("val=\"poly\"");
     }
 
@@ -162,6 +195,7 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         chart.ShowLinearTrendline = true;
         chart.TrendlineSeriesIndex = 0;
         chart.TrendlineType = ChartTrendlineType.Linear;
+        chart.SeriesTrendlines = [ChartSeriesTrendline.FromChart(chart, 0)];
 
         var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
         var chartXml = LoadChartXml(saved);
@@ -173,6 +207,82 @@ public sealed class R41_ChartErrorBarsTrendlineDeepTests
         var reloaded = ReloadSingleChart(saved);
         reloaded.ShowLinearTrendline.Should().BeTrue();
         reloaded.AdditionalSeriesTrendlinesXml.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void PerSeriesTrendlinesAndErrorBars_RoundTripWithEachSeriesOwnSettings()
+    {
+        // Excel stores these per series: series 0 and 2 carry different trendlines, only series 1 has
+        // error bars, and every series keeps its own formatting through save and reload.
+        var workbook = CreateThreeSeriesColumnWorkbook();
+        var chart = workbook.GetSheetAt(0).Charts.Single();
+        chart.ShowLinearTrendline = true;
+        chart.ShowErrorBars = true;
+        chart.SeriesTrendlines =
+        [
+            new ChartSeriesTrendline { SeriesIndex = 0, Type = ChartTrendlineType.Linear, ShowEquation = true, Thickness = 3, DashStyle = ChartLineDashStyle.Solid, Color = new CellColor(255, 0, 0) },
+            new ChartSeriesTrendline { SeriesIndex = 2, Type = ChartTrendlineType.Polynomial, Order = 4, ShowRSquared = true, Forward = 2, Name = "Poly fit" },
+        ];
+        chart.SeriesErrorBars =
+        [
+            new ChartSeriesErrorBars { SeriesIndex = 1, Kind = ChartErrorBarKind.Percentage, Value = 12, Direction = ChartErrorBarDirection.Plus, EndCaps = false },
+        ];
+
+        var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
+        var seriesElements = LoadChartXml(saved).Descendants(ChartNs + "barChart").Single().Elements(ChartNs + "ser").ToList();
+
+        seriesElements[0].Elements(ChartNs + "trendline").Should().ContainSingle();
+        seriesElements[1].Elements(ChartNs + "trendline").Should().BeEmpty();
+        seriesElements[2].Elements(ChartNs + "trendline").Should().ContainSingle();
+        seriesElements[0].Elements(ChartNs + "errBars").Should().BeEmpty();
+        seriesElements[1].Elements(ChartNs + "errBars").Should().ContainSingle();
+        seriesElements[2].Elements(ChartNs + "errBars").Should().BeEmpty();
+
+        var reloaded = ReloadSingleChart(saved);
+        reloaded.SeriesTrendlines.Select(t => t.SeriesIndex).Should().Equal(0, 2);
+        var first = reloaded.SeriesTrendlines[0];
+        first.Type.Should().Be(ChartTrendlineType.Linear);
+        first.ShowEquation.Should().BeTrue();
+        first.Thickness.Should().Be(3);
+        first.DashStyle.Should().Be(ChartLineDashStyle.Solid);
+        first.Color.Should().Be(new CellColor(255, 0, 0));
+        var third = reloaded.SeriesTrendlines[1];
+        third.Type.Should().Be(ChartTrendlineType.Polynomial);
+        third.Order.Should().Be(4);
+        third.ShowRSquared.Should().BeTrue();
+        third.Forward.Should().Be(2);
+        third.Name.Should().Be("Poly fit");
+        // Series 0 has no unmodeled leftovers: the chart-wide members mirror the first trendline.
+        reloaded.TrendlineSeriesIndex.Should().Be(0);
+        reloaded.AdditionalSeriesTrendlinesXml.Should().BeEmpty();
+
+        var bars = reloaded.SeriesErrorBars.Should().ContainSingle().Subject;
+        bars.SeriesIndex.Should().Be(1);
+        bars.Kind.Should().Be(ChartErrorBarKind.Percentage);
+        bars.Value.Should().Be(12);
+        bars.Direction.Should().Be(ChartErrorBarDirection.Plus);
+        bars.EndCaps.Should().BeFalse();
+        reloaded.AdditionalSeriesErrorBarsXml.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ChartWideTrendlineAndErrorBars_StillMeanEverySeries_WhenWritten()
+    {
+        // Old files / legacy commands only carry the chart-wide flags: they keep applying to all series.
+        var workbook = CreateThreeSeriesColumnWorkbook();
+        var chart = workbook.GetSheetAt(0).Charts.Single();
+        chart.ShowLinearTrendline = true;
+        chart.ShowErrorBars = true;
+
+        var saved = XlsxPackageTestHelper.SaveToBytes(workbook);
+        var seriesElements = LoadChartXml(saved).Descendants(ChartNs + "barChart").Single().Elements(ChartNs + "ser").ToList();
+
+        seriesElements.Should().OnlyContain(ser => ser.Elements(ChartNs + "trendline").Count() == 1);
+        seriesElements.Should().OnlyContain(ser => ser.Elements(ChartNs + "errBars").Count() == 1);
+
+        var reloaded = ReloadSingleChart(saved);
+        reloaded.SeriesTrendlines.Should().HaveCount(3);
+        reloaded.SeriesErrorBars.Should().HaveCount(3);
     }
 
     private static Workbook CreateThreeSeriesColumnWorkbook()

@@ -127,13 +127,22 @@ public static class ChartElementCommandPlanner
                     ? ChartElementDeletePlan.None
                     : Layout(new ChartLayoutOptions { SecondaryAxisTitle = string.Empty });
             case ChartElementKind.Trendline:
-                return chart.ShowLinearTrendline
-                    ? Layout(new ChartLayoutOptions(ShowLinearTrendline: false))
-                    : ChartElementDeletePlan.None;
+                // Excel trendlines belong to one series: Delete removes only the selected series' trendline.
+                return element.SeriesIndex >= 0
+                    ? chart.HasTrendline(element.SeriesIndex)
+                        ? Layout(new ChartLayoutOptions(ShowLinearTrendline: false) { TrendlineTargetSeriesIndex = element.SeriesIndex })
+                        : ChartElementDeletePlan.None
+                    : chart.HasAnyTrendline()
+                        ? Layout(new ChartLayoutOptions(ShowLinearTrendline: false))
+                        : ChartElementDeletePlan.None;
             case ChartElementKind.ErrorBars:
-                return chart.ShowErrorBars
-                    ? Layout(new ChartLayoutOptions(ShowErrorBars: false))
-                    : ChartElementDeletePlan.None;
+                return element.SeriesIndex >= 0
+                    ? chart.HasErrorBars(element.SeriesIndex)
+                        ? Layout(new ChartLayoutOptions(ShowErrorBars: false) { ErrorBarTargetSeriesIndex = element.SeriesIndex })
+                        : ChartElementDeletePlan.None
+                    : chart.HasAnyErrorBars()
+                        ? Layout(new ChartLayoutOptions(ShowErrorBars: false))
+                        : ChartElementDeletePlan.None;
             case ChartElementKind.LegendEntry:
                 return Layout(new ChartLayoutOptions(LegendEntries: HideLegendEntry(chart, element.SeriesIndex)));
             case ChartElementKind.CategoryGridlines:
@@ -144,6 +153,9 @@ public static class ChartElementCommandPlanner
             case ChartElementKind.DataLabels:
                 return chart.ShowDataLabels ? Layout(new ChartLayoutOptions(ShowDataLabels: false)) : ChartElementDeletePlan.None;
             case ChartElementKind.Series:
+            // Excel: Delete on a selected data point removes the point's entire series (the worksheet cells
+            // are untouched); only the point's data label can be deleted on its own.
+            case ChartElementKind.DataPoint:
                 return new ChartElementDeletePlan(
                     ChartElementDeleteAction.RemoveSeries,
                     SeriesOrdinal: ResolveSeriesOrdinal(chart, element.SeriesIndex));

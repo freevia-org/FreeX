@@ -124,8 +124,10 @@ public sealed class ChartElementSelectionExtendedTests
         bounds.Right.Should().BeGreaterThanOrEqualTo(point.Position.X);
         ChartElementCommandPlanner.GetFormatTarget(Chart(ChartType.Line), selected)
             .Should().Be(ChartElementFormatTarget.DataSeries);
-        ChartElementCommandPlanner.PlanDelete(Chart(ChartType.Line), selected).Action
-            .Should().Be(ChartElementDeleteAction.None);
+        // Excel: Delete on a selected point removes the point's whole series.
+        var delete = ChartElementCommandPlanner.PlanDelete(Chart(ChartType.Line), selected);
+        delete.Action.Should().Be(ChartElementDeleteAction.RemoveSeries);
+        delete.SeriesOrdinal.Should().Be(1);
     }
 
     [Fact]

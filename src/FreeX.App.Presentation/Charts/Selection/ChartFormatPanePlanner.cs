@@ -139,14 +139,26 @@ public static class ChartFormatPanePlanner
                 AddDataLabelRows(rows, chart);
                 break;
             case ChartElementKind.Trendline:
-                rows.Add(Toggle(RowShowTrendline, "ChartFormatPane_ShowTrendline", chart.ShowLinearTrendline));
-                rows.Add(Toggle(RowTrendlineEquation, "ChartFormatPane_TrendlineEquation", chart.ShowTrendlineEquation));
-                rows.Add(Toggle(RowTrendlineRSquared, "ChartFormatPane_TrendlineRSquared", chart.ShowTrendlineRSquared));
+            {
+                // Per-series: show the selected series' own trendline settings (the chart-wide ones when the
+                // element carries no series).
+                var trend = element.SeriesIndex >= 0 ? chart.ResolveTrendline(element.SeriesIndex) : null;
+                var source = trend ?? chart;
+                rows.Add(Toggle(RowShowTrendline, "ChartFormatPane_ShowTrendline",
+                    element.SeriesIndex >= 0 ? trend is not null : chart.ShowLinearTrendline));
+                rows.Add(Toggle(RowTrendlineEquation, "ChartFormatPane_TrendlineEquation", source.ShowTrendlineEquation));
+                rows.Add(Toggle(RowTrendlineRSquared, "ChartFormatPane_TrendlineRSquared", source.ShowTrendlineRSquared));
                 break;
+            }
             case ChartElementKind.ErrorBars:
-                rows.Add(Toggle(RowShowErrorBars, "ChartFormatPane_ShowErrorBars", chart.ShowErrorBars));
-                rows.Add(Toggle(RowErrorBarCaps, "ChartFormatPane_ErrorBarCaps", chart.ErrorBarEndCaps));
+            {
+                var bars = element.SeriesIndex >= 0 ? chart.ResolveErrorBars(element.SeriesIndex) : null;
+                var source = bars ?? chart;
+                rows.Add(Toggle(RowShowErrorBars, "ChartFormatPane_ShowErrorBars",
+                    element.SeriesIndex >= 0 ? bars is not null : chart.ShowErrorBars));
+                rows.Add(Toggle(RowErrorBarCaps, "ChartFormatPane_ErrorBarCaps", source.ErrorBarEndCaps));
                 break;
+            }
         }
 
         return new ChartFormatPaneModel(
@@ -249,19 +261,23 @@ public static class ChartFormatPanePlanner
             case RowResetBounds:
                 return horizontal ? new ChartLayoutOptions(ClearXAxisBounds: true) : new ChartLayoutOptions(ClearYAxisBounds: true);
             case RowShowTrendline:
-                return new ChartLayoutOptions(ShowLinearTrendline: on);
+                return new ChartLayoutOptions(ShowLinearTrendline: on) { TrendlineTargetSeriesIndex = TargetSeries(element) };
             case RowTrendlineEquation:
-                return new ChartLayoutOptions(ShowTrendlineEquation: on);
+                return new ChartLayoutOptions(ShowTrendlineEquation: on) { TrendlineTargetSeriesIndex = TargetSeries(element) };
             case RowTrendlineRSquared:
-                return new ChartLayoutOptions(ShowTrendlineRSquared: on);
+                return new ChartLayoutOptions(ShowTrendlineRSquared: on) { TrendlineTargetSeriesIndex = TargetSeries(element) };
             case RowShowErrorBars:
-                return new ChartLayoutOptions(ShowErrorBars: on);
+                return new ChartLayoutOptions(ShowErrorBars: on) { ErrorBarTargetSeriesIndex = TargetSeries(element) };
             case RowErrorBarCaps:
-                return new ChartLayoutOptions(ErrorBarEndCaps: on);
+                return new ChartLayoutOptions(ErrorBarEndCaps: on) { ErrorBarTargetSeriesIndex = TargetSeries(element) };
             default:
                 return null;
         }
     }
+
+    /// <summary>The series a trendline / error-bar pane row edits (null = the chart-wide "every series" meaning).</summary>
+    private static int? TargetSeries(ChartElementRef element) =>
+        element.SeriesIndex >= 0 ? element.SeriesIndex : null;
 
     private static void AddAxisRows(List<ChartFormatPaneRow> rows, ChartModel chart, ChartElementRef element)
     {

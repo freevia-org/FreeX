@@ -20,9 +20,10 @@ public sealed class ChartErrorBarsDialog : Window
 
     public ChartErrorBarsInput Result { get; private set; }
 
-    public ChartErrorBarsDialog(ChartModel chart)
+    /// <param name="seriesIndex">The series whose error bars the dialog edits (Excel error bars are per series); null edits the chart-wide error bars.</param>
+    public ChartErrorBarsDialog(ChartModel chart, int? seriesIndex = null)
     {
-        Result = FromChart(chart);
+        Result = FromChart(chart, seriesIndex);
         Title = UiText.Get("ChartErrorBars_Title");
         Width = 360;
         Height = 290;
@@ -35,7 +36,7 @@ public sealed class ChartErrorBarsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static ChartErrorBarsInput FromChart(ChartModel chart) => ChartErrorBarsPlanner.Read(chart);
+    public static ChartErrorBarsInput FromChart(ChartModel chart, int? seriesIndex = null) => ChartErrorBarsPlanner.Read(chart, seriesIndex);
 
     public static ChartErrorBarsInput CreateResult(
         bool showErrorBars,

@@ -309,51 +309,8 @@ public sealed partial class SetChartLayoutCommand
             chart.DataLabelLeaderLineThickness = ClampFinite(options.DataLabelLeaderLineThickness.Value, 0.5, 10);
         if (options.DataLabelLeaderLineDashStyle is not null)
             chart.DataLabelLeaderLineDashStyle = ValidEnumOrDefault(options.DataLabelLeaderLineDashStyle.Value, ChartLineDashStyle.Solid);
-        if (options.ShowLinearTrendline is not null)
-            chart.ShowLinearTrendline = options.ShowLinearTrendline.Value;
-        if (options.TrendlineType is not null)
-            chart.TrendlineType = ValidEnumOrDefault(options.TrendlineType.Value, ChartTrendlineType.Linear);
-        if (options.TrendlinePeriod is not null)
-            chart.TrendlinePeriod = Math.Max(2, options.TrendlinePeriod.Value);
-        if (options.TrendlineOrder is not null)
-            chart.TrendlineOrder = Math.Clamp(options.TrendlineOrder.Value, 2, 6);
-        if (options.ShowTrendlineEquation is not null)
-            chart.ShowTrendlineEquation = options.ShowTrendlineEquation.Value;
-        if (options.ShowTrendlineRSquared is not null)
-            chart.ShowTrendlineRSquared = options.ShowTrendlineRSquared.Value;
-        if (options.TrendlineColor is not null)
-        {
-            chart.TrendlineColor = options.TrendlineColor;
-            chart.TrendlineThemeColor = null;
-        }
-        if (options.TrendlineThickness is not null)
-            chart.TrendlineThickness = ClampFinite(options.TrendlineThickness.Value, 0.5, 10);
-        if (options.TrendlineDashStyle is not null)
-            chart.TrendlineDashStyle = ValidEnumOrDefault(options.TrendlineDashStyle.Value, ChartLineDashStyle.Dash);
-        if (options.ShowErrorBars is not null)
-            chart.ShowErrorBars = options.ShowErrorBars.Value;
-        if (options.ErrorBarKind is not null)
-            chart.ErrorBarKind = ValidEnumOrDefault(options.ErrorBarKind.Value, ChartErrorBarKind.StandardError);
-        if (options.ErrorBarDirection is not null)
-            chart.ErrorBarDirection = ValidEnumOrDefault(options.ErrorBarDirection.Value, ChartErrorBarDirection.Both);
-        if (options.ErrorBarValue is not null)
-            chart.ErrorBarValue = ClampFinite(options.ErrorBarValue.Value, 0, 1000);
-        if (options.ErrorBarEndCaps is not null)
-            chart.ErrorBarEndCaps = options.ErrorBarEndCaps.Value;
-        if (options.ErrorBarColor is not null)
-        {
-            chart.ErrorBarColor = options.ErrorBarColor;
-            chart.ErrorBarThemeColor = null;
-        }
-        if (options.ErrorBarThemeColor is not null)
-        {
-            chart.ErrorBarThemeColor = options.ErrorBarThemeColor;
-            chart.ErrorBarColor = null;
-        }
-        if (options.ErrorBarThickness is not null)
-            chart.ErrorBarThickness = ClampFinite(options.ErrorBarThickness.Value, 0.5, 10);
-        if (options.ErrorBarDashStyle is not null)
-            chart.ErrorBarDashStyle = ValidEnumOrDefault(options.ErrorBarDashStyle.Value, ChartLineDashStyle.Solid);
+        ApplyTrendlineOptions(chart, options);
+        ApplyErrorBarOptions(chart, options);
         if (options.DropLineColor is not null)
         {
             chart.DropLineColor = options.DropLineColor;
@@ -498,6 +455,202 @@ public sealed partial class SetChartLayoutCommand
         EnforceTrendlineSupport(chart);
         EnforceSecondaryAxisSupport(chart);
         EnforceComboLineOverlaySupport(chart);
+    }
+
+    // ---- Trendlines / error bars -------------------------------------------------------------------
+    // Excel keeps these per series. The chart-wide members stay the "every series" form (legacy files and
+    // commands) and double as the template new per-series entries start from; per-series entries, once
+    // present, are authoritative (ChartSeriesAdornmentExtensions.ResolveTrendline / ResolveErrorBars).
+
+    private static void ApplyTrendlineOptions(ChartModel chart, ChartLayoutOptions options)
+    {
+        if (options.SeriesTrendlines is not null)
+        {
+            chart.SeriesTrendlines = options.SeriesTrendlines
+                .Where(t => t.SeriesIndex >= 0)
+                .GroupBy(t => t.SeriesIndex)
+                .Select(g => g.Last())
+                .OrderBy(t => t.SeriesIndex)
+                .ToList();
+        }
+
+        if (options.TrendlineTargetSeriesIndex is { } target && target >= 0)
+        {
+            ApplyTargetedTrendline(chart, options, target);
+            return;
+        }
+
+        // Chart-wide edit: the legacy "every series" meaning. With per-series entries present it edits
+        // every entry (and clears them all when hidden), so old commands keep working on new charts.
+        var hadEntries = chart.SeriesTrendlines.Count > 0;
+        if (options.ShowLinearTrendline is not null)
+            chart.ShowLinearTrendline = options.ShowLinearTrendline.Value;
+        ApplyTrendlineFields(chart, options);
+
+        if (!hadEntries)
+            return;
+
+        if (options.ShowLinearTrendline == false)
+        {
+            chart.SeriesTrendlines = [];
+            return;
+        }
+
+        chart.SeriesTrendlines = chart.SeriesTrendlines
+            .Select(entry =>
+            {
+                var scratch = chart.ShallowClone();
+                entry.ApplyTo(scratch);
+                ApplyTrendlineFields(scratch, options);
+                return ChartSeriesTrendline.FromChart(scratch, entry.SeriesIndex);
+            })
+            .ToList();
+    }
+
+    private static void ApplyTargetedTrendline(ChartModel chart, ChartLayoutOptions options, int target)
+    {
+        var entries = chart.MaterializeTrendlines();
+        var existing = entries.FindIndex(t => t.SeriesIndex == target);
+
+        if (options.ShowLinearTrendline == false)
+        {
+            if (existing >= 0)
+                entries.RemoveAt(existing);
+        }
+        else if (existing >= 0 || options.ShowLinearTrendline == true)
+        {
+            var scratch = chart.ShallowClone();
+            if (existing >= 0)
+                entries[existing].ApplyTo(scratch);
+            ApplyTrendlineFields(scratch, options);
+            var updated = ChartSeriesTrendline.FromChart(scratch, target);
+            if (existing >= 0)
+                entries[existing] = updated;
+            else
+                entries.Add(updated);
+        }
+
+        chart.SeriesTrendlines = entries.OrderBy(t => t.SeriesIndex).ToList();
+        chart.ShowLinearTrendline = chart.SeriesTrendlines.Count > 0;
+    }
+
+    private static void ApplyTrendlineFields(ChartModel target, ChartLayoutOptions options)
+    {
+        if (options.TrendlineType is not null)
+            target.TrendlineType = ValidEnumOrDefault(options.TrendlineType.Value, ChartTrendlineType.Linear);
+        if (options.TrendlinePeriod is not null)
+            target.TrendlinePeriod = Math.Max(2, options.TrendlinePeriod.Value);
+        if (options.TrendlineOrder is not null)
+            target.TrendlineOrder = Math.Clamp(options.TrendlineOrder.Value, 2, 6);
+        if (options.ShowTrendlineEquation is not null)
+            target.ShowTrendlineEquation = options.ShowTrendlineEquation.Value;
+        if (options.ShowTrendlineRSquared is not null)
+            target.ShowTrendlineRSquared = options.ShowTrendlineRSquared.Value;
+        if (options.TrendlineColor is not null)
+        {
+            target.TrendlineColor = options.TrendlineColor;
+            target.TrendlineThemeColor = null;
+        }
+        if (options.TrendlineThickness is not null)
+            target.TrendlineThickness = ClampFinite(options.TrendlineThickness.Value, 0.5, 10);
+        if (options.TrendlineDashStyle is not null)
+            target.TrendlineDashStyle = ValidEnumOrDefault(options.TrendlineDashStyle.Value, ChartLineDashStyle.Dash);
+    }
+
+    private static void ApplyErrorBarOptions(ChartModel chart, ChartLayoutOptions options)
+    {
+        if (options.SeriesErrorBars is not null)
+        {
+            chart.SeriesErrorBars = options.SeriesErrorBars
+                .Where(t => t.SeriesIndex >= 0)
+                .GroupBy(t => t.SeriesIndex)
+                .Select(g => g.Last())
+                .OrderBy(t => t.SeriesIndex)
+                .ToList();
+        }
+
+        if (options.ErrorBarTargetSeriesIndex is { } target && target >= 0)
+        {
+            ApplyTargetedErrorBars(chart, options, target);
+            return;
+        }
+
+        var hadEntries = chart.SeriesErrorBars.Count > 0;
+        if (options.ShowErrorBars is not null)
+            chart.ShowErrorBars = options.ShowErrorBars.Value;
+        ApplyErrorBarFields(chart, options);
+
+        if (!hadEntries)
+            return;
+
+        if (options.ShowErrorBars == false)
+        {
+            chart.SeriesErrorBars = [];
+            return;
+        }
+
+        chart.SeriesErrorBars = chart.SeriesErrorBars
+            .Select(entry =>
+            {
+                var scratch = chart.ShallowClone();
+                entry.ApplyTo(scratch);
+                ApplyErrorBarFields(scratch, options);
+                return ChartSeriesErrorBars.FromChart(scratch, entry.SeriesIndex);
+            })
+            .ToList();
+    }
+
+    private static void ApplyTargetedErrorBars(ChartModel chart, ChartLayoutOptions options, int target)
+    {
+        var entries = chart.MaterializeErrorBars();
+        var existing = entries.FindIndex(t => t.SeriesIndex == target);
+
+        if (options.ShowErrorBars == false)
+        {
+            if (existing >= 0)
+                entries.RemoveAt(existing);
+        }
+        else if (existing >= 0 || options.ShowErrorBars == true)
+        {
+            var scratch = chart.ShallowClone();
+            if (existing >= 0)
+                entries[existing].ApplyTo(scratch);
+            ApplyErrorBarFields(scratch, options);
+            var updated = ChartSeriesErrorBars.FromChart(scratch, target);
+            if (existing >= 0)
+                entries[existing] = updated;
+            else
+                entries.Add(updated);
+        }
+
+        chart.SeriesErrorBars = entries.OrderBy(t => t.SeriesIndex).ToList();
+        chart.ShowErrorBars = chart.SeriesErrorBars.Count > 0;
+    }
+
+    private static void ApplyErrorBarFields(ChartModel target, ChartLayoutOptions options)
+    {
+        if (options.ErrorBarKind is not null)
+            target.ErrorBarKind = ValidEnumOrDefault(options.ErrorBarKind.Value, ChartErrorBarKind.StandardError);
+        if (options.ErrorBarDirection is not null)
+            target.ErrorBarDirection = ValidEnumOrDefault(options.ErrorBarDirection.Value, ChartErrorBarDirection.Both);
+        if (options.ErrorBarValue is not null)
+            target.ErrorBarValue = ClampFinite(options.ErrorBarValue.Value, 0, 1000);
+        if (options.ErrorBarEndCaps is not null)
+            target.ErrorBarEndCaps = options.ErrorBarEndCaps.Value;
+        if (options.ErrorBarColor is not null)
+        {
+            target.ErrorBarColor = options.ErrorBarColor;
+            target.ErrorBarThemeColor = null;
+        }
+        if (options.ErrorBarThemeColor is not null)
+        {
+            target.ErrorBarThemeColor = options.ErrorBarThemeColor;
+            target.ErrorBarColor = null;
+        }
+        if (options.ErrorBarThickness is not null)
+            target.ErrorBarThickness = ClampFinite(options.ErrorBarThickness.Value, 0.5, 10);
+        if (options.ErrorBarDashStyle is not null)
+            target.ErrorBarDashStyle = ValidEnumOrDefault(options.ErrorBarDashStyle.Value, ChartLineDashStyle.Solid);
     }
 
 }

@@ -260,7 +260,7 @@ public static partial class ChartRenderer
         if (chart.Type == ChartType.Bubble)
         {
             var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, startCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);
-            AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
+            AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints, trendlineSeriesIndex: 0);
             ApplyAxisBounds(bubbleModel, chart, theme);
             AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return bubbleModel;
@@ -309,7 +309,18 @@ public static partial class ChartRenderer
             return BuildFunnelModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
 
         // Column / Line: one series per data column
-        List<DataPoint>? firstSeriesPoints = null;
+        // Excel stores trendlines per series: source points are collected for every series that carries one.
+        var trendlineSources = new List<(int SeriesIndex, List<DataPoint> Points)>();
+        // Tag every plotted OxyPlot series with its chart series index so per-series overlays (error
+        // bars) can look up the right series' settings; flushed lazily because the branches below add
+        // their series in several places.
+        var taggedSeriesCount = model.Series.Count;
+        var pendingTagSeriesIndex = -1;
+        void FlushSeriesTags()
+        {
+            for (; taggedSeriesCount < model.Series.Count; taggedSeriesCount++)
+                model.Series[taggedSeriesCount].Tag ??= pendingTagSeriesIndex;
+        }
         // For clustered (grouped) Column charts each non-overlay series gets a disjoint sub-slot
         // within the category so the bars sit side by side rather than overdrawing each other.
         var clusteredColumnCount = chart.Type is ChartType.Column or ChartType.ThreeDColumn
@@ -346,6 +357,8 @@ public static partial class ChartRenderer
                 continue;
 
             var seriesIndex = GetSeriesIndex(chart, col, dataStartCol, endCol);
+            FlushSeriesTags();
+            pendingTagSeriesIndex = seriesIndex;
             string seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((startRow, col), out var hdr)
                 ? hdr.DisplayText : $"Series {seriesIndex + 1}";
 
@@ -399,9 +412,9 @@ public static partial class ChartRenderer
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints, dateCategoryPositions);
-                    if (firstSeriesPoints is null)
-                        firstSeriesPoints = comboTrendPoints;
+                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null, out var comboTrendPoints, dateCategoryPositions);
+                    if (comboTrendPoints is not null)
+                        trendlineSources.Add((seriesIndex, comboTrendPoints));
                     AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                     model.Series.Add(lineSeries);
                     continue;
@@ -419,7 +432,7 @@ public static partial class ChartRenderer
                 var seriesFormat = GetSeriesFormat(chart, seriesIndex);
                 ApplyRectangleBarFormat(series, seriesFormat, theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
-                var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
+                var trendPoints = chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null;
                 var colHalfWidth = ColumnBarHalfWidth(chart);
                 var (clusterLeft, clusterRight) = ClusteredBarOffsets(colHalfWidth, clusteredColumnOrdinal, clusteredColumnCount, EffectiveBarOverlap(chart));
                 clusteredColumnOrdinal++;
@@ -471,8 +484,8 @@ public static partial class ChartRenderer
                         barCategoryValues.Add(null);
                     }
                 }
-                if (firstSeriesPoints is null)
-                    firstSeriesPoints = trendPoints;
+                if (trendPoints is not null)
+                    trendlineSources.Add((seriesIndex, trendPoints));
                 clusteredBarValues.Add(barCategoryValues);
                 model.Series.Add(series);
             }
@@ -492,7 +505,7 @@ public static partial class ChartRenderer
                 };
                 ApplyBarFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
-                var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
+                var trendPoints = chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null;
                 var i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
@@ -520,8 +533,8 @@ public static partial class ChartRenderer
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), 0, i, 0);
                     }
                 }
-                if (firstSeriesPoints is null)
-                    firstSeriesPoints = trendPoints;
+                if (trendPoints is not null)
+                    trendlineSources.Add((seriesIndex, trendPoints));
                 model.Series.Add(series);
             }
             else if (chart.Type is ChartType.Area or ChartType.ThreeDArea)
@@ -543,9 +556,9 @@ public static partial class ChartRenderer
                 if (IsComboLineSeries(chart, seriesIndex))
                 {
                     var lineSeries = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, firstSeriesPoints is null ? new List<DataPoint>() : null, out var comboTrendPoints, dateCategoryPositions);
-                    if (firstSeriesPoints is null)
-                        firstSeriesPoints = comboTrendPoints;
+                    AddLinePoints(lineSeries, chart, cellLookup, dataStartRow, endRow, col, chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null, out var comboTrendPoints, dateCategoryPositions);
+                    if (comboTrendPoints is not null)
+                        trendlineSources.Add((seriesIndex, comboTrendPoints));
                     AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, lineSeries, seriesName, seriesIndex, categories);
                     model.Series.Add(lineSeries);
                     continue;
@@ -558,7 +571,7 @@ public static partial class ChartRenderer
                 };
                 ApplyAreaFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
-                var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
+                var trendPoints = chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null;
                 int i = 0;
                 for (uint r = dataStartRow; r <= endRow; r++, i++)
                 {
@@ -586,8 +599,8 @@ public static partial class ChartRenderer
                         }
                     }
                 }
-                if (firstSeriesPoints is null)
-                    firstSeriesPoints = trendPoints;
+                if (trendPoints is not null)
+                    trendlineSources.Add((seriesIndex, trendPoints));
                 model.Series.Add(series);
             }
             else if (chart.Type == ChartType.Scatter)
@@ -610,7 +623,7 @@ public static partial class ChartRenderer
                 ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
                 ApplyNativeDataLabelStyle(series, chart, theme);
                 var xCol = chart.FirstColIsCategories ? startCol : dataStartCol;
-                var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
+                var trendPoints = chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null;
                 for (uint r = dataStartRow; r <= endRow; r++)
                 {
                     if (!cellLookup.TryGetValue((r, xCol), out var xCell) ||
@@ -626,8 +639,8 @@ public static partial class ChartRenderer
                             AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, (int)(r - dataStartRow), ChartDataLabelTextPlanner.GetCategory(categories, (int)(r - dataStartRow)), x, y, y);
                     }
                 }
-                if (firstSeriesPoints is null)
-                    firstSeriesPoints = trendPoints;
+                if (trendPoints is not null)
+                    trendlineSources.Add((seriesIndex, trendPoints));
                 model.Series.Add(series);
             }
             else // Line / 3D Line
@@ -647,14 +660,16 @@ public static partial class ChartRenderer
                 }
 
                 var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
-                var trendPoints = firstSeriesPoints is null ? new List<DataPoint>() : null;
+                var trendPoints = chart.HasTrendline(seriesIndex) ? new List<DataPoint>() : null;
                 AddLinePoints(series, chart, cellLookup, dataStartRow, endRow, col, trendPoints, out trendPoints, dateCategoryPositions);
-                if (firstSeriesPoints is null)
-                    firstSeriesPoints = trendPoints;
+                if (trendPoints is not null)
+                    trendlineSources.Add((seriesIndex, trendPoints));
                 AddLineDataLabelAnnotations(model, chart, theme, pointDataLabelFormats, series, seriesName, seriesIndex, categories);
                 model.Series.Add(series);
             }
         }
+
+        FlushSeriesTags();
 
         // OxyPlot has no native three-dimensional bar primitives.  Keep the ordinary series as
         // the front faces (so axes, hit testing and data labels retain their established behavior)
@@ -664,7 +679,8 @@ public static partial class ChartRenderer
         AddThreeDBarAndColumnFaces(model, chart, theme);
         AddDeviationOverlay(model, chart, theme, clusteredBarValues);
         AddRangeDataLabelAnnotations(model, chart, theme, clusteredBarValues, categories);
-        AddTrendlineIfRequested(model, chart, theme, firstSeriesPoints, swapTrendlineAxes: chart.Type == ChartType.Bar);
+        foreach (var (trendSeriesIndex, trendSourcePoints) in trendlineSources)
+            AddTrendlineIfRequested(model, chart, theme, trendSourcePoints, swapTrendlineAxes: chart.Type == ChartType.Bar, trendlineSeriesIndex: trendSeriesIndex);
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
 

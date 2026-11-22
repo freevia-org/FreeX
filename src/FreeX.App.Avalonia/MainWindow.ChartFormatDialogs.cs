@@ -726,7 +726,10 @@ public sealed partial class MainWindow
 
     // ---- Trendline (real, SetChartLayoutCommand via ChartTrendlinePlanner) ----------------------------
 
-    private async Task ShowChartTrendlineDialog()
+    private Task ShowChartTrendlineDialog() => ShowChartTrendlineDialog(seriesIndex: null);
+
+    /// <param name="seriesIndex">The series whose trendline the dialog edits (Excel trendlines are per series); null edits the chart-wide trendline.</param>
+    private async Task ShowChartTrendlineDialog(int? seriesIndex)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -740,7 +743,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var current = ChartTrendlinePlanner.Read(chart);
+        var current = ChartTrendlinePlanner.Read(chart, seriesIndex);
         var result = await ShowChartTrendlineDialogAsync(current);
         if (result is not { } edited)
             return;
@@ -748,7 +751,7 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout(command, chart, ChartTrendlinePlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartTrendlinePlanner.Plan(edited, seriesIndex));
     }
 
     private async Task<ChartTrendlineInput?> ShowChartTrendlineDialogAsync(ChartTrendlineInput current)
@@ -903,7 +906,10 @@ public sealed partial class MainWindow
 
     // ---- Error Bars (real, SetChartLayoutCommand via ChartErrorBarsPlanner) ---------------------------
 
-    private async Task ShowChartErrorBarsDialog()
+    private Task ShowChartErrorBarsDialog() => ShowChartErrorBarsDialog(seriesIndex: null);
+
+    /// <param name="seriesIndex">The series whose error bars the dialog edits (Excel error bars are per series); null edits the chart-wide error bars.</param>
+    private async Task ShowChartErrorBarsDialog(int? seriesIndex)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
@@ -917,7 +923,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        var current = ChartErrorBarsPlanner.Read(chart);
+        var current = ChartErrorBarsPlanner.Read(chart, seriesIndex);
         var result = await ShowChartErrorBarsDialogAsync(current);
         if (result is not { } edited)
             return;
@@ -925,7 +931,7 @@ public sealed partial class MainWindow
         if (!TryGetSelectedChart(command, out chart))
             return;
 
-        ApplyChartLayout(command, chart, ChartErrorBarsPlanner.Plan(edited));
+        ApplyChartLayout(command, chart, ChartErrorBarsPlanner.Plan(edited, seriesIndex));
     }
 
     private async Task<ChartErrorBarsInput?> ShowChartErrorBarsDialogAsync(ChartErrorBarsInput current)

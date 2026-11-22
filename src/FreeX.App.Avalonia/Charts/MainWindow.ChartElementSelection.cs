@@ -215,10 +215,10 @@ public sealed partial class MainWindow
                 await ShowChartDataLabelsDialog();
                 break;
             case ChartElementFormatTarget.Trendline:
-                await ShowChartTrendlineDialog();
+                await ShowChartTrendlineDialog(element.SeriesIndex >= 0 ? element.SeriesIndex : null);
                 break;
             case ChartElementFormatTarget.ErrorBars:
-                await ShowChartErrorBarsDialog();
+                await ShowChartErrorBarsDialog(element.SeriesIndex >= 0 ? element.SeriesIndex : null);
                 break;
             default:
                 await ShowFormatChartAreaDialog();

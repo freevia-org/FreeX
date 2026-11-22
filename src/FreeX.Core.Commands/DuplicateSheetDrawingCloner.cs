@@ -1097,6 +1097,8 @@ internal static class DuplicateSheetDrawingCloner
             AdditionalPlotGroupDataLabels = chart.AdditionalPlotGroupDataLabels.ToList(),
             AdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml.ToList(),
             AdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml.ToList(),
+            SeriesTrendlines = chart.SeriesTrendlines.ToList(),
+            SeriesErrorBars = chart.SeriesErrorBars.ToList(),
             UseComboLineForSecondarySeries = chart.UseComboLineForSecondarySeries,
             Left = chart.Left,
             Top = chart.Top,

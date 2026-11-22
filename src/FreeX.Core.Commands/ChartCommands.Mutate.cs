@@ -244,6 +244,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private List<ChartPointDataLabelFormat>? _previousPointDataLabelFormats;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesErrorBarsXml;
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
+    private List<ChartSeriesTrendline>? _previousSeriesTrendlines;
+    private List<ChartSeriesErrorBars>? _previousSeriesErrorBars;
     private List<int>? _previousSeriesPlotOrder;
     private List<ChartLegendEntryModel>? _previousLegendEntries;
     private List<ChartSeriesNameOverride>? _previousSeriesNameOverrides;
@@ -353,6 +355,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             _previousPointDataLabelFormats = chart.PointDataLabelFormats;
             _previousAdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml;
             _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
+            _previousSeriesTrendlines = chart.SeriesTrendlines;
+            _previousSeriesErrorBars = chart.SeriesErrorBars;
             _previousSeriesPlotOrder = chart.SeriesPlotOrder;
             _previousLegendEntries = chart.LegendEntries;
             _previousSeriesNameOverrides = chart.SeriesNameOverrides;
@@ -378,6 +382,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.PointDataLabelFormats = [];
             chart.AdditionalSeriesErrorBarsXml = [];
             chart.AdditionalSeriesTrendlinesXml = [];
+            chart.SeriesTrendlines = [];
+            chart.SeriesErrorBars = [];
             chart.SeriesPlotOrder = [];
             chart.LegendEntries = [];
             chart.SeriesNameOverrides = [];
@@ -425,6 +431,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.PointDataLabelFormats = _previousPointDataLabelFormats ?? [];
             chart.AdditionalSeriesErrorBarsXml = _previousAdditionalSeriesErrorBarsXml ?? [];
             chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
+            chart.SeriesTrendlines = _previousSeriesTrendlines ?? [];
+            chart.SeriesErrorBars = _previousSeriesErrorBars ?? [];
             chart.SeriesPlotOrder = _previousSeriesPlotOrder ?? [];
             chart.LegendEntries = _previousLegendEntries ?? [];
             chart.SeriesNameOverrides = _previousSeriesNameOverrides ?? [];
@@ -455,6 +463,8 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousPointDataLabelFormats = null;
         _previousAdditionalSeriesErrorBarsXml = null;
         _previousAdditionalSeriesTrendlinesXml = null;
+        _previousSeriesTrendlines = null;
+        _previousSeriesErrorBars = null;
         _previousSeriesPlotOrder = null;
         _previousLegendEntries = null;
         _previousSeriesNameOverrides = null;
