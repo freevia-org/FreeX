@@ -42,8 +42,8 @@ public sealed partial class StructuredTableCommandTests
             table.Id,
             new StructuredTableStyleBanding(
                 HeaderFill: new CellColor(31, 78, 121),
-                OddRowFill: new CellColor(222, 235, 247),
-                EvenRowFill: CellColor.White,
+                EvenRowFill: new CellColor(222, 235, 247),
+                OddRowFill: CellColor.White,
                 HeaderFontColor: CellColor.White),
             "TableStyleMedium2",
             updateStyleName: true);
@@ -106,8 +106,8 @@ public sealed partial class StructuredTableCommandTests
             table.Id,
             new StructuredTableStyleBanding(
                 HeaderFill: new CellColor(31, 78, 121),
-                OddRowFill: new CellColor(222, 235, 247),
-                EvenRowFill: CellColor.White,
+                EvenRowFill: new CellColor(222, 235, 247),
+                OddRowFill: CellColor.White,
                 HeaderFontColor: CellColor.White));
 
         command.Apply(ctx).Success.Should().BeTrue();

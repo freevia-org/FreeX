@@ -49,7 +49,8 @@ public sealed class CommentListWindowTests
 
         source.Should().Contain("CommentNavigationPlanner.CreateThreadedCommentRows(threadedComments)");
         source.Should().Contain("CommentNavigationPlanner.CreateNoteRows(notes)");
-        source.Should().Contain("ObservableCollection<CommentListRowPlan>");
+        DialogSourceTestSupport.ReadHostSources("CommentListView.cs")
+            .Should().Contain("ObservableCollection<CommentListRowPlan>");
         source.Should().NotContain("CommentListWindowItem");
         source.Should().NotContain("private static IReadOnlyList<CommentListRowPlan> CreateItems");
         source.Should().NotContain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(threadedComments)");
@@ -83,5 +84,24 @@ public sealed class CommentListWindowTests
                 .Should()
                 .Equal(UiText.Get("ReviewCommentList_CellColumnHeader"), UiText.Get("ReviewCommentList_TextColumnHeader"));
         });
+    }
+
+    [Fact]
+    public void ThreadedCommentsPane_IsADockedWorkAreaColumn_NotAFloatingWindow()
+    {
+        var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
+        xaml.Should().Contain("x:Name=\"CommentsPane\"");
+        xaml.Should().Contain("Grid.Column=\"4\"");
+
+        var pane = DialogSourceTestSupport.ReadHostSources("MainWindow.CommentsPane.cs");
+        pane.Should().Contain("ThreadedCommentActivationPlanner.ClampPaneWidth(");
+        pane.Should().Contain("Thumb");
+        pane.Should().Contain("CloseCommentsPane()");
+
+        var review = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        review.Should().Contain("ShowCommentsPane(");
+        review.Should().Contain("ThreadedCommentActivationPlanner.ShouldClosePaneOnToggle(IsCommentsPaneOpen)");
+        review.Should().NotContain("DockCommentPaneRight");
+        review.Should().NotContain("_reviewCommentsWindow");
     }
 }

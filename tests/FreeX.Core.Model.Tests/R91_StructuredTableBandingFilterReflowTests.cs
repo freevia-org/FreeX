@@ -46,10 +46,10 @@ public sealed class R91_StructuredTableBandingFilterReflowTests
         };
         sheet.StructuredTables.Add(table);
 
-        // Bake the initial (pre-filter) banding: row2=even, row3=odd, row4=even, row5=odd.
+        // Bake the initial (pre-filter) banding: row2=odd, row3=even, row4=odd, row5=even.
         StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
         var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill, "sanity: pre-filter row4 is even");
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill, "sanity: pre-filter row4 is odd");
 
         var ctx = new TestCommandContext(workbook);
         new FilterCommand(sheet.Id, range, filterColOffset: 0, allowedValues: ["Keep"]).Apply(ctx).Success.Should().BeTrue();
@@ -57,20 +57,20 @@ public sealed class R91_StructuredTableBandingFilterReflowTests
         // Rows 3 and 5 are now filter-hidden.
         sheet.FilterHiddenRows.Should().Contain([3u, 5u]);
 
-        // Row2 is still the 1st VISIBLE row -> even. Row4 is now the 2nd VISIBLE row (row3 dropped
-        // out of the count because it's hidden) -> odd, even though its own physical offset (2)
-        // never changed and previously made it "even".
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill,
+        // Row2 is still the 1st VISIBLE row -> odd. Row4 is now the 2nd VISIBLE row (row3 dropped
+        // out of the count because it's hidden) -> even, odd though its own physical offset (2)
+        // never changed and previously made it "odd".
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill,
             "row2 is still the 1st visible row");
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill,
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill,
             "row4 is now the 2nd VISIBLE row since row3 is filtered out -- banding must re-flow around the gap");
 
         // Clearing the filter must re-flow banding back to the purely-positional pattern.
         new FilterCommand(sheet.Id, range, filterColOffset: 0, allowedValues: []).Apply(ctx).Success.Should().BeTrue();
         sheet.FilterHiddenRows.Should().BeEmpty();
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill,
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill,
             "clearing the filter must re-flow row4 back to its physical-offset parity");
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill);
     }
 
     // No-regression sibling: filtering a plain worksheet range with no owning structured table must

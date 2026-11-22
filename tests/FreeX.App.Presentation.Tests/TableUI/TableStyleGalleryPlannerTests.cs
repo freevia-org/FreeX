@@ -225,8 +225,8 @@ public sealed class TableStyleGalleryPlannerTests
         sheet.StructuredTables.Should().ContainSingle()
             .Which.StyleName.Should().Be("TableStyleMedium2");
         StyleAt(workbook, sheet, 1, 1).FillColor.Should().Be(option.Banding.HeaderFill);
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(option.Banding.EvenRowFill);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(option.Banding.OddRowFill);
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(option.Banding.OddRowFill);
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(option.Banding.EvenRowFill);
     }
 
     [Fact]
@@ -262,8 +262,8 @@ public sealed class TableStyleGalleryPlannerTests
             .Which.StyleName.Should().Be("TableStyleLight16");
         StyleAt(workbook, sheet, 1, 1).FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.8));
         StyleAt(workbook, sheet, 1, 1).FontColor.Should().Be(CellColor.Black);
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(CellColor.White);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.95));
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.95));
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(CellColor.White);
     }
 
     [Fact]

@@ -19,7 +19,6 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private CommentListWindow? _reviewCommentsWindow;
     private SessionChangesWindow? _sessionChangesWindow;
 
     internal void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
@@ -354,10 +353,9 @@ public partial class MainWindow
     private void ReviewShowCommentsBtn_Click(object sender, RoutedEventArgs e)
     {
         // Show Comments is a toggle (Excel): pressing it while the pane is open closes it.
-        if (_reviewCommentsWindow is { IsLoaded: true } openPane &&
-            ThreadedCommentActivationPlanner.ShouldClosePaneOnToggle(paneOpen: true))
+        if (ThreadedCommentActivationPlanner.ShouldClosePaneOnToggle(IsCommentsPaneOpen))
         {
-            openPane.Close();
+            CloseCommentsPane();
             return;
         }
 
@@ -370,12 +368,7 @@ public partial class MainWindow
             return;
         }
 
-        var items = CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments);
-        _reviewCommentsWindow = ShowOrRefreshCommentListWindow(
-            _reviewCommentsWindow,
-            UiText.Get("MainWindowMessage_CommentsTitle"),
-            items,
-            window => _reviewCommentsWindow = window);
+        ShowCommentsPane(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));
     }
 
     private void ReviewPrevNoteBtn_Click(object sender, RoutedEventArgs e)
@@ -420,7 +413,6 @@ public partial class MainWindow
                 applyAction: ApplyThreadedCommentCardActionFromPane)
             { Owner = this };
             window.Closed += (_, _) => setWindow(null);
-            DockCommentPaneRight(window);
             window.Show();
             return window;
         }
@@ -430,51 +422,6 @@ public partial class MainWindow
             window.WindowState = WindowState.Normal;
         window.Activate();
         return window;
-    }
-
-    /// <summary>
-    /// Docks the Comments pane to the right edge of the grid area (Excel's task-pane position) and
-    /// keeps it there while the main window moves/resizes. Falls back to the floating window when
-    /// the grid would be squeezed (see <see cref="ThreadedCommentActivationPlanner.PlanPaneDock"/>).
-    /// </summary>
-    private void DockCommentPaneRight(Window pane)
-    {
-        void Apply()
-        {
-            if (PresentationSource.FromVisual(SheetGrid) is not { } source || WindowState == WindowState.Minimized)
-                return;
-
-            var fromDevice = source.CompositionTarget.TransformFromDevice;
-            var topLeft = fromDevice.Transform(SheetGrid.PointToScreen(new System.Windows.Point(0, 0)));
-            var bottomRight = fromDevice.Transform(
-                SheetGrid.PointToScreen(new System.Windows.Point(SheetGrid.ActualWidth, SheetGrid.ActualHeight)));
-            var plan = ThreadedCommentActivationPlanner.PlanPaneDock(
-                topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y, contentTopInset: 0);
-            if (!plan.IsDocked)
-                return;
-
-            pane.WindowStartupLocation = WindowStartupLocation.Manual;
-            pane.MinWidth = 0;
-            pane.Left = plan.Left;
-            pane.Top = plan.Top;
-            pane.Width = plan.Width;
-            pane.Height = plan.Height;
-        }
-
-        pane.WindowStyle = WindowStyle.ToolWindow;
-        pane.ShowInTaskbar = false;
-        pane.Loaded += (_, _) => Apply();
-        EventHandler moved = (_, _) => { if (pane.IsLoaded) Apply(); };
-        SizeChangedEventHandler resized = (_, _) => { if (pane.IsLoaded) Apply(); };
-        LocationChanged += moved;
-        StateChanged += moved;
-        SizeChanged += resized;
-        pane.Closed += (_, _) =>
-        {
-            LocationChanged -= moved;
-            StateChanged -= moved;
-            SizeChanged -= resized;
-        };
     }
 
     private void SheetGrid_ThreadedCommentCardRequested(object? sender, GridThreadedCommentCardRequestedEventArgs e)
@@ -593,7 +540,7 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        _reviewCommentsWindow?.Refresh(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));
+        _commentsPaneView?.Refresh(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));
         RefreshExternalReviewWindows(sheet);
     }
 

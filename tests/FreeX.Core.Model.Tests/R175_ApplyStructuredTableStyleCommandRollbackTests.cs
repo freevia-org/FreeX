@@ -97,8 +97,8 @@ public sealed class R175_ApplyStructuredTableStyleCommandRollbackTests
             table.Id,
             new StructuredTableStyleBanding(
                 HeaderFill: new CellColor(31, 78, 121),
-                OddRowFill: new CellColor(222, 235, 247),
-                EvenRowFill: CellColor.White,
+                EvenRowFill: new CellColor(222, 235, 247),
+                OddRowFill: CellColor.White,
                 HeaderFontColor: CellColor.White),
             "TableStyleMedium2",
             updateStyleName: true);
@@ -132,8 +132,8 @@ public sealed class R175_ApplyStructuredTableStyleCommandRollbackTests
             table.Id,
             new StructuredTableStyleBanding(
                 HeaderFill: new CellColor(31, 78, 121),
-                OddRowFill: new CellColor(222, 235, 247),
-                EvenRowFill: CellColor.White,
+                EvenRowFill: new CellColor(222, 235, 247),
+                OddRowFill: CellColor.White,
                 HeaderFontColor: CellColor.White),
             "TableStyleMedium2",
             updateStyleName: true);
@@ -144,8 +144,8 @@ public sealed class R175_ApplyStructuredTableStyleCommandRollbackTests
         var headerStyle = wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 1, 1))!.StyleId);
         headerStyle.FillColor.Should().Be(new CellColor(31, 78, 121));
         headerStyle.Bold.Should().BeTrue();
-        // Row offset 0 (the first data row, row 2) is even -> EvenRowFill (white); row offset 1
-        // (row 3) is odd -> OddRowFill. Check the odd-striped row for the non-white banding color.
+        // Row offset 0 (the first data row, row 2) is odd -> OddRowFill (white); row offset 1
+        // (row 3) is even -> EvenRowFill. Check the even-striped row for the non-white banding color.
         var secondDataRowStyle = wb.GetStyle(sheet.GetCell(new CellAddress(sheet.Id, 3, 1))!.StyleId);
         secondDataRowStyle.FillColor.Should().Be(new CellColor(222, 235, 247));
         sheet.StructuredTables.Single().StyleName.Should().Be("TableStyleMedium2");

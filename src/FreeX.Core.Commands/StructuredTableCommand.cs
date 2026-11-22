@@ -535,7 +535,8 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
             {
                 var rowOffset = row - dataStartRow;
                 var fill = table.ShowRowStripes
-                    ? rowOffset % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill
+                    // Excel paints the FIRST data row with the style's stripe (OddRowFill = 1st, 3rd, ... row).
+                    ? rowOffset % 2 == 0 ? _banding.OddRowFill : _banding.EvenRowFill
                     : _banding.EffectiveBodyFill;
                 yield return CreateRangeStyleCommand(
                     row,
@@ -557,7 +558,7 @@ public sealed class ApplyStructuredTableStyleCommand : IWorkbookCommand, IEstima
                 for (var col = table.Range.Start.Col; col <= table.Range.End.Col; col++)
                 {
                     var colOffset = col - table.Range.Start.Col;
-                    var fill = colOffset % 2 == 0 ? _banding.EvenRowFill : _banding.OddRowFill;
+                    var fill = colOffset % 2 == 0 ? _banding.OddRowFill : _banding.EvenRowFill;
                     yield return CreateRangeStyleCommand(
                         dataStartRow,
                         col,

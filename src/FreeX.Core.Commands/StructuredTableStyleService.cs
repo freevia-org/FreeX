@@ -129,11 +129,11 @@ public static class StructuredTableStyleService
             var visibleRowIndex = 0u;
             for (var row = dataStartRow; row <= dataEndRow; row++)
             {
-                // Match Excel's (and the table-creation command's) banding parity: the first
-                // (visible) data row is the "even" (typically unfilled) stripe, the next is the
-                // "odd" (tinted) stripe.
+                // Match Excel's (and the table-creation command's) banding parity, verified against
+                // real Excel (TableStyleLight/Medium/Dark): the first (visible) data row carries the
+                // style's stripe (OddRowFill: the 1st, 3rd, ... row), the next is the unstriped one.
                 var rowStyle = table.ShowRowStripes
-                    ? (visibleRowIndex % 2 == 0 ? evenFill : oddFill)
+                    ? (visibleRowIndex % 2 == 0 ? oddFill : evenFill)
                     : bodyFill;
                 for (var col = range.Start.Col; col <= range.End.Col; col++)
                     styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, rowStyle, isHeaderOrTotals: false, banding: banding, forceFill: forceReband);
@@ -153,7 +153,7 @@ public static class StructuredTableStyleService
                 for (var col = range.Start.Col; col <= range.End.Col; col++)
                 {
                     var colOffset = col - range.Start.Col;
-                    var colFill = colOffset % 2 == 0 ? evenFill : oddFill;
+                    var colFill = colOffset % 2 == 0 ? oddFill : evenFill;
                     for (var row = dataStartRow; row <= dataEndRow; row++)
                     {
                         var hadExplicitFillBeforeStyling = originalBodyFill!.Contains((row, col));
@@ -330,8 +330,11 @@ public static class StructuredTableStyleService
         // exactly the same as it does for body cells — direct formatting always wins over a computed
         // table style, per Excel's own precedence (mirrors PivotTableRefreshService's preserveExisting
         // VisualStyles handling of a pivot header's existing fill).
-        // forceFill bypasses this guard — used by the column-stripe pass so it wins over the row-fill pass.
-        var keepExistingFill = !forceFill && existing.FillColor is not null;
+        // forceFill bypasses this guard — used by the column-stripe pass so it wins over the row-fill pass,
+        // and by RebandTable to replace this service's own stale banding. It never bypasses a DIRECT fill
+        // (one that is not one of this style's band colors): Excel keeps a cell's direct fill with the
+        // cell when a sort/filter/insert re-flows the table's banding, and only the stripe re-flows.
+        var keepExistingFill = existing.FillColor is not null && (!forceFill || IsDirectFill(existing, banding));
 
         var merged = existing.Clone();
         if (!keepExistingFill)
@@ -389,6 +392,23 @@ public static class StructuredTableStyleService
 
         cell.StyleId = workbook.RegisterStyle(merged);
         return true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="style"/>'s fill is a direct (user/source-file) fill rather than one of
+    /// this table style's own baked band colors. Banding is baked into per-cell fills by this service
+    /// and the table-creation command; a reband must replace such a stale band fill (it travelled with
+    /// the cell through a Sort, or its row's visibility changed) but must keep a direct fill.
+    /// </summary>
+    private static bool IsDirectFill(CellStyle style, StructuredTableStyleBanding banding)
+    {
+        if (style.FillColor is not { } fill)
+            return false;
+
+        if (style.FillThemeColor is not null)
+            return true;
+
+        return fill != banding.OddRowFill && fill != banding.EvenRowFill && fill != banding.EffectiveBodyFill;
     }
 
     /// <summary>

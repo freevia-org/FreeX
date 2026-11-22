@@ -57,12 +57,12 @@ public sealed class R95_FilterCommandTableRebandUndoTests
         filterCommand.Apply(ctx).Success.Should().BeTrue();
         sheet.FilterHiddenRows.Should().Contain([3u, 5u], "sanity: the filter hid rows 3 and 5");
 
-        // Sanity: RebandTable's forceFill repaint really does reach row4 and overwrite the user's
-        // explicit fill (this is the defect, not itself under test here).
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().NotBe(UserHighlight,
-            "sanity: the filter's table reband overwrote the user's explicit fill (expected -- this is the bug)");
+        // Excel keeps a cell's direct fill when a filter re-flows the table's banding: only the
+        // stripe is recomputed, never a direct fill.
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(UserHighlight,
+            "the filter's table reband must keep the user's direct fill (Excel parity)");
 
-        // The defect: undoing the filter must restore row4's explicit fill, exactly as real Excel's
+        // Undoing the filter must still restore row4's explicit fill, exactly as real Excel's
         // Ctrl+Z would -- applying (or clearing) a filter must never permanently destroy formatting.
         filterCommand.Revert(ctx);
         StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(UserHighlight,
@@ -110,10 +110,10 @@ public sealed class R95_FilterCommandTableRebandUndoTests
         // is visible again -- confirms the fix's snapshot-restore (instead of a second RebandTable
         // call) still leaves banding internally consistent, not just "whatever it happened to be".
         var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill);
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill);
     }
 
     private static void SeedTable(Sheet sheet)

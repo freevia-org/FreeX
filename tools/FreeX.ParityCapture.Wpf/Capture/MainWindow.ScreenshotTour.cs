@@ -8617,20 +8617,25 @@ public partial class MainWindow
             captures.Add(await CaptureInsertObjectsLinksInlineThreadedCommentEditorAsync(outputDir));
             captures.Add(await CaptureInsertObjectsLinksInlineNoteEditorAsync(outputDir));
 
-            ReviewShowCommentsBtn_Click(this, new RoutedEventArgs());
-            if (_reviewCommentsWindow is null)
-                throw new InvalidOperationException("Insert objects/links/text tour could not open the threaded comments list surface.");
+            // The threaded Comments pane is docked in the main window now; the tour captures the same
+            // list surface hosted in a floating window.
+            var commentsListSheet = _workbook.GetSheet(_currentSheetId)
+                ?? throw new InvalidOperationException("Insert objects/links/text tour requires an active worksheet.");
+            var commentsListWindow = ShowOrRefreshCommentListWindow(
+                null,
+                UiText.Get("MainWindowMessage_CommentsTitle"),
+                CommentListWindow.CreateThreadedCommentItems(commentsListSheet.ThreadedComments),
+                _ => { });
 
             captures.Add(await CaptureInsertObjectsLinksOwnedWindowAsync(
                 outputDir,
-                _reviewCommentsWindow,
+                commentsListWindow,
                 "freex_insert_comments_list_surface",
                 "comments-list-surface",
                 "Review/Insert comments list surface showing the seeded threaded comment.",
                 "RenderTargetBitmap-comment-list-window",
                 "UI-CMD-INSERT-010"));
-            _reviewCommentsWindow.Close();
-            _reviewCommentsWindow = null;
+            commentsListWindow.Close();
 
             ShowNotesListForParityCapture();
             if (_reviewNotesWindow is null)

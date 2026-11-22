@@ -28,8 +28,8 @@ public sealed partial class StructuredTableCommandTests
             firstRowHasHeaders: true,
             new StructuredTableStyleBanding(
                 HeaderFill: new CellColor(31, 78, 121),
-                OddRowFill: new CellColor(222, 235, 247),
-                EvenRowFill: new CellColor(255, 255, 255),
+                EvenRowFill: new CellColor(222, 235, 247),
+                OddRowFill: new CellColor(255, 255, 255),
                 HeaderFontColor: CellColor.White));
 
         var outcome = command.Apply(ctx);
@@ -83,8 +83,8 @@ public sealed partial class StructuredTableCommandTests
             firstRowHasHeaders: true,
             new StructuredTableStyleBanding(
                 HeaderFill: new CellColor(31, 78, 121),
-                OddRowFill: secondDataRowFill,
-                EvenRowFill: firstDataRowFill,
+                EvenRowFill: secondDataRowFill,
+                OddRowFill: firstDataRowFill,
                 HeaderFontColor: CellColor.White));
 
         var outcome = command.Apply(ctx);

@@ -60,13 +60,12 @@ public sealed class R94_SortCommandTableRebandUndoTests
         var sortCommand = new SortCommand(sheet.Id, sortRange, sortByColOffset: 1, ascending: false);
         sortCommand.Apply(ctx).Success.Should().BeTrue();
 
-        // Sanity: RebandTable's blast radius really does reach row2, well outside the sort range
-        // (mirrors the already-accepted InsertRowsCommand/DeleteRowsCommand banding behavior; it is
-        // not itself the defect under test).
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().NotBe(UserHighlight,
-            "sanity: reband's forceFill overwrote the user's explicit fill on a row outside the sort range (expected)");
+        // Excel keeps a cell's direct fill when a sort re-flows the table's banding: only the stripe
+        // is recomputed, never a direct fill (even on a row outside the sorted sub-range).
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(UserHighlight,
+            "a reband re-flows the stripe but must keep the user's direct fill (Excel parity)");
 
-        // The defect: undoing the sort must restore row2's explicit fill, exactly as real Excel's
+        // Undoing the sort must still restore row2's explicit fill, exactly as real Excel's
         // Ctrl+Z would -- a sort of an unrelated sub-range (and its own undo) must not permanently
         // destroy formatting on a row it never touched directly.
         sortCommand.Revert(ctx);
