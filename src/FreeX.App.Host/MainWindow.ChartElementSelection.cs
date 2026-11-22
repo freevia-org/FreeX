@@ -22,6 +22,13 @@ public partial class MainWindow
         if (chart is null || chart.Id != chartId)
             return;
 
+        // Double-click / Format Selection opens the docked Format pane (Excel); its "More Options"
+        // button reaches the full dialog below.
+        ShowChartFormatPane(element);
+    }
+
+    private void OpenChartElementFormatDialog(ChartModel chart, ChartElementRef element)
+    {
         switch (ChartElementCommandPlanner.GetFormatTarget(chart, element))
         {
             case ChartElementFormatTarget.ChartTitles:

@@ -79,4 +79,42 @@ public sealed class ChartElementMapTests
             map.HitTest(legend.Center).Should().Be(new ChartElementRef(ChartElementKind.Legend));
         });
     }
+
+    [Fact]
+    public void Manual_layouts_move_the_plot_legend_and_title_in_the_oxyplot_render()
+    {
+        WpfTestThread.Run(() =>
+        {
+            var (chart, viewport) = ColumnChart();
+            chart.XAxisTitle = "Quarter";
+            var baseline = ChartRenderer.BuildElementMap(chart, viewport, WorkbookTheme.Office, 1.0);
+            var plotBefore = baseline.GetHighlightBounds(new ChartElementRef(ChartElementKind.PlotArea))[0];
+
+            chart.PlotAreaLayout = new ChartManualLayoutModel
+            {
+                LayoutTarget = "inner", XMode = "edge", YMode = "edge", X = 0.2, Y = 0.3, Width = 0.5, Height = 0.4,
+            };
+            chart.LegendLayout = new ChartManualLayoutModel { XMode = "edge", YMode = "edge", X = 0.05, Y = 0.75 };
+            chart.TitleLayout = new ChartManualLayoutModel { XMode = "edge", YMode = "edge", X = 0.6, Y = 0.02 };
+
+            var map = ChartRenderer.BuildElementMap(chart, viewport, WorkbookTheme.Office, 1.0);
+
+            var plot = map.GetHighlightBounds(new ChartElementRef(ChartElementKind.PlotArea))[0];
+            plotBefore.Left.Should().NotBeApproximately(plot.Left, 1);
+            plot.Left.Should().BeApproximately(0.2 * 480, 2);
+            plot.Top.Should().BeApproximately(0.3 * 300, 2);
+            plot.Width.Should().BeApproximately(0.5 * 480, 2);
+            plot.Height.Should().BeApproximately(0.4 * 300, 2);
+
+            var legend = map.GetHighlightBounds(new ChartElementRef(ChartElementKind.Legend))[0];
+            legend.Left.Should().BeApproximately(0.05 * 480, 2);
+            legend.Top.Should().BeApproximately(0.75 * 300, 2);
+
+            var title = map.GetHighlightBounds(new ChartElementRef(ChartElementKind.ChartTitle))[0];
+            title.Left.Should().BeApproximately(0.6 * 480, 2);
+
+            // The bitmap itself is drawn with the same layout (no exception, non-empty image).
+            ChartRenderer.Render(chart, viewport, WorkbookTheme.Office, 1.0).Should().NotBeNull();
+        });
+    }
 }

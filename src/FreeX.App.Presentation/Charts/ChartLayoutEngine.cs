@@ -123,6 +123,11 @@ public static class ChartLayoutEngine
     public static ChartLayout Layout(ChartLayoutRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        return ChartManualLayoutApplier.ApplyDataLabelOffsets(request, LayoutCore(request));
+    }
+
+    private static ChartLayout LayoutCore(ChartLayoutRequest request)
+    {
         var chart = request.Chart;
 
         if (!IsSupported(chart.Type))
