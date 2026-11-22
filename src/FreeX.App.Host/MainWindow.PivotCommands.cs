@@ -915,7 +915,10 @@ public partial class MainWindow
         if (pivotTable.DataFields.Count == 0)
             return;
 
-        var dialog = new PivotValueFilterDialog(sourceIndex, existingFilter) { Owner = this };
+        var dialog = new PivotValueFilterDialog(
+            sourceIndex,
+            existingFilter,
+            pivotTable.DataFields.Select(dataField => dataField.Name).ToList()) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.ResultFilter is not { } filter)
             return;
 

@@ -104,8 +104,15 @@ public sealed partial class MainWindow
         var selected = IsSelectedChart(chart);
         var elementMap = ChartElementMapPlanner.Plan(chart, layout, width, height, ChartTextMeasurer);
         var selectedElement = GetSelectedChartElement(chart);
-        _lastChartElementMap = elementMap;
-        _lastChartElementMapChartId = chart.Id;
+        _lastChartElementMaps[chart.Id] = elementMap;
+        if (selectedElement is { } staleCheck && !elementMap.Contains(staleCheck))
+        {
+            // The element no longer exists (e.g. it was just deleted or undone away): fall back to
+            // the whole-chart selection handles, like the WPF grid does.
+            _selectedChartElement = null;
+            _selectedChartElementSeriesName = null;
+            selectedElement = null;
+        }
         var container = new AvaloniaGrid
         {
             Width = Math.Max(1, width),

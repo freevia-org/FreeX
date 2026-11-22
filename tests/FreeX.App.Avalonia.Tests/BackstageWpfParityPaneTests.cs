@@ -197,7 +197,7 @@ public sealed class BackstageWpfParityPaneTests
             foreach (var id in new[]
                      {
                          "BackstagePrintZoomInButton", "BackstagePrintZoomOutButton", "BackstagePrintActualSizeButton",
-                         "BackstagePrintPageWidthButton", "BackstagePrintWholePageButton",
+                         "BackstagePrintPageWidthButton", "BackstagePrintWholePageButton", "BackstagePrintTwoPagesButton",
                      })
             {
                 FindById<Button>(content, id);
@@ -215,6 +215,51 @@ public sealed class BackstageWpfParityPaneTests
                 .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             host.GetVisualDescendants().OfType<LayoutTransformControl>().Should().NotBeEmpty();
+        }), CancellationToken.None);
+
+    [Fact]
+    public Task PrintPane_PreviewToolbarHasPrintCopyFindAndScrollsContinuously() =>
+        Session.Dispatch(() => WithBackstagePane(FreeXBackstagePaneId.Print, (window, content) =>
+        {
+            // WPF's DocumentViewer toolbar leads with Print and Copy and ends with a Find box.
+            FindById<Button>(content, "BackstagePrintToolbarPrintButton");
+            FindById<Button>(content, "BackstagePrintCopyButton").IsEnabled.Should().BeFalse("nothing is selected");
+            var findBox = FindById<TextBox>(content, "BackstagePrintFindBox");
+            // The Find group is pinned to the right-hand end of the toolbar row, after the zoom icons.
+            var toolbarDock = findBox.GetVisualAncestors().OfType<DockPanel>().First();
+            DockPanel.GetDock(findBox.GetVisualAncestors().OfType<StackPanel>().First()).Should().Be(Dock.Right);
+            toolbarDock.Children.Count.Should().Be(2);
+            FindById<Button>(content, "BackstagePrintFindNextButton").IsEnabled.Should().BeFalse("no query yet");
+
+            // Pages live in one continuous vertical scroll surface (a single stack), not one page at a time.
+            var host = FindById<Border>(content, "BackstagePrintPreviewHost");
+            var scroll = host.Child.Should().BeOfType<ScrollViewer>().Subject;
+            scroll.VerticalScrollBarVisibility.Should().Be(global::Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+            scroll.GetVisualDescendants().OfType<StackPanel>()
+                .Should().Contain(panel => panel.Children.Count > 0 && panel.Children.All(c => c is Border));
+        }), CancellationToken.None);
+
+    [Fact]
+    public Task PrintPane_TwoPagesButtonLaysPagesSideBySideInTheContinuousScroll() =>
+        Session.Dispatch(() => WithBackstagePane(FreeXBackstagePaneId.Print, (window, content) =>
+        {
+            var host = FindById<Border>(content, "BackstagePrintPreviewHost");
+            FindById<Button>(content, "BackstagePrintTwoPagesButton")
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var scroll = host.Child.Should().BeOfType<ScrollViewer>().Subject;
+            var rows = scroll.GetVisualDescendants().OfType<StackPanel>()
+                .Where(panel => panel.Orientation == global::Avalonia.Layout.Orientation.Horizontal &&
+                                panel.Children.Count > 0 && panel.Children.All(c => c is Border))
+                .ToList();
+            rows.Should().NotBeEmpty("pages flow two to a row");
+            rows.Should().OnlyContain(row => row.Children.Count <= 2);
+            FindById<Button>(content, "BackstagePrintPageWidthButton")
+                .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            host.GetVisualDescendants().OfType<StackPanel>()
+                .Should().NotContain(panel => panel.Orientation == global::Avalonia.Layout.Orientation.Horizontal &&
+                                              panel.Children.Count > 0 && panel.Children.All(c => c is Border));
         }), CancellationToken.None);
 
     private static bool WithBackstagePane(

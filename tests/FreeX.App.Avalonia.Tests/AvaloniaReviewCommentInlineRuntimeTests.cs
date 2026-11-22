@@ -464,6 +464,65 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task SelectingThreadedCommentCell_ShowsPassiveCardWithResolveAndDeleteThreadActions()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewCardActionsFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.ThreadedComments[address] = new ThreadedComment("Root text");
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+
+            // Excel/WPF: selecting the cell opens the card without any command.
+            var renderedGrid = window.RebuildSheetGridForTest();
+            var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetThreadedCommentInlineEditor");
+            editor.Should().NotBeNull();
+            var toggle = FindByAutomationId<Button>(editor, "GridThreadedCommentToggleResolvedButton");
+            var delete = FindByAutomationId<Button>(editor, "GridThreadedCommentDeleteThreadButton");
+            toggle.Should().NotBeNull();
+            delete.Should().NotBeNull();
+            toggle!.IsEnabled.Should().BeTrue();
+            delete!.IsEnabled.Should().BeTrue();
+            toggle.Content.Should().Be("Resolve thread");
+
+            toggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            sheet.ThreadedComments[address].IsResolved.Should().BeTrue();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ThreadedCommentCard_ProtectedSheetDisablesThreadActionsAndShowsNotice()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewCardProtectedFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.ThreadedComments[address] = new ThreadedComment("Root text");
+            sheet.IsProtected = true;
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+
+            var renderedGrid = window.RebuildSheetGridForTest();
+            var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetThreadedCommentInlineEditor");
+            editor.Should().NotBeNull();
+            FindByAutomationId<Button>(editor, "GridThreadedCommentToggleResolvedButton")!.IsEnabled.Should().BeFalse();
+            FindByAutomationId<Button>(editor, "GridThreadedCommentDeleteThreadButton")!.IsEnabled.Should().BeFalse();
+            FindByAutomationId<TextBox>(editor, "GridThreadedCommentRootBox")!.IsReadOnly.Should().BeTrue();
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     private static object? InvokePrivate(MainWindow window, string methodName, params object[] args) =>
         typeof(MainWindow)
             .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)

@@ -177,7 +177,7 @@ public sealed partial class MainWindow
         // Layout mirrors PivotCalculatedFieldDialog: a 16px root margin, a name-and-formula group and
         // a fields group (each 12px above the next block, content inset 10,8,10,10), labels above their
         // controls with an 8px row gap, the 110px insert button left-aligned under the 92px field list,
-        // and the button row 12px below. The existing-field picker and Delete are Avalonia-only.
+        // and the button row 12px below. The existing-field picker and Delete match the WPF dialog's PivotTable form.
         var formulaPanel = new StackPanel();
         AddPivotDialogLabeledControl(formulaPanel, UiText.Get("PivotCalcField_ExistingLabel"), existingBox);
         AddPivotDialogLabeledControl(formulaPanel, UiText.Get("PivotCalculated_NameLabel"), nameBox);

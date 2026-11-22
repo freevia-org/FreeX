@@ -296,7 +296,8 @@ public sealed partial class MainWindow
 
         var input = await ShowSingleValueDialogAsync(
             UiText.Get("InsertLoc_RotateObjectTitle"),
-            UiText.Get("InsertLoc_RotationDegreesPrompt"),
+            // WPF RotationDialog labels its only editor "Degrees:" (ObjectSizing_Degrees).
+            StripDisplayMnemonic(UiText.Get("ObjectSizing_Degrees")),
             target.Values.RotationDegrees.ToString("0.##", CultureInfo.CurrentCulture));
         if (input is null)
             return;

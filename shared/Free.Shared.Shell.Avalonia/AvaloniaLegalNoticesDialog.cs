@@ -26,7 +26,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     // measured WPF-equivalent line box so long documents expose the same rows.
     private const double ShortDocumentLineHeightCompensation = 14.6;
     private const double OverflowDocumentLineHeightCompensation = 15.0;
-    internal const string DocumentFontFamilyName = "Consolas, Menlo, Courier New";
+    internal const string DocumentFontFamilyName = "Consolas, Menlo, Courier New, DejaVu Sans Mono, Liberation Mono, monospace";
     private readonly TabControl _tabControl = new();
     private readonly List<TextBox> _noticeTextBoxes = [];
     private readonly Button _closeButton = new();

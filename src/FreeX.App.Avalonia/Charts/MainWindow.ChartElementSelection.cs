@@ -70,7 +70,7 @@ public sealed partial class MainWindow
             {
                 Width = Math.Max(1, rect.Width + (2 * ChartElementHighlightInflate)),
                 Height = Math.Max(1, rect.Height + (2 * ChartElementHighlightInflate)),
-                Stroke = SelectionBorder,
+                Stroke = ObjectSelectionAccent,
                 StrokeThickness = 1.5,
                 StrokeDashArray = [4, 2],
                 Fill = Brushes.Transparent,
@@ -103,7 +103,7 @@ public sealed partial class MainWindow
                     Width = ChartElementHandleSize,
                     Height = ChartElementHandleSize,
                     Fill = Brushes.White,
-                    Stroke = SelectionBorder,
+                    Stroke = ObjectSelectionAccent,
                     StrokeThickness = 1,
                     IsHitTestVisible = false,
                 };
@@ -117,8 +117,8 @@ public sealed partial class MainWindow
     }
 
     // The element map of the chart as last painted, kept so keyboard navigation uses the same geometry.
-    private ChartElementMap? _lastChartElementMap;
-    private Guid _lastChartElementMapChartId;
+    // Keyed by chart so several charts on a sheet never navigate with another chart's geometry.
+    private readonly Dictionary<Guid, ChartElementMap> _lastChartElementMaps = new();
 
     /// <summary>
     /// Arrow-key navigation between chart elements (Excel behaviour). Returns false when no inner
@@ -130,8 +130,7 @@ public sealed partial class MainWindow
             _selectedDrawingObjectId is not { } chartId ||
             _selectedChartElement is not { IsChartArea: false } current ||
             _selectedChartElementChartId != chartId ||
-            _lastChartElementMap is not { } map ||
-            _lastChartElementMapChartId != chartId)
+            !_lastChartElementMaps.TryGetValue(chartId, out var map))
         {
             return false;
         }

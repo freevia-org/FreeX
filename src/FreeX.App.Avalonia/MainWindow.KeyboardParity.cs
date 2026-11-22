@@ -168,6 +168,17 @@ public sealed partial class MainWindow
         if (TryHandleFocusedEditorShortcut(args))
             return true;
 
+        // Excel for Mac: Control+U edits the active cell (underline is Cmd+U there), so the Windows
+        // Ctrl+U underline chord is not routed on macOS.
+        if (!IsTextEditingEventSource(args) &&
+            TryMapMacExcelShortcutAlias(OperatingSystem.IsMacOS(), args.Key, args.KeyModifiers, out var editKey, out var editModifiers) &&
+            editKey == Key.F2 && editModifiers == KeyModifiers.None)
+        {
+            args.Handled = true;
+            BeginActiveCellEditFromKeyboard();
+            return true;
+        }
+
         if (_keyboardSelectionMode != ExcelSelectionMode.Normal &&
             args.Key == Key.Escape &&
             args.KeyModifiers == KeyModifiers.None)
@@ -384,7 +395,9 @@ public sealed partial class MainWindow
     /// Excel for Mac documents Cmd-based chords for commands whose Windows chord uses Ctrl/Alt and
     /// which the shared catalog carries only in Windows form. Maps those Mac chords onto the
     /// Windows chord the shared catalog already routes (Cmd+Y Redo, Ctrl+Cmd+V Paste Special,
-    /// Cmd+Shift+F Filter, Cmd+; current time, Cmd+Shift+K/J Group/Ungroup). The Windows chords
+    /// Cmd+Shift+F Filter, Cmd+; current time, Cmd+Shift+K/J Group/Ungroup, Control+U Edit cell,
+    /// Cmd+Shift+F3 Create names). Control+Shift+U (formula bar) and Control+Q (Quick Analysis) are the
+    /// same physical chords on Mac Excel, so they need no alias; Cmd+Q stays Quit. The Windows chords
     /// stay live; chords with no clear Mac Excel equivalent are left alone.
     /// </summary>
     internal static bool TryMapMacExcelShortcutAlias(
@@ -407,6 +420,10 @@ public sealed partial class MainWindow
             (Key.OemSemicolon, KeyModifiers.Meta) => (Key.OemSemicolon, KeyModifiers.Control | KeyModifiers.Shift),
             (Key.K, KeyModifiers.Meta | KeyModifiers.Shift) => (Key.Right, KeyModifiers.Alt | KeyModifiers.Shift),
             (Key.J, KeyModifiers.Meta | KeyModifiers.Shift) => (Key.Left, KeyModifiers.Alt | KeyModifiers.Shift),
+            // Control+U = Edit cell (Cmd+U stays Underline through the native-menu chord).
+            (Key.U, KeyModifiers.Control) => (Key.F2, KeyModifiers.None),
+            // Cmd+Shift+F3 = Create names from selection.
+            (Key.F3, KeyModifiers.Meta | KeyModifiers.Shift) => (Key.F3, KeyModifiers.Control | KeyModifiers.Shift),
             _ => null
         };
         if (mapped is not { } value)

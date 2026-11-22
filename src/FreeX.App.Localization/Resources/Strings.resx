@@ -3917,15 +3917,6 @@
   <data name="PivotLoc_InsertPivotChartFailed" xml:space="preserve">
     <value>Insert PivotChart failed.</value>
   </data>
-  <data name="PivotLoc_RoleUnused" xml:space="preserve">
-    <value>(Unused)</value>
-  </data>
-  <data name="PivotLoc_RoleRow" xml:space="preserve">
-    <value>Row</value>
-  </data>
-  <data name="PivotLoc_RoleValue" xml:space="preserve">
-    <value>Value</value>
-  </data>
   <data name="PivotLoc_SelectRangeForPivot" xml:space="preserve">
     <value>Select a range with a header row and at least one data row to insert a PivotTable.</value>
   </data>
@@ -5958,6 +5949,9 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   </data>
   <data name="PrintPreview_ZoomPageWidth" xml:space="preserve">
     <value>Page Width</value>
+  </data>
+  <data name="PrintPreview_TwoPages" xml:space="preserve">
+    <value>Two Pages</value>
   </data>
   <data name="DialogReferencePicker_HelpText" xml:space="preserve">
     <value>Collapse dialog and select a worksheet range for this field.</value>
@@ -16521,7 +16515,7 @@ Continue saving?</value>
     <value>Report Layout</value>
   </data>
   <data name="PivotValueFilter_LessThanOrEqual" xml:space="preserve">
-    <value>Less Than Or Equal</value>
+    <value>Less Than Or Equal To</value>
   </data>
   <data name="FormatCells_Bottom2" xml:space="preserve">
     <value>_Bottom:</value>
@@ -16605,7 +16599,7 @@ Continue saving?</value>
     <value>Paste formulas that link to the copied cells.</value>
   </data>
   <data name="PivotValueFilter_GreaterThanOrEqual" xml:space="preserve">
-    <value>Greater Than Or Equal</value>
+    <value>Greater Than Or Equal To</value>
   </data>
   <data name="WatchWindow_Refresh" xml:space="preserve">
     <value>_Refresh</value>
@@ -21265,5 +21259,8 @@ and {0} more.</value>
   </data>
   <data name="ThreadedCommentPane_SummaryFormat" xml:space="preserve">
     <value>{0} active, {1} resolved</value>
+  </data>
+  <data name="ColorPicker_InvalidRgbMessage" xml:space="preserve">
+    <value>Enter RGB values from 0 to 255.</value>
   </data>
 </root>

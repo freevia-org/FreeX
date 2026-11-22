@@ -434,11 +434,11 @@ public sealed partial class MainWindow
             TextBoxHeight = 22,
             ButtonHeight = 22,
             ButtonPadding = new Thickness(8, 1),
-            ListBoxItemMinHeight = 22,
+            ListBoxItemMinHeight = 20,
             KeepListRowMinHeight = true,
         };
 
-    private const double SelectDataSourceWpfListHeight = 77;
+    private const double SelectDataSourceWpfListHeight = 72;
 
     private async Task ShowSelectChartDataDialog()
     {
@@ -539,8 +539,10 @@ public sealed partial class MainWindow
         // WPF DialogReferencePicker.CreateEditor docks the 28px picker left with a 6px gap and lets the
         // reference box fill the rest of the row.
         rangePickButton.Margin = new Thickness(0, 0, 6, 0);
-        // The WPF capture draws the range box 22px tall.
-        rangeBox.Height = 22;
+        // The WPF capture draws the range box 20px tall (border to border).
+        rangeBox.Height = 20;
+        rangeBox.MinHeight = 20;
+        rangeBox.MaxHeight = 20;
         rangeBox.Width = double.NaN;
         rangeBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         Grid.SetColumn(rangeBox, 1);
@@ -552,11 +554,11 @@ public sealed partial class MainWindow
 
         // ---- Switch Row/Column checkbox -------------------------------------------------------
         var switchRowColumnCheck = CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(switchField.LabelResourceKey)), switchRowColumn);
-        // WPF: a 16px check box with a 0,10,0,8 margin. The Avalonia check row is 20px, so 2px comes off
-        // each side to keep the 34px row pitch.
+        // WPF: a 0,10,0,8 margin round the native check box. The Avalonia check row is 20px, so the
+        // margins are trimmed to land the glyph and the following title on the measured WPF rows.
         switchRowColumnCheck.MinHeight = 20;
         switchRowColumnCheck.MaxHeight = 20;
-        switchRowColumnCheck.Margin = new Thickness(0, 7, 0, 10);
+        switchRowColumnCheck.Margin = new Thickness(0, 7, 0, 6);
         AutomationProperties.SetAutomationId(switchRowColumnCheck, switchField.AutomationId);
 
         // ---- Series ListBox + buttons ---------------------------------------------------------
@@ -605,7 +607,7 @@ public sealed partial class MainWindow
         var categoriesCheck = CreateChartCheckBox(StripDisplayMnemonic(UiText.Get(firstColumnField.LabelResourceKey)), firstColumnIsCategories);
         categoriesCheck.MinHeight = 20;
         categoriesCheck.MaxHeight = 20;
-        categoriesCheck.Margin = new Thickness(0, 6, 0, 7);
+        categoriesCheck.Margin = new Thickness(0, 7, 0, 6);
         AutomationProperties.SetAutomationId(categoriesCheck, firstColumnField.AutomationId);
 
         // ---- State management helpers --------------------------------------------------------
@@ -784,7 +786,7 @@ public sealed partial class MainWindow
         // Helper to build a panel with a list on the left and buttons stacked on the right.
         Grid MakeListPanel(SelectDataSourceListPanelDescriptor panel, ListBox list, IEnumerable<Button> buttons, double helpBottomMargin)
         {
-            var grid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -792,7 +794,7 @@ public sealed partial class MainWindow
 
             // WPF: a plain title 2px above grey inline help, which carries 6px below.
             var header = new StackPanel();
-            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.TitleResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 5) });
+            header.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get(panel.TitleResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 2) });
             var panelHelp = CreateChartDialogInlineHelp(StripDisplayMnemonic(UiText.Get(panel.ListField.HelpResourceKey!)));
             panelHelp.Margin = new Thickness(0, 0, 0, helpBottomMargin);
             header.Children.Add(panelHelp);
@@ -801,7 +803,7 @@ public sealed partial class MainWindow
             Grid.SetRow(list, 1);
             grid.Children.Add(list);
 
-            var buttonStack = new StackPanel { Margin = new Thickness(8, 19, 0, 0), Spacing = 5 };
+            var buttonStack = new StackPanel { Margin = new Thickness(8, 20, 0, 0), Spacing = 4 };
             foreach (var b in buttons)
                 buttonStack.Children.Add(b);
             Grid.SetColumn(buttonStack, 1);
@@ -817,7 +819,7 @@ public sealed partial class MainWindow
         var hiddenEmptyButton = CreateChartButton(UiText.Get(hiddenEmptyAction.LabelResourceKey), 150);
         hiddenEmptyButton.Width = double.NaN;
         hiddenEmptyButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
-        hiddenEmptyButton.Margin = new Thickness(0, 0, 0, 19);
+        hiddenEmptyButton.Margin = new Thickness(0, 0, 0, 16);
         AutomationProperties.SetAutomationId(hiddenEmptyButton, hiddenEmptyAction.AutomationId);
         hiddenEmptyButton.Click += (_, _) => RunGuarded(async () =>
         {
@@ -842,7 +844,7 @@ public sealed partial class MainWindow
             Children =
             {
                 // Range label + picker button + text box
-                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(rangeField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 4, 0, 4) },
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get(rangeField.LabelResourceKey)), FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 0, 0, 4) },
                 rangeRow,
                 switchRowColumnCheck,
                 // Legend Entries (Series) panel
@@ -850,13 +852,13 @@ public sealed partial class MainWindow
                     seriesPanel,
                     seriesList,
                     new[] { addSeriesButton, editSeriesButton, removeSeriesButton },
-                    helpBottomMargin: 5),
+                    helpBottomMargin: 6),
                 // Horizontal (Category) Axis Labels panel
                 MakeListPanel(
                     axisLabelsPanel,
                     axisLabelsList,
                     new[] { editAxisLabelsButton },
-                    helpBottomMargin: 7),
+                    helpBottomMargin: 6),
                 // First column is categories checkbox
                 categoriesCheck,
                 hiddenEmptyButton,

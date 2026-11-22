@@ -248,7 +248,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.TitleBarBrush) ?? Brush(23, 50, 77);
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
-    private static readonly IBrush GridLine = Brush(231, 231, 231);
+    // WPF GridView draws gridlines with MakePen(MakeBrush(220, 220, 220), 1) (GridView.GridLineBrush):
+    // a 1-DIP stroke centred on each shared cell edge. Avalonia matches that effective result at both
+    // 1x and 2x scale with the same 220 colour and ONE 1-DIP shared edge (see CreateCellBorder).
+    private static readonly IBrush GridLine = Brush(220, 220, 220);
     // Freeze Panes divider line — matches WPF's GridView.cs MakeFreezePen (RGB 100,100,200 @ 2px).
     private static readonly IBrush FreezeDividerBrush = Brush(100, 100, 200);
     private const double FreezeDividerThickness = 2;
@@ -373,6 +376,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
+    // Floating-object selection chrome (picture/shape/text box/chart outline, resize + rotation
+    // handles, selected chart-element outline) is blue (#207AC5) in WPF -- GridView.ObjectDrag.cs
+    // HandlePen/SelectionBorderPen/RotationGripPen and GridView.ChartElements.cs -- while only the
+    // cell-range selection (SelectionBorder above) is Excel green.
+    private static readonly IBrush ObjectSelectionAccent = Brush(0x20, 0x7A, 0xC5);
     private const double SelectionOutlineThickness = 2;
     // Outer size of the fill handle. The WPF grid draws a 6 DIP square stroked with the 2 DIP
     // selection pen (GridView.Rendering.Selection.cs DrawSelectionHandle), i.e. a solid 8 DIP square
@@ -12242,7 +12250,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Background = background,
             BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent,
-            BorderThickness = new Thickness(scaledBorderThickness),
+            // Each cell paints only its right and bottom edge, so the edge shared with its neighbour is
+            // ONE scaledBorderThickness line (WPF strokes a single 1-DIP line per shared edge; four
+            // sides per cell produced a doubled 2-DIP line, 4 device pixels on Retina). The Padding
+            // keeps the content slot identical to the old all-sides inset so text geometry is unchanged.
+            BorderThickness = new Thickness(0, 0, scaledBorderThickness, scaledBorderThickness),
+            Padding = new Thickness(scaledBorderThickness, scaledBorderThickness, 0, 0),
             ClipToBounds = true,
             Child = cellContent,
         };
@@ -22817,12 +22830,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         static void ApplyAdvancedFilterPickerButtonChrome(Button button)
         {
             // WPF DialogReferencePicker.CreateButton: 28 wide, 6px gap to the reference box, and the
-            // DockPanel stretches it to the reference box height (24 here).
+            // DockPanel stretches it to the reference box height (20: default WPF TextBox template).
             button.Width = 28;
             button.MinWidth = 28;
-            button.Height = 24;
-            button.MinHeight = 24;
-            button.MaxHeight = 24;
+            button.Height = AdvancedFilterReferenceBoxHeight;
+            button.MinHeight = AdvancedFilterReferenceBoxHeight;
+            button.MaxHeight = AdvancedFilterReferenceBoxHeight;
             button.Padding = new Thickness(0);
             button.Margin = new Thickness(0, 0, 6, 0);
             button.FontSize = 11;
@@ -22838,7 +22851,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange)),
             MinWidth = 0,
         };
-        ApplyDialogTextBoxChrome(listRangeBox);
+        ApplyAdvancedFilterReferenceBoxChrome(listRangeBox);
         AutomationProperties.SetName(listRangeBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_ListRange")));
         AutomationProperties.SetAutomationId(listRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox);
         AutomationProperties.SetHelpText(
@@ -22849,7 +22862,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 0,
         };
-        ApplyDialogTextBoxChrome(criteriaRangeBox);
+        ApplyAdvancedFilterReferenceBoxChrome(criteriaRangeBox);
         AutomationProperties.SetName(criteriaRangeBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CriteriaRange")));
         AutomationProperties.SetAutomationId(criteriaRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox);
         AutomationProperties.SetHelpText(
@@ -22877,6 +22890,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             GroupName = "AdvancedFilterOutputMode",
         };
         ApplyDialogRadioButtonChrome(copyToAnotherLocationButton);
+        // WPF stacks the two radios at a 19px pitch (15 + 4 margin); the compact radio row is 20.
+        inPlaceButton.MinHeight = inPlaceButton.MaxHeight = 19;
+        copyToAnotherLocationButton.MinHeight = copyToAnotherLocationButton.MaxHeight = 19;
         AutomationProperties.SetName(copyToAnotherLocationButton, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CopyToAnotherLocationAutomationName")));
         AutomationProperties.SetAutomationId(copyToAnotherLocationButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton);
         AutomationProperties.SetHelpText(
@@ -22888,7 +22904,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsEnabled = false,
             MinWidth = 0,
         };
-        ApplyDialogTextBoxChrome(copyToBox);
+        ApplyAdvancedFilterReferenceBoxChrome(copyToBox);
         AutomationProperties.SetName(copyToBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CopyTo")));
         AutomationProperties.SetAutomationId(copyToBox, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox);
         AutomationProperties.SetHelpText(
@@ -22898,7 +22914,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var uniqueBox = new CheckBox
         {
             Content = UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName"),
-            Margin = new Thickness(0, 10, 0, 0),
+            // WPF: 10px above a 16px-tall check box; Avalonia's compact check box row is 20px, so 3px
+            // less keeps the glyph and label on the WPF rows.
+            Margin = new Thickness(0, 7, 0, 0),
         };
         ApplyDialogCheckBoxChrome(uniqueBox);
         AutomationProperties.SetName(uniqueBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName")));
@@ -23039,7 +23057,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = UiText.Get("AdvancedFilter_CriteriaShouldIncludeColumnLabelsInTheFirstRowMatchingExcelAdvancedFilte"),
             Foreground = grayText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
@@ -23143,7 +23161,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // glyph centres on the WPF positions.
         var actionPanel = new StackPanel
         {
-            Margin = new Thickness(14, 21, 8, 0),
+            Margin = new Thickness(14, 20, 8, 0),
             Children =
             {
                 inPlaceButton,
@@ -23152,7 +23170,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var actionGroup = new AvaloniaGrid
         {
-            Height = 73,
+            Height = 71,
             Margin = new Thickness(0, 0, 0, 10),
             Children =
             {
@@ -23170,7 +23188,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     FontFamily = FormulaBarFontFamily,
                     Background = Brushes.White,
                     Padding = new Thickness(3, 0),
-                    Margin = new Thickness(6, 0, 0, 0),
+                    Margin = new Thickness(6, 1, 0, 0),
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                     VerticalAlignment = AvaloniaVerticalAlignment.Top,
                 },
@@ -23201,6 +23219,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    // WPF AdvancedFilterDialog leaves its reference boxes at the default TextBox template, which
+    // measures 20px tall at the dialog font (row pitch 28 = 20 + 8 margin). Avalonia's shared 24px
+    // dialog box made every row 4px taller and pushed everything below it down.
+    private const double AdvancedFilterReferenceBoxHeight = 20;
+
+    private static void ApplyAdvancedFilterReferenceBoxChrome(TextBox tb)
+    {
+        ApplyDialogTextBoxChrome(tb);
+        tb.Height = AdvancedFilterReferenceBoxHeight;
+        tb.MinHeight = AdvancedFilterReferenceBoxHeight;
+        tb.MaxHeight = AdvancedFilterReferenceBoxHeight;
+        tb.Padding = new Thickness(3, 0);
     }
 
     private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)
@@ -25614,8 +25646,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             formula2Label.Text = StripDisplayMnemonic(UiText.Get(DataValidationDialogPlanner.Formula2FieldDescriptor.LabelResourceKey));
             AutomationProperties.SetHelpText(formula2Box, DataValidationDialogPlanner.Formula2FieldDescriptor.HelpText);
             operatorField.IsVisible = plan.ShowOperator;
-            formula1Field.IsVisible = plan.ShowFormula1;
-            formula2Field.IsVisible = plan.ShowFormula2;
+            // WPF collapses the label and the box but leaves each row's DockPanel (margin 0,0,0,8)
+            // in the grid, so the two hidden formula rows still hold their 8px gap each.
+            formula1Label.IsVisible = plan.ShowFormula1;
+            formula1Box.IsVisible = plan.ShowFormula1;
+            formula2Label.IsVisible = plan.ShowFormula2;
+            formula2Box.IsVisible = plan.ShowFormula2;
             sourcePickerButton.IsVisible = plan.ShowFormula1RangePicker;
             useSelectionButton.IsVisible = plan.ShowFormula1UseSelection;
             sourcePicker2Button.IsVisible = plan.ShowFormula2RangePicker;
@@ -25740,9 +25776,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         const double labelColumnWidth = DataValidationLabelColumnWidth;
         // WPF SystemColors.GrayTextBrush (#6D6D6D).
         var grayText = Brush(109, 109, 109);
-        // WPF check boxes are ~16px rows with an 8px bottom margin; the compact Avalonia check box is a
-        // 20px row, so 4px keeps the same 24px pitch.
-        var controlColumnCheckBoxMargin = new Thickness(labelColumnWidth, 0, 0, 4);
+        // WPF check boxes on the Settings page are 15px rows (13px box at a 1px offset) with an 8px
+        // bottom margin, a 23px pitch. The compact Avalonia check box is a 20px row (box at a 4px
+        // offset) and clips the descenders of the 12px text when squeezed to 15px, so these three
+        // boxes keep the 20px row and pull it up 3px / push the next one 6px instead: same box
+        // position and the same 23px pitch, local to this page (the shared check box is untouched).
+        var controlColumnCheckBoxMargin = new Thickness(labelColumnWidth, -3, 0, 6);
 
         static TabItem CreateValidationTab(string header, string automationId, Control content)
         {
@@ -26094,7 +26133,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <summary>
     /// One row of the WPF Data Validation two-column form: a vertically centred label in the 120px
     /// label column (8px gap) and the editor stretched across the remaining width, with the 8px row
-    /// gap carried by the row so a collapsed row leaves no hole.
+    /// gap carried by the row (WPF keeps the formula rows' 8px gap even while their label and box are collapsed).
     /// </summary>
     private static AvaloniaGrid CreateDataValidationFormRow(TextBlock label, Control control)
     {
@@ -29078,21 +29117,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Close();
     }
 
+    private void BeginActiveCellEditFromKeyboard()
+    {
+        // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
+        // while a picture/shape/text box/chart is genuinely selected -- same family as the
+        // Escape/Fill/Backspace/Delete guards (see HasSelectedDrawingObject).
+        if (HasSelectedDrawingObject())
+            return;
+
+        var address = _session.ActiveCell;
+        var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
+        BeginInlineCellEdit(address, editText, editText.Length);
+    }
+
     private void NavigateActiveCell(KeyEventArgs e)
     {
         if (e.Key == Key.F2)
         {
             e.Handled = true;
-
-            // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
-            // while a picture/shape/text box/chart is genuinely selected -- same family as the
-            // Escape/Fill/Backspace/Delete guards (see HasSelectedDrawingObject).
-            if (HasSelectedDrawingObject())
-                return;
-
-            var address = _session.ActiveCell;
-            var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
-            BeginInlineCellEdit(address, editText, editText.Length);
+            BeginActiveCellEditFromKeyboard();
             return;
         }
 

@@ -409,12 +409,27 @@ public sealed class PrintWorkflowPrinterAvailabilityTests
 
                 if (nextId is not null)
                 {
-                    PrintedText(root).Should().Contain("First").And.NotContain("Extra");
                     var next = Find<Button>(root, nextId);
+                    if (surface == "backstage")
+                    {
+                        // The backstage preview scrolls continuously: both pages are stacked at once.
+                        var allPages = root.GetVisualDescendants().OfType<Canvas>()
+                            .Where(canvas => AutomationProperties.GetAutomationId(canvas) == PrintPreviewDialogPlanner.PageCanvasAutomationId)
+                            .SelectMany(canvas => canvas.GetVisualDescendants().OfType<TextBlock>())
+                            .Select(text => text.Text)
+                            .ToList();
+                        allPages.Should().Contain("First").And.Contain("Last").And.NotContain("Extra");
+                    }
+                    else
+                    {
+                        PrintedText(root).Should().Contain("First").And.NotContain("Extra");
+                    }
+
                     next.IsEnabled.Should().BeTrue();
                     next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     await SettleAsync();
-                    PrintedText(root).Should().Contain("Last").And.NotContain("Extra");
+                    if (surface != "backstage")
+                        PrintedText(root).Should().Contain("Last").And.NotContain("Extra");
                     next.IsEnabled.Should().BeFalse();
                 }
 

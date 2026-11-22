@@ -255,7 +255,7 @@ public sealed partial class MainWindow
         // insert-into-formula group (each 12px above the next block, content inset 10,8,10,10), labels
         // above their controls with an 8px row gap, a 110px insert button left-aligned under each 80px
         // list (field list first, then the selected field's item list) with 8px below it, and the
-        // button row 12px below. The existing-item picker and Delete are Avalonia-only.
+        // button row 12px below. The existing-item picker and Delete match the WPF dialog's PivotTable form.
         var itemPanel = new StackPanel();
         AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalculated_SourceFieldLabel"), fieldBox);
         AddPivotDialogLabeledControl(itemPanel, UiText.Get("PivotCalcItem_ExistingLabel"), existingBox);

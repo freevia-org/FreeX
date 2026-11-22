@@ -15,14 +15,35 @@ public partial class PivotValueFilterDialog : Window
             .ToArray();
 
     private readonly int _sourceFieldIndex;
-    private readonly int _dataFieldIndex;
+    private readonly int _fallbackDataFieldIndex;
+    private readonly bool _hasDataFieldChoices;
 
-    public PivotValueFilterDialog(int sourceFieldIndex, PivotValueFilterModel? existingFilter = null)
+    /// <param name="dataFieldNames">
+    /// The pivot's value-field names for the Summarize-by (measure) picker, as in Excel's Value Filter
+    /// dialog. When omitted the picker is hidden and the filter keeps the existing (or first) value field.
+    /// </param>
+    public PivotValueFilterDialog(
+        int sourceFieldIndex,
+        PivotValueFilterModel? existingFilter = null,
+        IReadOnlyList<string>? dataFieldNames = null)
     {
         _sourceFieldIndex = sourceFieldIndex;
-        _dataFieldIndex = existingFilter?.DataFieldIndex ?? 0;
+        _fallbackDataFieldIndex = existingFilter?.DataFieldIndex ?? 0;
+        _hasDataFieldChoices = dataFieldNames is { Count: > 0 };
         InitializeComponent();
         ValueFilterKindBox.ItemsSource = Options.Select(option => option.Label);
+        if (_hasDataFieldChoices)
+        {
+            ValueFilterDataFieldBox.ItemsSource = dataFieldNames;
+            ValueFilterDataFieldBox.SelectedIndex =
+                PivotFieldFilterPlanner.InitialDataFieldIndex(existingFilter, dataFieldNames!.Count);
+        }
+        else
+        {
+            ValueFilterDataFieldLabel.Visibility = Visibility.Collapsed;
+            ValueFilterDataFieldBox.Visibility = Visibility.Collapsed;
+        }
+
         LoadFilter(existingFilter);
         UpdateValueInputState();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
@@ -49,7 +70,9 @@ public partial class PivotValueFilterDialog : Window
         var option = Options[Math.Max(0, ValueFilterKindBox.SelectedIndex)];
         if (!PivotFieldFilterPlanner.TryCreateValueFilter(
                 _sourceFieldIndex,
-                _dataFieldIndex,
+                _hasDataFieldChoices
+                    ? Math.Max(0, ValueFilterDataFieldBox.SelectedIndex)
+                    : _fallbackDataFieldIndex,
                 option.Kind,
                 ValueFilterValueBox.Text,
                 ValueFilterValue2Box.Text,

@@ -14,19 +14,13 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static IReadOnlyList<(PivotCreatePlanner.FieldRole Role, string Label)> PivotFieldRoleChoices =>
-    [
-        (PivotCreatePlanner.FieldRole.Unused, UiText.Get("PivotLoc_RoleUnused")),
-        (PivotCreatePlanner.FieldRole.Row, UiText.Get("PivotLoc_RoleRow")),
-        (PivotCreatePlanner.FieldRole.Value, UiText.Get("PivotLoc_RoleValue")),
-    ];
-
     /// <summary>
     /// Opens the Insert PivotTable dialog for the current selection. The selection is the pivot's source
-    /// range (header row + data); the user assigns each source column to the Row or Values area (defaults
-    /// proposed by <see cref="PivotCreatePlanner.DefaultRoles"/>) and chooses a new worksheet or an in-place
-    /// target. On OK the Core <c>AddPivotTable…</c> command runs and the pivot renders; the field pane then
-    /// refines it. Surfaces the Core guard message (e.g. needs a header row and a data field) on failure.
+    /// range (header row + data); the user chooses a new worksheet or an in-place target. Like Excel and
+    /// the WPF dialog there is no per-column role list: the shared session proposes the starting Row/Values
+    /// layout (<see cref="PivotCreatePlanner.DefaultRoles"/>) and the field pane then refines it. On OK the
+    /// Core <c>AddPivotTable…</c> command runs and the pivot renders. Surfaces the Core guard message (e.g.
+    /// needs a header row and a data field) on failure.
     /// </summary>
     private async Task ShowInsertPivotTableDialogAsync()
     {
@@ -36,14 +30,11 @@ public sealed partial class MainWindow
         var createModel = PivotApplication.PrepareCreate(
             _session.ActiveSheet.Id,
             _session.SelectedRange);
-        if (!createModel.CanShow || createModel.SourceRange is not { } source)
+        if (!createModel.CanShow || createModel.SourceRange is null)
         {
             ShowPivotApplicationIssue(createModel.Message);
             return;
         }
-
-        var fields = createModel.Fields;
-        var defaults = createModel.DefaultRoles;
 
         var dialog = new Window
         {
@@ -86,58 +77,6 @@ public sealed partial class MainWindow
         var destinationPicker = new Button { Content = "...", IsEnabled = false };
         AutomationProperties.SetAutomationId(destinationPicker, "InsertPivotTableDestinationRangePickerButton");
         AutomationProperties.SetName(destinationPicker, UiText.Get("PivotTable_SelectPivotTableLocation"));
-
-        var roleBoxes = new Dictionary<int, ComboBox>();
-        var fieldsPanel = new StackPanel { Spacing = 4 };
-        void ReloadFields(
-            IReadOnlyList<PivotCreatePlanner.SourceField> sourceFields,
-            IReadOnlyDictionary<int, PivotCreatePlanner.FieldRole> defaultRoles)
-        {
-            roleBoxes.Clear();
-            fieldsPanel.Children.Clear();
-            foreach (var field in sourceFields)
-            {
-                var roleBox = new ComboBox
-                {
-                    ItemsSource = PivotFieldRoleChoices.Select(c => c.Label).ToList(),
-                    SelectedIndex = RoleIndex(defaultRoles.TryGetValue(field.Index, out var role) ? role : PivotCreatePlanner.FieldRole.Unused),
-                    MinWidth = 130,
-                };
-                ApplyPivotComboBoxChrome(roleBox);
-                AutomationProperties.SetAutomationId(roleBox, $"PivotFieldRole{field.Index}");
-                roleBoxes[field.Index] = roleBox;
-
-                fieldsPanel.Children.Add(new DockPanel
-                {
-                    Children =
-                    {
-                        new TextBlock
-                        {
-                            Text = field.Header,
-                            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                            TextTrimming = TextTrimming.CharacterEllipsis,
-                            Width = 200,
-                            FontSize = 12,
-                            FontFamily = FormulaBarFontFamily,
-                        },
-                        roleBox,
-                    },
-                });
-            }
-        }
-        ReloadFields(fields, defaults);
-
-        sourceBox.TextChanged += (_, _) =>
-        {
-            if (_session.TryResolveReferenceRange(sourceBox.Text, out var selectedSource)
-                && selectedSource.Start.Sheet == _session.ActiveSheet.Id
-                && PivotCreatePlanner.IsValidSource(selectedSource))
-            {
-                source = selectedSource;
-                var selectedFields = PivotCreatePlanner.ReadFields(_session.ActiveSheet, source);
-                ReloadFields(selectedFields, PivotCreatePlanner.DefaultRoles(selectedFields));
-            }
-        };
 
         // WPF offers the destination as two radio buttons (new worksheet is the default); only the
         // existing-worksheet choice enables the location editor.
@@ -210,10 +149,7 @@ public sealed partial class MainWindow
 
         okButton.Click += (_, _) =>
         {
-            var roles = new Dictionary<int, PivotCreatePlanner.FieldRole>();
-            foreach (var (index, box) in roleBoxes)
-                roles[index] = PivotFieldRoleChoices[Math.Max(0, box.SelectedIndex)].Role;
-
+            // No roles: the shared session applies the same default Row/Values layout WPF creates.
             var plan = PivotApplication.PlanCreate(
                 _session.ActiveSheet.Id,
                 new PivotCreateSubmission(
@@ -222,8 +158,7 @@ public sealed partial class MainWindow
                         ? PivotDestinationKind.ExistingWorksheet
                         : PivotDestinationKind.NewWorksheet,
                     destinationBox.Text,
-                    OpenFieldList: openFieldListBox.IsChecked == true,
-                    roles));
+                    OpenFieldList: openFieldListBox.IsChecked == true));
             if (!plan.CanApply)
             {
                 errorText.Text = plan.Message?.Issue is
@@ -297,13 +232,6 @@ public sealed partial class MainWindow
                 selectTableRangeButton,
                 CreatePivotDialogLabel(UiText.Get("PivotTable_TableRangeLabel"), new Thickness(22, 0, 0, 4)),
                 CreatePivotDialogReferenceEditor(sourcePicker, sourceBox, new Thickness(22, 0, 0, 8)),
-                // Avalonia-only: the per-column Row/Value role list the macOS shell builds the pivot from.
-                new ScrollViewer
-                {
-                    Content = fieldsPanel,
-                    MaxHeight = 160,
-                    Margin = new Thickness(22, 0, 0, 12),
-                },
                 CreateSectionHeader(UiText.Get("PivotTable_ChooseDestinationHeader")),
                 newSheetBox,
                 existingSheetBox,
@@ -321,11 +249,4 @@ public sealed partial class MainWindow
         await dialog.ShowDialog(this);
     }
 
-    private static int RoleIndex(PivotCreatePlanner.FieldRole role)
-    {
-        for (var i = 0; i < PivotFieldRoleChoices.Count; i++)
-            if (PivotFieldRoleChoices[i].Role == role)
-                return i;
-        return 0;
-    }
 }
