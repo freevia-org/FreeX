@@ -96,11 +96,13 @@ public partial class GridView
         CellAddress address,
         string cellReference,
         ThreadedComment? existing,
-        ThreadedCommentCardPlan? card = null)
+        ThreadedCommentCardPlan? card = null,
+        bool focusEditor = true)
     {
         if (!TryGetCellRect(Viewport, address.Row, address.Col, out var cellRect))
             return false;
 
+        _threadedCardPassive = !focusEditor && existing is not null;
         _activeNoteEditAddress = null;
         _activeThreadedEditAddress = address;
         _activeCommentCellReference = cellReference;
@@ -117,8 +119,57 @@ public partial class GridView
             new Size(
                 CommentEditorWidth,
                 existing is null ? CommentEditorDesiredHeight : CommentEditorExistingDesiredHeight));
-        FocusCommentTextBox(existing is null ? _threadedRootBox : _threadedReplyBox ?? _threadedRootBox);
+        if (_commentPreviewBorder is { } cardBorder)
+        {
+            cardBorder.GotKeyboardFocus -= OnThreadedCardGotKeyboardFocus;
+            cardBorder.GotKeyboardFocus += OnThreadedCardGotKeyboardFocus;
+        }
+
+        if (focusEditor)
+            FocusCommentTextBox(existing is null ? _threadedRootBox : _threadedReplyBox ?? _threadedRootBox);
         return true;
+    }
+
+    // Excel shows the thread card as soon as a commented cell is selected without taking keyboard
+    // focus; this passive card is replaced on the next selection change and becomes a normal editor
+    // once the user clicks into it.
+    private bool _threadedCardPassive;
+
+    private void OnThreadedCardGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e) =>
+        _threadedCardPassive = false;
+
+    private bool TryOpenThreadedCard(uint row, uint col, bool focusEditor)
+    {
+        if (ThreadedCommentCardRequested is not { } handler)
+            return false;
+
+        var args = new GridThreadedCommentCardRequestedEventArgs(new CellAddress(ActiveSheetId, row, col), focusEditor);
+        handler(this, args);
+        return args.Handled;
+    }
+
+    // Clicking the purple corner indicator opens the editable card with the reply box focused.
+    private void TryOpenThreadedCardFromIndicatorClick(Point pos)
+    {
+        if (IsInlineCommentEditorOpen() && !_threadedCardPassive)
+            return;
+
+        if (!TryGetCommentPreviewAt(pos, out var cell, out var rect) ||
+            ThreadedCommentActivationPlanner.Decide(
+                CommentActivationSource.IndicatorClick,
+                cell.CommentDisplay?.Kind) != CommentActivationAction.OpenCard ||
+            !ThreadedCommentActivationPlanner.IsIndicatorHit(pos.X - rect.X, pos.Y - rect.Y, rect.Width, rect.Height))
+        {
+            return;
+        }
+
+        if (_threadedCardPassive)
+        {
+            _threadedCardPassive = false;
+            DismissCommentPreview();
+        }
+
+        TryOpenThreadedCard(cell.Row, cell.Col, focusEditor: true);
     }
 
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
@@ -150,11 +201,27 @@ public partial class GridView
 
     private void UpdateCommentPreviewForSelection()
     {
+        if (_threadedCardPassive)
+        {
+            _threadedCardPassive = false;
+            DismissCommentPreview();
+        }
+
         if (IsInlineCommentEditorOpen())
             return;
 
         if (TryGetSelectedCommentPreview(out var cell, out var rect))
+        {
+            if (ThreadedCommentActivationPlanner.Decide(
+                    CommentActivationSource.Selection,
+                    cell.CommentDisplay?.Kind) == CommentActivationAction.OpenCard &&
+                TryOpenThreadedCard(cell.Row, cell.Col, focusEditor: false))
+            {
+                return;
+            }
+
             ShowCommentPreview(cell, rect, CommentPreviewActivation.Selection);
+        }
         else
             DismissCommentPreview();
     }
@@ -189,6 +256,7 @@ public partial class GridView
 
         _activeCommentPreviewKey = null;
         _commentPopupMode = CommentPopupMode.None;
+        _threadedCardPassive = false;
         _activeNoteEditAddress = null;
         _activeThreadedEditAddress = null;
         _threadedEditExisting = null;
@@ -1223,6 +1291,12 @@ public partial class GridView
 
     private void RefreshCommentPreviewAfterViewportChanged()
     {
+        if (_threadedCardPassive)
+        {
+            _threadedCardPassive = false;
+            DismissCommentPreview();
+        }
+
         if (IsInlineCommentEditorOpen())
         {
             RefreshActiveCommentPopupPlacement();

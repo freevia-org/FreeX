@@ -480,6 +480,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         SheetGrid.PictureCropped += OnPictureCropped;
         SheetGrid.NoteInlineEditSubmitted += SheetGrid_NoteInlineEditSubmitted;
         SheetGrid.ThreadedCommentInlineEditSubmitted += SheetGrid_ThreadedCommentInlineEditSubmitted;
+        SheetGrid.ThreadedCommentCardRequested += SheetGrid_ThreadedCommentCardRequested;
         SheetGrid.TextBoxEditRequested += OnTextBoxEditRequested;
         SheetGrid.NativeSlicerClearFilterRequested += OnNativeSlicerClearFilterRequested;
         SheetGrid.NativeSlicerTileToggleRequested += OnNativeSlicerTileToggleRequested;

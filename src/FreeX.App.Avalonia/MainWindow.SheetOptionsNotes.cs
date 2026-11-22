@@ -46,6 +46,14 @@ public sealed partial class MainWindow
 
         ClearSelectedDrawingObject();
 
+        // Show Comments is a toggle (Excel): pressing it while the pane is open closes it.
+        if (_commentListWindow is { IsVisible: true } openPane &&
+            ThreadedCommentActivationPlanner.ShouldClosePaneOnToggle(paneOpen: true))
+        {
+            openPane.Close();
+            return Task.CompletedTask;
+        }
+
         var sheet = _session.ActiveSheet;
         var comments = CollectThreadedComments(sheet);
         if (comments.Count == 0)
@@ -258,6 +266,7 @@ public sealed partial class MainWindow
         };
 
         RefreshList(comments);
+        DockCommentPaneRight(dialog);
         _commentListWindow = dialog;
         _refreshCommentListWindow = RefreshList;
         ShowOwnedModelessWindow(
@@ -272,6 +281,47 @@ public sealed partial class MainWindow
                 _refreshCommentListWindow = null;
             });
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Docks the Comments pane to the right edge of the grid area (Excel's task-pane position) and
+    /// keeps it there while the main window moves/resizes; falls back to the floating window when
+    /// the grid would be squeezed. Mirrors WPF's DockCommentPaneRight.
+    /// </summary>
+    private void DockCommentPaneRight(Window pane)
+    {
+        void Apply()
+        {
+            if (WindowState == WindowState.Minimized || _sheetGridHost.Bounds.Width <= 0)
+                return;
+
+            var scaling = RenderScaling <= 0 ? 1 : RenderScaling;
+            var origin = _sheetGridHost.PointToScreen(new Point(0, 0));
+            var plan = ThreadedCommentActivationPlanner.PlanPaneDock(
+                origin.X / scaling,
+                origin.Y / scaling,
+                _sheetGridHost.Bounds.Width,
+                _sheetGridHost.Bounds.Height,
+                contentTopInset: 0);
+            if (!plan.IsDocked)
+                return;
+
+            pane.WindowStartupLocation = WindowStartupLocation.Manual;
+            pane.Width = plan.Width;
+            pane.Height = plan.Height;
+            pane.Position = new PixelPoint((int)Math.Round(plan.Left * scaling), (int)Math.Round(plan.Top * scaling));
+        }
+
+        pane.Opened += (_, _) => Apply();
+        EventHandler<PixelPointEventArgs> moved = (_, _) => { if (pane.IsVisible) Apply(); };
+        EventHandler<SizeChangedEventArgs> resized = (_, _) => { if (pane.IsVisible) Apply(); };
+        PositionChanged += moved;
+        SizeChanged += resized;
+        pane.Closed += (_, _) =>
+        {
+            PositionChanged -= moved;
+            SizeChanged -= resized;
+        };
     }
 
     private static IReadOnlyList<CommentListRowPlan> CollectThreadedComments(Sheet sheet) =>

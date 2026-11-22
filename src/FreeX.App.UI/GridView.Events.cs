@@ -39,6 +39,21 @@ public sealed class GridNoteInlineEditSubmittedEventArgs(CellAddress address, st
     public string? ErrorMessage { get; set; }
 }
 
+/// <summary>
+/// Raised when selecting a cell with a thread (passive, no focus steal) or clicking its purple
+/// indicator (focus the reply box) should open the editable threaded-comment card. The host builds
+/// the card and calls <see cref="GridView.BeginThreadedCommentInlineEdit"/>; setting
+/// <see cref="Handled"/> tells the grid not to fall back to the read-only preview.
+/// </summary>
+public sealed class GridThreadedCommentCardRequestedEventArgs(CellAddress address, bool focusEditor) : EventArgs
+{
+    public CellAddress Address { get; } = address;
+
+    public bool FocusEditor { get; } = focusEditor;
+
+    public bool Handled { get; set; }
+}
+
 public sealed class GridThreadedCommentInlineEditSubmittedEventArgs(
     CellAddress address,
     ThreadedCommentDialogResult result) : EventArgs
@@ -178,6 +193,8 @@ public partial class GridView
 
     /// <summary>Fired when the user saves an in-window threaded comment edit.</summary>
     public event EventHandler<GridThreadedCommentInlineEditSubmittedEventArgs>? ThreadedCommentInlineEditSubmitted;
+
+    public event EventHandler<GridThreadedCommentCardRequestedEventArgs>? ThreadedCommentCardRequested;
 
     /// <summary>Fired when the user requests in-place editing for an existing text box.</summary>
     public event Action<Guid>? TextBoxEditRequested;

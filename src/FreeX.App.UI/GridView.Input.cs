@@ -646,6 +646,7 @@ public partial class GridView
 
         var pos = e.GetPosition(this);
         DismissCommentPreview(CommentPreviewActivation.Hover);
+        TryOpenThreadedCardFromIndicatorClick(pos);
 
         if (TryHitTestOutlineGroupToggle(Viewport, pos, ActualRowHeaderWidth, EffectiveColHeaderHeight, out var outlineToggle))
         {

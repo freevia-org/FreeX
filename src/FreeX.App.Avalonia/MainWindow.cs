@@ -9589,6 +9589,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             }
 
             if (point.Properties.IsLeftButtonPressed &&
+                commentDisplay is { } clickedComment &&
+                ThreadedCommentActivationPlanner.Decide(
+                    CommentActivationSource.IndicatorClick,
+                    clickedComment.Kind) == CommentActivationAction.OpenCard &&
+                ThreadedCommentActivationPlanner.IsIndicatorHit(
+                    point.Position.X,
+                    point.Position.Y,
+                    border.Bounds.Width,
+                    border.Bounds.Height,
+                    8 * zoomFactor))
+            {
+                OpenThreadedCommentCardFromIndicator(address);
+            }
+
+            if (point.Properties.IsLeftButtonPressed &&
                 TryInsertFormulaPointReference(address))
             {
                 var referenceStart = _formulaRangeEditingSession.ReferenceSpan?.Start;

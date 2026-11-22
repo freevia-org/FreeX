@@ -72,10 +72,68 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
         ClearInlineNoteEditorState();
         EnsureInlineEditorAddressVisible(target.Address);
+        _inlineThreadedCardPassive = false;
+        _inlineThreadedCardDismissedAddress = null;
         _inlineThreadedCommentEditAddress = target.Address;
         _inlineThreadedCommentEditExisting = existing ?? target.ThreadedComment;
         RefreshShell(UiText.Get("MainLoc_Ready"));
         Dispatcher.UIThread.Post(FocusInlineThreadedCommentEditor, DispatcherPriority.Input);
+    }
+
+    // Excel shows a cell's thread card as soon as the cell is selected, without taking keyboard
+    // focus (WPF: GridView passive card). It is re-derived from the active cell on every overlay
+    // build and becomes a normal editor once the user focuses into it.
+    private bool _inlineThreadedCardPassive;
+    private CellAddress? _inlineThreadedCardDismissedAddress;
+
+    private void SyncPassiveThreadedCommentCard()
+    {
+        var wasPassive = _inlineThreadedCardPassive;
+        if (!wasPassive && (_inlineThreadedCommentEditAddress is not null || _inlineNoteEditAddress is not null))
+            return;
+
+        if (wasPassive)
+            ClearInlineThreadedCommentEditorState();
+        if (_inlineNoteEditAddress is not null)
+            return;
+
+        var address = _session.ActiveCell;
+        if (_inlineThreadedCardDismissedAddress is { } dismissed && dismissed != address)
+            _inlineThreadedCardDismissedAddress = null;
+        if (_inlineThreadedCardDismissedAddress == address)
+            return;
+
+        if (!_session.ActiveSheet.ThreadedComments.TryGetValue(address, out var thread) ||
+            ThreadedCommentActivationPlanner.Decide(
+                CommentActivationSource.Selection,
+                CellCommentDisplayKind.ThreadedComment) != CommentActivationAction.OpenCard)
+        {
+            return;
+        }
+
+        _inlineThreadedCommentEditAddress = address;
+        _inlineThreadedCommentEditExisting = thread;
+        _inlineThreadedCardPassive = true;
+    }
+
+    /// <summary>Clicking the purple corner indicator opens the editable card with the reply box focused.</summary>
+    private void OpenThreadedCommentCardFromIndicator(CellAddress address)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_isOpening || _isSaving || _inlineNoteEditAddress is not null ||
+                !_session.ActiveSheet.ThreadedComments.TryGetValue(address, out var thread))
+            {
+                return;
+            }
+
+            ClearInlineThreadedCommentEditorState();
+            _inlineThreadedCardDismissedAddress = null;
+            _inlineThreadedCommentEditAddress = address;
+            _inlineThreadedCommentEditExisting = thread;
+            RefreshShell(UiText.Get("MainLoc_Ready"));
+            Dispatcher.UIThread.Post(FocusInlineThreadedCommentEditor, DispatcherPriority.Input);
+        }, DispatcherPriority.Input);
     }
 
     private void EnsureInlineEditorAddressVisible(CellAddress address)
@@ -214,6 +272,7 @@ public sealed partial class MainWindow
         bool showHeadings,
         double zoomFactor)
     {
+        SyncPassiveThreadedCommentCard();
         ClearInlineThreadedCommentControlReferences();
         if (_inlineThreadedCommentEditAddress is not { } address ||
             !TryGetDisplayedCellBounds(viewport, address, showHeadings, zoomFactor,
@@ -249,6 +308,9 @@ public sealed partial class MainWindow
             }),
             Child = BuildInlineThreadedCommentPanel(),
         };
+        editor.AddHandler(
+            InputElement.GotFocusEvent,
+            (_, _) => _inlineThreadedCardPassive = false);
         AutomationProperties.SetAutomationId(editor, "WorksheetThreadedCommentInlineEditor");
         AutomationProperties.SetName(editor, UiText.Get("ThreadedComment_CommentAutomationName"));
         Canvas.SetLeft(editor, left);
@@ -735,6 +797,7 @@ public sealed partial class MainWindow
 
     private void CancelThreadedCommentInlineEdit()
     {
+        _inlineThreadedCardDismissedAddress = _inlineThreadedCommentEditAddress;
         ClearInlineThreadedCommentEditorState();
         RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
@@ -827,6 +890,7 @@ public sealed partial class MainWindow
 
     private void ClearInlineThreadedCommentEditorState()
     {
+        _inlineThreadedCardPassive = false;
         _inlineThreadedCommentEditAddress = null;
         _inlineThreadedCommentEditExisting = null;
         ClearInlineThreadedCommentControlReferences();

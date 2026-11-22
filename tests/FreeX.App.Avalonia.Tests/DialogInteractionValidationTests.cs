@@ -159,8 +159,11 @@ public sealed class DialogInteractionValidationTests
 
                 await owner.ShowCommentsListForTestAsync();
                 var comments = FindOwnedWindow(owner, "ReviewCommentListWindow");
+                // Show Comments is a toggle (Excel): a second press closes the docked pane.
                 await owner.ShowCommentsListForTestAsync();
-                FindOwnedWindow(owner, "ReviewCommentListWindow").Should().BeSameAs(comments);
+                comments.IsVisible.Should().BeFalse();
+                await owner.ShowCommentsListForTestAsync();
+                comments = FindOwnedWindow(owner, "ReviewCommentListWindow");
 
                 owner.AllowCloseWithoutDirtyPromptForParityCapture();
 
