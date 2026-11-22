@@ -48,7 +48,7 @@ namespace FreeX.App.Host;
 /// <c>captured:false</c> with a diagnostic note, and never aborts the rest of the run.
 /// </para>
 /// </summary>
-internal static class ParityCapture
+internal static partial class ParityCapture
 {
     private const double SurfaceWidth = 1120;
     private const double SurfaceHeight = 720;
@@ -605,9 +605,13 @@ internal static class ParityCapture
                             : (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight),
                     captureOnlySurfaceId: targetSurfaceId);
             }
+            else if (IsSupplementalDialogSurface(targetSurfaceId))
+            {
+                CaptureSupplementalDialogs(outDir, results, targetSurfaceId);
+            }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.CreateTable, dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.TextToColumns, dialog.ScenarioManager, and the targeted Options tabs.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports every surface listed in ParityCapture.SupplementalDialogs.cs plus dialog.CreateTable, dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.TextToColumns, dialog.ScenarioManager, and the targeted Options tabs.");
             }
 
             return;
@@ -859,6 +863,9 @@ internal static class ParityCapture
             captureSizeResolver: surfaceId => surfaceId.Equals("dialog.Options.Formulas", StringComparison.Ordinal)
                 ? (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.FormulasCaptureHeight)
                 : (OptionsDialogPlanner.CaptureWidth, OptionsDialogPlanner.CaptureHeight));
+
+        // Dialogs the Avalonia tour reaches through its supplemental routes, under the same surface ids.
+        CaptureSupplementalDialogs(outDir, results);
     }
 
     private static Func<string, SheetId?> ResolveSheetId(Workbook workbook) =>
