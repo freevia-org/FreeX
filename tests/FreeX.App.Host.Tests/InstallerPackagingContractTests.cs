@@ -102,7 +102,7 @@ public sealed class InstallerPackagingContractTests
         workflow.Should().Contain("Tag '$tag' is immutable at $tagSha; refusing to replace it with assets from $env:RELEASE_SHA");
         workflow.Should().Contain("Tag '$tag' is immutable at $tagSha; refusing publication from $env:RELEASE_SHA");
         workflow.Should().NotContain("refusing to replace it with assets from $env:GITHUB_SHA");
-        workflow.Should().Contain("RELEASE_SHA: ${{ inputs.source_sha != '' && inputs.source_sha || github.sha }}");
+        workflow.Should().Contain("RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}");
         workflow.Should().Contain("contents: write");
         workflow.Should().Contain("contents: read");
         manifest.Should().Contain("ValidatePattern('^[0-9a-fA-F]{40}$')");

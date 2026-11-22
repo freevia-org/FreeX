@@ -142,6 +142,26 @@ public sealed class R92_LocalizedRemoveDuplicatesAndGoToSpecialStatusTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task SelectGoToSpecial_NoMatches_LeavesSelectionAndReturnsFalseWithReadyStatus()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("NoComments");
+            window.Session.SelectSheet(sheet.Id);
+            var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4));
+            window.Session.SelectRange(range);
+
+            // WPF reports an empty search in an information message box and keeps the selection.
+            InvokeSelectGoToSpecial(window, GoToSpecialKind.Comments).Should().BeFalse();
+
+            window.Session.SelectedRange.Should().Be(range);
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // ── Source-contract checks ──────────────────────────────────────────────────────────────────
     // The neutral-locale English text for "{0} cells" is byte-identical whether it comes from the
     // shared catalog or a raw interpolated literal, so the behavioral test above cannot by itself

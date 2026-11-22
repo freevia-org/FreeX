@@ -69,7 +69,8 @@ jobs:
             -f release_version=$version `
             -f prerelease=true `
             -f macos_unsigned=$($unsigned.ToString().ToLowerInvariant()) `
-            -f dry_run=true
+            -f dry_run=true `
+            -f release_head=true
           if ($LASTEXITCODE -ne 0) {
             throw "Could not dispatch the packaging rehearsal."
           }

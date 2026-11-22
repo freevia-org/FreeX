@@ -316,16 +316,31 @@ overhead without changing coverage.
 
 ### Releasing from the newest readiness-green commit
 
-When main moved since the last fully green `release-readiness.yml` run, a head dispatch re-runs every
-release gate. Dispatch with `source_sha` instead to release an older commit of main that already has
-that proof: the workflow builds, packages, signs and tags exactly that commit and skips the release
-tests only when a fresh (7 days) readiness run proved every expected gate on exactly that SHA
-(`tools/Resolve-ReleaseGateEvidence.ps1`, unchanged and fail closed). The SHA must be a 40-character
-lowercase ancestor of the dispatched `refs/heads/main` head; tag continuations cannot use it. The
-CI/CodeQL attestation and immutable-tag checks apply to that SHA as before, and without full evidence
-every gate runs against it. Find a candidate with `pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1`
-(advisory; exits 1 when none exists, then release from the head).
+When main moved since the last fully green `release-readiness.yml` run, re-running every release gate
+on the head repeats work a readiness run already proved. So a `full-release.yml` dispatch from
+`refs/heads/main` with an EMPTY `source_sha` releases the **newest readiness-green ancestor of main**
+by default (real and dry-run alike). The first job, `resolve`, finds it with
+`tools/Get-LatestReadinessGreenSha.ps1`, which judges each commit with
+`tools/Resolve-ReleaseGateEvidence.ps1` (the same fail-closed script the candidate job uses, against
+the dispatched head's gate manifest; the candidate job re-checks the chosen commit against its OWN
+manifest). The workflow then builds, packages, signs and tags exactly that commit and skips the release
+tests only when a fresh (7 days) readiness run proved every expected gate on exactly that SHA.
 
+- Fail closed: no green commit, a helper error or any unparseable answer releases the dispatched head
+  and runs every gate; the job summary says "FALLBACK TO THE HEAD" loudly.
+- The job summary always prints the released commit, how many commits it is behind the head and the
+  evidence run, and warns when an ancestor is released (later commits are not in the release).
+- `release_head=true` (default false) releases the dispatched head and runs every gate, as before the
+  default changed. The weekly packaging rehearsal sets it so packaging stays rehearsed at the head.
+- An explicit `source_sha` (40-character lowercase) always wins; `release_head` is then ignored.
+- Tag continuations are unchanged: they release the tagged commit, and `source_sha` is rejected there.
+- The resolved SHA is validated again by the candidate job (40-character lowercase, ancestor of the
+  dispatched head, head fetched) and reaches every job only through the `RELEASE_SHA` environment
+  variable from the `resolve` job output; no job uses `github.sha` for checkout or tagging. The CI/CodeQL
+  attestation and immutable-tag checks apply to the resolved SHA as before.
+
+Preview the default choice locally with `pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1`
+(exits 1 when none exists, in which case the workflow releases the head).
 Hosted CI and release gates retain TRX and hang-diagnostic output and use a 15-minute test-host hang
 timeout. They do not silently retry a failed project; a failure remains visible and the individual
 matrix job can be rerun without repeating successful jobs. Local runs may explicitly request the

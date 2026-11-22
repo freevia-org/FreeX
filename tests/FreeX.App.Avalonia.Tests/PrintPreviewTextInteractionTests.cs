@@ -35,6 +35,7 @@ public sealed class PrintPreviewTextInteractionTests
             second.SetCell(new CellAddress(second.Id, 38, 1), new TextValue("lower NEEDLE"));
 
             var dialog = await OpenPreviewAsync(window);
+            await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(dialog);
             Find<ComboBox>(dialog, "PrintPreviewSettingsPrintWhatBox").SelectedIndex = (int)PrintWhat.EntireWorkbook;
             await DrainAsync();
             var query = Find<TextBox>(dialog, "PrintPreviewFindBox");

@@ -580,11 +580,11 @@ public sealed partial class MainWindow
             marginsButton, pageSetupButton,
         ]);
         // The page navigation, page box, zoom combo, Margins and Page Setup live in this second row.
-        // It starts EXPANDED: a collapsed row is never templated, so its controls would be absent from
-        // the visual/automation tree (page range, find and zoom flows could not reach them). The chevron
-        // still collapses it for the compact, icon-only WPF look.
-        overflowToggle.IsChecked = true;
-        overflowToolbar.IsVisible = true;
+        // It starts COLLAPSED, matching WPF: WPF's DocumentViewer toolbar is a single icon row and these
+        // controls sit behind the toolbar overflow chevron. A collapsed row is never templated, so tests
+        // and flows that need these controls must expand it first via the chevron toggle.
+        overflowToggle.IsChecked = false;
+        overflowToolbar.IsVisible = false;
         overflowToggle.IsCheckedChanged += (_, _) => overflowToolbar.IsVisible = overflowToggle.IsChecked == true;
         var documentToolbar = new StackPanel { Children = { primaryToolbar, overflowToolbar } };
         var previewPane = CreatePrintPreviewPane(documentToolbar, pageHost, findBar);

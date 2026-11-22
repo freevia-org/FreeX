@@ -54,6 +54,7 @@ public sealed class Wave151PrintPreviewWorkbookParityTests
                     new CellAddress(second.Id, 1, 1));
 
                 var preview = await OpenPrintPreviewDialogAsync(window);
+                await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(preview);
                 var printWhat = FindComboBox(preview, "PrintPreviewSettingsPrintWhatBox");
                 printWhat.Items[1].Should().BeOfType<ComboBoxItem>()
                     .Which.IsEnabled.Should().BeTrue();

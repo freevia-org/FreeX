@@ -102,6 +102,44 @@ public sealed class Wave150PrintPreviewSelectionParityTests
     }
 
     [Fact]
+    public async Task ToolbarStartsAsWpfsSingleIconRowAndTheChevronRevealsPageNavigationAndZoom()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                var preview = await OpenPrintPreviewDialogAsync(window);
+
+                // WPF default: one icon row only (print, copy, zoom in/out, actual size, page width,
+                // whole page); page navigation, page box, zoom combo, Margins and Page Setup are
+                // not shown until the overflow chevron is toggled.
+                var toggle = PrintPreviewToolbarTestSupport.FindOverflowToggle(preview);
+                toggle.IsChecked.Should().NotBe(true);
+                FindButton(preview, "PrintPreviewZoomInButton").IsEffectivelyVisible.Should().BeTrue();
+                FindButton(preview, "PrintPreviewFitWidthButton").IsEffectivelyVisible.Should().BeTrue();
+                preview.GetVisualDescendants().OfType<ComboBox>().Where(combo =>
+                        AutomationProperties.GetAutomationId(combo) == PrintPreviewDialogPlanner.ZoomBoxAutomationId)
+                    .Should().BeEmpty();
+                preview.GetVisualDescendants().OfType<Button>().Where(button =>
+                        AutomationProperties.GetAutomationId(button) == PrintPreviewDialogPlanner.NextPageButtonAutomationId)
+                    .Should().BeEmpty();
+
+                await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(preview);
+                FindComboBox(preview, PrintPreviewDialogPlanner.ZoomBoxAutomationId).IsEffectivelyVisible.Should().BeTrue();
+                FindButton(preview, PrintPreviewDialogPlanner.NextPageButtonAutomationId).IsEffectivelyVisible.Should().BeTrue();
+            }
+            finally
+            {
+                CloseOwnedWindows(window);
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task BlankWorksheetPreviewsAndContributesToEntireWorkbookPageCount()
     {
         await Session.Dispatch(async () =>
@@ -118,6 +156,7 @@ public sealed class Wave150PrintPreviewSelectionParityTests
                 dataSheet.PageFooter = new WorksheetHeaderFooter("", "Page &P of &N", "");
 
                 var preview = await OpenPrintPreviewDialogAsync(window);
+                await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(preview);
                 CanvasText(preview).Should().Contain("Page 1 of 1");
 
                 FindComboBox(preview, "PrintPreviewSettingsPrintWhatBox").SelectedIndex = (int)PrintWhat.EntireWorkbook;
@@ -150,6 +189,7 @@ public sealed class Wave150PrintPreviewSelectionParityTests
             {
                 window.Show();
                 var preview = await OpenPrintPreviewDialogAsync(window);
+                await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(preview);
                 var zoom = FindComboBox(preview, PrintPreviewDialogPlanner.ZoomBoxAutomationId);
                 zoom.IsEffectivelyVisible.Should().BeTrue();
                 double PageScale() => FindPageCanvas(preview).TransformToVisual(preview)!.Value.M11;
@@ -202,6 +242,7 @@ public sealed class Wave150PrintPreviewSelectionParityTests
                 window.Session.SelectRange(new GridRange(selected, selected));
 
                 var preview = await OpenPrintPreviewDialogAsync(window);
+                await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(preview);
                 FindButton(preview, PrintPreviewDialogPlanner.LastPageButtonAutomationId).RaiseEvent(
                     new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 await DrainInputAsync();

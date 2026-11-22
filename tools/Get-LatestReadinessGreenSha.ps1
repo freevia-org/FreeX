@@ -47,8 +47,10 @@ Set-StrictMode -Version Latest
 # main head, the evidence against that commit's own gate manifest, and the CI/CodeQL attestation)
 # and runs every gate when anything is short.
 #
-# Usage:  $sha = pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1
-#         gh workflow run full-release.yml -f release_version=0.8.193 -f source_sha=$sha ...
+# full-release.yml's `resolve` job calls this by default (empty source_sha, dispatched from main) with
+# -HeadSha <dispatched head> -Json, and releases the head with every gate when it exits 1.
+# Usage:  pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1      (preview the default choice)
+#         gh workflow run full-release.yml -f release_version=0.8.193 -f release_head=true ...  (override)
 # Exit code 0 with the SHA on stdout, or 1 when no candidate exists (release from the head instead).
 
 function Read-JsonDocument([string]$OfflinePath, [scriptblock]$Query, [string]$What) {
