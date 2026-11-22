@@ -98,7 +98,7 @@ public sealed partial class FormulaEvaluator
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;
             s_lastAddSubNode = null;
-            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, EvaluateNode(ast, context)));
+            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, BlankNamedCellToZero(ast, EvaluateNode(ast, context))));
         }
         catch (FormulaEvalException ex)
         {
@@ -130,7 +130,7 @@ public sealed partial class FormulaEvaluator
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;
             s_lastAddSubNode = null;
-            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, EvaluateNode(ast, context)));
+            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, BlankNamedCellToZero(ast, EvaluateNode(ast, context))));
         }
         catch (FormulaEvalException ex)
         {
@@ -178,13 +178,23 @@ public sealed partial class FormulaEvaluator
             // reference-taking function argument (AREAS, SUM, ...). NormalizeTopLevelResult below
             // handles the ordinary Evaluate() entry point's equivalent case.
 
-            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, result));
+            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, BlankNamedCellToZero(ast, result)));
         }
         catch (FormulaEvalException ex)
         {
             return ErrorFromCode(ex.ErrorCode);
         }
     }
+
+    /// <summary>
+    /// A formula whose whole body is a defined name bound to ONE empty cell (=Supplier) evaluates to 0
+    /// in Excel, exactly like a bare reference to that empty cell. The name arrives here as a 1x1
+    /// RangeValue holding a blank, which NormalizeTopLevelResult (BlankValue only) would not touch.
+    /// </summary>
+    private static ScalarValue BlankNamedCellToZero(FormulaNode ast, ScalarValue value) =>
+        ast is NamedRangeNode && value is RangeValue { RowCount: 1, ColCount: 1 } single && single.Cells[0, 0] is BlankValue
+            ? NumberValueFor(0d)
+            : value;
 
     private static ScalarValue NormalizeTopLevelResult(ScalarValue value) =>
         value switch

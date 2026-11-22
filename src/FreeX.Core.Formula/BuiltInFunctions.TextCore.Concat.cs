@@ -86,6 +86,10 @@ public static partial class BuiltInFunctions
         // like an ordinary numeric argument and displays "0" (the documented HYPERLINK quirk,
         // worked around by wrapping the argument as `cell&""`), it does not fall back to the link.
         // Real Excel returns the NUMBER 0 here (the cached <v>0</v> is untyped, not t="str"), so keep it numeric.
+        // Excel rejects a link_location longer than 255 characters with #VALUE! (255 is accepted).
+        if (link is not (ErrorValue or BlankValue or RangeValue) && ToText(link).Length > 255)
+            return ErrorValue.Value;
+
         if (friendlyName is BlankValue)
             return new NumberValue(0);
 

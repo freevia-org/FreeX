@@ -43,6 +43,12 @@ public static partial class BuiltInFunctions
         // applies the format's text section ('@' placeholder plus any literal/escaped text) to a text input
         // (e.g. TEXT("A1","\"SKU \"@") = "SKU A1"); a purely numeric format with no '@' leaves the text
         // unchanged, which NumberFormatter.Format already implements (see FormatTextWithColor).
+        // TEXT(number, "") yields "" in Excel (an empty format string has no sections to render);
+        // text input is returned unchanged by an empty format, which the engine already does.
+        if (fmt.Length == 0 &&
+            (val is NumberValue or DateTimeValue ||
+             (val is TextValue numericText && ExcelTextNumberParser.TryParse(numericText.Value, out _, uses1904DateSystem))))
+            return TextResult("");
         if (val is NumberValue or DateTimeValue or TextValue)
             return TextResult(NumberFormatter.Format(val, fmt, uses1904DateSystem));
         return TextResult(ToText(val));

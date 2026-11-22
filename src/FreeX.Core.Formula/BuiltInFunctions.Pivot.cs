@@ -567,7 +567,24 @@ public static partial class BuiltInFunctions
             return [];
         var headers = new List<string>();
         for (var col = pivotTable.SourceRange.Start.Col; col <= pivotTable.SourceRange.End.Col; col++)
-            headers.Add(PivotText(sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col)?.Value));
+        {
+            var headerCell = sourceSheet.GetCell(pivotTable.SourceRange.Start.Row, col);
+            // A numeric header cell (e.g. 1844 formatted 0.00) names its pivot field by the cell's
+            // DISPLAYED text ("1844.00") -- Excel's cache field name -- so GETPIVOTDATA's data_field /
+            // field_name arguments must match that text, not the bare number.
+            if (headerCell?.Value is NumberValue headerNumber)
+            {
+                var numberFormat = workbook.GetStyle(headerCell.StyleId)?.NumberFormat;
+                headers.Add(!string.IsNullOrWhiteSpace(numberFormat) &&
+                            !string.Equals(numberFormat, "General", StringComparison.OrdinalIgnoreCase)
+                    ? NumberFormatter.Format(headerNumber, numberFormat, false)
+                    : PivotText(headerNumber));
+                continue;
+            }
+
+            headers.Add(PivotText(headerCell?.Value));
+        }
+
         return headers;
     }
 
