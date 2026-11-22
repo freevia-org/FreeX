@@ -392,14 +392,14 @@ public sealed partial class MainWindow
 
         layer.Children.Add(new AvaloniaBorder
         {
-            BorderBrush = SelectionBorder,
+            BorderBrush = ObjectSelectionAccent,
             BorderThickness = new Thickness(1.5),
             IsHitTestVisible = false,
         });
         layer.Children.Add(new AvaloniaBorder
         {
             Width = 1,
-            Background = SelectionBorder,
+            Background = ObjectSelectionAccent,
             IsHitTestVisible = false,
         });
         layer.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse
@@ -407,7 +407,7 @@ public sealed partial class MainWindow
             Width = DrawingObjectRotationGripDiameter,
             Height = DrawingObjectRotationGripDiameter,
             Fill = Brushes.White,
-            Stroke = SelectionBorder,
+            Stroke = ObjectSelectionAccent,
             StrokeThickness = 1,
             IsHitTestVisible = false,
         });
@@ -419,7 +419,7 @@ public sealed partial class MainWindow
                 Width = DrawingObjectHandleSize,
                 Height = DrawingObjectHandleSize,
                 Background = Brushes.White,
-                BorderBrush = SelectionBorder,
+                BorderBrush = ObjectSelectionAccent,
                 BorderThickness = new Thickness(1),
                 IsHitTestVisible = false,
             });
@@ -486,7 +486,7 @@ public sealed partial class MainWindow
         {
             Width = Math.Max(1, visibleRect.Width),
             Height = Math.Max(1, visibleRect.Height),
-            BorderBrush = SelectionBorder,
+            BorderBrush = ObjectSelectionAccent,
             BorderThickness = new Thickness(1.5),
             IsHitTestVisible = false,
         };
@@ -501,7 +501,7 @@ public sealed partial class MainWindow
                 Width = PictureCropPlanner.DefaultHandleSize,
                 Height = PictureCropPlanner.DefaultHandleSize,
                 Background = Brushes.White,
-                BorderBrush = SelectionBorder,
+                BorderBrush = ObjectSelectionAccent,
                 BorderThickness = new Thickness(1),
                 IsHitTestVisible = false,
             };
@@ -1309,8 +1309,9 @@ public sealed partial class MainWindow
         {
             Width = Math.Max(1, width),
             Height = Math.Max(1, height),
-            BorderBrush = SelectionBorder,
-            BorderThickness = new Thickness(2),
+            BorderBrush = ObjectSelectionAccent,
+            // WPF SelectionBorderPen (GridView.ObjectDrag.cs) is 1.5 DIP for every selected object.
+            BorderThickness = new Thickness(1.5),
             IsHitTestVisible = false,
         };
         AvaloniaCanvas.SetLeft(border, 0);
@@ -1324,7 +1325,7 @@ public sealed partial class MainWindow
                 Width = ChartHandleSize,
                 Height = ChartHandleSize,
                 Background = Brushes.White,
-                BorderBrush = SelectionBorder,
+                BorderBrush = ObjectSelectionAccent,
                 BorderThickness = new Thickness(1),
                 IsHitTestVisible = false,
             });

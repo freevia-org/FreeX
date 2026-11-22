@@ -248,7 +248,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.TitleBarBrush) ?? Brush(23, 50, 77);
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
-    private static readonly IBrush GridLine = Brush(231, 231, 231);
+    // WPF GridView draws gridlines with MakePen(MakeBrush(220, 220, 220), 1) (GridView.GridLineBrush):
+    // a 1-DIP stroke centred on each shared cell edge. Avalonia matches that effective result at both
+    // 1x and 2x scale with the same 220 colour and ONE 1-DIP shared edge (see CreateCellBorder).
+    private static readonly IBrush GridLine = Brush(220, 220, 220);
     // Freeze Panes divider line — matches WPF's GridView.cs MakeFreezePen (RGB 100,100,200 @ 2px).
     private static readonly IBrush FreezeDividerBrush = Brush(100, 100, 200);
     private const double FreezeDividerThickness = 2;
@@ -373,6 +376,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
+    // Floating-object selection chrome (picture/shape/text box/chart outline, resize + rotation
+    // handles, selected chart-element outline) is blue (#207AC5) in WPF -- GridView.ObjectDrag.cs
+    // HandlePen/SelectionBorderPen/RotationGripPen and GridView.ChartElements.cs -- while only the
+    // cell-range selection (SelectionBorder above) is Excel green.
+    private static readonly IBrush ObjectSelectionAccent = Brush(0x20, 0x7A, 0xC5);
     private const double SelectionOutlineThickness = 2;
     // Outer size of the fill handle. The WPF grid draws a 6 DIP square stroked with the 2 DIP
     // selection pen (GridView.Rendering.Selection.cs DrawSelectionHandle), i.e. a solid 8 DIP square
@@ -12238,7 +12246,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Background = background,
             BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent,
-            BorderThickness = new Thickness(scaledBorderThickness),
+            // Each cell paints only its right and bottom edge, so the edge shared with its neighbour is
+            // ONE scaledBorderThickness line (WPF strokes a single 1-DIP line per shared edge; four
+            // sides per cell produced a doubled 2-DIP line, 4 device pixels on Retina). The Padding
+            // keeps the content slot identical to the old all-sides inset so text geometry is unchanged.
+            BorderThickness = new Thickness(0, 0, scaledBorderThickness, scaledBorderThickness),
+            Padding = new Thickness(scaledBorderThickness, scaledBorderThickness, 0, 0),
             ClipToBounds = true,
             Child = cellContent,
         };

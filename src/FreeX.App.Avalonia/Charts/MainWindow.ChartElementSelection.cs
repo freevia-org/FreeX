@@ -69,7 +69,7 @@ public sealed partial class MainWindow
             {
                 Width = Math.Max(1, rect.Width + (2 * ChartElementHighlightInflate)),
                 Height = Math.Max(1, rect.Height + (2 * ChartElementHighlightInflate)),
-                Stroke = SelectionBorder,
+                Stroke = ObjectSelectionAccent,
                 StrokeThickness = 1.5,
                 StrokeDashArray = [4, 2],
                 Fill = Brushes.Transparent,
@@ -94,7 +94,7 @@ public sealed partial class MainWindow
                     Width = ChartElementHandleSize,
                     Height = ChartElementHandleSize,
                     Fill = Brushes.White,
-                    Stroke = SelectionBorder,
+                    Stroke = ObjectSelectionAccent,
                     StrokeThickness = 1,
                     IsHitTestVisible = false,
                 };
