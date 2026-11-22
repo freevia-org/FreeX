@@ -501,7 +501,7 @@ public sealed partial class FormulaEvaluator
             if (candidate is ErrorValue error)
                 return error;
 
-            if (BuiltInFunctions.MatchExactValue(candidate, lookupValue))
+            if (BuiltInFunctions.MatchExactLegacyLookup(candidate, lookupValue))
                 return resultReader.GetValue(index);
         }
 
@@ -521,7 +521,7 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
-                if (BuiltInFunctions.MatchExactValue(candidate, lookupValue))
+                if (BuiltInFunctions.MatchExactLegacyLookup(candidate, lookupValue))
                     return new NumberValue(index + 1);
             }
 

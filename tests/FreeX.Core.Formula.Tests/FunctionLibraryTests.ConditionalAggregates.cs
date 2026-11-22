@@ -59,10 +59,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Sumif_CriteriaError_PropagatesError()
+    public void Sumif_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)));
-        _eval.Evaluate("=SUMIF(A1:A1,NA(),B1:B1)", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=SUMIF(A1:A1,NA(),B1:B1)", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]
@@ -194,10 +195,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Countif_CriteriaError_PropagatesError()
+    public void Countif_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)));
-        _eval.Evaluate("=COUNTIF(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=COUNTIF(A1:A1,NA())", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]
@@ -287,10 +289,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Averageif_CriteriaError_PropagatesError()
+    public void Averageif_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)));
-        _eval.Evaluate("=AVERAGEIF(A1:A1,NA(),B1:B1)", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=AVERAGEIF(A1:A1,NA(),B1:B1)", sheet).Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact]
@@ -349,12 +352,13 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Sumifs_CriteriaError_PropagatesError()
+    public void Sumifs_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)),
             (1, 2, new TextValue("A")));
-        _eval.Evaluate("=SUMIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=SUMIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]
@@ -423,10 +427,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Countifs_CriteriaError_PropagatesError()
+    public void Countifs_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet((1, 1, new TextValue("A")));
-        _eval.Evaluate("=COUNTIFS(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=COUNTIFS(A1:A1,NA())", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]
@@ -468,12 +473,13 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Averageifs_CriteriaError_PropagatesError()
+    public void Averageifs_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)),
             (1, 2, new TextValue("A")));
-        _eval.Evaluate("=AVERAGEIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=AVERAGEIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact]

@@ -32,7 +32,6 @@ public static partial class BuiltInFunctions
         // same convention in BuiltInFunctions.Database.cs / BuiltInFunctions.Subtotal.cs).
         if (args[0] is not RangeValue { IsSheetReference: true } rangeArg) return ErrorValue.Value;
         var criteria = args[1];
-        if (criteria is ErrorValue criteriaError) return criteriaError;
 
         // Array-criteria: criteria is a range → return one result per element.
         // Check before validating the optional sum-range so the expansion path
@@ -44,7 +43,7 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is not RangeValue { IsSheetReference: true }) return ErrorValue.Value;
 
         RangeValue? sumRange = args.Count > 2 ? (RangeValue)args[2] : null;
-        var criteriaMatcher = CompileCriteria(criteria);
+        var criteriaMatcher = CompileCriteriaAllowingErrors(criteria);
 
         double total = 0;
         int len = FlatCount(rangeArg);
@@ -71,13 +70,12 @@ public static partial class BuiltInFunctions
         // Excel requires the range argument to be a genuine worksheet reference (see Sumif above).
         if (args[0] is not RangeValue { IsSheetReference: true } rangeArg) return ErrorValue.Value;
         var criteria = args[1];
-        if (criteria is ErrorValue criteriaError) return criteriaError;
 
         // Array-criteria: criteria is a range → return one result per element.
         if (criteria is RangeValue criteriaArray)
             return ExpandConditionalArrayCriteria(criteriaArray, args, 1, ctx, Countif);
 
-        var criteriaMatcher = CompileCriteria(criteria);
+        var criteriaMatcher = CompileCriteriaAllowingErrors(criteria);
         return new NumberValue(CountMatchingCells(rangeArg, criteriaMatcher));
     }
 
@@ -89,7 +87,6 @@ public static partial class BuiltInFunctions
         // Excel requires the range argument to be a genuine worksheet reference (see Sumif above).
         if (args[0] is not RangeValue { IsSheetReference: true } rangeArg) return ErrorValue.Value;
         var criteria = args[1];
-        if (criteria is ErrorValue criteriaError) return criteriaError;
 
         // Array-criteria: criteria is a range → return one result per element.
         if (criteria is RangeValue criteriaArray)
@@ -99,7 +96,7 @@ public static partial class BuiltInFunctions
         if (args.Count > 2 && args[2] is not RangeValue { IsSheetReference: true }) return ErrorValue.Value;
 
         RangeValue? avgRange = args.Count > 2 ? (RangeValue)args[2] : null;
-        var criteriaMatcher = CompileCriteria(criteria);
+        var criteriaMatcher = CompileCriteriaAllowingErrors(criteria);
 
         double total = 0;
         int count = 0;
@@ -469,8 +466,7 @@ public static partial class BuiltInFunctions
             if (!SameShape(shapeRange, criteriaRange)) return ErrorValue.Value;
 
             var criteria = args[criteriaIndex];
-            if (criteria is ErrorValue criteriaError) return criteriaError;
-            pairs[p] = new ConditionalCriteriaPair(criteriaRange, CompileCriteria(criteria));
+            pairs[p] = new ConditionalCriteriaPair(criteriaRange, CompileCriteriaAllowingErrors(criteria));
         }
 
         criteriaSet = new ConditionalCriteriaSet(shapeRange!, pairs);

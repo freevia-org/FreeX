@@ -97,7 +97,8 @@ public sealed partial class FormulaEvaluator
                 : new SheetEvalContext(sheet, workbook, this, currentCell);
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;
-            return NormalizeTopLevelResult(EvaluateNode(ast, context));
+            s_lastAddSubNode = null;
+            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, EvaluateNode(ast, context)));
         }
         catch (FormulaEvalException ex)
         {
@@ -128,7 +129,8 @@ public sealed partial class FormulaEvaluator
                 : new SheetEvalContext(sheet, workbook, this, currentCell, isIterativeCalculationPass);
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;
-            return NormalizeTopLevelResult(EvaluateNode(ast, context));
+            s_lastAddSubNode = null;
+            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, EvaluateNode(ast, context)));
         }
         catch (FormulaEvalException ex)
         {
@@ -159,6 +161,7 @@ public sealed partial class FormulaEvaluator
 
             _effectiveMaxEvalDepth = MaxEvalDepth;
             _evalDepth = 0;
+            s_lastAddSubNode = null;
 
             // Only top-level reference nodes need the spilling treatment; every other node
             // already produces a RangeValue when it yields an array (functions, operators,
@@ -175,7 +178,7 @@ public sealed partial class FormulaEvaluator
             // reference-taking function argument (AREAS, SUM, ...). NormalizeTopLevelResult below
             // handles the ordinary Evaluate() entry point's equivalent case.
 
-            return NormalizeTopLevelResult(result);
+            return NormalizeTopLevelResult(SnapNearZeroRootAddSub(ast, result));
         }
         catch (FormulaEvalException ex)
         {

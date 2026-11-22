@@ -68,13 +68,14 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Maxifs_CriteriaError_PropagatesError()
+    public void Maxifs_CriteriaError_MatchesErrorCellsInsteadOfPropagating()
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)),
             (1, 2, new TextValue("A")));
 
-        _eval.Evaluate("=MAXIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(ErrorValue.NA);
+        // Excel: an error criterion matches cells holding that error (none here) rather than propagating.
+        _eval.Evaluate("=MAXIFS(A1:A1,B1:B1,NA())", sheet).Should().Be(new NumberValue(0));
     }
 
     [Fact]

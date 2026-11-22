@@ -293,13 +293,7 @@ public sealed partial class FormulaEvaluator
             return DirectRangeFastPathState.Unsupported;
         }
 
-        if (criteriaValue is ErrorValue error)
-        {
-            result = error;
-            return DirectRangeFastPathState.Error;
-        }
-
-        criteria = BuiltInFunctions.CompileCriteria(criteriaValue);
+        criteria = BuiltInFunctions.CompileCriteriaAllowingErrors(criteriaValue);
         result = BlankValue.Instance;
         return DirectRangeFastPathState.Success;
     }

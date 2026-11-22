@@ -32,6 +32,10 @@ public static class FidelityValueCompare
             // Any error vs any error is a MATCH — the formula is genuinely erroneous on the available data;
             // only error-vs-non-error (caught by the wildcard below) remains a mismatch.
             (ErrorValue, ErrorValue) => true,
+            // A cached value written as the literal text of an error ("#VALUE!" with t="str", as some
+            // writers emit) is that error as far as Excel is concerned.
+            (TextValue tx, ErrorValue er) => string.Equals(tx.Value, er.Code, StringComparison.Ordinal),
+            (ErrorValue er2, TextValue tx2) => string.Equals(tx2.Value, er2.Code, StringComparison.Ordinal),
             _ => false
         };
     }

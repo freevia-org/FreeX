@@ -112,7 +112,7 @@ public static partial class BuiltInFunctions
             {
                 var cv = table.At(r, 1);
                 if (cv is ErrorValue ev) return ev;
-                if (MatchExactValue(cv, lookupValue))
+                if (MatchExactLegacyLookup(cv, lookupValue))
                     return table.At(r, colIndex);
             }
             return ErrorValue.NA;
@@ -183,7 +183,7 @@ public static partial class BuiltInFunctions
             {
                 var cv = table.At(1, c);
                 if (cv is ErrorValue ev) return ev;
-                if (MatchExactValue(cv, lookupValue))
+                if (MatchExactLegacyLookup(cv, lookupValue))
                     return table.At(rowIndex, c);
             }
             return ErrorValue.NA;
@@ -311,7 +311,7 @@ public static partial class BuiltInFunctions
             {
                 var candidate = vector[i];
                 if (candidate is ErrorValue ev) return ev;
-                if (MatchExactValue(candidate, lookupValue))
+                if (MatchExactLegacyLookup(candidate, lookupValue))
                     return new NumberValue(i + 1);
             }
             return ErrorValue.NA;

@@ -14,6 +14,19 @@ public static partial class BuiltInFunctions
     }
 
     /// <summary>
+    /// Exact-match test for the legacy MATCH/VLOOKUP/HLOOKUP: a blank lookup_value is
+    /// coerced to 0, so it never matches a blank candidate cell (Excel returns #N/A),
+    /// unlike XLOOKUP/XMATCH where blank matches blank.
+    /// </summary>
+    internal static bool MatchExactLegacyLookup(ScalarValue candidate, ScalarValue lookupValue)
+    {
+        if (lookupValue is BlankValue && candidate is BlankValue)
+            return false;
+
+        return MatchExactValue(candidate, lookupValue);
+    }
+
+    /// <summary>
     /// Test a cell value against an Excel criteria string or value.
     /// Supports: number (exact), text (exact, case-insensitive),
     /// operator strings ">5", ">=5", "<5", "<=5", "<>5", "=text",
@@ -36,6 +49,16 @@ public static partial class BuiltInFunctions
     internal static CriteriaMatcher CompileCriteria(ScalarValue criteria, bool textPrefixMatch = false) =>
         CriteriaMatcher.Create(criteria, textPrefixMatch);
 
+    /// <summary>
+    /// COUNTIF/SUMIF-family criteria compiler: an error-valued criterion (including a criterion built
+    /// with a concatenation that propagated an error, e.g. ">="&amp;DATE(...) -> #VALUE!) does not
+    /// propagate. Excel treats it as "match cells holding that same error" (verified against Excel).
+    /// </summary>
+    internal static CriteriaMatcher CompileCriteriaAllowingErrors(ScalarValue criteria) =>
+        criteria is ErrorValue error
+            ? CriteriaMatcher.ForError(error)
+            : CriteriaMatcher.Create(criteria);
+
     private enum CriteriaMatcherKind : byte
     {
         AlwaysFalse,
@@ -47,7 +70,8 @@ public static partial class BuiltInFunctions
         WildcardText,
         NumericComparison,
         TextComparison,
-        WildcardComparison
+        WildcardComparison,
+        ErrorEquals
     }
 
     private enum CriteriaComparisonOp : byte
@@ -77,6 +101,9 @@ public static partial class BuiltInFunctions
             _number = number;
             _bool = boolean;
         }
+
+        public static CriteriaMatcher ForError(ErrorValue error) =>
+            new(CriteriaMatcherKind.ErrorEquals, text: error.Code);
 
         public static CriteriaMatcher Create(ScalarValue criteria, bool textPrefixMatch = false)
         {
@@ -137,6 +164,9 @@ public static partial class BuiltInFunctions
 
         public bool Matches(ScalarValue cellValue) => _kind switch
         {
+            CriteriaMatcherKind.ErrorEquals =>
+                cellValue is ErrorValue cellError && string.Equals(cellError.Code, _text, StringComparison.Ordinal),
+
             CriteriaMatcherKind.NumberEquals =>
                 TryCellNumber(cellValue, out double cellNumber) && FormulaEvaluator.RoundTo15SignificantDigits(cellNumber) == _number,
 
