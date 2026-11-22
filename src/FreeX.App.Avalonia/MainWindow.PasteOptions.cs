@@ -33,16 +33,64 @@ public partial class MainWindow
         }
 
         var button = CreatePasteOptionsButton(range);
-        Canvas.SetLeft(button, left + width + 1);
-        Canvas.SetTop(button, top + height + 1);
+        var desiredLeft = left + width + 1;
+        var desiredTop = top + height + 1;
+        Canvas.SetLeft(button, desiredLeft);
+        Canvas.SetTop(button, desiredTop);
         overlay.Children.Add(button);
         _pasteOptionsButton = button;
+
+        // WPF keeps the button inside the grid overlay (RefreshPasteOptionsButton clamps against the
+        // overlay's actual size); the overlay and the button have no size until they are laid out,
+        // so re-clamp once either reports one.
+        void Reclamp()
+        {
+            var (clampedLeft, clampedTop) = ClampPasteOptionsButtonPosition(
+                desiredLeft,
+                desiredTop,
+                button.Bounds.Width,
+                overlay.Bounds.Width,
+                overlay.Bounds.Height);
+            Canvas.SetLeft(button, clampedLeft);
+            Canvas.SetTop(button, clampedTop);
+        }
+
+        overlay.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+                Reclamp();
+        };
+        button.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+                Reclamp();
+        };
         if (!_pasteOptionsKeysHooked)
         {
             _pasteOptionsKeysHooked = true;
             AddHandler(KeyDownEvent, PasteOptions_KeyDown, RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(KeyUpEvent, PasteOptions_KeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
+    }
+
+    /// <summary>
+    /// WPF's RefreshPasteOptionsButton clamp: the button sits just past the pasted range's corner but
+    /// never leaves the overlay. A zero overlay size (not laid out yet) leaves that axis unclamped.
+    /// </summary>
+    internal static (double Left, double Top) ClampPasteOptionsButtonPosition(
+        double desiredLeft,
+        double desiredTop,
+        double buttonWidth,
+        double overlayWidth,
+        double overlayHeight)
+    {
+        var left = overlayWidth > 0
+            ? Math.Min(desiredLeft, Math.Max(0, overlayWidth - buttonWidth))
+            : desiredLeft;
+        var top = overlayHeight > 0
+            ? Math.Min(desiredTop, Math.Max(0, overlayHeight - PasteOptionsPlanner.ButtonHeight))
+            : desiredTop;
+        return (Math.Max(0, left), Math.Max(0, top));
     }
 
     // Excel opens the Paste Options menu when Ctrl is pressed and released on its own, and Esc
