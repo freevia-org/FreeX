@@ -301,6 +301,9 @@ public sealed partial class MainWindow
                     ? RaiseFormulaBoxShortcutForValidationAsync(args)
                     : RaiseKeyDownForTest(args);
                 await SettleShortcutDispatchAsync(dispatch, ownedBefore);
+                // A bare Alt/Option step is a standalone-Alt key tip toggle that, like WPF, fires on release.
+                if (step.Key is Key.LeftAlt or Key.RightAlt && args.Handled)
+                    RaiseKeyUpForTest(new KeyEventArgs { Key = step.Key });
                 if (!args.Handled)
                 {
                     return (false,

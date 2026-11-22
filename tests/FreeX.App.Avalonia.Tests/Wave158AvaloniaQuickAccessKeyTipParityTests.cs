@@ -43,7 +43,7 @@ public sealed class Wave158AvaloniaQuickAccessKeyTipParityTests
                     .Should().Be("2");
                 window.AvaloniaQuickAccessKeyTipForTest(QuickAccessToolbarCommandIds.CalculateSheet)
                     .Should().Be("01");
-                await Press(window, Key.LeftAlt);
+                await TapAlt(window);
                 window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
                 window.AvaloniaQuickAccessKeyTipVisibleForTest(QuickAccessToolbarCommandIds.CalculateSheet)
                     .Should().BeTrue("enabled configured QAT commands must expose their keytip badge");
@@ -83,11 +83,10 @@ public sealed class Wave158AvaloniaQuickAccessKeyTipParityTests
                 window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
 
                 await PressHandled(window, Key.D0, KeyModifiers.Alt);
-                await PressHandled(window, Key.LeftAlt);
+                await TapAlt(window);
                 window.QuickAccessKeyTipInputForTest.Should().BeEmpty();
-                window.RibbonKeyTipsVisibleForTest.Should().BeTrue(
-                    "Alt while paused in a multi-digit QAT keytip must restart the visible keytip scope");
-                await PressHandled(window, Key.Escape);
+                window.RibbonKeyTipsVisibleForTest.Should().BeFalse(
+                    "WPF exits key tip mode when Alt is tapped while a multi-digit QAT keytip is pending");
             });
     }
 
@@ -160,6 +159,13 @@ public sealed class Wave158AvaloniaQuickAccessKeyTipParityTests
             if (File.Exists(optionsPath))
                 File.Delete(optionsPath);
         }
+    }
+
+    private static async Task TapAlt(MainWindow window)
+    {
+        var down = new KeyEventArgs { Key = Key.LeftAlt, KeyModifiers = KeyModifiers.Alt };
+        await window.RaiseKeyDownForTest(down);
+        window.RaiseKeyUpForTest(new KeyEventArgs { Key = Key.LeftAlt });
     }
 
     private static async Task PressHandled(

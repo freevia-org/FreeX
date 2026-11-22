@@ -23,8 +23,83 @@ public sealed partial class MainWindow
             "shortcut.data.filter-toggle-reapply:2",
         };
 
+    // WPF StandaloneAltKeyTipTracker parity: a bare Alt (Option on macOS) press only becomes a
+    // key-tip toggle when it is released without any other key in between, so Option+Arrow word
+    // navigation, Option+drag and Option+letter (special characters / Alt chords) never flash or
+    // leave key tips on. _standaloneAltExitsMode records whether the mode was already on at press
+    // time (WPF then exits the mode on release instead of entering it).
+    private bool _standaloneAltCandidate;
+    private bool _standaloneAltExitsMode;
+    private bool _standaloneAltHooked;
+
+    private static bool IsStandaloneAltKeyTipKey(Key key) => key == Key.LeftAlt || key == Key.RightAlt;
+
+    private void HookStandaloneAltKeyTipRelease()
+    {
+        if (_standaloneAltHooked)
+            return;
+
+        _standaloneAltHooked = true;
+        AddHandler(KeyUpEvent, StandaloneAltKeyTip_KeyUp, RoutingStrategies.Tunnel, handledEventsToo: true);
+        Deactivated += (_, _) => HandleKeyTipWindowDeactivated();
+    }
+
+    /// <summary>WPF MainWindow_Deactivated: losing focus cancels a pending Alt and exits key tip mode.</summary>
+    private void HandleKeyTipWindowDeactivated()
+    {
+        _standaloneAltCandidate = false;
+        if (_ribbonKeyTipSession.IsActive || _ribbonKeyTipsVisible)
+            ResetRibbonKeyTipSequence();
+    }
+
+    private void StandaloneAltKeyTip_KeyUp(object? sender, KeyEventArgs e)
+    {
+        if (!IsStandaloneAltKeyTipKey(e.Key) || !_standaloneAltCandidate)
+            return;
+
+        _standaloneAltCandidate = false;
+        if (_standaloneAltExitsMode)
+            ResetRibbonKeyTipSequence();
+        else
+        {
+            _ribbonKeyTipSession.Cancel();
+            SetRibbonKeyTipsVisible(true);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Begins or cancels the standalone-Alt candidate. Returns true when the key is the bare Alt
+    /// press that was consumed as a candidate.
+    /// </summary>
+    private bool TryTrackStandaloneAltKeyTip(KeyEventArgs args)
+    {
+        HookStandaloneAltKeyTipRelease();
+        if (!IsStandaloneAltKeyTipKey(args.Key))
+        {
+            _standaloneAltCandidate = false;
+            return false;
+        }
+
+        var modeActive = _ribbonKeyTipSession.IsActive || _ribbonKeyTipsVisible;
+        if (!modeActive && ((args.KeyModifiers & ~KeyModifiers.Alt) != 0 || !CanHandleRibbonKeyTipInput(args)))
+        {
+            _standaloneAltCandidate = false;
+            return false;
+        }
+
+        _standaloneAltCandidate = true;
+        _standaloneAltExitsMode = modeActive;
+        args.Handled = true;
+        return true;
+    }
+
     private bool TryHandleRibbonKeyTipInput(KeyEventArgs args)
     {
+        if (TryTrackStandaloneAltKeyTip(args))
+            return true;
+
         if (TryHandleQuickAccessKeyTipSequence(args))
             return true;
 

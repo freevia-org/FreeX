@@ -33,7 +33,7 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
 
             if (standaloneAlt)
             {
-                await PressHandled(window, Key.LeftAlt);
+                await TapAlt(window);
                 window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
                 await PressHandled(window, Key.D);
             }
@@ -82,7 +82,7 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
 
             if (standaloneAlt)
             {
-                await PressHandled(window, Key.LeftAlt);
+                await TapAlt(window);
                 window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
                 await PressHandled(window, Key.E);
             }
@@ -285,10 +285,13 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
             await PressHandled(window, Key.H, KeyModifiers.Alt);
             window.RibbonKeyTipInputForTest.Should().Be("H");
 
-            await PressHandled(window, Key.LeftAlt);
+            // WPF: Alt pressed while a key tip session is active exits the mode on release.
+            await TapAlt(window);
             window.RibbonKeyTipInputForTest.Should().BeEmpty();
-            window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
+            window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
 
+            await TapAlt(window);
+            window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
             await PressHandled(window, Key.X);
             window.RibbonKeyTipInputForTest.Should().BeEmpty();
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
@@ -508,6 +511,14 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Keep"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("Drop"));
         return range;
+    }
+
+    private static async Task TapAlt(MainWindow window)
+    {
+        var down = new KeyEventArgs { Key = Key.LeftAlt, KeyModifiers = KeyModifiers.Alt };
+        await window.RaiseKeyDownForTest(down);
+        down.Handled.Should().BeTrue();
+        window.RaiseKeyUpForTest(new KeyEventArgs { Key = Key.LeftAlt });
     }
 
     private static async Task PressHandled(
