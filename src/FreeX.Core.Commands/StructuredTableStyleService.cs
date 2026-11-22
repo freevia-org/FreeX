@@ -318,7 +318,11 @@ public static class StructuredTableStyleService
         // null "no fill" -- which would never structurally equal a truly blank cell's default style
         // even though it renders identically.
         var cell = sheet.GetCell(row, col);
-        var existing = cell is not null ? workbook.GetStyle(cell.StyleId) : CellStyle.Default;
+        // A cell that does not exist can still carry a style-only entry (e.g. the format a table row insert
+        // inherits from the row above); banding merges onto it instead of discarding it.
+        var existing = cell is not null
+            ? workbook.GetStyle(cell.StyleId)
+            : sheet.GetStyleOnly(row, col) is { } styleOnly ? workbook.GetStyle(styleOnly) : CellStyle.Default;
         var visual = workbook.GetStyle(visualStyleId);
 
         // Do not overwrite a fill the user (or the source file) explicitly set on a cell; Excel's
@@ -420,6 +424,8 @@ public static class StructuredTableStyleService
         if (cell is null)
         {
             cell = new Cell { Value = BlankValue.Instance };
+            if (sheet.GetStyleOnly(row, col) is { } inheritedStyle)
+                cell.StyleId = inheritedStyle;
             sheet.SetCell(new CellAddress(sheet.Id, row, col), cell);
         }
 
