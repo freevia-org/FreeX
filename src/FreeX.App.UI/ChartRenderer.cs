@@ -260,7 +260,8 @@ public static partial class ChartRenderer
         if (chart.Type == ChartType.Bubble)
         {
             var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, startCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);
-            AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints, trendlineSeriesIndex: 0);
+            foreach (var (bubbleSeriesIndex, bubbleTrendPoints) in trendPoints)
+                AddTrendlineIfRequested(bubbleModel, chart, theme, bubbleTrendPoints, trendlineSeriesIndex: bubbleSeriesIndex);
             ApplyAxisBounds(bubbleModel, chart, theme);
             AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return bubbleModel;

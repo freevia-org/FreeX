@@ -20,7 +20,7 @@ public static partial class ChartRenderer
         uint headerRow,
         WorkbookTheme theme,
         ChartPointDataLabelFormatLookup pointDataLabelFormats,
-        out List<DataPoint> trendPoints)
+        out Dictionary<int, List<DataPoint>> trendPoints)
     {
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
@@ -75,6 +75,14 @@ public static partial class ChartRenderer
             ApplyScatterFormat(series, GetSeriesFormat(chart, seriesIndex), theme);
             ApplyNativeDataLabelStyle(series, chart, theme);
 
+            // Each bubble series carries its own trendline (Excel), so collect points per series.
+            List<DataPoint>? seriesTrendPoints = null;
+            if (chart.HasTrendline(seriesIndex))
+            {
+                seriesTrendPoints = [];
+                trendPoints[seriesIndex] = seriesTrendPoints;
+            }
+
             var fallbackIndex = 0;
             for (uint row = dataStartRow; row <= endRow; row++, fallbackIndex++)
             {
@@ -90,8 +98,8 @@ public static partial class ChartRenderer
                     maxSize,
                     chart.BubbleSizeRepresents) * bubbleScale;
                 series.Points.Add(new ScatterPoint(x, y, size));
-                if (seriesIndex == 0)
-                    trendPoints.Add(new DataPoint(x, y));
+                if (seriesTrendPoints is not null)
+                    seriesTrendPoints.Add(new DataPoint(x, y));
                 if (ShouldUseAnnotationLabels(chart))
                     AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, fallbackIndex, ChartDataLabelTextPlanner.GetCategory(categories, fallbackIndex), x, y, y);
             }
