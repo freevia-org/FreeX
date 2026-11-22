@@ -1383,6 +1383,9 @@ public sealed partial class WorkbookSession : IDisposable
         };
     }
 
+    /// <summary>Error text of a Go To Special search that matched no cells.</summary>
+    public const string GoToSpecialNoCellsFoundMessage = "No cells found.";
+
     public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
     {
         // CurrentRegion/Precedents/Dependents trace relationships from the user's true active
@@ -1396,7 +1399,7 @@ public sealed partial class WorkbookSession : IDisposable
             : ResolveGoToSpecialSearchRange();
         var matches = GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options);
         if (matches.Count == 0)
-            return WorkbookGoToSpecialResult.Failed("No cells found.");
+            return WorkbookGoToSpecialResult.Failed(GoToSpecialNoCellsFoundMessage);
 
         var ranges = SelectionRangeService.CompressAddresses(matches);
         var selectedRange = ranges[0];
@@ -2339,7 +2342,8 @@ public sealed partial class WorkbookSession : IDisposable
         FindOptions? options,
         bool matchCase = false,
         bool matchEntireCell = false,
-        StyleDiff? replacementFormat = null)
+        StyleDiff? replacementFormat = null,
+        FindReplaceNextBehavior? behavior = null)
     {
         var result = _findReplaceWorkflow.ReplaceNext(
             searchText,
@@ -2347,11 +2351,18 @@ public sealed partial class WorkbookSession : IDisposable
             options,
             matchCase,
             matchEntireCell,
-            replacementFormat);
+            replacementFormat,
+            behavior);
         if (!result.Success)
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace failed.");
         if (result.EditResult is { } editResult && result.ReplacedMatch is { } replacedMatch)
+        {
             ApplySuccessfulEditResult(editResult, replacedMatch.Address);
+            // A submitted-dialog replace advances to the following match; the edit apply above
+            // re-selects the replaced cell, so restore the advanced selection.
+            if (result.CurrentIndex >= 0 && result.CurrentIndex < result.CurrentMatches.Count)
+                GoToCell(result.CurrentMatches[result.CurrentIndex].Address);
+        }
 
         var replacedRange = result.ReplacedMatch is { } match
             ? new GridRange(match.Address, match.Address)
@@ -2360,7 +2371,9 @@ public sealed partial class WorkbookSession : IDisposable
             result.ReplacedCount,
             replacedRange,
             result.MatchIndex,
-            result.MatchCount);
+            result.MatchCount,
+            result.CurrentIndex,
+            result.CurrentMatches.Count);
     }
 
     public void MoveActiveCell(int rowDelta, int colDelta)

@@ -80,7 +80,7 @@ public sealed class ReleaseAutomationWorkflowTests
 
         // Publication stays behind the protected environment on the job that creates the release.
         Regex.Matches(workflow, @"(?m)^    environment: public-preview\r?$").Count.Should().Be(2);
-        workflow.Should().Contain("needs: [prepare, publication-gate]");
+        workflow.Should().Contain("needs: [resolve, prepare, publication-gate]");
         // Every Azure login step is Windows-only, so no ungated leg needs the environment secrets.
         Regex.Matches(workflow, @"(?s)if: matrix\.platform == 'windows' && !inputs\.dry_run\s+uses: azure/login").Count.Should().Be(2);
     }
@@ -146,14 +146,14 @@ public sealed class ReleaseAutomationWorkflowTests
         releaseGate.Should().Contain("if: always()");
 
         // Everything downstream still needs the gate, and the gate must still be green to publish.
-        publicationGate.Should().Contain("needs: [prepare, release-gate, package, suite-package]");
+        publicationGate.Should().Contain("needs: [resolve, prepare, release-gate, package, suite-package]");
         publicationGate.Should().Contain("$releaseGateResult -ne 'success'");
         ExtractWorkflowJob(workflow, "publish").Should().Contain("if: ${{ !inputs.dry_run }}");
-        ExtractWorkflowJob(workflow, "publish").Should().Contain("needs: [prepare, publication-gate]");
-        ExtractWorkflowJob(workflow, "publish-suite").Should().Contain("needs: [suite-package, publication-gate]");
+        ExtractWorkflowJob(workflow, "publish").Should().Contain("needs: [resolve, prepare, publication-gate]");
+        ExtractWorkflowJob(workflow, "publish-suite").Should().Contain("needs: [resolve, suite-package, publication-gate]");
 
         // Packaging never waited on the tests, so dropping them cannot starve the package legs.
-        ExtractWorkflowJob(workflow, "package").Should().Contain("needs: [prepare, candidate]");
+        ExtractWorkflowJob(workflow, "package").Should().Contain("needs: [resolve, prepare, candidate]");
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class ReleaseAutomationWorkflowTests
             workflow.Should().Contain(lane);
         }
 
-        workflow.Should().Contain("needs: [prepare, candidate]");
+        workflow.Should().Contain("needs: [resolve, prepare, candidate]");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.package_matrix)");
         workflow.Should().Contain("fromJSON(needs.prepare.outputs.suite_matrix)");
         workflow.Should().Contain("max-parallel: 15");
@@ -233,9 +233,9 @@ public sealed class ReleaseAutomationWorkflowTests
         workflow.Should().Contain("-RetryFailedProjectCount 1");
         workflow.Should().Contain("-HangTimeout 30m");
         workflow.Should().Contain("name: FreeX full release gate");
-        workflow.Should().Contain("needs: [prepare, candidate]");
+        workflow.Should().Contain("needs: [resolve, prepare, candidate]");
         workflow.Should().Contain("name: Validate complete release inventory");
-        workflow.Should().Contain("needs: [prepare, release-gate, package, suite-package]");
+        workflow.Should().Contain("needs: [resolve, prepare, release-gate, package, suite-package]");
         workflow.Should().Contain("$releaseGateResult = \"${{ needs.release-gate.result }}\"");
         workflow.Should().Contain("nuget-v2-${{ runner.os }}");
         workflow.Should().NotContain("'**/*.csproj'");

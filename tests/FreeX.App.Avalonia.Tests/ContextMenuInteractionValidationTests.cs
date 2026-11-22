@@ -174,7 +174,11 @@ public sealed class ContextMenuInteractionValidationTests
             ownedIds.Contains(id)).ToArray();
 
         ownedRows.Should().HaveCount(ownedIds.Count);
-        ownedRows.Should().OnlyContain(row => MainWindow.MayOpenOwnedContextDialog(row));
+        // File > Export opens the (harness-cancelled) save picker first, so it is not an owned-dialog route.
+        ownedRows.Where(row => row.ActionKey != "file:BackstageExport")
+            .Should().OnlyContain(row => MainWindow.MayOpenOwnedContextDialog(row));
+        ownedRows.Single(row => row.ActionKey == "file:BackstageExport")
+            .Should().Match<ContextMenuValidationDescriptor>(row => !MainWindow.MayOpenOwnedContextDialog(row));
         nativeRows.Except(ownedRows).Should().OnlyContain(row => !MainWindow.MayOpenOwnedContextDialog(row));
     }
 
@@ -416,7 +420,8 @@ public sealed class ContextMenuInteractionValidationTests
                         $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
                 results.Should().OnlyContain(result =>
                     result.EvidenceLevel == "production-dialog-opened-cancelled" ||
-                    result.EvidenceLevel == "production-dispatch-completed");
+                    result.EvidenceLevel == "production-dispatch-completed" ||
+                    result.EvidenceLevel == "production-status-observed");
             }
             finally
             {

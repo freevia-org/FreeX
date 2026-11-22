@@ -35,6 +35,21 @@ public sealed class DialogsBWpfFlowSourceTests
         method.Should().Contain("FreeXBackstageAccountPanePlanner.FormatMessageBody(");
         method.Should().Contain("AvaloniaUserMessageDialog.ShowAsync(");
         method.Should().NotContain("new Window");
+        // Blank lines in the message body are handled by the shared AvaloniaUserMessageDialog (one
+        // wrapped TextBlock per paragraph); no caller-side normalization is needed.
+        method.Should().NotContain("Regex.Replace(");
+    }
+
+    [Fact]
+    public void ValidationHarness_InstallsDeterministicExportPickerAndClosesMessageBoxesWithAResult()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var capture = Path.Combine(root, "tools", "FreeX.ParityCapture.Avalonia", "Capture");
+        File.ReadAllText(Path.Combine(capture, "MainWindow.InteractionValidation.cs"))
+            .Should().Contain("InstallCancellingExportSavePicker();");
+        var routes = File.ReadAllText(Path.Combine(capture, "MainWindow.ContextMenuInteractionValidation.cs"));
+        routes.Should().Contain("InstallCancellingExportSavePicker();");
+        routes.Should().Contain("dialog.Close(Free.Shared.AppServices.UserMessageResult.Cancel)");
     }
 
     [Fact]

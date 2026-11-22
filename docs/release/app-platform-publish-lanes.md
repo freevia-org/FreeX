@@ -65,10 +65,15 @@ gh workflow run full-release.yml --ref main `
 Use `prerelease=true` for a signed test release. The same signing and integrity
 requirements apply to both release states.
 
-To release the newest commit that already has a fully green readiness run without re-running the
-release tests, add `-f source_sha=$(pwsh -NoProfile -File tools/Get-LatestReadinessGreenSha.ps1)`. The
-commit must be an ancestor of the dispatched main head; see Release Gate in
-`docs/testing/test-gates.md` for the exact rules and fail-closed behaviour.
+By default (empty `source_sha`, dispatched from `refs/heads/main`) the run releases the **newest
+readiness-green ancestor of main**, not the main head, so the release tests a readiness run already
+proved are reused. The first job (`resolve`) finds it with `tools/Get-LatestReadinessGreenSha.ps1` and
+the job summary states the released commit, how many commits behind the head it is, the evidence run
+and a loud warning when it is not the head. If no green commit is found the head is released and every
+gate runs (the summary says so). To release the dispatched head itself and run every gate, add
+`-f release_head=true`; to release one specific commit add `-f source_sha=<40-char lowercase sha>`
+(an explicit SHA always wins). The commit must be an ancestor of the dispatched main head; see Release
+Gate in `docs/testing/test-gates.md` for the exact rules and fail-closed behaviour.
 
 ## Installation verification
 

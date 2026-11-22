@@ -155,6 +155,36 @@ public sealed class PresentationReviewSessionController
         return Apply(_mutationService.PlanResolveThreadedComment(_adapter.ActiveSheetId, resolved));
     }
 
+    /// <summary>
+    /// Applies a card/pane action to the thread at <paramref name="address"/> (not necessarily the
+    /// selected cell) as one undoable command. Refuses on protected sheets without Edit objects.
+    /// </summary>
+    public PresentationReviewMutationResult ApplyThreadedCommentCardAction(
+        CellAddress address,
+        ThreadedCommentCardAction action,
+        string? text = null,
+        int? replyIndex = null)
+    {
+        var sheet = _adapter.ActiveSheet;
+        if (sheet is null || !sheet.ThreadedComments.TryGetValue(address, out var existing))
+            return Failed("No threaded comment exists at the selected cell.");
+
+        if (!ThreadedCommentCardPlanner.CanAuthorComments(sheet))
+            return Failed("The sheet is protected. Unprotect the sheet to change comments.");
+
+        var plan = ThreadedCommentCardPlanner.PlanAction(
+            _mutationService,
+            _adapter.ActiveSheetId,
+            existing,
+            action,
+            _adapter.AuthorName,
+            text,
+            replyIndex);
+        return plan is null
+            ? NoMutation()
+            : Apply(plan, new GridRange(address, address));
+    }
+
     public PresentationReviewMutationResult DeleteNote()
     {
         if (!HasNoteAtSelectionCore())

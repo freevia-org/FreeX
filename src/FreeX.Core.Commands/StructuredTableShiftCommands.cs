@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -14,7 +16,16 @@ namespace FreeX.Core.Commands;
 // Verified against real Excel (ListRows.Add / ListRows.Delete / ListColumns.Add / ListColumns.Delete):
 //   - a new row/column is blank, calculated columns auto-fill, a new column is named "ColumnN";
 //   - deleting every data row keeps one blank data row (the rows below shift up by count - 1);
-//   - A1 references into the shifted band follow the cells, references to deleted cells become #REF!.
+//   - A1 references into the shifted band follow the cells, references to deleted cells become #REF!;
+//   - row properties (hidden flag, height) belong to the sheet row, not the table, so they do NOT shift
+//     with the table's cells -- a manually hidden row stays hidden at the same row number;
+//   - a table with an active filter refuses to insert rows in the middle or delete rows ("Can't move
+//     cells in a filtered range or table."); only appending rows at the end is allowed and the appended
+//     row is not hidden. Inserting/deleting a table column keeps the filters of the surviving columns
+//     (re-indexed) and the same rows hidden; deleting a filtered column drops its criterion and
+//     re-applies the remaining ones (rows only that column hid reappear);
+//   - the table's sort state survives, its key ranges adjusted like any range; deleting the key column
+//     removes its sort condition.
 
 /// <summary>Cell snapshot taken as a command mutates, restored in reverse order on undo.</summary>
 internal sealed class TableShiftCellUndo
@@ -52,19 +63,20 @@ internal sealed class TableShiftCellUndo
 
 internal static class StructuredTableShiftSupport
 {
-    /// <summary>Copies <paramref name="table"/> with a new shape; the stale native sort state is dropped.</summary>
+    /// <summary>Copies <paramref name="table"/> with a new shape; the caller supplies the already-adjusted native sort state.</summary>
     internal static StructuredTableModel Reshape(
         StructuredTableModel table,
         GridRange range,
         IReadOnlyList<StructuredTableColumnModel> columns,
-        IReadOnlyList<StructuredTableFilterColumnModel> filterColumns)
+        IReadOnlyList<StructuredTableFilterColumnModel> filterColumns,
+        string? sortStateXml = null)
     {
         var state = table.CaptureCopyState() with
         {
             Range = range,
             Columns = columns,
             FilterColumns = filterColumns,
-            NativeSortStateXml = null
+            NativeSortStateXml = sortStateXml
         };
         return StructuredTableModel.FromCopyState(state);
     }
@@ -74,6 +86,220 @@ internal static class StructuredTableShiftSupport
     {
         undo.CaptureRange(sheet, table.Range);
         StructuredTableStyleService.RebandTable(workbook, sheet, table);
+    }
+
+
+    internal const string FilteredShiftMessage = "Can't move cells in a filtered range or table.";
+
+    /// <summary>True when the table carries an active filter (Excel's FilterMode), even one that currently hides nothing.</summary>
+    internal static bool IsFiltered(Sheet sheet, StructuredTableModel table)
+    {
+        if (table.FilterColumns.Count > 0)
+            return true;
+
+        var firstCol = table.Range.Start.Col;
+        var lastCol = table.Range.End.Col;
+        foreach (var col in sheet.ActiveValueFilterColumns.Keys)
+        {
+            if (col >= firstCol && col <= lastCol)
+                return true;
+        }
+
+        foreach (var (col, rows) in sheet.ColumnFilterOwnedRows)
+        {
+            if (col >= firstCol && col <= lastCol && rows.Count > 0)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Snapshot of every sheet-wide filter bookkeeping collection a table column shift may touch.</summary>
+    internal sealed class FilterStateUndo
+    {
+        private readonly HashSet<uint> _filterHidden;
+        private readonly HashSet<uint> _valueFilterHidden;
+        private readonly Dictionary<uint, IReadOnlyList<string>> _activeValues;
+        private readonly Dictionary<uint, HashSet<uint>> _owned;
+
+        internal FilterStateUndo(Sheet sheet)
+        {
+            _filterHidden = [.. sheet.FilterHiddenRows];
+            _valueFilterHidden = [.. sheet.ValueFilterHiddenRows];
+            _activeValues = new Dictionary<uint, IReadOnlyList<string>>(sheet.ActiveValueFilterColumns);
+            _owned = sheet.ColumnFilterOwnedRows.ToDictionary(kvp => kvp.Key, kvp => new HashSet<uint>(kvp.Value));
+        }
+
+        internal void Restore(Sheet sheet)
+        {
+            sheet.FilterHiddenRows.Clear();
+            sheet.FilterHiddenRows.UnionWith(_filterHidden);
+            sheet.ValueFilterHiddenRows.Clear();
+            sheet.ValueFilterHiddenRows.UnionWith(_valueFilterHidden);
+            sheet.ActiveValueFilterColumns.Clear();
+            foreach (var (col, values) in _activeValues)
+                sheet.ActiveValueFilterColumns[col] = values;
+            sheet.ColumnFilterOwnedRows.Clear();
+            foreach (var (col, rows) in _owned)
+                sheet.ColumnFilterOwnedRows[col] = new HashSet<uint>(rows);
+        }
+    }
+
+    /// <summary>Re-keys the column-keyed filter bookkeeping for columns inside the table's span after a column insert.</summary>
+    internal static void ShiftFilterColumnKeysRight(Sheet sheet, uint insertCol, uint tableLastCol, uint count)
+    {
+        ShiftKeys(sheet.ActiveValueFilterColumns, insertCol, tableLastCol, (int)count);
+        ShiftKeys(sheet.ColumnFilterOwnedRows, insertCol, tableLastCol, (int)count);
+    }
+
+    /// <summary>Drops the filter state of deleted columns (releasing rows only they hid) and re-keys the survivors.</summary>
+    internal static void ReleaseAndShiftFilterColumnKeysLeft(
+        Sheet sheet, GridRange oldRange, uint firstDeletedCol, uint count, StructuredTableModel shrunk)
+    {
+        var lastDeletedCol = firstDeletedCol + count - 1;
+        for (var col = firstDeletedCol; col <= lastDeletedCol; col++)
+        {
+            sheet.ActiveValueFilterColumns.Remove(col);
+            FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, col, oldRange);
+            sheet.ColumnFilterOwnedRows.Remove(col);
+        }
+
+        ShiftKeys(sheet.ActiveValueFilterColumns, lastDeletedCol + 1, oldRange.End.Col, -(int)count);
+        ShiftKeys(sheet.ColumnFilterOwnedRows, lastDeletedCol + 1, oldRange.End.Col, -(int)count);
+
+        // Excel re-applies the surviving criteria: rows that only the deleted column's filter hid reappear.
+        ApplyStructuredTableFiltersCommand.RecomputeHiddenRows(sheet, shrunk);
+        sheet.ValueFilterHiddenRows.RemoveWhere(row => !sheet.FilterHiddenRows.Contains(row));
+    }
+
+    private static void ShiftKeys<TValue>(Dictionary<uint, TValue> map, uint from, uint to, int delta)
+    {
+        if (map.Count == 0)
+            return;
+
+        var moved = map.Where(pair => pair.Key >= from && pair.Key <= to).ToList();
+        foreach (var (key, _) in moved)
+            map.Remove(key);
+        foreach (var (key, value) in moved)
+            map[(uint)(key + delta)] = value;
+    }
+
+    private static readonly Regex RangeRef = new(
+        @"^\$?([A-Za-z]{1,3})\$?(\d+)(?::\$?([A-Za-z]{1,3})\$?(\d+))?$", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Adjusts a table's sortState XML for a band insert/delete: every <c>ref</c> moves like an ordinary
+    /// range; a sort condition whose key range disappears (its column or all its rows were deleted) is
+    /// dropped, and the whole state is dropped when no condition survives (Excel: SortFields.Count = 0).
+    /// </summary>
+    internal static string? AdjustSortState(string? xml, bool rowAxis, bool insert, uint at, uint count)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return xml;
+
+        XElement element;
+        try
+        {
+            element = XElement.Parse(xml);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return xml;
+        }
+
+        var hadConditions = false;
+        foreach (var condition in element.Elements().Where(e => e.Name.LocalName == "sortCondition").ToList())
+        {
+            hadConditions = true;
+            if (condition.Attribute("ref") is not { } conditionRef)
+                continue;
+            var adjusted = AdjustRef(conditionRef.Value, rowAxis, insert, at, count);
+            if (adjusted is null)
+                condition.Remove();
+            else
+                conditionRef.Value = adjusted;
+        }
+
+        if (hadConditions && !element.Elements().Any(e => e.Name.LocalName == "sortCondition"))
+            return null;
+
+        if (element.Attribute("ref") is { } rootRef)
+        {
+            var adjusted = AdjustRef(rootRef.Value, rowAxis, insert, at, count);
+            if (adjusted is null)
+                rootRef.Remove();
+            else
+                rootRef.Value = adjusted;
+        }
+
+        return element.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string? AdjustRef(string reference, bool rowAxis, bool insert, uint at, uint count)
+    {
+        var match = RangeRef.Match(reference.Trim());
+        if (!match.Success)
+            return reference;
+
+        var startCol = CellAddress.ColumnNameToNumber(match.Groups[1].Value.ToUpperInvariant());
+        var startRow = uint.Parse(match.Groups[2].Value);
+        var endCol = match.Groups[3].Success ? CellAddress.ColumnNameToNumber(match.Groups[3].Value.ToUpperInvariant()) : startCol;
+        var endRow = match.Groups[4].Success ? uint.Parse(match.Groups[4].Value) : startRow;
+
+        var start = rowAxis ? startRow : startCol;
+        var end = rowAxis ? endRow : endCol;
+        if (!AdjustSpan(ref start, ref end, insert, at, count))
+            return null;
+
+        if (rowAxis)
+        {
+            startRow = start;
+            endRow = end;
+        }
+        else
+        {
+            startCol = start;
+            endCol = end;
+        }
+
+        var first = CellAddress.NumberToColumnName(startCol) + startRow;
+        var last = CellAddress.NumberToColumnName(endCol) + endRow;
+        return first == last ? first : first + ":" + last;
+    }
+
+    private static bool AdjustSpan(ref uint start, ref uint end, bool insert, uint at, uint count)
+    {
+        if (insert)
+        {
+            if (start >= at)
+            {
+                start += count;
+                end += count;
+            }
+            else if (end >= at)
+            {
+                end += count;
+            }
+
+            return true;
+        }
+
+        var lastDeleted = at + count - 1;
+        if (end < at)
+            return true;
+        if (start > lastDeleted)
+        {
+            start -= count;
+            end -= count;
+            return true;
+        }
+
+        if (start >= at && end <= lastDeleted)
+            return false;
+
+        start = start < at ? start : at;
+        end = end > lastDeleted ? end - count : at - 1;
+        return true;
     }
 
     internal static GridRange Range(SheetId sheetId, uint startRow, uint startCol, uint endRow, uint endCol) =>
@@ -143,6 +369,8 @@ public sealed class InsertTableRowsCommand : IWorkbookCommand, IAffectedCellsCom
         var dataRowCount = (int)(lastDataRow - firstDataRow + 1);
         if (_dataRowIndex < 0 || _dataRowIndex > dataRowCount)
             return new CommandOutcome(false, "The table row to insert at is outside the table.");
+        if (_dataRowIndex < dataRowCount && StructuredTableShiftSupport.IsFiltered(sheet, table))
+            return new CommandOutcome(false, StructuredTableShiftSupport.FilteredShiftMessage);
         if ((ulong)table.Range.End.Row + _count > CellAddress.MaxRow)
             return new CommandOutcome(false, $"Cannot insert table rows: the table would extend past the last row ({CellAddress.MaxRow}).");
 
@@ -163,7 +391,8 @@ public sealed class InsertTableRowsCommand : IWorkbookCommand, IAffectedCellsCom
 
         var grownRange = StructuredTableShiftSupport.Range(
             _sheetId, table.Range.Start.Row, table.Range.Start.Col, table.Range.End.Row + _count, table.Range.End.Col);
-        var grown = StructuredTableShiftSupport.Reshape(table, grownRange, table.Columns, table.FilterColumns);
+        var grown = StructuredTableShiftSupport.Reshape(table, grownRange, table.Columns, table.FilterColumns,
+            StructuredTableShiftSupport.AdjustSortState(table.NativeSortStateXml, rowAxis: true, insert: true, insertRow, _count));
         sheet.StructuredTables[tableIndex] = grown;
 
         FillCalculatedColumns(sheet, grown, insertRow, insertRow + _count - 1, firstDataRow);
@@ -256,6 +485,8 @@ public sealed class DeleteTableRowsCommand : IWorkbookCommand, IAffectedCellsCom
         var dataRowCount = (uint)(lastDataRow - firstDataRow + 1);
         if (_dataRowIndex < 0 || (ulong)_dataRowIndex + _count > dataRowCount)
             return new CommandOutcome(false, "The table rows to delete are outside the table.");
+        if (StructuredTableShiftSupport.IsFiltered(sheet, table))
+            return new CommandOutcome(false, StructuredTableShiftSupport.FilteredShiftMessage);
 
         // Excel never leaves a table without a data row: deleting every data row removes all but the
         // first one and merely clears that one.
@@ -293,7 +524,8 @@ public sealed class DeleteTableRowsCommand : IWorkbookCommand, IAffectedCellsCom
         {
             var shrunkRange = StructuredTableShiftSupport.Range(
                 _sheetId, table.Range.Start.Row, table.Range.Start.Col, table.Range.End.Row - shiftCount, table.Range.End.Col);
-            shrunk = StructuredTableShiftSupport.Reshape(table, shrunkRange, table.Columns, table.FilterColumns);
+            shrunk = StructuredTableShiftSupport.Reshape(table, shrunkRange, table.Columns, table.FilterColumns,
+                StructuredTableShiftSupport.AdjustSortState(table.NativeSortStateXml, rowAxis: true, insert: false, firstDeleted, shiftCount));
             sheet.StructuredTables[tableIndex] = shrunk;
         }
 
@@ -371,6 +603,7 @@ public sealed class InsertTableColumnsCommand : IWorkbookCommand, IAffectedCells
     private InsertCellsCommand? _shift;
     private StructuredTableModel? _previousTable;
     private TableShiftCellUndo? _undo;
+    private StructuredTableShiftSupport.FilterStateUndo? _filterUndo;
     private IReadOnlyList<CellAddress> _affectedCells = [];
 
     public string Label => "Insert Table Columns";
@@ -390,6 +623,7 @@ public sealed class InsertTableColumnsCommand : IWorkbookCommand, IAffectedCells
         _shift = null;
         _previousTable = null;
         _undo = null;
+        _filterUndo = null;
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -419,6 +653,8 @@ public sealed class InsertTableColumnsCommand : IWorkbookCommand, IAffectedCells
         _shift = shift;
         _previousTable = table;
         _undo = new TableShiftCellUndo();
+        _filterUndo = new StructuredTableShiftSupport.FilterStateUndo(sheet);
+        StructuredTableShiftSupport.ShiftFilterColumnKeysRight(sheet, insertCol, table.Range.End.Col, _count);
 
         var hasHeaderRow = table.HeaderRowCount is null or > 0;
         var columns = BuildColumns(sheet, table, insertCol, hasHeaderRow, out var newNames);
@@ -429,7 +665,8 @@ public sealed class InsertTableColumnsCommand : IWorkbookCommand, IAffectedCells
             .ToList();
         var grownRange = StructuredTableShiftSupport.Range(
             _sheetId, table.Range.Start.Row, table.Range.Start.Col, table.Range.End.Row, table.Range.End.Col + _count);
-        var grown = StructuredTableShiftSupport.Reshape(table, grownRange, columns, filterColumns);
+        var grown = StructuredTableShiftSupport.Reshape(table, grownRange, columns, filterColumns,
+            StructuredTableShiftSupport.AdjustSortState(table.NativeSortStateXml, rowAxis: false, insert: true, insertCol, _count));
         sheet.StructuredTables[tableIndex] = grown;
 
         if (hasHeaderRow)
@@ -519,6 +756,7 @@ public sealed class InsertTableColumnsCommand : IWorkbookCommand, IAffectedCells
 
         var sheet = ctx.GetSheet(_sheetId);
         _undo.Restore(sheet);
+        _filterUndo?.Restore(sheet);
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _shift.Revert(ctx);
@@ -526,6 +764,7 @@ public sealed class InsertTableColumnsCommand : IWorkbookCommand, IAffectedCells
         _shift = null;
         _previousTable = null;
         _undo = null;
+        _filterUndo = null;
     }
 }
 
@@ -540,6 +779,7 @@ public sealed class DeleteTableColumnsCommand : IWorkbookCommand, IAffectedCells
     private StructuredTableColumnDeleteEffects? _structuredEffects;
     private StructuredTableModel? _tableBeforeResize;
     private TableShiftCellUndo? _undo;
+    private StructuredTableShiftSupport.FilterStateUndo? _filterUndo;
     private IReadOnlyList<CellAddress> _affectedCells = [];
 
     public string Label => "Delete Table Columns";
@@ -560,6 +800,7 @@ public sealed class DeleteTableColumnsCommand : IWorkbookCommand, IAffectedCells
         _structuredEffects = null;
         _tableBeforeResize = null;
         _undo = null;
+        _filterUndo = null;
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -611,6 +852,7 @@ public sealed class DeleteTableColumnsCommand : IWorkbookCommand, IAffectedCells
         _structuredEffects = effects;
         _tableBeforeResize = current;
         _undo = new TableShiftCellUndo();
+        _filterUndo = new StructuredTableShiftSupport.FilterStateUndo(sheet);
 
         var rewriteOp = new DeleteCellsShiftLeftOp(
             sheet.Name,
@@ -646,8 +888,10 @@ public sealed class DeleteTableColumnsCommand : IWorkbookCommand, IAffectedCells
 
         var shrunkRange = StructuredTableShiftSupport.Range(
             _sheetId, current.Range.Start.Row, current.Range.Start.Col, current.Range.End.Row, current.Range.End.Col - _count);
-        var shrunk = StructuredTableShiftSupport.Reshape(current, shrunkRange, columns, filterColumns);
+        var shrunk = StructuredTableShiftSupport.Reshape(current, shrunkRange, columns, filterColumns,
+            StructuredTableShiftSupport.AdjustSortState(current.NativeSortStateXml, rowAxis: false, insert: false, firstDeletedCol, _count));
         sheet.StructuredTables[tableIndex] = shrunk;
+        StructuredTableShiftSupport.ReleaseAndShiftFilterColumnKeysLeft(sheet, current.Range, firstDeletedCol, _count, shrunk);
 
         StructuredTableShiftSupport.Reband(ctx.Workbook, sheet, shrunk, _undo);
 
@@ -667,6 +911,7 @@ public sealed class DeleteTableColumnsCommand : IWorkbookCommand, IAffectedCells
 
         var sheet = ctx.GetSheet(_sheetId);
         _undo.Restore(sheet);
+        _filterUndo?.Restore(sheet);
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _tableBeforeResize;
         _shift.Revert(ctx);
@@ -676,5 +921,6 @@ public sealed class DeleteTableColumnsCommand : IWorkbookCommand, IAffectedCells
         _structuredEffects = null;
         _tableBeforeResize = null;
         _undo = null;
+        _filterUndo = null;
     }
 }

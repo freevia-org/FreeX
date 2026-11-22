@@ -5546,6 +5546,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.ReplaceAllValues(");
         source.Should().Contain("CreateFindOptions(options, findFormat, selectionScopeAtOpen)");
         source.Should().Contain("MatchEntire(), replacementFormat)");
+        source.Should().Contain("FindReplaceNextBehavior.SubmittedDialogStyle);");
+        source.Should().Contain("ShowFindReplaceWarningAsync(r.ErrorMessage)");
         source.Should().Contain("var result = _session.GoToReference(reference);");
         source.Should().Contain("var result = _session.GoToSpecial(kind, options);");
         source.Should().Contain("result.SelectedRanges.Count == 1");
