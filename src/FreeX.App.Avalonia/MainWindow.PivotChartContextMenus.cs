@@ -202,19 +202,22 @@ public sealed partial class MainWindow
                 pivot,
                 sourceIndex),
             PivotFieldFilterText);
-        var hasFilter = filterState.HasStoredFilter;
-        var summary = hasFilter ? $"{target.FieldCaption}: Filtered" : $"{target.FieldCaption}: (All)";
+        // Same headers/enablement as WPF BuildPivotChartFieldContextMenuState (shared formatters).
+        var hasFilterState = target.Area != PivotHeaderArea.Value;
+        var valueFieldSettingsAvailable =
+            PivotUiPlanner.FindDataFieldIndex(pivot, target.FieldCaption) is not null ||
+            pivot.DataFields.Count == 1;
 
         return new PivotChartFieldContextMenuState(
-            HasFilterState: target.Area != PivotHeaderArea.Value,
-            OverallSummary: summary,
-            SelectItemsHeader: "Select Items...",
-            LabelFilterHeader: "Label Filter...",
-            ValueFilterHeader: "Value Filter...",
-            ClearFilterHeader: $"Clear Filters from {target.FieldCaption}",
-            CanValueFilter: target.Area != PivotHeaderArea.Value && pivot.DataFields.Count > 0,
-            HasAnyFilter: hasFilter,
-            CanValueFieldSettings: target.Area == PivotHeaderArea.Value || pivot.DataFields.Count == 1);
+            HasFilterState: hasFilterState,
+            OverallSummary: PivotFieldFilterSummary.FormatOverallSummary(filterState),
+            SelectItemsHeader: PivotFieldFilterSummary.FormatSelectItemsHeader(filterState),
+            LabelFilterHeader: PivotFieldFilterSummary.FormatLabelFilterHeader(filterState),
+            ValueFilterHeader: PivotFieldFilterSummary.FormatValueFilterHeader(filterState),
+            ClearFilterHeader: PivotFieldFilterSummary.FormatClearFilterHeader(filterState),
+            CanValueFilter: hasFilterState && pivot.DataFields.Count > 0,
+            HasAnyFilter: filterState.HasAnyFilter,
+            CanValueFieldSettings: valueFieldSettingsAvailable);
     }
 
     private void DispatchPivotChartFieldContextMenuAction(
