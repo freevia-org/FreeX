@@ -719,8 +719,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         var workbook = CreateFormulaAggregateContrastWorkbook(out var sheet, out var firstLabel, out var lastLabel);
         sheet.FilterHiddenRows.Add(2);
         sheet.HiddenRows.Add(4);
-        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "SUBTOTAL(9,$A$1:$A$4)=275");
+        AddFormulaContrastRule(sheet, firstLabel, lastLabel, "SUBTOTAL(9,$A$1:$A$4)=150");
 
+        // Excel: while a filter is active every hidden row (row 4 here, hidden manually) counts as
+        // filtered, so SUBTOTAL(9) agrees with SUBTOTAL(109).
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
