@@ -80,7 +80,7 @@ public class R27_DvEqualOperatorToleranceTests
     }
 
     [Fact]
-    public void DecimalAddition_FreeXEvaluated_NowRoundsToBitExactValue()
+    public void DecimalAddition_FreeXEvaluated_KeepsRawDoubleAndDvStillAccepts()
     {
         // Round 77: the exact formula the test above used to rely on for its FP-noise premise
         // now evaluates bit-exact through FreeX's own "+" operator, matching Excel's
@@ -91,7 +91,11 @@ public class R27_DvEqualOperatorToleranceTests
         var result = _eval.Evaluate("=0.1+0.2", sheet);
 
         result.Should().BeOfType<NumberValue>();
-        ((NumberValue)result).Value.Should().Be(0.3, "Excel rounds arithmetic results to 15 significant digits");
+        // Excel keeps the raw double (0.30000000000000004; verified via COM) and only displays 0.3, so the
+        // DV tolerance is what makes Equal-to-0.3 accept it.
+        ((NumberValue)result).Value.Should().Be(0.1 + 0.2);
+        var dv = new DataValidation { Type = DvType.Decimal, Operator = DvOperator.Equal, Formula1 = "0.3" };
+        DataValidationService.Validate(dv, result).Should().BeNull();
     }
 
     [Fact]
