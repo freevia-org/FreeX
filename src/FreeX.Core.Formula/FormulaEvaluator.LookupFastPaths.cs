@@ -469,28 +469,11 @@ public sealed partial class FormulaEvaluator
             // path (BuiltInFunctions.Lookup.Legacy.cs's ApproxLookupClassForLookupValue) -- this
             // fast path is reached even for a bare cell reference lookup_value (e.g. "A1"), since
             // TryAsRangeRef only bails to the slow path for a multi-cell range, not a single cell.
-            var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
-            var best = -1;
-            for (var index = 0; index < lookupReader.Count; index++)
-            {
-                var candidate = lookupReader.GetValue(index);
-                if (candidate is ErrorValue error)
-                    return error;
-
-                if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
-                // Full scan keeping the last qualifying candidate (no early break): Excel's
-                // approximate match does not verify sortedness, so an out-of-order row that
-                // already exceeds the lookup value must not abort the scan and yield #N/A when a
-                // valid match exists later. Mirrors BuiltInFunctions.Lookup.Legacy's slow path
-                // (R29-lookup-repass-1) so the literal-range fast path agrees with it.
-                //
-                // A genuinely blank candidate cell is let through the type-class filter (mirrors
-                // BuiltInFunctions.Lookup.Legacy.cs) so CompareScalar's own blank-to-0/""
-                // coercion gets a chance to run instead of the blank row being skipped like a
-                // foreign type (text/logical).
-                if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
-                    best = index;
-            }
+            // Shared with the slow path: Excel binary-searches (equal-key early exit); mixed /
+            // blank candidates keep the full-scan rule. See ApproximateAscendingIndex.
+            var lookupError = BuiltInFunctions.ApproximateAscendingIndex(lookupReader.Count, lookupReader.GetValue, lookupValue, out var best);
+            if (lookupError is not null)
+                return lookupError;
 
             return best >= 0 ? resultReader.GetValue(best) : ErrorValue.NA;
         }
@@ -532,22 +515,9 @@ public sealed partial class FormulaEvaluator
         {
             // R75-formula-lookup-vhx-4-2: see EvaluateLegacyLookupDirectTable above for why the
             // blank-lookup-value coercion is needed here too.
-            var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
-            var best = -1;
-            for (var index = 0; index < reader.Count; index++)
-            {
-                var candidate = reader.GetValue(index);
-                if (candidate is ErrorValue error)
-                    return error;
-
-                if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
-                // Full scan keeping the last qualifying candidate (no early break) -- see the
-                // rationale on EvaluateLegacyLookupDirectTable above (R29-lookup-repass-1). A
-                // genuinely blank candidate is let through the type-class filter for the same
-                // reason as above.
-                if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
-                    best = index;
-            }
+            var matchError = BuiltInFunctions.ApproximateAscendingIndex(reader.Count, reader.GetValue, lookupValue, out var best);
+            if (matchError is not null)
+                return matchError;
 
             return best >= 0 ? new NumberValue(best + 1) : ErrorValue.NA;
         }
@@ -921,21 +891,9 @@ public sealed partial class FormulaEvaluator
     {
         // R75-formula-lookup-vhx-4-2: see EvaluateLegacyLookupDirectTable above for why the
         // blank-lookup-value coercion is needed here too (LOOKUP's direct-vector fast path).
-        var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
-        var matchIndex = -1;
-        for (var index = 0; index < lookupReader.Count; index++)
-        {
-            var candidate = lookupReader.GetValue(index);
-            // Match VLOOKUP/HLOOKUP/MATCH's direct-range fast paths (EvaluateLegacyLookupDirectTable
-            // / EvaluateMatchDirectRange above): an error encountered while scanning the lookup
-            // vector poisons the whole lookup and must be returned immediately, not skipped.
-            if (candidate is ErrorValue error)
-                return error;
-
-            if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
-            if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
-                matchIndex = index;
-        }
+        var lookupError = BuiltInFunctions.ApproximateAscendingIndex(lookupReader.Count, lookupReader.GetValue, lookupValue, out var matchIndex);
+        if (lookupError is not null)
+            return lookupError;
 
         if (matchIndex < 0)
             return ErrorValue.NA;
