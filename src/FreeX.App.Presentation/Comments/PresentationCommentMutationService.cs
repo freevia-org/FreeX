@@ -101,6 +101,7 @@ public sealed class PresentationCommentMutationService
 
         return result.Action switch
         {
+            ThreadedCommentDialogAction.DeleteThread => PlanDeleteThreadedComment(sheetId),
             ThreadedCommentDialogAction.EditReply when
                 result.ReplyIndex is { } replyIndex && result.ReplyEditText is not null =>
                 new PresentationCommentMutationPlan(
