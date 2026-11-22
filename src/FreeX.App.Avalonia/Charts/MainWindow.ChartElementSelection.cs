@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts.Editing;
@@ -42,9 +43,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        string? seriesName = null;
-        if (element.SeriesIndex >= 0)
-            map.SeriesNames.TryGetValue(element.SeriesIndex, out seriesName);
+        var seriesName = map.GetDisplayName(element);
         _selectedChartElementSeriesName = seriesName;
 
         var name = ChartElementCommandPlanner.Describe(element, seriesName).Resolve(UiText.Get, UiText.Format);
@@ -106,6 +105,42 @@ public sealed partial class MainWindow
         }
 
         return layer;
+    }
+
+    // The element map of the chart as last painted, kept so keyboard navigation uses the same geometry.
+    private ChartElementMap? _lastChartElementMap;
+    private Guid _lastChartElementMapChartId;
+
+    /// <summary>
+    /// Arrow-key navigation between chart elements (Excel behaviour). Returns false when no inner
+    /// element is selected so the arrow keys keep nudging the chart object.
+    /// </summary>
+    private bool TryNavigateSelectedChartElement(Key key)
+    {
+        if (_selectedDrawingObjectKind != SelectionPaneObjectKind.Chart ||
+            _selectedDrawingObjectId is not { } chartId ||
+            _selectedChartElement is not { IsChartArea: false } current ||
+            _selectedChartElementChartId != chartId ||
+            _lastChartElementMap is not { } map ||
+            _lastChartElementMapChartId != chartId)
+        {
+            return false;
+        }
+
+        var chart = _session.ActiveSheet.Charts.FirstOrDefault(c => c.Id == chartId);
+        if (chart is null)
+            return false;
+
+        var next = map.Navigate(current, key switch
+        {
+            Key.Up => ChartNavigationKey.Up,
+            Key.Down => ChartNavigationKey.Down,
+            Key.Left => ChartNavigationKey.Left,
+            _ => ChartNavigationKey.Right,
+        });
+        if (next != current)
+            SelectChartElement(chart, next, map);
+        return true;
     }
 
     /// <summary>
@@ -170,6 +205,12 @@ public sealed partial class MainWindow
                 break;
             case ChartElementFormatTarget.DataLabels:
                 await ShowChartDataLabelsDialog();
+                break;
+            case ChartElementFormatTarget.Trendline:
+                await ShowChartTrendlineDialog();
+                break;
+            case ChartElementFormatTarget.ErrorBars:
+                await ShowChartErrorBarsDialog();
                 break;
             default:
                 await ShowFormatChartAreaDialog();

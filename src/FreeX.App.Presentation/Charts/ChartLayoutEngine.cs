@@ -547,7 +547,7 @@ public static class ChartLayoutEngine
             // inherited the primary axis's format instead of its own.
             SecondaryValueAxis = secondaryScale is null
                 ? null
-                : BuildValueAxisLayout(chart, secondaryScale, secondarySide, secondaryLine, chart.SecondaryAxisNumberFormat, chart.SecondaryAxisNumberFormatCode, chart.YAxisLabelAngle),
+                : BuildValueAxisLayout(chart, secondaryScale, secondarySide, secondaryLine, chart.SecondaryAxisNumberFormat, chart.SecondaryAxisNumberFormatCode, chart.YAxisLabelAngle, secondary: true),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
@@ -1355,7 +1355,8 @@ public static class ChartLayoutEngine
         double linePosition,
         ChartDataLabelNumberFormat numberFormat,
         string? numberFormatCode = null,
-        double labelAngle = 0)
+        double labelAngle = 0,
+        bool secondary = false)
     {
         var isXAxis = side is AxisSide.Bottom or AxisSide.Top;
         var displayUnit = isXAxis ? chart.XAxisDisplayUnit : chart.YAxisDisplayUnit;
@@ -1372,7 +1373,7 @@ public static class ChartLayoutEngine
             ticks.Add(new AxisTick(value, scale.Transform(value), label));
         }
 
-        var title = isXAxis ? chart.XAxisTitle : chart.YAxisTitle;
+        var title = secondary ? chart.SecondaryAxisTitle : isXAxis ? chart.XAxisTitle : chart.YAxisTitle;
         var unitLabel = GetAxisDisplayUnitLabel(displayUnit, customDisplayUnit);
         if (!string.IsNullOrEmpty(unitLabel))
             title = string.IsNullOrEmpty(title) ? unitLabel : $"{title} ({unitLabel})";

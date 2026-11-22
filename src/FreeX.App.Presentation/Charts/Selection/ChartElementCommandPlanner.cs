@@ -18,6 +18,10 @@ public enum ChartElementFormatTarget
     YAxis,
     DataSeries,
     DataLabels,
+    /// <summary>Format Trendline dialog.</summary>
+    Trendline,
+    /// <summary>Format Error Bars dialog.</summary>
+    ErrorBars,
 }
 
 public enum ChartElementDeleteAction
@@ -71,6 +75,7 @@ public static class ChartElementCommandPlanner
         return element.Kind switch
         {
             ChartElementKind.ChartTitle
+                or ChartElementKind.SecondaryAxisTitle
                 or ChartElementKind.CategoryAxisTitle
                 or ChartElementKind.ValueAxisTitle => ChartElementFormatTarget.ChartTitles,
             ChartElementKind.CategoryAxis
@@ -81,7 +86,9 @@ public static class ChartElementCommandPlanner
                     : ChartElementFormatTarget.YAxis,
             // The secondary value axis has no dialog of its own; it shares the vertical axis dialog.
             ChartElementKind.SecondaryValueAxis => ChartElementFormatTarget.YAxis,
-            ChartElementKind.Series => ChartElementFormatTarget.DataSeries,
+            ChartElementKind.Series or ChartElementKind.DataPoint => ChartElementFormatTarget.DataSeries,
+            ChartElementKind.Trendline => ChartElementFormatTarget.Trendline,
+            ChartElementKind.ErrorBars => ChartElementFormatTarget.ErrorBars,
             ChartElementKind.DataLabels => ChartElementFormatTarget.DataLabels,
             _ => ChartElementFormatTarget.ChartArea,
         };
@@ -115,6 +122,20 @@ public static class ChartElementCommandPlanner
                     : Layout(new ChartLayoutOptions(ShowYAxisLabels: false));
             case ChartElementKind.SecondaryValueAxis:
                 return Layout(new ChartLayoutOptions(ShowSecondaryAxis: false));
+            case ChartElementKind.SecondaryAxisTitle:
+                return string.IsNullOrEmpty(chart.SecondaryAxisTitle)
+                    ? ChartElementDeletePlan.None
+                    : Layout(new ChartLayoutOptions { SecondaryAxisTitle = string.Empty });
+            case ChartElementKind.Trendline:
+                return chart.ShowLinearTrendline
+                    ? Layout(new ChartLayoutOptions(ShowLinearTrendline: false))
+                    : ChartElementDeletePlan.None;
+            case ChartElementKind.ErrorBars:
+                return chart.ShowErrorBars
+                    ? Layout(new ChartLayoutOptions(ShowErrorBars: false))
+                    : ChartElementDeletePlan.None;
+            case ChartElementKind.LegendEntry:
+                return Layout(new ChartLayoutOptions(LegendEntries: HideLegendEntry(chart, element.SeriesIndex)));
             case ChartElementKind.CategoryGridlines:
             case ChartElementKind.ValueGridlines:
                 return horizontal
@@ -130,6 +151,32 @@ public static class ChartElementCommandPlanner
                 // The plot area has no model-level "removed" state, so it cannot be deleted.
                 return ChartElementDeletePlan.None;
         }
+    }
+
+    /// <summary>
+    /// The legend-entry list with <paramref name="entryIndex"/> (series index, or category index for pie
+    /// charts) marked deleted, addressed the way OOXML <c>c:legendEntry</c> does (declaration order).
+    /// </summary>
+    public static IReadOnlyList<ChartLegendEntryModel> HideLegendEntry(ChartModel chart, int entryIndex)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var isPie = chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut;
+        var xmlIndex = entryIndex;
+        if (!isPie && chart.SeriesPlotOrder.Count > 0)
+        {
+            var at = chart.SeriesPlotOrder.IndexOf(entryIndex);
+            if (at >= 0)
+                xmlIndex = at;
+        }
+
+        var entries = chart.LegendEntries.ToList();
+        var existing = entries.FindIndex(e => e.Index == xmlIndex);
+        if (existing >= 0)
+            entries[existing] = entries[existing] with { IsDeleted = true };
+        else
+            entries.Add(new ChartLegendEntryModel(xmlIndex, true));
+        return entries;
     }
 
     /// <summary>
@@ -156,6 +203,27 @@ public static class ChartElementCommandPlanner
         if (element.Kind == ChartElementKind.DataLabels && element.SeriesIndex >= 0 && !string.IsNullOrWhiteSpace(seriesName))
             return LocalizedTextDescriptor.Resource("ChartElement_SeriesDataLabels", seriesName);
 
+        if (element.Kind is ChartElementKind.Trendline or ChartElementKind.ErrorBars)
+        {
+            var key = element.Kind == ChartElementKind.Trendline ? "ChartElement_Trendline" : "ChartElement_ErrorBars";
+            var seriesKey = element.Kind == ChartElementKind.Trendline ? "ChartElement_SeriesTrendline" : "ChartElement_SeriesErrorBars";
+            return string.IsNullOrWhiteSpace(seriesName)
+                ? LocalizedTextDescriptor.Resource(key)
+                : LocalizedTextDescriptor.Resource(seriesKey, seriesName);
+        }
+
+        if (element.Kind == ChartElementKind.DataPoint)
+        {
+            var name = string.IsNullOrWhiteSpace(seriesName) ? $"Series {element.SeriesIndex + 1}" : seriesName;
+            return LocalizedTextDescriptor.Resource("ChartElement_DataPoint", name, element.PointIndex + 1);
+        }
+
+        if (element.Kind == ChartElementKind.LegendEntry)
+        {
+            var name = string.IsNullOrWhiteSpace(seriesName) ? $"{element.SeriesIndex + 1}" : seriesName;
+            return LocalizedTextDescriptor.Resource("ChartElement_LegendEntry", name);
+        }
+
         return LocalizedTextDescriptor.Resource(element.Kind switch
         {
             ChartElementKind.PlotArea => "ChartElement_PlotArea",
@@ -166,6 +234,7 @@ public static class ChartElementCommandPlanner
             ChartElementKind.SecondaryValueAxis => "ChartElement_SecondaryValueAxis",
             ChartElementKind.CategoryAxisTitle => "ChartElement_CategoryAxisTitle",
             ChartElementKind.ValueAxisTitle => "ChartElement_ValueAxisTitle",
+            ChartElementKind.SecondaryAxisTitle => "ChartElement_SecondaryAxisTitle",
             ChartElementKind.CategoryGridlines => "ChartElement_CategoryGridlines",
             ChartElementKind.ValueGridlines => "ChartElement_ValueGridlines",
             ChartElementKind.DataLabels => "ChartElement_DataLabels",

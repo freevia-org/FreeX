@@ -82,7 +82,13 @@ public partial class GridView
         var local = new LayoutPoint(
             (pos.X - rect.Left) * chart.Width / rect.Width,
             (pos.Y - rect.Top) * chart.Height / rect.Height);
-        var element = map.HitTest(local) ?? ChartElementRef.ChartArea;
+        if (isDoubleClick && SelectedChartElement is { } current && map.IsDoubleClickOnSelection(local, current))
+        {
+            ChartElementFormatRequested?.Invoke(chart.Id, current);
+            return true;
+        }
+
+        var element = map.ResolveClick(local, SelectedChartElement) ?? ChartElementRef.ChartArea;
 
         if (element.IsChartArea)
         {
@@ -90,21 +96,47 @@ public partial class GridView
             return false;
         }
 
-        if (isDoubleClick && SelectedChartElement == element)
-        {
-            ChartElementFormatRequested?.Invoke(chart.Id, element);
-            return true;
-        }
-
-        string? seriesName = null;
-        if (element.SeriesIndex >= 0)
-            map.SeriesNames.TryGetValue(element.SeriesIndex, out seriesName);
+        var seriesName = map.GetDisplayName(element);
 
         _selectedChartElementChartId = chart.Id;
         _selectedChartElement = element;
         _selectedChartElementSeriesName = seriesName;
         InvalidateVisual();
         ChartElementSelected?.Invoke(chart.Id, element, seriesName);
+        return true;
+    }
+
+    /// <summary>
+    /// Arrow-key navigation between chart elements (Excel behaviour): with an inner element selected,
+    /// Up/Down walk the chart's top-level elements and Left/Right walk the points of a selected series or
+    /// the entries of a selected legend. Returns false when no inner element is selected so the caller
+    /// keeps its normal arrow handling (nudging the chart object).
+    /// </summary>
+    public bool TryNavigateChartElement(ChartNavigationKey key)
+    {
+        if (SelectedChartElement is not { } current ||
+            Viewport is null ||
+            FindChart(SelectedObjectId) is not { } chart)
+        {
+            return false;
+        }
+
+        var map = GetChartElementMap(chart);
+        var next = map.Navigate(current, key);
+        if (next == current)
+            return true;
+
+        if (next.IsChartArea)
+        {
+            ClearSelectedChartElement();
+            return true;
+        }
+
+        var name = map.GetDisplayName(next);
+        _selectedChartElement = next;
+        _selectedChartElementSeriesName = name;
+        InvalidateVisual();
+        ChartElementSelected?.Invoke(chart.Id, next, name);
         return true;
     }
 

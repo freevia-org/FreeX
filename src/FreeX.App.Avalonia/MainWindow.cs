@@ -28612,6 +28612,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // Excel routes plain and Ctrl+ arrow keys to nudging the object instead of moving the
             // cell cursor underneath it. Shift/Alt + arrow combos fall through unchanged; the
             // shared planner owns that modifier/selection enablement policy for both renderers.
+            if (e.KeyModifiers == KeyModifiers.None &&
+                e.Key is Key.Up or Key.Down or Key.Left or Key.Right &&
+                TryNavigateSelectedChartElement(e.Key))
+            {
+                // Excel: arrow keys move between the elements of a chart once an inner element is selected.
+                e.Handled = true;
+                return;
+            }
+
             if (TryPlanSelectedDrawingObjectNudge(e.Key, e.KeyModifiers, out var nudgePlan))
             {
                 e.Handled = true;

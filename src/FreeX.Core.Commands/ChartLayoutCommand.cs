@@ -159,7 +159,11 @@ public sealed record ChartLayoutOptions(
     // io-chart-legend-6-3 (round 67): snapshot-only field, restored by RestoreLayout on undo.
     // Never set as forward input by a caller -- ApplyOptions derives chart.LegendPositionExplicit
     // itself (from options.LegendPosition being non-null), it does not read this back out of options.
-    bool? LegendPositionExplicit = null);
+    bool? LegendPositionExplicit = null)
+{
+    /// <summary>The secondary value axis title (null leaves it unchanged; empty clears it). Init-only so the positional constructor stays binary-compatible.</summary>
+    public string? SecondaryAxisTitle { get; init; }
+}
 
 public sealed partial class SetChartLayoutCommand : IWorkbookCommand
 {
@@ -364,6 +368,9 @@ public sealed partial class SetChartLayoutCommand : IWorkbookCommand
             AxisTitleTextThemeColor: chart.AxisTitleTextThemeColor,
             XAxisLabelTextThemeColor: chart.XAxisLabelTextThemeColor,
             YAxisLabelTextThemeColor: chart.YAxisLabelTextThemeColor,
-            LegendPositionExplicit: chart.LegendPositionExplicit);
+            LegendPositionExplicit: chart.LegendPositionExplicit)
+        {
+            SecondaryAxisTitle = chart.SecondaryAxisTitle,
+        };
 
 }

@@ -34,6 +34,7 @@ public static class ChartElementMapPlanner
     private const double AxisLinePadding = 4;
     private const double GridlineTolerance = 3;
     private const double SeriesLineTolerance = 5;
+    private const double ErrorBarTolerance = 3;
     private const double MarkerHitRadius = 6;
     private const double TitlePadding = 2;
 
@@ -60,6 +61,7 @@ public static class ChartElementMapPlanner
         {
             AddAxisTitles(regions, chart, layout, plot, measurer, frame);
             AddAxes(regions, chart, layout, plot, measurer, frame);
+            AddOverlays(regions, layout);
             AddSeries(regions, layout);
             AddGridlines(regions, chart, layout);
             regions.Add(Region(ChartElementKind.PlotArea, new RectHitShape(plot)));
@@ -69,9 +71,16 @@ public static class ChartElementMapPlanner
             regions.Add(Region(ChartElementKind.PlotArea, new RectHitShape(plot)));
         }
 
+        var nested = new List<ChartElementRegion>();
+        var legendLabels = new Dictionary<int, string?>();
+        AddNestedLegendEntries(nested, legendLabels, layout, frame);
+        AddNestedDataPoints(nested, layout);
+
         return new ChartElementMap(width, height, regions)
         {
             SeriesNames = CollectSeriesNames(layout),
+            NestedRegions = nested,
+            LegendEntryLabels = legendLabels,
         };
     }
 
@@ -156,8 +165,11 @@ public static class ChartElementMapPlanner
     {
         AddAxisTitle(regions, chart, layout.ValueAxis, ChartElementKind.ValueAxisTitle, plot, measurer, frame);
         AddAxisTitle(regions, chart, layout.CategoryAxis, ChartElementKind.CategoryAxisTitle, plot, measurer, frame);
-        // The secondary value axis shares the Y title field with the primary (ChartModel has no
-        // separate secondary title), so it has no independently selectable title.
+        if (layout.SecondaryValueAxis is { } secondary &&
+            !string.IsNullOrWhiteSpace(chart.SecondaryAxisTitle))
+        {
+            AddAxisTitle(regions, chart, secondary, ChartElementKind.SecondaryAxisTitle, plot, measurer, frame);
+        }
     }
 
     private static void AddAxisTitle(
@@ -323,6 +335,161 @@ public static class ChartElementMapPlanner
         {
             var shapes = group.Select(l => (ChartHitShape)new RectHitShape(l.Bounds)).ToList();
             regions.Add(new ChartElementRegion(ChartElementRef.ForDataLabels(group.Key), shapes));
+        }
+    }
+
+    /// <summary>
+    /// Trendlines and error bars are drawn over their series, so they win the hit test (Excel lets a
+    /// thin trendline or whisker be picked even where it crosses a bar or marker).
+    /// </summary>
+    private static void AddOverlays(List<ChartElementRegion> regions, ChartLayout layout)
+    {
+        for (var i = layout.Series.Count - 1; i >= 0; i--)
+        {
+            var series = layout.Series[i];
+
+            if (series.ErrorBars is { Whiskers.Count: > 0 } errorBars)
+            {
+                var segments = new List<(LayoutPoint, LayoutPoint)>();
+                foreach (var w in errorBars.Whiskers)
+                {
+                    if (w.HasPlus)
+                    {
+                        segments.Add((w.Center, w.PlusEnd));
+                        if (errorBars.EndCaps)
+                            segments.Add((w.PlusCapStart, w.PlusCapEnd));
+                    }
+
+                    if (w.HasMinus)
+                    {
+                        segments.Add((w.Center, w.MinusEnd));
+                        if (errorBars.EndCaps)
+                            segments.Add((w.MinusCapStart, w.MinusCapEnd));
+                    }
+                }
+
+                segments.RemoveAll(sg => !IsFinite(sg.Item1) || !IsFinite(sg.Item2));
+                if (segments.Count > 0)
+                {
+                    regions.Add(new ChartElementRegion(
+                        ChartElementRef.ForErrorBars(series.SeriesIndex),
+                        [new SegmentsHitShape(segments, ErrorBarTolerance)]));
+                }
+            }
+
+            if (series.Trendline is { Points.Count: >= 2 } trendline)
+            {
+                regions.Add(new ChartElementRegion(
+                    ChartElementRef.ForTrendline(series.SeriesIndex),
+                    [SegmentsHitShape.FromPolyline(trendline.Points, SeriesLineTolerance)]));
+            }
+        }
+    }
+
+    private static bool IsFinite(LayoutPoint p) => double.IsFinite(p.X) && double.IsFinite(p.Y);
+
+    // ---- Nested (second-click) elements ---------------------------------------------------
+
+    private static void AddNestedLegendEntries(
+        List<ChartElementRegion> nested,
+        Dictionary<int, string?> labels,
+        ChartLayout? layout,
+        ChartElementFrame? frame)
+    {
+        var legend = layout?.Legend;
+        if (legend is null || legend.Position == ChartLegendPosition.None || legend.Entries.Count == 0)
+            return;
+
+        var rects = new List<LayoutRect>(legend.Entries.Count);
+        if (frame?.LegendBounds is { } host)
+        {
+            // The host's own legend (OxyPlot) decided where the legend sits, so the portable per-entry
+            // rectangles are meaningless: divide the host legend among the entries instead.
+            var count = legend.Entries.Count;
+            var vertical = legend.Position is ChartLegendPosition.Left or ChartLegendPosition.Right or ChartLegendPosition.TopRight;
+            if (vertical)
+            {
+                var step = host.Height / count;
+                for (var i = 0; i < count; i++)
+                    rects.Add(new LayoutRect(host.Left, host.Top + (i * step), host.Width, step));
+            }
+            else
+            {
+                var weights = legend.Entries
+                    .Select(e => Math.Max(1.0, e.LabelRect.Width + e.SwatchRect.Width))
+                    .ToList();
+                var total = weights.Sum();
+                var x = host.Left;
+                foreach (var weight in weights)
+                {
+                    var w = host.Width * weight / total;
+                    rects.Add(new LayoutRect(x, host.Top, w, host.Height));
+                    x += w;
+                }
+            }
+        }
+        else
+        {
+            foreach (var entry in legend.Entries)
+            {
+                var left = Math.Min(entry.SwatchRect.Left, entry.LabelRect.Left);
+                var top = Math.Min(entry.SwatchRect.Top, entry.LabelRect.Top);
+                var right = Math.Max(entry.SwatchRect.Right, entry.LabelRect.Right);
+                var bottom = Math.Max(entry.SwatchRect.Bottom, entry.LabelRect.Bottom);
+                rects.Add(LayoutRect.FromCorners(left, top, right, bottom));
+            }
+        }
+
+        for (var i = 0; i < legend.Entries.Count; i++)
+        {
+            var entry = legend.Entries[i];
+            labels[entry.SeriesIndex] = entry.Label;
+            nested.Add(new ChartElementRegion(
+                ChartElementRef.ForLegendEntry(entry.SeriesIndex),
+                [new RectHitShape(rects[i], 1)]));
+        }
+    }
+
+    private static void AddNestedDataPoints(List<ChartElementRegion> nested, ChartLayout? layout)
+    {
+        if (layout is null)
+            return;
+
+        foreach (var series in layout.Series)
+        {
+            var byPoint = new SortedDictionary<int, List<ChartHitShape>>();
+
+            void Add(int pointIndex, ChartHitShape shape)
+            {
+                if (!byPoint.TryGetValue(pointIndex, out var list))
+                    byPoint[pointIndex] = list = [];
+                list.Add(shape);
+            }
+
+            foreach (var bar in series.Bars)
+                Add(bar.PointIndex, new RectHitShape(bar.Rect, 1));
+            foreach (var slice in series.Slices)
+                Add(slice.PointIndex, new ArcHitShape(slice.Arc));
+            foreach (var bubble in series.Bubbles)
+                Add(bubble.PointIndex, new CirclesHitShape([(bubble.Center, Math.Max(bubble.Radius, 3.0))]));
+            foreach (var stock in series.StockElements)
+            {
+                Add(stock.PointIndex, new RectHitShape(
+                    LayoutRect.FromCorners(stock.X, Math.Min(stock.HighY, stock.LowY), stock.X, Math.Max(stock.HighY, stock.LowY)),
+                    MarkerHitRadius));
+            }
+
+            if (series.Bars.Count == 0 && series.Slices.Count == 0 && series.Bubbles.Count == 0 && series.StockElements.Count == 0)
+            {
+                foreach (var point in series.Points)
+                {
+                    if (IsFinite(point.Position))
+                        Add(point.PointIndex, new CirclesHitShape([(point.Position, MarkerHitRadius)]));
+                }
+            }
+
+            foreach (var (pointIndex, shapes) in byPoint)
+                nested.Add(new ChartElementRegion(ChartElementRef.ForDataPoint(series.SeriesIndex, pointIndex), shapes));
         }
     }
 
