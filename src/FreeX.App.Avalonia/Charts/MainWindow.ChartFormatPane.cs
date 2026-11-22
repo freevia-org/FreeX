@@ -45,7 +45,7 @@ public sealed partial class MainWindow
 
         var close = new Button
         {
-            Content = "X",
+            Content = "00D7",
             Width = 22,
             Height = 22,
             Padding = new Thickness(0),
