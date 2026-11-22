@@ -112,6 +112,25 @@ public sealed partial class PivotWorkflowDialogTests
     }
 
     [Fact]
+    public void PivotCalculatedItemDialog_ForPivotTable_FieldsListHoldsEverySourceFieldNotJustRowAndColumnFields()
+    {
+        // Excel's Insert Calculated Item "Fields" list (and the Avalonia dialog's, which binds the session's
+        // FieldReferences) holds every source field; only the Field combo box is limited to row/column fields.
+        StaTestRunner.Run(() =>
+        {
+            var pivot = new PivotTableModel();
+            pivot.RowFields.Add(new PivotFieldModel(0));
+            var dialog = new PivotCalculatedItemDialog(["Region", "Product", "Revenue"], 0, pivotTable: pivot);
+            var fieldBox = DialogSourceTestSupport.GetPrivateField<ComboBox>(dialog, "_fieldBox");
+            var fieldList = DialogSourceTestSupport.GetPrivateField<ListBox>(dialog, "_fieldList");
+
+            fieldBox.Items.Count.Should().Be(1);
+            fieldList.Items.Cast<object>().Should().Equal("Region", "Product", "Revenue");
+            fieldList.SelectedIndex.Should().Be(0);
+        });
+    }
+
+    [Fact]
     public void PivotCalculatedItemDialog_ForPivotTableWithoutRowOrColumnFields_ReportsOpenIssue()
     {
         StaTestRunner.Run(() =>

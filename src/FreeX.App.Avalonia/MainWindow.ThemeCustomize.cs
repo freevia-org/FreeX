@@ -590,7 +590,7 @@ public sealed partial class MainWindow
                 await AvaloniaUserMessageDialog.ShowWarningAsync(
                     dialog,
                     error.Message,
-                    title);
+                    UiText.Get("WorkbookTheme_CustomizeThemeTitle"));
                 foreach (var field in colorFields)
                 {
                     if (field.Slot != error.Slot)

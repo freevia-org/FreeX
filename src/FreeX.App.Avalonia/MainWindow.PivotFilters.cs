@@ -546,6 +546,8 @@ public sealed partial class MainWindow
     // Both WPF dialogs are a 14px-margin DockPanel: the button row docked to the bottom (12px top
     // margin, 74px buttons, 8px gap) and a two-column grid (104px label column) whose labels are WPF
     // Labels (5px padding, vertically centred, 8px right margin) beside their editors.
+    private const double PivotFilterFormRowEditorHeight = 26;
+
     private static Grid CreatePivotFilterFormGrid() => new()
     {
         ColumnDefinitions = new ColumnDefinitions("104,*"),
@@ -583,6 +585,12 @@ public sealed partial class MainWindow
         editor.Margin = new Thickness(0, top, 0, bottom);
         editor.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         editor.VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center;
+        // The WPF editors carry no vertical alignment, so they Stretch to the row, which the 26px Label
+        // (16px text + 5px padding above and below) sizes: the combo boxes and text boxes are 26px tall,
+        // not the 22/20px compact-dialog defaults.
+        editor.Height = PivotFilterFormRowEditorHeight;
+        editor.MinHeight = PivotFilterFormRowEditorHeight;
+        editor.MaxHeight = PivotFilterFormRowEditorHeight;
         Grid.SetRow(labelBlock, row);
         Grid.SetRow(editor, row);
         Grid.SetColumn(editor, 1);
@@ -617,8 +625,9 @@ public sealed partial class MainWindow
         var existing = pivot.LabelFilters.FirstOrDefault(filter => filter.SourceFieldIndex == target.SourceFieldIndex);
 
         var kindBox = new ComboBox();
-        foreach (var (label, _) in PivotFieldFilterPlanner.LabelFilterKinds)
-            kindBox.Items.Add(label);
+        // WPF PivotLabelFilterDialog lists UiText.Get(option.ResourceKey), not the planner's English fallback.
+        foreach (var option in PivotFieldFilterPlanner.LabelFilterKinds)
+            kindBox.Items.Add(UiText.Get(option.ResourceKey));
         // WPF PivotLabelFilterDialog.LoadFilter: a new filter starts on the planner default kind.
         kindBox.SelectedIndex = existing is null
             ? PivotFieldFilterPlanner.DefaultLabelKindIndex
@@ -732,8 +741,9 @@ public sealed partial class MainWindow
             .FirstOrDefault(filter => PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex));
 
         var kindBox = new ComboBox();
-        foreach (var (label, _) in PivotFieldFilterPlanner.ValueFilterKinds)
-            kindBox.Items.Add(label);
+        // WPF PivotValueFilterDialog lists UiText.Get(option.ResourceKey), not the planner's English fallback.
+        foreach (var option in PivotFieldFilterPlanner.ValueFilterKinds)
+            kindBox.Items.Add(UiText.Get(option.ResourceKey));
         // WPF PivotValueFilterDialog.LoadFilter: a new filter starts on the planner default kind with "0".
         kindBox.SelectedIndex = existing is null
             ? PivotFieldFilterPlanner.DefaultValueKindIndex

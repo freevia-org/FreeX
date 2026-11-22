@@ -110,7 +110,7 @@ public partial class ColorPickerDialog : Window
 
         if (!TryParseCustomRgbFields(out _, out var invalidRgbInput))
         {
-            ShowInvalidCustomColorWarning("Enter RGB values from 0 to 255.", invalidRgbInput);
+            ShowInvalidCustomColorWarning(UiText.Get("ColorPicker_InvalidRgbMessage"), invalidRgbInput);
             return;
         }
 

@@ -80,7 +80,13 @@ public sealed partial class MainWindow
 
     private async System.Threading.Tasks.Task<CellColor?> ShowMoreColorsDialogAsync(string title, CellColor initial)
     {
-        var choice = await ShowColorPickerDialogAsync(title, initial, allowNoColor: false);
+        // WPF MainWindow.TryShowColorPicker hands the live workbook theme to the dialog so the Theme
+        // Colors gallery shows this workbook's accents instead of always falling back to Office.
+        var choice = await ShowColorPickerDialogAsync(
+            title,
+            initial,
+            allowNoColor: false,
+            theme: _session.Workbook.Theme);
         return choice?.Color;
     }
 
@@ -88,7 +94,8 @@ public sealed partial class MainWindow
         string title,
         CellColor? initial,
         bool allowNoColor,
-        Window? owner = null)
+        Window? owner = null,
+        WorkbookTheme? theme = null)
     {
         CellColor? selected = initial;
         // WPF _customSpectrumBaseColor: the colour the luminosity slider scales.
@@ -342,7 +349,7 @@ public sealed partial class MainWindow
 
         // WPF fills the 10-column theme grid row by row: every theme column's base colour first, then
         // each tint/shade row beneath it.
-        var themeColumns = CellColorPalettePlanner.BuildThemePalette();
+        var themeColumns = CellColorPalettePlanner.BuildThemePalette(theme);
         var themeColorsPanel = new UniformGrid
         {
             Columns = 10,
@@ -568,7 +575,7 @@ public sealed partial class MainWindow
                 if (invalidComponentBox is not null)
                 {
                     await ShowInvalidCustomColorWarningAsync(
-                        UiText.Get("ColorPicker_RRGGBBOrRGBValuesFrom0To255"),
+                        UiText.Get("ColorPicker_InvalidRgbMessage"),
                         invalidComponentBox);
                     return;
                 }

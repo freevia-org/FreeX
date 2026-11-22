@@ -660,11 +660,12 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("InsertLoc_CreateNamesTitle"),
-            // WPF CreateNamesFromSelectionDialog: Width = 280, ResizeMode.NoResize, a top-stacked
-            // StackPanel { Margin = 16 }. The height follows the content so OK/Cancel are never cut.
-            Width = 280,
-            MinWidth = 280,
-            MaxWidth = 280,
+            // WPF CreateNamesFromSelectionDialog: Width = 280 (outer, so the client is 280 minus the
+            // NoResize frame), ResizeMode.NoResize, a top-stacked StackPanel { Margin = 16 }. The height
+            // follows the content (WPF DialogSizing grows it the same way) so OK/Cancel are never cut.
+            Width = 280 - WpfNoResizeFrameWidth,
+            MinWidth = 280 - WpfNoResizeFrameWidth,
+            MaxWidth = 280 - WpfNoResizeFrameWidth,
             SizeToContent = SizeToContent.Height,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,

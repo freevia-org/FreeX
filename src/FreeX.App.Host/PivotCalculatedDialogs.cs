@@ -341,8 +341,9 @@ public sealed class PivotCalculatedItemDialog : Window
         stack.Children.Add(PivotDialogLayout.CreateGroupBox(UiText.Get("PivotCalculated_FieldAndItemGroup"), itemPanel));
 
         var insertPanel = PivotDialogLayout.CreateGroupPanel();
-        _fieldList.ItemsSource = _session.Fields;
-        _fieldList.DisplayMemberPath = nameof(PivotCalculatedItemPlanner.CalculatedItemField.Caption);
+        // Excel's Insert Calculated Item "Fields" list holds every source field (the session's insertable
+        // references), not just the row/column fields the Field combo box offers.
+        _fieldList.ItemsSource = _session.FieldReferences;
         _fieldList.MouseDoubleClick += FieldList_MouseDoubleClick;
         AutomationProperties.SetName(_fieldList, UiText.Get("PivotCalculated_AvailableFields"));
         PivotDialogLayout.AddLabeledControl(insertPanel, UiText.Get("PivotCalculated_AvailableFieldsLabel"), _fieldList);
@@ -443,8 +444,7 @@ public sealed class PivotCalculatedItemDialog : Window
             field => field.SourceFieldIndex == result.SourceFieldIndex) ?? _session.Fields.FirstOrDefault();
         _nameBox.Text = _managesExistingItems ? _session.Name : result.Name;
         _formulaBox.Text = _managesExistingItems ? _session.Formula : result.Formula;
-        _fieldList.SelectedItem = _fieldBox.SelectedItem;
-        if (_fieldList.SelectedItem is null && _session.Fields.Count > 0)
+        if (_session.FieldReferences.Count > 0)
             _fieldList.SelectedIndex = 0;
         RefreshItemList();
     }
@@ -509,12 +509,10 @@ public sealed class PivotCalculatedItemDialog : Window
 
     private bool InsertSelectedField()
     {
-        var selectedField = _fieldList.SelectedItem as PivotCalculatedItemPlanner.CalculatedItemField
-            ?? _fieldBox.SelectedItem as PivotCalculatedItemPlanner.CalculatedItemField;
-        if (selectedField is null)
+        if (_fieldList.SelectedItem is not string fieldReference)
             return false;
 
-        InsertFormulaText(selectedField.Caption);
+        InsertFormulaText(fieldReference);
         return true;
     }
 
