@@ -18,6 +18,14 @@ public sealed class Parser
     private int _parseDepth;
     private int _nestingDepth;
     private int _chainedCallCounter;
+    private FormulaNode? _lastParenthesizedExpression;
+
+    // Root +/- nodes whose whole formula is wrapped in parentheses, e.g. =(A1+A2-A3). Excel only snaps the
+    // result of an unparenthesized outermost +/- to zero, so the evaluator needs to know. Identity-keyed
+    // so the shared (cached) AST nodes carry the flag without changing record equality.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FormulaNode, object> ParenthesizedRoots = new();
+
+    internal static bool IsParenthesizedRoot(FormulaNode node) => ParenthesizedRoots.TryGetValue(node, out _);
 
     private sealed record ParsedTokenCacheEntry(int Hash, Token[] Tokens, FormulaNode Node);
 
@@ -46,6 +54,9 @@ public sealed class Parser
 
         if (Current.Type != TokenType.EndOfFormula)
             throw new FormulaParseException($"Unexpected token '{Current.Value}' at position {Current.Position}");
+
+        if (node is BinaryOpNode && ReferenceEquals(node, _lastParenthesizedExpression))
+            ParenthesizedRoots.AddOrUpdate(node, new object());
 
         if (canUseCache)
             AddCachedParse(_tokens, tokenHash, node);
@@ -995,6 +1006,7 @@ public sealed class Parser
                 }
 
                 Expect(TokenType.CloseParen);
+                _lastParenthesizedExpression = expr;
                 return expr;
             }
 

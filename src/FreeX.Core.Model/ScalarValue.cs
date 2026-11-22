@@ -46,7 +46,8 @@ public sealed record DateTimeValue(double Value) : ScalarValue
     // shifts by a day. FakeLeapDayBoundary is the first date OADate and Excel agree on again.
     private const double FirstDateSerial = 1;
     private const double PhantomLeapDaySerial = 60;
-    private static readonly DateTime FirstDate = new(1900, 1, 1);
+    // ClosedXML surfaces a date-formatted time-of-day serial in [0,1) (e.g. 0.6) as 1899-12-31 + fraction.
+    private static readonly DateTime SerialZeroDate = new(1899, 12, 31);
     private static readonly DateTime FakeLeapDayBoundary = new(1900, 3, 1);
 
     // DateTime.FromOADate's representable range (year 100..9999).
@@ -93,7 +94,7 @@ public sealed record DateTimeValue(double Value) : ScalarValue
         Value is >= FirstDateSerial and < PhantomLeapDaySerial ? Value + 1 : Value;
 
     public static DateTimeValue FromDateTime(DateTime dt) =>
-        new(dt >= FirstDate && dt < FakeLeapDayBoundary ? dt.ToOADate() - 1 : dt.ToOADate());
+        new(dt >= SerialZeroDate && dt < FakeLeapDayBoundary ? dt.ToOADate() - 1 : dt.ToOADate());
 }
 
 /// <summary>Represents a cell error value (e.g. #DIV/0!, #VALUE!, #REF!).</summary>

@@ -205,7 +205,7 @@ public sealed partial class FormulaEvaluator
             BinaryOperator.Power => Math.Pow(left, right),
             _ => 0
         };
-        value = RoundTo15SignificantDigits(value);
+        // Excel keeps the full double result (no 15-digit rounding of arithmetic results; verified via COM).
 
         if (double.IsFinite(value))
         {
@@ -224,14 +224,16 @@ public sealed partial class FormulaEvaluator
     /// Excel snaps the result of a formula's outermost +/- to 0 when it is smaller than
     /// 2^(exponent(largest operand) - 49), i.e. within ~8 ulps of the operands (verified against
     /// Excel: =A3-(A1+A2) with a 3.7e-9 residue on ~1e7 operands shows 0, while the same
-    /// expression nested inside another operator keeps the residue).
+    /// expression nested inside another operator keeps the residue). A formula whose whole body is wrapped
+    /// in parentheses, =(A1+A2-A3), is not snapped either (verified against Excel).
     /// </summary>
     private static ScalarValue SnapNearZeroRootAddSub(FormulaNode ast, ScalarValue result)
     {
         if (result is NumberValue number &&
             number.Value != 0d &&
             ReferenceEquals(ast, s_lastAddSubNode) &&
-            s_lastAddSubOperandMagnitude > 0d)
+            s_lastAddSubOperandMagnitude > 0d &&
+            !Parser.IsParenthesizedRoot(ast))
         {
             var exponent = Math.Floor(Math.Log2(s_lastAddSubOperandMagnitude));
             // The result was already rounded to 15 significant digits, so a difference of exactly 8 ulps
@@ -311,7 +313,7 @@ public sealed partial class FormulaEvaluator
             ArithmeticKind.Subtract => leftNumber - rightNumber,
             _ => leftNumber * rightNumber
         };
-        result = RoundTo15SignificantDigits(result);
+
         return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
@@ -331,7 +333,7 @@ public sealed partial class FormulaEvaluator
     private static ScalarValue DivideNumberValues(double dividend, double divisor)
     {
         if (divisor == 0) return ErrorValue.DivByZero;
-        double result = RoundTo15SignificantDigits(dividend / divisor);
+        double result = dividend / divisor;
         return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }
 
