@@ -22,6 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Fixtures/flashfill-excel-corpus.jsonl" LogicalName="flashfill-excel-corpus.jsonl" />
+    <EmbeddedResource Include="Fixtures/flashfill-excel-corpus-holdout.jsonl" LogicalName="flashfill-excel-corpus-holdout.jsonl" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="../CommandTestInfrastructure/TestCommandContext.cs" Link="TestCommandContext.cs" />
   </ItemGroup>
 
