@@ -22826,12 +22826,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         static void ApplyAdvancedFilterPickerButtonChrome(Button button)
         {
             // WPF DialogReferencePicker.CreateButton: 28 wide, 6px gap to the reference box, and the
-            // DockPanel stretches it to the reference box height (24 here).
+            // DockPanel stretches it to the reference box height (20: default WPF TextBox template).
             button.Width = 28;
             button.MinWidth = 28;
-            button.Height = 24;
-            button.MinHeight = 24;
-            button.MaxHeight = 24;
+            button.Height = AdvancedFilterReferenceBoxHeight;
+            button.MinHeight = AdvancedFilterReferenceBoxHeight;
+            button.MaxHeight = AdvancedFilterReferenceBoxHeight;
             button.Padding = new Thickness(0);
             button.Margin = new Thickness(0, 0, 6, 0);
             button.FontSize = 11;
@@ -22847,7 +22847,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange)),
             MinWidth = 0,
         };
-        ApplyDialogTextBoxChrome(listRangeBox);
+        ApplyAdvancedFilterReferenceBoxChrome(listRangeBox);
         AutomationProperties.SetName(listRangeBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_ListRange")));
         AutomationProperties.SetAutomationId(listRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox);
         AutomationProperties.SetHelpText(
@@ -22858,7 +22858,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 0,
         };
-        ApplyDialogTextBoxChrome(criteriaRangeBox);
+        ApplyAdvancedFilterReferenceBoxChrome(criteriaRangeBox);
         AutomationProperties.SetName(criteriaRangeBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CriteriaRange")));
         AutomationProperties.SetAutomationId(criteriaRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox);
         AutomationProperties.SetHelpText(
@@ -22886,6 +22886,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             GroupName = "AdvancedFilterOutputMode",
         };
         ApplyDialogRadioButtonChrome(copyToAnotherLocationButton);
+        // WPF stacks the two radios at a 19px pitch (15 + 4 margin); the compact radio row is 20.
+        inPlaceButton.MinHeight = inPlaceButton.MaxHeight = 19;
+        copyToAnotherLocationButton.MinHeight = copyToAnotherLocationButton.MaxHeight = 19;
         AutomationProperties.SetName(copyToAnotherLocationButton, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CopyToAnotherLocationAutomationName")));
         AutomationProperties.SetAutomationId(copyToAnotherLocationButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton);
         AutomationProperties.SetHelpText(
@@ -22897,7 +22900,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsEnabled = false,
             MinWidth = 0,
         };
-        ApplyDialogTextBoxChrome(copyToBox);
+        ApplyAdvancedFilterReferenceBoxChrome(copyToBox);
         AutomationProperties.SetName(copyToBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_CopyTo")));
         AutomationProperties.SetAutomationId(copyToBox, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox);
         AutomationProperties.SetHelpText(
@@ -22907,7 +22910,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var uniqueBox = new CheckBox
         {
             Content = UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName"),
-            Margin = new Thickness(0, 10, 0, 0),
+            // WPF: 10px above a 16px-tall check box; Avalonia's compact check box row is 20px, so 3px
+            // less keeps the glyph and label on the WPF rows.
+            Margin = new Thickness(0, 7, 0, 0),
         };
         ApplyDialogCheckBoxChrome(uniqueBox);
         AutomationProperties.SetName(uniqueBox, UiText.CreateAutomationName(UiText.Get("AdvancedFilter_UniqueRecordsOnlyAutomationName")));
@@ -23048,7 +23053,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = UiText.Get("AdvancedFilter_CriteriaShouldIncludeColumnLabelsInTheFirstRowMatchingExcelAdvancedFilte"),
             Foreground = grayText,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 10, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
@@ -23152,7 +23157,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // glyph centres on the WPF positions.
         var actionPanel = new StackPanel
         {
-            Margin = new Thickness(14, 21, 8, 0),
+            Margin = new Thickness(14, 20, 8, 0),
             Children =
             {
                 inPlaceButton,
@@ -23161,7 +23166,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         var actionGroup = new AvaloniaGrid
         {
-            Height = 73,
+            Height = 71,
             Margin = new Thickness(0, 0, 0, 10),
             Children =
             {
@@ -23179,7 +23184,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     FontFamily = FormulaBarFontFamily,
                     Background = Brushes.White,
                     Padding = new Thickness(3, 0),
-                    Margin = new Thickness(6, 0, 0, 0),
+                    Margin = new Thickness(6, 1, 0, 0),
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
                     VerticalAlignment = AvaloniaVerticalAlignment.Top,
                 },
@@ -23210,6 +23215,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         await dialog.ShowDialog(this);
         return result;
+    }
+
+    // WPF AdvancedFilterDialog leaves its reference boxes at the default TextBox template, which
+    // measures 20px tall at the dialog font (row pitch 28 = 20 + 8 margin). Avalonia's shared 24px
+    // dialog box made every row 4px taller and pushed everything below it down.
+    private const double AdvancedFilterReferenceBoxHeight = 20;
+
+    private static void ApplyAdvancedFilterReferenceBoxChrome(TextBox tb)
+    {
+        ApplyDialogTextBoxChrome(tb);
+        tb.Height = AdvancedFilterReferenceBoxHeight;
+        tb.MinHeight = AdvancedFilterReferenceBoxHeight;
+        tb.MaxHeight = AdvancedFilterReferenceBoxHeight;
+        tb.Padding = new Thickness(3, 0);
     }
 
     private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)
