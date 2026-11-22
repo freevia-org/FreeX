@@ -1837,6 +1837,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildWorkbookWorkArea()
     {
         var workArea = new DockPanel { LastChildFill = true };
+        // Docked threaded Comments pane (Review > Show Comments): a real layout column, outermost
+        // right, so the worksheet viewport shrinks instead of being covered.
+        ConfigureCommentsPaneHost();
+        DockPanel.SetDock(_commentsPaneHost, Dock.Right);
+        workArea.Children.Add(_commentsPaneHost);
+        workArea.SizeChanged += (_, _) => ClampCommentsPaneWidth();
         var pivotFieldPane = BuildPivotFieldPaneChrome();
         DockPanel.SetDock(pivotFieldPane, Dock.Right);
         workArea.Children.Add(pivotFieldPane);

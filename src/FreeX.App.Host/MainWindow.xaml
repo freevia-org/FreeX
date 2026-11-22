@@ -497,6 +497,19 @@
                 </Grid>
             </Border>
 
+            <!-- Docked threaded Comments pane (Review > Show Comments): a real layout column, content built in MainWindow.CommentsPane.cs. -->
+            <Border x:Name="CommentsPane"
+                    Grid.Column="4"
+                    Width="320"
+                    Background="#FFFFFF"
+                    BorderBrush="#C8C8C8"
+                    BorderThickness="1,0,0,0"
+                    Visibility="Collapsed"
+                    KeyboardNavigation.TabNavigation="Cycle"
+                    KeyboardNavigation.ControlTabNavigation="Cycle"
+                    AutomationProperties.AutomationId="ReviewCommentsPane"
+                    AutomationProperties.Name="{local:Loc Key=MainWindowMessage_CommentsTitle}"/>
+
             <!-- Docked Format pane (Excel's Format Chart Area / Title / Legend / Axis / Series pane): a layout
                  column on the right of the grid, opened by double-clicking a chart element or Format Selection. -->
             <Border x:Name="ChartFormatPane"

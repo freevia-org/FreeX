@@ -166,8 +166,8 @@ public sealed class StructuredTableStyleBandingCustomStyleTests
         StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
 
         var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
-        workbook.GetStyle(sheet.GetCell(2, 1)!.StyleId).FillColor.Should().Be(banding.EvenRowFill, "col 1 (offset 0) should be even");
-        workbook.GetStyle(sheet.GetCell(2, 2)!.StyleId).FillColor.Should().Be(banding.OddRowFill, "col 2 (offset 1) should be odd");
+        workbook.GetStyle(sheet.GetCell(2, 1)!.StyleId).FillColor.Should().Be(banding.OddRowFill, "col 1 (offset 0) carries the first stripe");
+        workbook.GetStyle(sheet.GetCell(2, 2)!.StyleId).FillColor.Should().Be(banding.EvenRowFill, "col 2 (offset 1) is the unstriped column");
     }
 
     private static void SeedTable(Sheet sheet, int rowCount)

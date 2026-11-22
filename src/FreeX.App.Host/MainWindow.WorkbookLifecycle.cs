@@ -310,6 +310,8 @@ public partial class MainWindow
         if (PivotValuesList is not null)
             PivotValuesList.ItemsSource = null;
 
+        CloseCommentsPane(restoreGridFocus: false);
+
         _slicerTimelinePaneDismissed = false;
         if (SlicerTimelinePane is not null)
             SlicerTimelinePane.Visibility = Visibility.Collapsed;

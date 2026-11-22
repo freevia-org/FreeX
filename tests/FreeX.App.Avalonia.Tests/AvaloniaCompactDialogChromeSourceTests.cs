@@ -414,7 +414,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         // The comment-list action row wraps (the pane docks narrower than four buttons side by side),
         // so the four buttons are added to a WrapPanel instead of a CreateActionRow call.
         sheetOptionsSource.Should().Contain("var bottomRow = new WrapPanel");
-        sheetOptionsSource.Should().Contain("foreach (var actionButton in new[] { toggleResolvedButton, deleteThreadButton, goToButton, closeButton })");
+        sheetOptionsSource.Should().Contain("foreach (var actionButton in actionButtons)");
         sheetOptionsSource.Should().Contain("bottomRow.Children.Add(actionButton);");
         sheetOptionsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(filterBox, SheetOptionsDialogChromeStyle);");
         // The gridlines/headings sheet-options dialog that owned the check box and the ok/cancel

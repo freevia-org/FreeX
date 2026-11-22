@@ -39,24 +39,22 @@ public sealed class ThreadedCommentActivationPlannerTests
     public void IsIndicatorHit_tests_top_right_triangle(double x, double y, bool expected) =>
         ThreadedCommentActivationPlanner.IsIndicatorHit(x, y, 100, 20).Should().Be(expected);
 
-    [Fact]
-    public void PlanPaneDock_docks_to_the_right_of_the_grid()
-    {
-        var plan = ThreadedCommentActivationPlanner.PlanPaneDock(100, 50, 1400, 900, contentTopInset: 200);
+    [Theory]
+    [InlineData(1400, 392)]
+    [InlineData(2000, 400)]
+    [InlineData(800, 280)]
+    public void DefaultPaneWidth_is_a_fraction_of_the_work_area_within_limits(double hostWidth, double expected) =>
+        ThreadedCommentActivationPlanner.DefaultPaneWidth(hostWidth).Should().BeApproximately(expected, 0.001);
 
-        plan.IsDocked.Should().BeTrue();
-        plan.Width.Should().BeInRange(ThreadedCommentActivationPlanner.MinPaneWidth, ThreadedCommentActivationPlanner.MaxPaneWidth);
-        plan.Left.Should().Be(100 + 1400 - plan.Width);
-        plan.Top.Should().Be(250);
-        plan.Height.Should().Be(700);
-    }
-
-    [Fact]
-    public void PlanPaneDock_declines_when_grid_would_be_squeezed()
-    {
-        ThreadedCommentActivationPlanner.PlanPaneDock(0, 0, 560, 900, 200).IsDocked.Should().BeFalse();
-        ThreadedCommentActivationPlanner.PlanPaneDock(0, 0, 1400, 300, 200).IsDocked.Should().BeFalse();
-    }
+    [Theory]
+    [InlineData(100, 1400, 280)]
+    [InlineData(450, 1400, 450)]
+    [InlineData(2000, 1400, 640)]
+    [InlineData(2000, 800, 480)]
+    [InlineData(450, 500, 280)]
+    [InlineData(double.NaN, 1400, 280)]
+    public void ClampPaneWidth_keeps_pane_minimum_and_grid_minimum(double requested, double hostWidth, double expected) =>
+        ThreadedCommentActivationPlanner.ClampPaneWidth(requested, hostWidth).Should().Be(expected);
 
     [Fact]
     public void ShowComments_toggles_pane()

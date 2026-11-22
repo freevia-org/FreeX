@@ -157,18 +157,20 @@ public sealed class DialogInteractionValidationTests
                 errorCheckingWindows.Should().HaveCount(2, "WPF creates a fresh modeless error-checking window per command");
                 errorCheckingWindows.ForEach(window => window.Close());
 
+                // Show Comments docks a real layout column in the main window (not an owned window)
+                // and is a toggle (Excel): a second press closes it.
                 await owner.ShowCommentsListForTestAsync();
-                var comments = FindOwnedWindow(owner, "ReviewCommentListWindow");
-                // Show Comments is a toggle (Excel): a second press closes the docked pane.
+                owner.IsCommentsPaneOpen.Should().BeTrue();
+                owner.OwnedWindows.Should().NotContain(window =>
+                    AutomationProperties.GetAutomationId(window) == "ReviewCommentListWindow");
                 await owner.ShowCommentsListForTestAsync();
-                comments.IsVisible.Should().BeFalse();
+                owner.IsCommentsPaneOpen.Should().BeFalse();
                 await owner.ShowCommentsListForTestAsync();
-                comments = FindOwnedWindow(owner, "ReviewCommentListWindow");
+                owner.IsCommentsPaneOpen.Should().BeTrue();
 
                 owner.AllowCloseWithoutDirtyPromptForParityCapture();
 
                 owner.Close();
-                comments.IsVisible.Should().BeFalse("owned modeless windows must follow the owner lifetime");
             }
             finally
             {

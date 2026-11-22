@@ -92,7 +92,8 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("ReviewSessionController.NavigateThreadedComment(previous)");
         source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
         source.Should().Contain("ShowOrRefreshCommentListWindow(");
-        source.Should().Contain("new CommentListWindow(title, items, NavigateToCell) { Owner = this }");
+        source.Should().Contain("new CommentListWindow(");
+        source.Should().Contain("ShowCommentsPane(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));");
         source.Should().Contain("window.Show();");
         source.Should().Contain("ReviewSessionController.NavigateNote(previous)");
         source.Should().Contain("ReviewSessionController.ToggleNoteVisibility(address)");

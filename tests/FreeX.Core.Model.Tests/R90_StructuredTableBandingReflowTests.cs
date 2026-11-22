@@ -32,11 +32,11 @@ public sealed class R90_StructuredTableBandingReflowTests
         sheet.StructuredTables.Add(table);
 
         // Bake the initial (pre-insert) banding, exactly like the workbook-open pipeline does:
-        // row2=even, row3=odd, row4=even, row5=odd.
+        // row2=odd, row3=even, row4=odd, row5=even.
         StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
         var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill, "sanity: pre-insert row4 is even");
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill, "sanity: pre-insert row5 is odd");
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill, "sanity: pre-insert row4 is odd");
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill, "sanity: pre-insert row5 is even");
 
         var ctx = new TestCommandContext(workbook);
         // Insert one row above physical row 4 — lands strictly inside the table body.
@@ -46,14 +46,14 @@ public sealed class R90_StructuredTableBandingReflowTests
         resized.Range.End.Row.Should().Be(6, "the table body must have grown by the inserted row");
 
         // The brand-new row must be striped for its OWN position, not left blank.
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill,
-            "the newly-inserted row is the 3rd data row (offset 2) — even parity");
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill,
+            "the newly-inserted row is the 3rd data row (offset 2) — odd parity");
         // The row that shifted down from old row4 must be recomputed for ITS new position,
         // not keep carrying its old (now-stale) fill down with it.
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill,
-            "old row4's content shifted to row5 (offset 3) — odd parity, even though it carried an even fill down");
-        StyleAt(workbook, sheet, 6, 1).FillColor.Should().Be(banding.EvenRowFill,
-            "old row5's content shifted to row6 (offset 4) — even parity, even though it carried an odd fill down");
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill,
+            "old row4's content shifted to row5 (offset 3) — even parity, odd though it carried an odd fill down");
+        StyleAt(workbook, sheet, 6, 1).FillColor.Should().Be(banding.OddRowFill,
+            "old row5's content shifted to row6 (offset 4) — odd parity, odd though it carried an even fill down");
     }
 
     // No-regression sibling: an insert that lands OUTSIDE any table's body must not disturb an
@@ -85,10 +85,10 @@ public sealed class R90_StructuredTableBandingReflowTests
 
         var unchanged = sheet.StructuredTables.Single(t => t.Id == 1);
         unchanged.Range.End.Row.Should().Be(5);
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill);
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill);
     }
 
     [Fact]
@@ -131,10 +131,10 @@ public sealed class R90_StructuredTableBandingReflowTests
 
         // Real Excel's banding stays purely positional after a sort — the physical row's parity
         // never changes, regardless of which record's data landed there.
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill);
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill);
     }
 
     // No-regression sibling: sorting a plain (non-table) range must not throw or attempt to

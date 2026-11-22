@@ -12,6 +12,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Comments;
@@ -26,15 +27,29 @@ public sealed partial class MainWindow
 {
     private const double ReviewCommentListCellColumnWidth = 80;
 
-    private Window? _commentListWindow;
+    private readonly Border _commentsPaneHost = new()
+    {
+        IsVisible = false,
+        Width = 320,
+        Background = Brushes.White,
+        BorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
+        BorderThickness = new Thickness(1, 0, 0, 0),
+    };
+
     private Action<IReadOnlyList<CommentListRowPlan>>? _refreshCommentListWindow;
+    private double? _commentsPaneUserWidth;
 
     private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
+    /// <summary>True while the docked threaded Comments pane column is showing.</summary>
+    internal bool IsCommentsPaneOpen => _commentsPaneHost.IsVisible;
+
     /// <summary>
-    /// Review ▸ Show Comments — list every threaded comment on the active sheet
-    /// (cell ref + author + text). Double-click a row or use Go To to select that cell.
-    /// Legacy notes remain a separate WPF-style Show Notes toggle-all command.
+    /// Review ▸ Show Comments — toggles the docked Comments pane: a real layout column right of the
+    /// grid (the grid shrinks), resizable with its left-edge grip, closed with its X button or by
+    /// pressing Show Comments again. Lists every threaded comment on the active sheet (cell ref +
+    /// author + text). Double-click a row or use Go To to select that cell. Legacy notes remain a
+    /// separate WPF-style Show Notes toggle-all command.
     /// </summary>
     private Task ShowCommentsListAsync()
     {
@@ -47,10 +62,9 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         // Show Comments is a toggle (Excel): pressing it while the pane is open closes it.
-        if (_commentListWindow is { IsVisible: true } openPane &&
-            ThreadedCommentActivationPlanner.ShouldClosePaneOnToggle(paneOpen: true))
+        if (ThreadedCommentActivationPlanner.ShouldClosePaneOnToggle(IsCommentsPaneOpen))
         {
-            openPane.Close();
+            CloseCommentsPane();
             return Task.CompletedTask;
         }
 
@@ -62,16 +76,172 @@ public sealed partial class MainWindow
             return Task.CompletedTask;
         }
 
-        if (_commentListWindow is { IsVisible: true } existing)
-        {
-            _refreshCommentListWindow?.Invoke(comments);
-            if (existing.WindowState == WindowState.Minimized)
-                existing.WindowState = WindowState.Normal;
-            existing.Activate();
-            return Task.CompletedTask;
-        }
+        var surface = BuildCommentsListSurface(comments, closeRequested: null);
+        _commentsPaneHost.Child = BuildCommentsPaneChrome(surface.Content);
+        var hostWidth = CommentsPaneHostWidth();
+        _commentsPaneHost.Width = ThreadedCommentActivationPlanner.ClampPaneWidth(
+            _commentsPaneUserWidth ?? ThreadedCommentActivationPlanner.DefaultPaneWidth(hostWidth),
+            hostWidth);
+        _refreshCommentListWindow = surface.Refresh;
+        _commentsPaneHost.IsVisible = true;
+        Dispatcher.UIThread.Post(surface.FocusList, DispatcherPriority.Input);
+        return Task.CompletedTask;
+    }
 
-        var listBox = new ListBox { MinHeight = 240, MinWidth = 420 };
+    private void ConfigureCommentsPaneHost()
+    {
+        AutomationProperties.SetAutomationId(_commentsPaneHost, "ReviewCommentsPane");
+        AutomationProperties.SetName(_commentsPaneHost, UiText.Get("MainWindowMessage_CommentsTitle"));
+    }
+
+    internal void CloseCommentsPane(bool restoreGridFocus = true)
+    {
+        if (!_commentsPaneHost.IsVisible && _commentsPaneHost.Child is null)
+            return;
+
+        _commentsPaneHost.IsVisible = false;
+        _commentsPaneHost.Child = null;
+        _refreshCommentListWindow = null;
+        if (restoreGridFocus)
+            _sheetGridHost.Focus();
+    }
+
+    private double CommentsPaneHostWidth() =>
+        (_commentsPaneHost.Parent as Control)?.Bounds.Width is > 0 and var width ? width : Bounds.Width;
+
+    private void ClampCommentsPaneWidth()
+    {
+        if (!_commentsPaneHost.IsVisible)
+            return;
+
+        _commentsPaneHost.Width = ThreadedCommentActivationPlanner.ClampPaneWidth(
+            _commentsPaneHost.Width, CommentsPaneHostWidth());
+    }
+
+    private Control BuildCommentsPaneChrome(Control content)
+    {
+        var title = UiText.Get("MainWindowMessage_CommentsTitle");
+        var closeButton = new Button
+        {
+            Content = "×",
+            Width = 22,
+            Height = 22,
+            Padding = new Thickness(0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(closeButton, "ReviewCommentsPaneCloseButton");
+        AutomationProperties.SetName(closeButton, UiText.Get("ReviewCommentList_CloseButtonAutomationName"));
+        closeButton.Click += (_, _) => CloseCommentsPane();
+
+        var header = new DockPanel { Margin = new Thickness(10, 8, 10, 0), LastChildFill = true };
+        DockPanel.SetDock(closeButton, Dock.Right);
+        header.Children.Add(closeButton);
+        header.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 14,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        });
+
+        var body = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(header, Dock.Top);
+        body.Children.Add(header);
+        body.Children.Add(content);
+
+        var grip = new Border
+        {
+            Width = 6,
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.SizeWestEast),
+        };
+        AutomationProperties.SetAutomationId(grip, "ReviewCommentsPaneResizeGrip");
+        AutomationProperties.SetName(grip, title);
+        var dragging = false;
+        var dragStartX = 0d;
+        var dragStartWidth = 0d;
+        grip.PointerPressed += (_, args) =>
+        {
+            if (!args.GetCurrentPoint(grip).Properties.IsLeftButtonPressed)
+                return;
+
+            dragging = true;
+            dragStartX = args.GetPosition(this).X;
+            dragStartWidth = _commentsPaneHost.Width;
+            args.Pointer.Capture(grip);
+            args.Handled = true;
+        };
+        grip.PointerMoved += (_, args) =>
+        {
+            if (!dragging)
+                return;
+
+            // Docked on the right: dragging left (negative delta) widens the pane.
+            var requested = dragStartWidth - (args.GetPosition(this).X - dragStartX);
+            _commentsPaneHost.Width = ThreadedCommentActivationPlanner.ClampPaneWidth(requested, CommentsPaneHostWidth());
+            _commentsPaneUserWidth = _commentsPaneHost.Width;
+            args.Handled = true;
+        };
+        grip.PointerReleased += (_, args) =>
+        {
+            if (!dragging)
+                return;
+
+            dragging = false;
+            args.Pointer.Capture(null);
+            args.Handled = true;
+        };
+
+        var root = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(grip, Dock.Left);
+        root.Children.Add(grip);
+        root.Children.Add(body);
+        return root;
+    }
+
+    private sealed record CommentsListSurface(
+        Control Content,
+        Action<IReadOnlyList<CommentListRowPlan>> Refresh,
+        Action FocusList);
+
+    /// <summary>
+    /// Opens the Comments list as a floating owned window (the surface the dialog-parity capture
+    /// harness and its modeless-contract checks drive). The production command docks the pane
+    /// instead; both host the same <see cref="BuildCommentsListSurface"/> content.
+    /// </summary>
+    internal Task ShowCommentsListFloatingWindowAsync()
+    {
+        var comments = CollectThreadedComments(_session.ActiveSheet);
+        Window? dialog = null;
+        var surface = BuildCommentsListSurface(comments, closeRequested: () => dialog?.Close());
+        dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_CommentsTitle"),
+            Width = 520,
+            Height = 380,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+            Content = surface.Content,
+        };
+        AutomationProperties.SetAutomationId(dialog, "ReviewCommentListWindow");
+        ShowOwnedModelessWindow(dialog, surface.FocusList, () => { });
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Builds the Comments list content shared by the docked pane and the floating window: All /
+    /// Active / Resolved filter, live summary, two-column list and per-thread Resolve/Reopen, Delete
+    /// and Go To actions, driven by the shared ThreadedCommentCardPlanner view-model.
+    /// </summary>
+    /// <param name="closeRequested">When set, a Close button is added to the action row (floating window).</param>
+    private CommentsListSurface BuildCommentsListSurface(
+        IReadOnlyList<CommentListRowPlan> comments,
+        Action? closeRequested)
+    {
+        var listBox = new ListBox { MinHeight = 240, MinWidth = 240 };
         ApplySheetOptionListBoxStyle(listBox);
         AutomationProperties.SetAutomationId(listBox, "ReviewCommentList");
         AutomationProperties.SetName(listBox, UiText.Get("MainWindowMessage_CommentsTitle"));
@@ -95,24 +265,6 @@ public sealed partial class MainWindow
         var goToButton = new Button { Content = UiText.Get("ReviewCommentList_OpenButton"), MinWidth = 84, IsEnabled = false };
         ApplySheetOptionButtonChrome(goToButton, 84);
         AutomationProperties.SetAutomationId(goToButton, "ReviewCommentListOpenButton");
-        var closeButton = new Button
-        {
-            Content = UiText.Get("ReviewCommentList_CloseButton"),
-            IsCancel = true,
-            MinWidth = 84,
-        };
-        ApplySheetOptionButtonChrome(closeButton, 84);
-        AutomationProperties.SetAutomationId(closeButton, "ReviewCommentListCloseButton");
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("MainWindowMessage_CommentsTitle"),
-            Width = 520,
-            Height = 380,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetAutomationId(dialog, "ReviewCommentListWindow");
 
         IReadOnlyList<CommentListRowPlan> currentComments = comments;
 
@@ -242,17 +394,30 @@ public sealed partial class MainWindow
             args.Handled = true;
         };
         goToButton.Click += (_, _) => GoToSelected();
-        closeButton.Click += (_, _) => dialog.Close();
 
-        // The pane docks at 280-400px, narrower than the four buttons side by side, so the row wraps
-        // instead of cutting Open/Close off the right edge.
+        var actionButtons = new List<Button> { toggleResolvedButton, deleteThreadButton, goToButton };
+        if (closeRequested is not null)
+        {
+            var closeButton = new Button
+            {
+                Content = UiText.Get("ReviewCommentList_CloseButton"),
+                IsCancel = true,
+                MinWidth = 84,
+            };
+            ApplySheetOptionButtonChrome(closeButton, 84);
+            AutomationProperties.SetAutomationId(closeButton, "ReviewCommentListCloseButton");
+            closeButton.Click += (_, _) => closeRequested();
+            actionButtons.Add(closeButton);
+        }
+
+        // A wrapping row so the actions stay reachable in the narrow docked pane.
         var bottomRow = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0),
         };
-        foreach (var actionButton in new[] { toggleResolvedButton, deleteThreadButton, goToButton, closeButton })
+        foreach (var actionButton in actionButtons)
         {
             actionButton.Margin = new Thickness(8, 0, 0, 6);
             bottomRow.Children.Add(actionButton);
@@ -269,69 +434,14 @@ public sealed partial class MainWindow
         summaryText.Margin = new Thickness(0);
         DockPanel.SetDock(filterRow, Dock.Top);
 
-        dialog.Content = new DockPanel
+        var content = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(10),
             Children = { bottomRow, emptyText, filterRow, header, listBox },
         };
 
         RefreshList(comments);
-        DockCommentPaneRight(dialog);
-        _commentListWindow = dialog;
-        _refreshCommentListWindow = RefreshList;
-        ShowOwnedModelessWindow(
-            dialog,
-            () => listBox.Focus(),
-            () =>
-            {
-                if (!ReferenceEquals(_commentListWindow, dialog))
-                    return;
-
-                _commentListWindow = null;
-                _refreshCommentListWindow = null;
-            });
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Docks the Comments pane to the right edge of the grid area (Excel's task-pane position) and
-    /// keeps it there while the main window moves/resizes; falls back to the floating window when
-    /// the grid would be squeezed. Mirrors WPF's DockCommentPaneRight.
-    /// </summary>
-    private void DockCommentPaneRight(Window pane)
-    {
-        void Apply()
-        {
-            if (WindowState == WindowState.Minimized || _sheetGridHost.Bounds.Width <= 0)
-                return;
-
-            var scaling = RenderScaling <= 0 ? 1 : RenderScaling;
-            var origin = _sheetGridHost.PointToScreen(new Point(0, 0));
-            var plan = ThreadedCommentActivationPlanner.PlanPaneDock(
-                origin.X / scaling,
-                origin.Y / scaling,
-                _sheetGridHost.Bounds.Width,
-                _sheetGridHost.Bounds.Height,
-                contentTopInset: 0);
-            if (!plan.IsDocked)
-                return;
-
-            pane.WindowStartupLocation = WindowStartupLocation.Manual;
-            pane.Width = plan.Width;
-            pane.Height = plan.Height;
-            pane.Position = new PixelPoint((int)Math.Round(plan.Left * scaling), (int)Math.Round(plan.Top * scaling));
-        }
-
-        pane.Opened += (_, _) => Apply();
-        EventHandler<PixelPointEventArgs> moved = (_, _) => { if (pane.IsVisible) Apply(); };
-        EventHandler<SizeChangedEventArgs> resized = (_, _) => { if (pane.IsVisible) Apply(); };
-        PositionChanged += moved;
-        SizeChanged += resized;
-        pane.Closed += (_, _) =>
-        {
-            PositionChanged -= moved;
-            SizeChanged -= resized;
-        };
+        return new CommentsListSurface(content, RefreshList, () => listBox.Focus());
     }
 
     private static IReadOnlyList<CommentListRowPlan> CollectThreadedComments(Sheet sheet) =>

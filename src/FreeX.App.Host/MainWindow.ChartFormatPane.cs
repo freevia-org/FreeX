@@ -28,6 +28,9 @@ public partial class MainWindow
         if (GetSelectedChartOnCurrentSheet() is not { } chart)
             return;
 
+        if (IsCommentsPaneOpen)
+            CloseCommentsPane(restoreGridFocus: false);
+
         _chartFormatPaneChartId = chart.Id;
         _chartFormatPaneElement = element;
         ChartFormatPane.Visibility = Visibility.Visible;

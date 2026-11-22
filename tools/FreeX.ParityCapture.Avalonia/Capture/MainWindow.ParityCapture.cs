@@ -760,7 +760,9 @@ public sealed partial class MainWindow
             address,
             "Review the quarterly total.",
             "FreeX"));
-        await ShowCommentsListAsync();
+        // The production Show Comments command docks the pane in the main window; the dialog
+        // interaction contract exercises the same list surface hosted in a floating owned window.
+        await ShowCommentsListFloatingWindowAsync();
     }
 
     private async Task ShowFunctionArgumentsParityDialogAsync()

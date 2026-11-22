@@ -41,12 +41,12 @@ public sealed class StructuredTableStyleServiceTests
         header.FontColor.Should().Be(banding.HeaderFontColor);
         header.Bold.Should().BeTrue();
 
-        // Data rows alternate: first data row is the "even" (unfilled) stripe, second is the "odd"
-        // (tinted) stripe, mirroring Excel and the table-creation command's parity.
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 5, 2).FillColor.Should().Be(banding.OddRowFill);
+        // Data rows alternate: first data row is the "odd" (tinted) stripe, second is the "even"
+        // (unfilled) stripe, mirroring Excel and the table-creation command's parity.
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill);
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 5, 2).FillColor.Should().Be(banding.EvenRowFill);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public sealed class StructuredTableStyleServiceTests
     /// <summary>
     /// When ShowColumnStripes=true (and ShowRowStripes=false) the load-time materializer must paint
     /// vertical column bands, mirroring StructuredTableCommand.BuildStyleCommands.  Column 1 (offset 0)
-    /// gets the even fill, column 2 (offset 1) gets the odd fill.
+    /// gets the odd fill, column 2 (offset 1) gets the even fill.
     /// </summary>
     [Fact]
     public void ApplyLoadedTableStyles_PaintsColumnStripesWhenShowColumnStripesTrue()
@@ -198,12 +198,12 @@ public sealed class StructuredTableStyleServiceTests
 
         var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
 
-        // Data rows: col 1 (offset 0) → even fill; col 2 (offset 1) → odd fill; col 3 (offset 2) → even fill
+        // Data rows: col 1 (offset 0) → odd fill; col 2 (offset 1) → even fill; col 3 (offset 2) → odd fill
         for (var row = 2u; row <= 4u; row++)
         {
-            StyleAt(workbook, sheet, row, 1).FillColor.Should().Be(banding.EvenRowFill, $"col 1 row {row} should be even (offset 0)");
-            StyleAt(workbook, sheet, row, 2).FillColor.Should().Be(banding.OddRowFill,  $"col 2 row {row} should be odd (offset 1)");
-            StyleAt(workbook, sheet, row, 3).FillColor.Should().Be(banding.EvenRowFill, $"col 3 row {row} should be even (offset 2)");
+            StyleAt(workbook, sheet, row, 1).FillColor.Should().Be(banding.OddRowFill, $"col 1 row {row} should be odd (offset 0)");
+            StyleAt(workbook, sheet, row, 2).FillColor.Should().Be(banding.EvenRowFill,  $"col 2 row {row} should be even (offset 1)");
+            StyleAt(workbook, sheet, row, 3).FillColor.Should().Be(banding.OddRowFill, $"col 3 row {row} should be odd (offset 2)");
         }
     }
 

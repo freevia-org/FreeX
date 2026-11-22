@@ -32,11 +32,11 @@ public sealed class R92_DeleteRowsCommandBandingReflowTests
         };
         sheet.StructuredTables.Add(table);
 
-        // Bake the initial (pre-delete) banding: row2=even, row3=odd, row4=even, row5=odd.
+        // Bake the initial (pre-delete) banding: row2=odd, row3=even, row4=odd, row5=even.
         StructuredTableStyleService.ApplyLoadedTableStyles(workbook).Should().BeTrue();
         var banding = StructuredTableStyleBandingResolver.Resolve("TableStyleMedium2", workbook.Theme);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill, "sanity: pre-delete row4 is even");
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill, "sanity: pre-delete row5 is odd");
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill, "sanity: pre-delete row4 is odd");
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill, "sanity: pre-delete row5 is even");
 
         var ctx = new TestCommandContext(workbook);
         var command = new DeleteRowsCommand(sheet.Id, startRow: 3, count: 1);
@@ -45,19 +45,19 @@ public sealed class R92_DeleteRowsCommandBandingReflowTests
         var resized = sheet.StructuredTables.Single(t => t.Id == 1);
         resized.Range.End.Row.Should().Be(4, "the table body must have shrunk by the deleted row");
 
-        // Old row4's content ("Row4") shifted up to row3, which is now the 2nd data row (odd
-        // parity) -- it must be repainted, not keep the "even" fill it carried down from row4.
+        // Old row4's content ("Row4") shifted up to row3, which is now the 2nd data row (even
+        // parity) -- it must be repainted, not keep the "odd" fill it carried down from row4.
         sheet.GetCell(3, 1)!.Value.Should().BeOfType<TextValue>()
             .Which.Value.Should().Be("Row4");
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill,
-            "old row4's content shifted to row3 (2nd data row) -- odd parity, even though it carried an even fill down");
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill,
+            "old row4's content shifted to row3 (2nd data row) -- even parity, odd though it carried an odd fill down");
 
-        // Old row5's content ("Row5") shifted up to row4, which is now the 3rd data row (even
-        // parity) -- it must be repainted, not keep the "odd" fill it carried down from row5.
+        // Old row5's content ("Row5") shifted up to row4, which is now the 3rd data row (odd
+        // parity) -- it must be repainted, not keep the "even" fill it carried down from row5.
         sheet.GetCell(4, 1)!.Value.Should().BeOfType<TextValue>()
             .Which.Value.Should().Be("Row5");
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill,
-            "old row5's content shifted to row4 (3rd data row) -- even parity, even though it carried an odd fill down");
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill,
+            "old row5's content shifted to row4 (3rd data row) -- odd parity, odd though it carried an even fill down");
 
         // Undo-fidelity: Revert must restore the TRUE pre-delete state -- both content and banding.
         command.Revert(ctx);
@@ -69,10 +69,10 @@ public sealed class R92_DeleteRowsCommandBandingReflowTests
         sheet.GetCell(4, 1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("Row4");
         sheet.GetCell(5, 1)!.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("Row5");
 
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill, "undo must restore row2's original banding");
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill, "undo must restore row3's original banding");
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill, "undo must restore row4's original banding");
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill, "undo must restore row5's original banding");
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill, "undo must restore row2's original banding");
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill, "undo must restore row3's original banding");
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill, "undo must restore row4's original banding");
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill, "undo must restore row5's original banding");
     }
 
     // No-regression sibling: a delete entirely OUTSIDE any table's body (whole table shifts up as a
@@ -106,10 +106,10 @@ public sealed class R92_DeleteRowsCommandBandingReflowTests
 
         var unchanged = sheet.StructuredTables.Single(t => t.Id == 1);
         unchanged.Range.End.Row.Should().Be(5);
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.OddRowFill);
-        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.EvenRowFill);
-        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 3, 1).FillColor.Should().Be(banding.EvenRowFill);
+        StyleAt(workbook, sheet, 4, 1).FillColor.Should().Be(banding.OddRowFill);
+        StyleAt(workbook, sheet, 5, 1).FillColor.Should().Be(banding.EvenRowFill);
     }
 
     private static void SeedTable(Sheet sheet, int rowCount)

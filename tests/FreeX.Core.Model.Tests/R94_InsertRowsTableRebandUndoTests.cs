@@ -54,14 +54,12 @@ public sealed class R94_InsertRowsTableRebandUndoTests
         var insertCommand = new InsertRowsCommand(sheet.Id, beforeRow: 5, count: 1);
         insertCommand.Apply(ctx).Success.Should().BeTrue();
 
-        // Sanity: RebandTable's blast radius really does reach row2 -- it overwrote the explicit
-        // highlight with the recomputed banding fill (this part mirrors DeleteRowsCommand's already-
-        // accepted "banding is purely positional and always repaints" behavior; it is not itself the
-        // defect under test).
-        StyleAt(workbook, sheet, 2, 1).FillColor.Should().NotBe(UserHighlight,
-            "sanity: reband's forceFill overwrote the user's explicit fill (expected, mirrors DeleteRowsCommand)");
+        // Excel keeps a cell's direct fill when a row insert re-flows the table's banding: only the
+        // stripe is recomputed, never a direct fill.
+        StyleAt(workbook, sheet, 2, 1).FillColor.Should().Be(UserHighlight,
+            "a reband re-flows the stripe but must keep the user's direct fill (Excel parity)");
 
-        // The defect: undoing the insert must restore row2's explicit fill, exactly as real Excel's
+        // Undoing the insert must still restore row2's explicit fill, exactly as real Excel's
         // Ctrl+Z would -- an edit far from row2 (and its own undo) must not permanently destroy row2's
         // unrelated formatting.
         insertCommand.Revert(ctx);

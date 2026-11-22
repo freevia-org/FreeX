@@ -316,7 +316,8 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
-            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            window.UpdateLayout();
+            var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             listWindow.Should().NotBeNull();
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
@@ -338,7 +339,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_B2")!.Text
                 .Should().Be("FreeX: Updated root");
 
-            listWindow!.Close();
+            window.CloseCommentsPane();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
@@ -363,7 +364,8 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
-            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            window.UpdateLayout();
+            var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
             list!.Items.Should().ContainSingle();
@@ -377,7 +379,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             InvokePrivate(window, "ToggleAllNotesVisibility");
             sheet.ShownComments.Should().NotContain(noteAddress);
 
-            listWindow!.Close();
+            window.CloseCommentsPane();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
@@ -403,7 +405,8 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
-            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            window.UpdateLayout();
+            var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
             AutomationProperties.GetHelpText(list!).Should().Be(UiText.Get("ReviewCommentList_ListHelpText"));
@@ -415,7 +418,7 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_D3")!.Text
                 .Should().Be("Reviewer: Root | Responder: Reply | Resolved");
 
-            listWindow!.Close();
+            window.CloseCommentsPane();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
@@ -439,7 +442,8 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Show();
 
             ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
-            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            window.UpdateLayout();
+            var listWindow = GetPrivateField<Border>(window, "_commentsPaneHost");
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             var openButton = FindByAutomationId<Button>(listWindow, "ReviewCommentListOpenButton");
             list.Should().NotBeNull();
@@ -456,10 +460,65 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             });
             window.Session.ActiveCell.Should().Be(secondAddress);
 
-            listWindow!.Close();
+            window.CloseCommentsPane();
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
 
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CommentsPane_IsADockedLayoutColumn_ThatShrinksTheGridAndClosesFromItsXButton()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("CommentsPaneDockFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 2, 2);
+            sheet.ThreadedComments[address] = new ThreadedComment("Docked");
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+            window.Width = 1400;
+            window.Height = 900;
+            window.Show();
+
+            var host = GetPrivateField<Border>(window, "_commentsPaneHost")!;
+            var scroll = GetPrivateField<ScrollViewer>(window, "_sheetScrollViewer")!;
+            host.IsVisible.Should().BeFalse();
+            var widthBefore = scroll.Bounds.Width;
+
+            ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            window.UpdateLayout();
+            host.IsVisible.Should().BeTrue();
+            window.OwnedWindows.Should().BeEmpty("the pane is a layout column, not a floating window");
+            host.GetVisualAncestors().Should().Contain(visual => ReferenceEquals(visual, window));
+            host.Bounds.Width.Should().BeApproximately(host.Width, 1.5);
+            scroll.Bounds.Width.Should().BeApproximately(widthBefore - host.Width, 1.5,
+                "the grid column shrinks by the pane width");
+
+            // Resize with the left-edge grip: dragging left widens the pane and shrinks the grid further.
+            var grip = FindByAutomationId<Border>(host, "ReviewCommentsPaneResizeGrip")!;
+            var narrowGrid = scroll.Bounds.Width;
+            var startWidth = host.Width;
+            var gripCenter = grip.TranslatePoint(new Point(grip.Bounds.Width / 2, 10), window)!.Value;
+            window.MouseMove(gripCenter, RawInputModifiers.None);
+            window.MouseDown(gripCenter, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+            window.MouseMove(gripCenter - new Vector(40, 0), RawInputModifiers.LeftMouseButton);
+            window.MouseUp(gripCenter - new Vector(40, 0), MouseButton.Left, RawInputModifiers.None);
+            window.UpdateLayout();
+            host.Width.Should().BeApproximately(startWidth + 40, 1);
+            scroll.Bounds.Width.Should().BeLessThan(narrowGrid);
+
+            // X closes the pane and the grid gets its width back.
+            var close = FindByAutomationId<Button>(host, "ReviewCommentsPaneCloseButton")!;
+            close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
+            host.IsVisible.Should().BeFalse();
+            scroll.Bounds.Width.Should().BeApproximately(widthBefore, 1.5);
+
+            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }

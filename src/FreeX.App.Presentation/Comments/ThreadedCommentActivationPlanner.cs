@@ -27,26 +27,20 @@ public enum CommentActivationAction
     OpenCard
 }
 
-/// <summary>Where the docked Comments pane goes, in the owner window's coordinate space.</summary>
-public readonly record struct CommentPaneDockPlan(
-    bool IsDocked,
-    double Left,
-    double Top,
-    double Width,
-    double Height);
-
 /// <summary>
 /// Shared (both hosts) decisions for Excel's threaded-comment interaction model: selecting a cell
 /// with a thread or clicking its purple indicator opens the editable card (hover stays a read-only
-/// preview), the Comments pane docks to the right of the grid, and Show Comments toggles the pane.
+/// preview), the Comments pane is a real layout column to the right of the grid (the grid shrinks,
+/// the pane is resizable and closes via its X button), and Show Comments toggles the pane.
 /// </summary>
 public static class ThreadedCommentActivationPlanner
 {
     public const double MinPaneWidth = 280;
     public const double MaxPaneWidth = 400;
+    public const double MaxResizablePaneWidth = 640;
     public const double PaneOwnerFraction = 0.28;
 
-    /// <summary>The grid keeps at least this much width; below it the pane is not docked.</summary>
+    /// <summary>The grid column keeps at least this much width while the pane is resized.</summary>
     public const double MinGridWidth = 320;
 
     public static CommentActivationAction Decide(
@@ -80,26 +74,28 @@ public static class ThreadedCommentActivationPlanner
         return localX >= 0 && localX <= cellWidth && localY >= 0 && dx >= 0 && localY <= size && localY + dx <= size;
     }
 
-    public static CommentPaneDockPlan PlanPaneDock(
-        double ownerLeft,
-        double ownerTop,
-        double ownerWidth,
-        double ownerHeight,
-        double contentTopInset,
-        double frameInset = 0)
-    {
-        var usableWidth = ownerWidth - (2 * frameInset);
-        var width = Math.Clamp(usableWidth * PaneOwnerFraction, MinPaneWidth, MaxPaneWidth);
-        var height = ownerHeight - contentTopInset - frameInset;
-        if (usableWidth - width < MinGridWidth || height < 160)
-            return new CommentPaneDockPlan(false, 0, 0, 0, 0);
+    /// <summary>
+    /// Initial width of the docked Comments pane column for a work area <paramref name="hostWidth"/>
+    /// wide (grid + pane).
+    /// </summary>
+    public static double DefaultPaneWidth(double hostWidth) =>
+        ClampPaneWidth(Math.Clamp(hostWidth * PaneOwnerFraction, MinPaneWidth, MaxPaneWidth), hostWidth);
 
-        return new CommentPaneDockPlan(
-            true,
-            ownerLeft + ownerWidth - frameInset - width,
-            ownerTop + contentTopInset,
-            width,
-            height);
+    /// <summary>
+    /// Clamps a requested (default or user-dragged) pane column width so the pane keeps its minimum
+    /// and the grid column keeps at least <see cref="MinGridWidth"/> of the work area. When the work
+    /// area is too narrow for both, the pane keeps its minimum width.
+    /// </summary>
+    public static double ClampPaneWidth(double requestedWidth, double hostWidth)
+    {
+        if (double.IsNaN(requestedWidth))
+            requestedWidth = MinPaneWidth;
+
+        var max = hostWidth > 0
+            ? Math.Min(MaxResizablePaneWidth, hostWidth - MinGridWidth)
+            : MaxResizablePaneWidth;
+        max = Math.Max(MinPaneWidth, max);
+        return Math.Clamp(requestedWidth, MinPaneWidth, max);
     }
 
     /// <summary>Show Comments is a toggle: pressing it while the pane is open closes it.</summary>
