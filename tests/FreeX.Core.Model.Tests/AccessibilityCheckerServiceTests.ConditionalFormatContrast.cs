@@ -2726,7 +2726,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("SEC(\"1\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SEC($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("SEC(KURT($A1))>0");
-        AssertFormulaArithmeticContrastLocations("SEC(PI()/2)>0");
+        AssertFormulaArithmeticContrastLocations("SEC(PI()/2)>0", "B1", "B2", "B3", "B4"); // Excel: 1.63E+16 (raw PI()/2, verified via COM)
         AssertFormulaArithmeticContrastLocations("SEC(RADIANS(90))>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("SEC(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("SEC(EXP(1000))>0");
