@@ -5172,7 +5172,9 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",2)=20", "B2", "B4");
         AssertFormulaLookupReferenceFunctionContrastLocations("XLOOKUP($C1,$F$1:$F$4,$G$1:$G$4,\"Missing\",0,2)=20", "B2", "B4");
         AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($C1,$F$1:$G$4,$G$1:$G$4)=20");
-        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"", "B3", "B4");
+        // $U$1:$U$4 = {10,30,20,40} is unsorted: Excel's LOOKUP binary-searches (verified against real
+        // Excel: LOOKUP(25,...)=Band1, LOOKUP(35,...)=Band3), so only D4=35 resolves to Band3.
+        AssertFormulaLookupReferenceFunctionContrastLocations("LOOKUP($D1,$U$1:$U$4,$N$1:$N$4)=\"Band3\"", "B4");
         AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($A:$A,0,0)>0");
         AssertFormulaLookupReferenceFunctionContrastLocations("OFFSET($G$1,0,0,1,2)=20");
         AssertFormulaLookupReferenceFunctionContrastLocations("INDIRECT(\"$G$1:$H$2\")=20");
