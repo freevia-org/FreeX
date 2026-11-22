@@ -6,6 +6,24 @@ namespace FreeX.Core.Model.Tests;
 
 public sealed partial class FlashFillServiceTests
 {
+    [Fact]
+    public void Fill_SentenceCase_OneExampleCopiesTheRestOfTheString()
+    {
+        var result = FlashFillService.Fill([("hello world", "Hello world")], ["nice to meet", "see you soon"]);
+
+        result.Should().BeEquivalentTo(["Nice to meet", "See you soon"], o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_SentenceCase_TwoExamplesCopyTheRestOfTheString()
+    {
+        var result = FlashFillService.Fill(
+            [("hello world", "Hello world"), ("good morning", "Good morning")],
+            ["happy new year", "safe travels all"]);
+
+        result.Should().BeEquivalentTo(["Happy new year", "Safe travels all"], o => o.WithStrictOrdering());
+    }
+
     // ── Prefix / suffix trim ──────────────────────────────────────────────────
 
     [Fact]
