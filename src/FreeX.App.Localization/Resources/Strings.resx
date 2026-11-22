@@ -5836,6 +5836,9 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   <data name="PrintPreview_ZoomPageWidth" xml:space="preserve">
     <value>Page Width</value>
   </data>
+  <data name="PrintPreview_TwoPages" xml:space="preserve">
+    <value>Two Pages</value>
+  </data>
   <data name="DialogReferencePicker_HelpText" xml:space="preserve">
     <value>Collapse dialog and select a worksheet range for this field.</value>
   </data>

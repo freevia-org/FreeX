@@ -29087,21 +29087,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Close();
     }
 
+    private void BeginActiveCellEditFromKeyboard()
+    {
+        // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
+        // while a picture/shape/text box/chart is genuinely selected -- same family as the
+        // Escape/Fill/Backspace/Delete guards (see HasSelectedDrawingObject).
+        if (HasSelectedDrawingObject())
+            return;
+
+        var address = _session.ActiveCell;
+        var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
+        BeginInlineCellEdit(address, editText, editText.Length);
+    }
+
     private void NavigateActiveCell(KeyEventArgs e)
     {
         if (e.Key == Key.F2)
         {
             e.Handled = true;
-
-            // R129-model-drawing-f2-1: F2 must no-op, not open the underlying active cell for edit,
-            // while a picture/shape/text box/chart is genuinely selected -- same family as the
-            // Escape/Fill/Backspace/Delete guards (see HasSelectedDrawingObject).
-            if (HasSelectedDrawingObject())
-                return;
-
-            var address = _session.ActiveCell;
-            var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
-            BeginInlineCellEdit(address, editText, editText.Length);
+            BeginActiveCellEditFromKeyboard();
             return;
         }
 

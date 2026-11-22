@@ -85,6 +85,9 @@ public sealed partial class MainWindow
         // WPF's backstage DocumentViewer keeps its stock icon toolbar: zoom in / zoom out | actual size,
         // page width, whole page. It opens fitted to the page width (FitToWidth after every refresh).
         var zoomMode = BackstagePreviewZoomMode.PageWidth;
+        // Pages laid side by side per row: 1 normally, 2 after the "Two pages" command (WPF
+        // FitToMaxPagesAcross). Zoom in/out keep the current column count.
+        var pagesAcross = 1;
         var zoomPercent = 100d;
         var chrome = PrintPreviewSurfacePlanner.DocumentToolbarChrome;
         var zoomInButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.PlusSign, UiText.Get("MainWindow_AutomationName_ZoomIn"), chrome);
@@ -92,6 +95,9 @@ public sealed partial class MainWindow
         var actualSizeButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Zoom, "100%", chrome);
         var pageWidthButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.View, UiText.Get("PrintPreview_ZoomPageWidth"), chrome);
         var wholePageButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Page, UiText.Get("PrintPreview_FitToOnePage"), chrome);
+        var twoPagesButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.Page, UiText.Get("PrintPreview_TwoPages"), chrome);
+        twoPagesButton.Content = CreateTwoPagesToolbarGlyph(chrome.IconSize);
+        AutomationProperties.SetAutomationId(twoPagesButton, "BackstagePrintTwoPagesButton");
         AutomationProperties.SetAutomationId(zoomInButton, "BackstagePrintZoomInButton");
         AutomationProperties.SetAutomationId(zoomOutButton, "BackstagePrintZoomOutButton");
         AutomationProperties.SetAutomationId(actualSizeButton, "BackstagePrintActualSizeButton");
@@ -138,10 +144,10 @@ public sealed partial class MainWindow
             CreateDocumentToolbarSeparator(chrome),
             zoomInButton, zoomOutButton,
             CreateDocumentToolbarSeparator(chrome),
-            actualSizeButton, pageWidthButton, wholePageButton,
-            CreateDocumentToolbarSeparator(chrome),
-            findBox, findPreviousButton, findNextButton, findStatus,
-        ]);
+            actualSizeButton, pageWidthButton, wholePageButton, twoPagesButton,
+        ],
+        // The DocumentViewer Find box sits at the right-hand end of the toolbar row.
+        [findBox, findPreviousButton, findNextButton, findStatus]);
         AutomationProperties.SetAutomationId(zoomToolbar, "BackstagePrintZoomToolbar");
 
         // Continuous page scrolling like DocumentViewer: every page is stacked in one scroll surface;
@@ -157,6 +163,7 @@ public sealed partial class MainWindow
                 return zoomPercent;
 
             var pageWidth = context.PageCount > 0 ? context.BuildPainting(navigator.CurrentIndex)?.PageBounds.Width ?? 0 : 0;
+            pageWidth = pageWidth * pagesAcross + BackstagePreviewPageSpacing * (pagesAcross - 1);
             var available = pageHost.Bounds.Width - 48;
             return pageWidth > 0 && available > 0 ? available / pageWidth * 100 : 100;
         }
@@ -179,18 +186,27 @@ public sealed partial class MainWindow
         zoomOutButton.Click += (_, _) => StepZoom(increase: false);
         actualSizeButton.Click += (_, _) =>
         {
+            pagesAcross = 1;
             zoomMode = BackstagePreviewZoomMode.Percent;
             zoomPercent = 100;
             Render();
         };
         pageWidthButton.Click += (_, _) =>
         {
+            pagesAcross = 1;
             zoomMode = BackstagePreviewZoomMode.PageWidth;
             Render();
         };
         wholePageButton.Click += (_, _) =>
         {
+            pagesAcross = 1;
             zoomMode = BackstagePreviewZoomMode.WholePage;
+            Render();
+        };
+        twoPagesButton.Click += (_, _) =>
+        {
+            pagesAcross = 2;
+            zoomMode = BackstagePreviewZoomMode.PageWidth;
             Render();
         };
 
@@ -271,7 +287,7 @@ public sealed partial class MainWindow
         {
             var hasPages = context.PageCount > 0;
             zoomInButton.IsEnabled = zoomOutButton.IsEnabled = actualSizeButton.IsEnabled =
-                pageWidthButton.IsEnabled = wholePageButton.IsEnabled = hasPages;
+                pageWidthButton.IsEnabled = wholePageButton.IsEnabled = twoPagesButton.IsEnabled = hasPages;
             findBox.IsEnabled = hasPages;
             findPreviousButton.IsEnabled = findNextButton.IsEnabled = hasPages && !string.IsNullOrWhiteSpace(findBox.Text);
             lastMatch = null;
@@ -280,7 +296,7 @@ public sealed partial class MainWindow
             if (hasPages)
             {
                 surface = BuildBackstagePreviewSurface(
-                    context, zoomMode, zoomPercent, new Size(pageHost.Bounds.Width, pageHost.Bounds.Height));
+                    context, zoomMode, zoomPercent, new Size(pageHost.Bounds.Width, pageHost.Bounds.Height), pagesAcross);
                 foreach (var canvas in surface.Canvases)
                     canvas.SelectionChanged += (_, _) => UpdateCopyState();
                 if (surface.Scroll is { } builtScroll)
@@ -544,6 +560,8 @@ public sealed partial class MainWindow
         Percent,
     }
 
+    private const double BackstagePreviewPageSpacing = 12;
+
     private static readonly double[] BackstagePreviewZoomSteps = [25, 50, 75, 100, 125, 150, 200, 300, 400];
 
     private sealed record BackstagePreviewSurface(
@@ -557,21 +575,45 @@ public sealed partial class MainWindow
         AvaloniaPrintPreviewPaginationContext context,
         BackstagePreviewZoomMode mode,
         double percent,
-        Size viewport)
+        Size viewport,
+        int pagesAcross = 1)
     {
+        pagesAcross = Math.Max(1, pagesAcross);
         var pages = new List<Control>();
         var canvases = new List<PrintPreviewTextCanvas>();
-        var stack = new StackPanel { Spacing = 12 };
+        var stack = new StackPanel { Spacing = BackstagePreviewPageSpacing };
+        StackPanel? row = null;
         for (var index = 0; index < context.PageCount; index++)
         {
             var page = BuildPreviewPageView(context, index);
             pages.Add(page);
             canvases.Add((page as Border)?.Child as PrintPreviewTextCanvas ?? new PrintPreviewTextCanvas());
-            stack.Children.Add(page);
+            if (pagesAcross == 1)
+            {
+                stack.Children.Add(page);
+                continue;
+            }
+
+            // Multi-page layout: pages flow left to right, pagesAcross to a row, rows stack vertically
+            // inside the same continuous scroll surface.
+            if (index % pagesAcross == 0)
+            {
+                row = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = BackstagePreviewPageSpacing,
+                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+                };
+                stack.Children.Add(row);
+            }
+
+            row!.Children.Add(page);
         }
 
         var first = pages.Count > 0 ? pages[0] as Layoutable : null;
         var pageWidth = first is { Width: > 0 } ? first.Width : 0;
+        if (pageWidth > 0)
+            pageWidth = pageWidth * pagesAcross + BackstagePreviewPageSpacing * (pagesAcross - 1);
         var pageHeight = first is { Height: > 0 } ? first.Height : 0;
         var scale = 1d;
         Control content;
