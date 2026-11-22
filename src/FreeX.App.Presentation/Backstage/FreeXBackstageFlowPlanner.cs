@@ -27,7 +27,8 @@ public enum FreeXBackstageCommandWorkflowKind
     ExportWorkbook,
     CloseWorkbook,
     Account,
-    Options
+    Options,
+    Feedback
 }
 
 public sealed record FreeXBackstageCommandWorkflowPlan(
@@ -146,6 +147,14 @@ public static class FreeXBackstageFlowPlanner
             FreeXBackstageCommandId.Options => new(
                 command,
                 FreeXBackstageCommandWorkflowKind.Options,
+                UsesDirtyGate: false,
+                UsesSaveResolution: false,
+                ForcesSaveAsDialog: false,
+                OpensNativeFileDialog: false),
+
+            FreeXBackstageCommandId.Feedback => new(
+                command,
+                FreeXBackstageCommandWorkflowKind.Feedback,
                 UsesDirtyGate: false,
                 UsesSaveResolution: false,
                 ForcesSaveAsDialog: false,

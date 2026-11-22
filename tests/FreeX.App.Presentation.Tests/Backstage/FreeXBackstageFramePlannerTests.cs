@@ -34,6 +34,9 @@ public sealed class FreeXBackstageFramePlannerTests
         var saveAs = plan.Entries.Single(entry =>
             entry.CommandWorkflow?.Command == FreeXBackstageCommandId.SaveAs);
         saveAs.StableId.Should().Be("freex.backstage.command.saveas");
+
+        plan.Entries.Single(entry => entry.CommandWorkflow?.Command == FreeXBackstageCommandId.Feedback)
+            .StableId.Should().Be("freex.backstage.command.feedback");
         saveAs.Navigation.AutomationId.Should().Be("BackstageSaveAsButton");
         saveAs.CommandWorkflow!.Workflow.Should().Be(FreeXBackstageCommandWorkflowKind.SaveWorkbookAs);
         saveAs.CommandWorkflow.ForcesSaveAsDialog.Should().BeTrue();

@@ -74,6 +74,21 @@ public sealed class FreeXBackstageFlowPlannerTests
     }
 
     [Fact]
+    public async Task CommandWorkflowExecutor_ThrowsWhenFeedbackHandlerIsMissing()
+    {
+        var handlers = new FreeXBackstageCommandHandlers(
+            () => Task.CompletedTask, () => Task.CompletedTask, () => Task.CompletedTask,
+            () => Task.CompletedTask, () => Task.CompletedTask, () => Task.CompletedTask,
+            () => Task.CompletedTask, () => Task.CompletedTask, () => Task.CompletedTask);
+
+        FreeXBackstageFlowPlanner.BuildCommandWorkflow(FreeXBackstageCommandId.Feedback)
+            .Workflow.Should().Be(FreeXBackstageCommandWorkflowKind.Feedback);
+        var act = () => FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(
+            FreeXBackstageCommandId.Feedback, handlers);
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
     public async Task CommandWorkflowExecutor_RoutesEveryCommandThroughSharedHandlers()
     {
         var invoked = new List<string>();
@@ -86,7 +101,10 @@ public sealed class FreeXBackstageFlowPlannerTests
             ExportWorkbookAsync: () => RecordAsync("export"),
             CloseWorkbookAsync: () => RecordAsync("close"),
             AccountAsync: () => RecordAsync("account"),
-            OptionsAsync: () => RecordAsync("options"));
+            OptionsAsync: () => RecordAsync("options"))
+        {
+            FeedbackAsync = () => RecordAsync("feedback"),
+        };
 
         foreach (var command in Enum.GetValues<FreeXBackstageCommandId>())
             await FreeXBackstageCommandWorkflowExecutor.ExecuteAsync(command, handlers);
@@ -100,7 +118,8 @@ public sealed class FreeXBackstageFlowPlannerTests
             "export",
             "close",
             "account",
-            "options");
+            "options",
+            "feedback");
 
         Task RecordAsync(string value)
         {
