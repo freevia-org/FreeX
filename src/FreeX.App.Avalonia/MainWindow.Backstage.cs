@@ -238,11 +238,7 @@ public sealed partial class MainWindow
             DeferredCommandMessagePlanner.LocalAccountInfo(),
             AvaloniaPlannerTextResources.Text,
             body => FreeXBackstageAccountPanePlanner.FormatMessageBody(panePlan, body, UiText.Get));
-        // Consecutive bare line feeds (the blank line between the intro and the detail rows) make the wrapped
-        // message TextBlock layout never complete under the Skia/headless text engine, which hangs the
-        // dialog; a single-space line keeps the same visual blank line.
-        var body = System.Text.RegularExpressions.Regex.Replace(message.Body, "\n(?=\n)", "\n ");
-        await AvaloniaUserMessageDialog.ShowAsync(this, body, message.Title, UserMessageIcon.Information);
+        await AvaloniaUserMessageDialog.ShowAsync(this, message.Body, message.Title, UserMessageIcon.Information);
     }
 
     private FreeXBackstageAccountPanePlan BuildBackstageAccountPanePlan(

@@ -35,8 +35,9 @@ public sealed class DialogsBWpfFlowSourceTests
         method.Should().Contain("FreeXBackstageAccountPanePlanner.FormatMessageBody(");
         method.Should().Contain("AvaloniaUserMessageDialog.ShowAsync(");
         method.Should().NotContain("new Window");
-        // Consecutive bare line feeds hang the wrapped message TextBlock layout; the body must be normalized.
-        method.Should().Contain("Regex.Replace(message.Body,");
+        // Blank lines in the message body are handled by the shared AvaloniaUserMessageDialog (one
+        // wrapped TextBlock per paragraph); no caller-side normalization is needed.
+        method.Should().NotContain("Regex.Replace(");
     }
 
     [Fact]

@@ -30,12 +30,7 @@ public sealed class AvaloniaUserMessageDialog : AvaloniaDialogWindow
         _defaultButton = actionButtons.Single(button => button.IsDefault);
 
         var severityIcon = CreateSeverityIcon(request.Kind);
-        var messageText = new TextBlock
-        {
-            Text = request.Message,
-            TextWrapping = TextWrapping.Wrap,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        var messageText = CreateMessageBody(request.Message);
         var messageRow = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("32,12,*"),
@@ -166,6 +161,45 @@ public sealed class AvaloniaUserMessageDialog : AvaloniaDialogWindow
         AvaloniaDialogButtonContent.Apply(button, plan.Label);
         button.Click += (_, _) => Close(plan.Result);
         return button;
+    }
+
+    /// <summary>
+    /// Builds the message text. A message that contains blank (or whitespace-only) lines is split
+    /// into one wrapped TextBlock per paragraph, separated by a line-height gap, instead of a single
+    /// wrapped TextBlock holding the blank line: Avalonia's headless stub text shaper never finishes
+    /// laying out a wrapped block that contains an empty or whitespace-only line, which hung whole
+    /// test shards. Rendering is otherwise the same as the single block.
+    /// </summary>
+    private static Control CreateMessageBody(string message)
+    {
+        var normalized = message.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var paragraphs = System.Text.RegularExpressions.Regex
+            .Split(normalized, @"\n[ \t]*\n(?:[ \t]*\n)*")
+            .Select(paragraph => paragraph.Trim('\n'))
+            .Where(paragraph => paragraph.Length > 0)
+            .ToArray();
+        if (paragraphs.Length <= 1)
+        {
+            return new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+        }
+
+        var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        for (var i = 0; i < paragraphs.Length; i++)
+        {
+            body.Children.Add(new TextBlock
+            {
+                Text = paragraphs[i],
+                TextWrapping = TextWrapping.Wrap,
+                Margin = i == 0 ? default : new Thickness(0, 18, 0, 0),
+            });
+        }
+
+        return body;
     }
 
     private static Control CreateSeverityIcon(UserMessageIcon icon)
