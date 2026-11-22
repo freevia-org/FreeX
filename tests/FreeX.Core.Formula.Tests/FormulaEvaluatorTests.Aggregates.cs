@@ -189,10 +189,11 @@ public partial class FormulaEvaluatorTests
     }
 
     [Fact]
-    public void Count_ErrorArgument_PropagatesError()
+    public void Count_ErrorArgument_IsIgnoredLikeExcel()
     {
         var sheet = new Sheet(SheetId.New(), "S");
-        _evaluator.Evaluate("=COUNT(NA())", sheet).Should().Be(ErrorValue.NA);
+        _evaluator.Evaluate("=COUNT(NA())", sheet).Should().Be(new NumberValue(0));
+        _evaluator.Evaluate("=COUNT(1,NA())", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]
@@ -252,13 +253,13 @@ public partial class FormulaEvaluatorTests
         _evaluator.Evaluate("=COUNTA(A1:A3)", sheet).Should().Be(new NumberValue(2));
     }
 
-    // R60-formula-statistics-6-1: a directly-erroring (non-range) argument must propagate,
-    // exactly like COUNT's Count_ErrorArgument_PropagatesError above.
+    // Excel (verified via COM): a directly-erroring argument is a non-empty value and is counted.
     [Fact]
-    public void CountA_DirectErrorArgument_PropagatesError()
+    public void CountA_DirectErrorArgument_IsCountedLikeExcel()
     {
         var sheet = new Sheet(SheetId.New(), "S");
-        _evaluator.Evaluate("=COUNTA(NA())", sheet).Should().Be(ErrorValue.NA);
+        _evaluator.Evaluate("=COUNTA(NA())", sheet).Should().Be(new NumberValue(1));
+        _evaluator.Evaluate("=COUNTA(1,NA())", sheet).Should().Be(new NumberValue(2));
     }
 
     // Sibling no-regression: an error arriving through a cell/range reference must still be

@@ -70,19 +70,17 @@ public sealed class R47b_LookupFastPathBlankCoercionTests
     }
 
     [Fact]
-    public void Match_FastPath_Approximate_Descending_BlankBetweenNumericKeys_CoercesToZero_NotSkipped()
+    public void Match_FastPath_Approximate_Descending_BlankBetweenNumericKeys_IsSkipped_LikeExcel()
     {
-        // Descending column [10, blank, -5] (blank coerces to 0, giving effective [10, 0, -5]).
-        // MATCH(-2, ..., -1) finds the smallest value >= -2: 10 qualifies, the coerced blank (0)
-        // also qualifies (0 >= -2) and -- being scanned after 10 -- overtakes it as the smallest
-        // qualifying value so far, but -5 does not qualify (-5 < -2). The last-updated qualifying
-        // index (the blank row) must win, landing on row 2, not row 1.
+        // Descending column [10, blank, -5]. Excel (verified via COM) skips the blank instead of
+        // coercing it to 0 in MATCH(..., -1): the scan sees 10 (>= -2), skips the blank, and ends
+        // at -5 (< -2), so the answer is row 1.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)),
             (2, 1, BlankValue.Instance),
             (3, 1, new NumberValue(-5)));
 
         _eval.Evaluate("=MATCH(-2,A1:A3,-1)", sheet)
-            .Should().Be(new NumberValue(2));
+            .Should().Be(new NumberValue(1));
     }
 }

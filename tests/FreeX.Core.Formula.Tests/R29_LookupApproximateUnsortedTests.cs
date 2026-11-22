@@ -83,17 +83,17 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Match_Approximate_Descending_UnsortedVector_FindsLaterMatch_InsteadOfNA()
+    public void Match_Approximate_Descending_UnsortedVector_StopsAtFirstSmallerValue_LikeExcel()
     {
-        // Descending mirror: {1,100,50,2}. Row 1 (1) is already below the lookup value (2), so the old
-        // descending scan ("smallest value >= lookupValue") aborted on the very first iteration.
+        // {1,100,50,2}: Excel's MATCH(-1) is a linear scan that ends at the first value below the
+        // lookup value (verified via COM), so the leading 1 < 2 yields #N/A.
         var (workbook, sheet) = MakeNamedRangeWorkbook(4, 1,
             (1, 1, new NumberValue(1)),
             (2, 1, new NumberValue(100)),
             (3, 1, new NumberValue(50)),
             (4, 1, new NumberValue(2)));
 
-        _eval.Evaluate("=MATCH(2,Tbl,-1)", sheet, workbook).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=MATCH(2,Tbl,-1)", sheet, workbook).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Match_Approximate_Descending_UnsortedLiteralRange_FastPath_FindsLaterMatch_InsteadOfNA()
+    public void Match_Approximate_Descending_UnsortedLiteralRange_FastPath_StopsAtFirstSmallerValue_LikeExcel()
     {
         var (workbook, sheet) = MakeLiteralWorkbook(
             (1, 1, new NumberValue(1)),
@@ -159,7 +159,7 @@ public partial class FunctionLibraryTests
             (3, 1, new NumberValue(50)),
             (4, 1, new NumberValue(2)));
 
-        _eval.Evaluate("=MATCH(2,A1:A4,-1)", sheet, workbook).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=MATCH(2,A1:A4,-1)", sheet, workbook).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
