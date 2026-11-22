@@ -14764,13 +14764,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return true;
         }
 
-        async Task ShowFindWhatRequiredAsync()
+        Task ShowFindWhatRequiredAsync() => ShowFindReplaceWarningAsync(Fr(FindReplaceDialogText.FindWhatRequired));
+
+        // WPF DialogMessageHelper.ShowWarning(this, message, Title) followed by FocusSearchBox().
+        async Task ShowFindReplaceWarningAsync(string message)
         {
             try
             {
                 await AvaloniaUserMessageDialog.ShowWarningAsync(
                     dialog,
-                    Fr(FindReplaceDialogText.FindWhatRequired),
+                    message,
                     dialog.Title ?? string.Empty);
             }
             catch (InvalidOperationException)
@@ -14792,14 +14795,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var r = _session.FindNext(CurrentFindText(), BuildOptions(), MatchCase(), MatchEntire());
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.FindFailed);
+                // WPF FindNext: every failed search reports the plain "No matches found." status.
+                statusLabel.Text = Fr(FindReplaceDialogText.NoMatchesFound);
                 return;
             }
-            statusLabel.Text = Fr(
-                FindReplaceDialogText.FoundRangeStatus,
-                FormatRangeReference(r.SelectedRange!.Value),
-                r.MatchIndex,
-                r.MatchCount);
+            // WPF FindNext status: "Match {i} of {n}".
+            statusLabel.Text = Fr(FindReplaceDialogText.MatchStatus, r.MatchIndex, r.MatchCount);
             RefreshShell(statusLabel.Text);
         }
 
@@ -14826,21 +14827,34 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             if (BlankSearchBlocked()) return;
             if (!TryCommitPendingFormulaEdit()) return;
-            var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
+            // WPF ReplaceOne uses the submitted-dialog behaviour: skip non-replaceable matches and
+            // advance to the following match after a replacement.
+            var r = _session.ReplaceNextValue(
+                CurrentFindText(),
+                replaceWithBox.Text ?? "",
+                BuildOptions(),
+                MatchCase(),
+                MatchEntire(),
+                replacementFormat,
+                FindReplaceNextBehavior.SubmittedDialogStyle);
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.ReplaceFailed);
+                // WPF ShowReplaceFailureWarning: a modal warning titled with the dialog.
+                if (!string.IsNullOrWhiteSpace(r.ErrorMessage))
+                    RunGuarded(() => ShowFindReplaceWarningAsync(r.ErrorMessage));
                 return;
             }
-            statusLabel.Text = r.ReplacedCount == 0
-                ? (r.MatchCount == 0
+            if (r.ReplacedCount == 0)
+            {
+                statusLabel.Text = r.MatchCount == 0
                     ? Fr(FindReplaceDialogText.NoMatchesFound)
-                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound))
-                : Fr(
-                    FindReplaceDialogText.ReplacedRangeStatus,
-                    FormatRangeReference(r.ReplacedRange!.Value),
-                    r.MatchIndex,
-                    r.MatchCount);
+                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound);
+                RefreshShell(statusLabel.Text);
+                return;
+            }
+            statusLabel.Text = r.NextMatchIndex >= 0
+                ? Fr(FindReplaceDialogText.MatchStatus, r.NextMatchIndex + 1, r.RemainingMatchCount)
+                : Fr(FindReplaceDialogText.ReplacedOneCell);
             RefreshShell(statusLabel.Text);
         }
 
@@ -14851,13 +14865,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
             {
-                statusLabel.Text = r.ErrorMessage ?? Fr(FindReplaceDialogText.ReplaceFailed);
+                if (!string.IsNullOrWhiteSpace(r.ErrorMessage))
+                    RunGuarded(() => ShowFindReplaceWarningAsync(r.ErrorMessage));
                 return;
             }
+            // WPF ReplaceAll: "No matches found." when nothing was replaced, else "Replaced N cell(s).".
             statusLabel.Text = r.ReplacedCount == 0
-                ? (r.MatchCount == 0
-                    ? Fr(FindReplaceDialogText.NoMatchesFound)
-                    : Fr(FindReplaceDialogText.NoReplaceableMatchFound))
+                ? Fr(FindReplaceDialogText.NoMatchesFound)
                 : Fr(FindReplaceDialogText.ReplacedCellsStatus, r.ReplacedCount);
             RefreshShell(statusLabel.Text);
         }
@@ -17485,9 +17499,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // WPF FormatCellsDialog.xaml: item padding 2,0 (16 px rows) and a solid system-highlight selection.
         DialogWindowDefaults.ApplyWpfSolidHighlightRows(numberCategoryList, 16);
 
+        // WPF NumberFormatCombo is IsEditable="True": the Custom category's code is typed straight into it.
         var numberFormatBox = new ComboBox
         {
             MinWidth = 260,
+            IsEditable = true,
         };
         AutomationProperties.SetName(
             numberFormatBox,
@@ -17621,7 +17637,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             return FormatCellsNumberFormatPlanner.ResolveSelectedNumberFormat(
                 numberCategoryList.SelectedItem as string,
-                numberFormatBox.SelectedItem as string ?? string.Empty,
+                numberFormatBox.Text ?? numberFormatBox.SelectedItem as string ?? string.Empty,
                 numberFormatBox.SelectedIndex,
                 numberDecimalPlacesBox.Text,
                 numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
@@ -17645,7 +17661,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            var typeText = numberFormatBox.SelectedItem as string ?? string.Empty;
+            var typeText = numberFormatBox.SelectedItem as string ?? numberFormatBox.Text ?? string.Empty;
             var resolved = ResolveSelectedNumberFormatCode();
             numberPreview.Text = FormatCellsNumberFormatPlanner.PreviewForFormat(
                 resolved ?? (string.IsNullOrEmpty(typeText) ? currentNumberFormat : typeText));
@@ -18276,10 +18292,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // style + color, composed alongside the whole-cell preset buttons (None/Outline/Inside).
         // The toggle state and the chosen line style/color flow into the shared
         // FormatCellsCompactRequest per-side fields so WPF/macOS map identically.
-        var borderTopToggle = CreateFormatCellsBorderSideToggle("Top", "FormatCellsBorderTopToggle");
-        var borderBottomToggle = CreateFormatCellsBorderSideToggle("Bottom", "FormatCellsBorderBottomToggle");
-        var borderLeftToggle = CreateFormatCellsBorderSideToggle("Left", "FormatCellsBorderLeftToggle");
-        var borderRightToggle = CreateFormatCellsBorderSideToggle("Right", "FormatCellsBorderRightToggle");
+        var borderTopToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Top")), "FormatCellsBorderTopToggle", UiText.Get("FormatCells_ApplyTopBorder"));
+        var borderBottomToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Bottom")), "FormatCellsBorderBottomToggle", UiText.Get("FormatCells_ApplyBottomBorder"));
+        var borderLeftToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Left")), "FormatCellsBorderLeftToggle", UiText.Get("FormatCells_ApplyLeftBorder"));
+        var borderRightToggle = CreateFormatCellsBorderSideToggle(StripDisplayMnemonic(UiText.Get("FormatCells_Right")), "FormatCellsBorderRightToggle", UiText.Get("FormatCells_ApplyRightBorder"));
         var borderInsideHorizontalToggle = CreateFormatCellsBorderSideToggle("Inside horizontal", "FormatCellsBorderInsideHorizontalToggle");
         var borderInsideVerticalToggle = CreateFormatCellsBorderSideToggle("Inside vertical", "FormatCellsBorderInsideVerticalToggle");
         // WPF exposes interior borders through the Inside preset and renders the resulting
@@ -18702,7 +18718,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 InitialMergeCells: currentMergeCells,
                 Number: new FormatCellsDialogNumberInput(
                     numberCategoryList.SelectedItem as string,
-                    numberFormatBox.SelectedItem as string ?? numberFormatBox.Text,
+                    numberFormatBox.Text ?? numberFormatBox.SelectedItem as string,
                     numberFormatBox.SelectedIndex,
                     numberDecimalPlacesBox.Text,
                     numberSymbolBox.SelectedItem as string ?? numberSymbolBox.Text,
@@ -19599,7 +19615,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return comboBox;
     }
 
-    private static ToggleButton CreateFormatCellsBorderSideToggle(string label, string automationId)
+    private static ToggleButton CreateFormatCellsBorderSideToggle(string label, string automationId, string? toolTip = null)
     {
         var toggle = new ToggleButton
         {
@@ -19614,6 +19630,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetName(toggle, label);
         AutomationProperties.SetAutomationId(toggle, automationId);
+        // WPF DlgBorderPreview{Top,Left,Right,Bottom}Button: "Apply <side> border" tooltip.
+        if (toolTip is not null)
+            ToolTip.SetTip(toggle, toolTip);
         return toggle;
     }
 

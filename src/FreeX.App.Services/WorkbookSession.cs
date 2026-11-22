@@ -2339,7 +2339,8 @@ public sealed partial class WorkbookSession : IDisposable
         FindOptions? options,
         bool matchCase = false,
         bool matchEntireCell = false,
-        StyleDiff? replacementFormat = null)
+        StyleDiff? replacementFormat = null,
+        FindReplaceNextBehavior? behavior = null)
     {
         var result = _findReplaceWorkflow.ReplaceNext(
             searchText,
@@ -2347,11 +2348,18 @@ public sealed partial class WorkbookSession : IDisposable
             options,
             matchCase,
             matchEntireCell,
-            replacementFormat);
+            replacementFormat,
+            behavior);
         if (!result.Success)
             return WorkbookReplaceResult.Failed(result.ErrorMessage ?? "Replace failed.");
         if (result.EditResult is { } editResult && result.ReplacedMatch is { } replacedMatch)
+        {
             ApplySuccessfulEditResult(editResult, replacedMatch.Address);
+            // A submitted-dialog replace advances to the following match; the edit apply above
+            // re-selects the replaced cell, so restore the advanced selection.
+            if (result.CurrentIndex >= 0 && result.CurrentIndex < result.CurrentMatches.Count)
+                GoToCell(result.CurrentMatches[result.CurrentIndex].Address);
+        }
 
         var replacedRange = result.ReplacedMatch is { } match
             ? new GridRange(match.Address, match.Address)
@@ -2360,7 +2368,9 @@ public sealed partial class WorkbookSession : IDisposable
             result.ReplacedCount,
             replacedRange,
             result.MatchIndex,
-            result.MatchCount);
+            result.MatchCount,
+            result.CurrentIndex,
+            result.CurrentMatches.Count);
     }
 
     public void MoveActiveCell(int rowDelta, int colDelta)
