@@ -1336,8 +1336,9 @@ public sealed class RendererNeutralDedupPlannerTests
     [Fact]
     public void WpfAndAvaloniaSlideShowWindows_UseRendererNeutralPlaybackSession()
     {
-        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs");
-        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
+        var contracts = ReadWorkspaceFile("freep", "RendererShared", "SlideShowWindow.RendererContracts.cs");
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Host", "SlideShowWindow.cs") + contracts;
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs") + contracts;
 
         foreach (var source in new[] { wpf, avalonia })
         {
