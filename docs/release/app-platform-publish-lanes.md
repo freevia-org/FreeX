@@ -98,7 +98,8 @@ signed release.
 - A failure is real unless `tools/Get-ReleaseRunFailureClass.ps1` can positively show the
   platform caused it (runner lost or never acquired, or only a job-setup or artifact-transfer
   step failed). Timeouts and anything uncertain are real.
-- `release-auto-retry.yml` re-runs the failed jobs once when a run concluded `failure`, was on
+- `release-auto-retry.yml` is dispatched by hand with the `run_id` of a finished run (it has no
+  automatic trigger) and re-runs the failed jobs once when that run concluded `failure`, was on
   its first attempt, and every failed job is infrastructure. It never retries a real failure,
   a cancelled run or a second attempt. A re-run still parks Windows signing jobs at the
   `public-preview` approval again.
@@ -120,7 +121,7 @@ depends on.
   auto-retry does not retry.
 - `infra`: on attempt 1 the job fails in a step named `Download injected rehearsal inputs`,
   which the classifier treats as infrastructure (a genuine runner annotation cannot be faked
-  honestly). The watcher does not cancel, the run ends `failure`, auto-retry re-runs the failed
+  honestly). The watcher does not cancel, the run ends `failure`, a dispatched auto-retry re-runs the failed
   job once, and attempt 2 skips the injection and passes.
 - `selftest`: the job runs `tools/Test-ReleaseResilienceSelfTest.ps1`: `Invoke-WithRetry` with a
   first attempt that fails and a second that succeeds, and `Send-ReleaseAssets.ps1 -PlanOnly`

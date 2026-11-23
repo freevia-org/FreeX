@@ -185,9 +185,9 @@ still-red summary.
 Every GitHub Actions workflow is started by hand with `workflow_dispatch` (for example
 `gh workflow run ci.yml -f full=true`). No workflow declares a `push`, `schedule` or `pull_request`
 trigger, so pushing to `main` starts nothing and the local gate (`tools/Test-BranchForIntegration.ps1`)
-is the pre-merge check. The single exception is `release-auto-retry.yml`, which also reacts
-(`workflow_run`) to the end of a manually dispatched Full Signed Release run to re-run infrastructure
-failures once; it never starts anything by itself. `tools/Test-GitHubWorkflows.ps1` enforces the
+is the pre-merge check. There are no exceptions: `release-auto-retry.yml` is also
+dispatch-only (an operator passes the `run_id` of a failed Full Signed Release run to re-run its
+infrastructure failures once), and no workflow declares `workflow_run`. `tools/Test-GitHubWorkflows.ps1` enforces the
 contract. Consequences: a commit may have no `ci.yml` run, and `Full Signed Release` still requires
 exact-SHA successful CI and CodeQL runs, so dispatch both for the release SHA first.
 

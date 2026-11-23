@@ -8,8 +8,9 @@ name: Release Auto Retry
 # blip while a job set itself up. Re-dispatching the whole release for that costs the better part of an
 # hour, and it also forgets which jobs had already passed.
 #
-# So when a Full Signed Release run ends in failure, this classifies every failed job with the same
-# tools/Get-ReleaseRunFailureClass.ps1 the in-run watcher uses and, ONLY if every failure is
+# So an operator dispatches this manually (it has no automatic trigger: all CI is manual-only) with
+# the id of a Full Signed Release run that ended in failure. It classifies every failed job with the
+# same tools/Get-ReleaseRunFailureClass.ps1 the in-run watcher uses and, ONLY if every failure is
 # infrastructure, re-runs the failed jobs (and what depended on them) once.
 #
 # It cannot mask a real failure or loop:
@@ -27,29 +28,19 @@ on:
         description: Full Signed Release run to classify and, if only infrastructure failed, re-run once
         required: true
         type: string
-  workflow_run:
-    workflows: ["Full Signed Release"]
-    types: [completed]
 
 permissions:
   contents: read
   actions: write
 
 concurrency:
-  group: release-auto-retry-${{ github.event.workflow_run.id || inputs.run_id }}
+  group: release-auto-retry-${{ inputs.run_id }}
   cancel-in-progress: false
 
 jobs:
   retry:
     name: Re-run infrastructure-failed jobs once
-    # The payload is only a pre-filter; the step below re-reads the run from the API before acting.
-    if: >-
-      ${{ github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.run_attempt == 1 &&
-      github.event.workflow_run.event == 'workflow_dispatch' &&
-      github.event.workflow_run.path == '.github/workflows/full-release.yml' &&
-      github.event.workflow_run.repository.full_name == github.repository) }}
+    # The step below re-reads the run from the API before acting.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -64,11 +55,10 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
           INPUT_RUN_ID: ${{ inputs.run_id }}
         run: |
           $ErrorActionPreference = "Stop"
-          $runId = if ([string]::IsNullOrWhiteSpace($env:EVENT_RUN_ID)) { $env:INPUT_RUN_ID } else { $env:EVENT_RUN_ID }
+          $runId = $env:INPUT_RUN_ID
           if ($runId -notmatch '^[0-9]+$') { throw "Run id '$runId' is not numeric." }
 
           function Stop-Without-Retry([string]$Reason) {

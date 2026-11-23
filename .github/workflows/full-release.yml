@@ -585,7 +585,7 @@ jobs:
     # GitHub cannot cancel one job, only the run, so this watcher cancels the run -- but only for a
     # REAL failure as tools/Get-ReleaseRunFailureClass.ps1 defines it. An infrastructure failure
     # (lost runner, never-acquired macOS runner) must not abort a healthy release; it is left for
-    # the single automatic re-run in release-auto-retry.yml.
+    # the single operator-dispatched re-run in release-auto-retry.yml.
     #
     # Failing closed: nothing needs this job, a cancelled run can never publish (publication-gate
     # requires every upstream job to have succeeded), and a watcher that errors is ignored rather
