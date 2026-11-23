@@ -811,4 +811,20 @@
   <data name="EquationEditor_Hint" xml:space="preserve"><value>Saisissez l'équation au format linéaire, par exemple x=(-b\pm\sqrt(b^2-4ac))/(2a). Appuyez sur Entrée pour valider ou sur Échap pour annuler.</value></data>
   <data name="EquationEditor_OpaqueParts_Notice" xml:space="preserve"><value>Les parties affichées sous forme de jeton numéroté ne peuvent pas être modifiées en tant que texte. Elles sont conservées telles quelles.</value></data>
   <data name="EquationEditor_EmptyPreview" xml:space="preserve"><value>Tapez l'équation ici.</value></data>
+  <data name="NativeMenu_File" xml:space="preserve"><value>Fichier</value></data>
+  <data name="NativeMenu_Edit" xml:space="preserve"><value>Édition</value></data>
+  <data name="NativeMenu_New" xml:space="preserve"><value>Nouveau</value></data>
+  <data name="NativeMenu_Open" xml:space="preserve"><value>Ouvrir…</value></data>
+  <data name="NativeMenu_Save" xml:space="preserve"><value>Enregistrer</value></data>
+  <data name="NativeMenu_SaveAs" xml:space="preserve"><value>Enregistrer sous…</value></data>
+  <data name="NativeMenu_Print" xml:space="preserve"><value>Imprimer…</value></data>
+  <data name="NativeMenu_Close" xml:space="preserve"><value>Fermer</value></data>
+  <data name="NativeMenu_Undo" xml:space="preserve"><value>Annuler</value></data>
+  <data name="NativeMenu_Redo" xml:space="preserve"><value>Rétablir</value></data>
+  <data name="NativeMenu_Cut" xml:space="preserve"><value>Couper</value></data>
+  <data name="NativeMenu_Copy" xml:space="preserve"><value>Copier</value></data>
+  <data name="NativeMenu_Paste" xml:space="preserve"><value>Coller</value></data>
+  <data name="NativeMenu_SelectAll" xml:space="preserve"><value>Tout sélectionner</value></data>
+  <data name="NativeMenu_Find" xml:space="preserve"><value>Rechercher…</value></data>
+  <data name="NativeMenu_Replace" xml:space="preserve"><value>Remplacer…</value></data>
 </root>

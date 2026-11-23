@@ -1410,4 +1410,20 @@
   <data name="LegacyFormField_NoFieldAtCaret" xml:space="preserve"><value>Place the insertion point in a form field to change its options.</value></data>
   <data name="LegacyFormField_EditBlocked" xml:space="preserve"><value>Form field options can't be changed because document editing is restricted.</value></data>
   <data name="LegacyFormField_ChangeFailed" xml:space="preserve"><value>Form field options couldn't be applied because the document is protected or the field has changed.</value></data>
+  <data name="NativeMenu_File" xml:space="preserve"><value>File</value></data>
+  <data name="NativeMenu_Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="NativeMenu_New" xml:space="preserve"><value>New</value></data>
+  <data name="NativeMenu_Open" xml:space="preserve"><value>Open…</value></data>
+  <data name="NativeMenu_Save" xml:space="preserve"><value>Save</value></data>
+  <data name="NativeMenu_SaveAs" xml:space="preserve"><value>Save As…</value></data>
+  <data name="NativeMenu_Print" xml:space="preserve"><value>Print…</value></data>
+  <data name="NativeMenu_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="NativeMenu_Undo" xml:space="preserve"><value>Undo</value></data>
+  <data name="NativeMenu_Redo" xml:space="preserve"><value>Redo</value></data>
+  <data name="NativeMenu_Cut" xml:space="preserve"><value>Cut</value></data>
+  <data name="NativeMenu_Copy" xml:space="preserve"><value>Copy</value></data>
+  <data name="NativeMenu_Paste" xml:space="preserve"><value>Paste</value></data>
+  <data name="NativeMenu_SelectAll" xml:space="preserve"><value>Select All</value></data>
+  <data name="NativeMenu_Find" xml:space="preserve"><value>Find…</value></data>
+  <data name="NativeMenu_Replace" xml:space="preserve"><value>Replace…</value></data>
 </root>

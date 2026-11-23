@@ -12,6 +12,8 @@ namespace FreeW.App.Avalonia;
 
 public sealed partial class App : Application
 {
+    public App() => Name = FreeWApplicationStartup.ProductIdentity.ProductName;
+
     internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
 
     internal static SisterAvaloniaStandardDesktopProfile<App, MainWindow, FreeWOptions> DesktopProfile { get; } =
@@ -52,12 +54,15 @@ public sealed partial class App : Application
                 }),
             new SisterAvaloniaWindowStartupDescriptor<MainWindow, FreeWOptions>(
                 (startupArguments, options, optionsStore) =>
-                    new MainWindow(startupArguments, options, optionsStore)),
+                    new MainWindow(startupArguments, options, optionsStore)
+                        .RememberStartupFileActivations(startupArguments)),
             onEmergencySnapshot: AutosaveAdapter.TryEmergencySnapshots);
 
     public override void OnFrameworkInitializationCompleted()
     {
+        SubscribeToFileActivations();
         SisterAvaloniaStandardDesktopFactory.Initialize(this, DesktopProfile);
+        CompleteFileActivationStartup();
 
         base.OnFrameworkInitializationCompleted();
     }

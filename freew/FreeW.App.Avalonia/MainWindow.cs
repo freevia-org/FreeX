@@ -396,7 +396,7 @@ public sealed partial class MainWindow : Window
 
         _scroller = new ScrollViewer
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            HorizontalScrollBarVisibility = HorizontalScrollingFor(_editor.ViewMode),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Padding = new Thickness(48, 24),
             Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = _editor },
@@ -458,6 +458,7 @@ public sealed partial class MainWindow : Window
         _editor.CaretMoved += () => { if (_thesaurusPane.IsVisible) _thesaurusPane.Refresh(); };
         _editor.ViewModeChanged += () => UpdateStatus(_editor);
         _editor.ViewModeChanged += UpdateViewModeButtons;
+        _editor.ViewModeChanged += UpdateHorizontalScrolling;
         _editor.HyperlinkActivated += OpenExternalUri;
         _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
 
@@ -593,6 +594,7 @@ public sealed partial class MainWindow : Window
             titleBarVisuals);
 
         Content = windowFrame.Root;
+        InstallMacOsMenu();
         UpdateStatus();
     }
 
@@ -1799,8 +1801,16 @@ public sealed partial class MainWindow : Window
             DetachFromParent(_liveWorkspaceContent);
             _workspace.Child = _liveWorkspaceContent;
         }
+        UpdateHorizontalScrolling();
+    }
+
+    private static ScrollBarVisibility HorizontalScrollingFor(DocumentViewMode mode) =>
+        mode == DocumentViewMode.PrintLayout ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+
+    private void UpdateHorizontalScrolling()
+    {
         if (_scroller is not null)
-            _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+            _scroller.HorizontalScrollBarVisibility = HorizontalScrollingFor(_editor.ViewMode);
     }
 
     private void EnterSplitPreview(FreeWViewDepthPlan plan)
@@ -1856,11 +1866,13 @@ public sealed partial class MainWindow : Window
 
         var splitScroller = new ScrollViewer
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = HorizontalScrollingFor(splitEditor.ViewMode),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Padding = new Thickness(FreeWSplitEditorGeometry.SplitScrollerPaddingDip),
             Content = new LayoutTransformControl { LayoutTransform = _zoom, Child = splitEditor },
         };
+        splitEditor.ViewModeChanged += () =>
+            splitScroller.HorizontalScrollBarVisibility = HorizontalScrollingFor(splitEditor.ViewMode);
         Grid.SetRow(splitScroller, 2);
         splitGrid.Children.Add(splitScroller);
 

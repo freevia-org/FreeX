@@ -334,7 +334,32 @@ function New-MacInstaller {
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 "@
-        $plist.TrimStart() | Set-Content -LiteralPath (Join-Path $bundle 'Contents/Info.plist') -Encoding utf8NoBOM
+        $infoPlistPath = Join-Path $bundle 'Contents/Info.plist'
+        if ($app -eq 'FreeW') {
+            # Use the product-owned document associations for Finder Open With. Generating only
+            # the generic bundle keys here omitted every supported Word document type.
+            $templatePath = Join-Path $repoRoot 'freew/FreeW.App.Avalonia/Packaging/macos/Info.plist'
+            [xml]$productPlist = Get-Content -LiteralPath $templatePath -Raw
+            $bundleValues = @{
+                CFBundleExecutable = $app
+                CFBundleIdentifier = $bundleId
+                CFBundleName = $app
+                CFBundleDisplayName = $app
+                CFBundleIconFile = "$app.icns"
+                CFBundleShortVersionString = $Version
+                CFBundleVersion = $Version
+            }
+            foreach ($entry in $bundleValues.GetEnumerator()) {
+                $value = $productPlist.SelectSingleNode("/plist/dict/key[.='$($entry.Key)']/following-sibling::*[1]")
+                if ($null -eq $value) {
+                    throw "The $app macOS plist template is missing '$($entry.Key)'."
+                }
+                $value.InnerText = [string]$entry.Value
+            }
+            $productPlist.Save($infoPlistPath)
+        } else {
+            $plist.TrimStart() | Set-Content -LiteralPath $infoPlistPath -Encoding utf8NoBOM
+        }
         if (-not (Test-ToolIsWindows)) { & chmod +x (Join-Path $macos $app) }
     }
     $installLines = @('#!/usr/bin/env bash','set -euo pipefail','here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"','destination="${1:-$HOME/Applications}"','mkdir -p "$destination"')

@@ -1,6 +1,6 @@
 # FreeW packaging / release
 
-Packaging for the FreeW WPF word processor (`freew/FreeW.App.Host`, a
+Windows packaging uses the FreeW WPF word processor (`freew/FreeW.App.Host`, a
 `net10.0-windows...` WinExe). The output is a **self-contained** `win-x64`
 folder publish zipped into `artifacts/`. Self-contained means the target machine
 needs no .NET runtime installed.
@@ -39,6 +39,27 @@ pwsh freew/build/publish-windows.ps1 `
 
 The script is idempotent (it cleans its publish + zip outputs before each run)
 and CI-friendly (no prompts; non-zero exit on failure).
+
+## Local macOS build
+
+macOS uses `freew/FreeW.App.Avalonia`. From the repository root, these PowerShell
+commands create a self-contained Apple Silicon app bundle with the product's
+Finder document associations:
+
+```pwsh
+pwsh -NoProfile -File tools/Invoke-Throttled.ps1 -Kind Build -- dotnet publish freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj --configuration Release --runtime osx-arm64 --self-contained true --output artifacts/freew-macos/publish
+Compress-Archive -Path artifacts/freew-macos/publish/* -DestinationPath artifacts/freew-macos/FreeW-v0.1.0-osx-arm64.zip
+pwsh -NoProfile -File tools/packaging/New-AppInstallers.ps1 -Apps FreeW -Platform macos -Version 0.1.0 -Runtime osx-arm64 -InputRoot artifacts/freew-macos -OutputDir artifacts/freew-macos/installer
+```
+
+Extract `artifacts/freew-macos/installer/FreeW-v0.1.0-osx-arm64-apps.zip` and open
+`FreeW.app`. Use `osx-x64` throughout for an Intel build. These local bundles are
+unsigned and unnotarized; distribution signing uses
+`tools/packaging/New-SignedMacOsReleasePackages.ps1` in the release workflow.
+
+The macOS shell exposes native File and Edit menus and Command-key shortcuts,
+including Command+Shift+Z for Redo. Finder file activation opens documents in
+separate windows and preserves unsaved documents already open in FreeW.
 
 ## Release workflow
 

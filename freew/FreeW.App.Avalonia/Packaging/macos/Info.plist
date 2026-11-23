@@ -13,15 +13,86 @@
       <array>
         <string>docx</string>
         <string>docm</string>
-        <string>dotx</string>
-        <string>dotm</string>
         <string>doc</string>
-        <string>dot</string>
-        <string>rtf</string>
-        <string>txt</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>org.openxmlformats.wordprocessingml.document</string>
+        <string>org.openxmlformats.wordprocessingml.document.macroenabled</string>
+        <string>com.microsoft.word.doc</string>
       </array>
       <key>CFBundleTypeName</key>
-      <string>Word Processing Documents</string>
+      <string>Word Documents</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>dotx</string>
+        <string>dotm</string>
+        <string>dot</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>org.openxmlformats.wordprocessingml.template</string>
+        <string>org.openxmlformats.wordprocessingml.template.macroenabled</string>
+        <string>com.microsoft.word.dot</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>Word Templates</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>rtf</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.rtf</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>Rich Text Documents</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>odt</string>
+        <string>ott</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>org.oasis-open.opendocument.text</string>
+        <string>org.oasis-open.opendocument.text-template</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>OpenDocument Text Documents</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>txt</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>public.plain-text</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>Plain Text Documents</string>
       <key>CFBundleTypeRole</key>
       <string>Editor</string>
       <key>LSHandlerRank</key>
