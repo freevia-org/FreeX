@@ -40,7 +40,7 @@ public sealed class R142_SelectPrecedentsShortcutExternalWorkbookMisreportTests
         await Session.Dispatch(async () =>
         {
             var window = new MainWindow([]);
-            var sheet = window.Session.Workbook.AddSheet("Sheet1");
+            var sheet = window.Session.ActiveSheet;
             window.Session.SelectSheet(sheet.Id);
             try
             {
@@ -87,7 +87,7 @@ public sealed class R142_SelectPrecedentsShortcutExternalWorkbookMisreportTests
         await Session.Dispatch(async () =>
         {
             var window = new MainWindow([]);
-            var sheet = window.Session.Workbook.AddSheet("Sheet1");
+            var sheet = window.Session.ActiveSheet;
             window.Session.SelectSheet(sheet.Id);
             try
             {
