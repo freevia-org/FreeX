@@ -99,11 +99,12 @@ public static partial class BuiltInFunctions
         }
         else
         {
-            // Exact match: propagate errors encountered in the lookup column.
+            // Exact match: error cells in the lookup column are skipped (verified against real Excel:
+            // VLOOKUP(5,{h,#N/A,5...},..,FALSE) finds the 5), they neither match nor abort the scan.
             for (int r = 1; r <= table.RowCount; r++)
             {
                 var cv = table.At(r, 1);
-                if (cv is ErrorValue ev) return ev;
+                if (cv is ErrorValue) continue;
                 if (MatchExactLegacyLookup(cv, lookupValue))
                     return table.At(r, colIndex);
             }
@@ -244,11 +245,11 @@ public static partial class BuiltInFunctions
         }
         else
         {
-            // Exact match: propagate errors encountered in the lookup row.
+            // Exact match: error cells in the lookup row are skipped (see VlookupScalar).
             for (int c = 1; c <= table.ColCount; c++)
             {
                 var cv = table.At(1, c);
-                if (cv is ErrorValue ev) return ev;
+                if (cv is ErrorValue) continue;
                 if (MatchExactLegacyLookup(cv, lookupValue))
                     return table.At(rowIndex, c);
             }
@@ -372,11 +373,11 @@ public static partial class BuiltInFunctions
 
         if (matchType == 0)
         {
-            // Exact match: propagate errors encountered in the lookup array.
+            // Exact match: error cells in the lookup array are skipped (see VlookupScalar).
             for (int i = 0; i < vector.Count; i++)
             {
                 var candidate = vector[i];
-                if (candidate is ErrorValue ev) return ev;
+                if (candidate is ErrorValue) continue;
                 if (MatchExactLegacyLookup(candidate, lookupValue))
                     return new NumberValue(i + 1);
             }
