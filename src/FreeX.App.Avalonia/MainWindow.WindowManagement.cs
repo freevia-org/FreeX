@@ -245,6 +245,7 @@ public sealed partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _sheetGridHost.CloseAutomationViewport();
         // A closing window must drop out of the shared registry so it and its WorkbookSession
         // document graph are no longer retained.
         _session.WorkbookChanged -= Session_WorkbookChanged;

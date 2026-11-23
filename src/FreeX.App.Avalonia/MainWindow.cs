@@ -4424,7 +4424,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void RefreshShell(string status)
     {
         var preserveFormulaEdit = _session.FormulaEditAddress is not null;
-        var formulaText = _inlineCellEditText ?? _inlineCellEditor?.Text ?? _formulaBox.Text;
+        var formulaText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? _formulaBox.Text;
         var formulaCaretIndex = _formulaBox.CaretIndex;
         var formulaSelectionStart = _formulaBox.SelectionStart;
         var formulaSelectionEnd = _formulaBox.SelectionEnd;
@@ -5151,11 +5151,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private Control BuildSheetGrid()
     {
+        // TextChanged is deferred by Avalonia. Preserve the live text before detaching its editor,
+        // including when a resize/preview rebuild arrives before that notification is dispatched.
+        if (_inlineCellEditAddress is not null && _inlineCellEditor is { } liveEditor)
+            _inlineCellEditText = liveEditor.Text ?? "";
         RecordSheetGridBuilt();
         _pageLayoutRuler = null;
         _autofillPreviewVisual = null;
         if (IsChartsheet(_session.ActiveSheet))
+        {
+            _sheetGridHost.ClearAutomationViewport();
             return BuildChartsheetView();
+        }
         _formulaReferenceGridOverlay = null;
         _cellAffordanceOverlay = null;
         _formulaReferenceGridHighlightVisuals.Clear();
@@ -5193,10 +5200,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sparklinesByCell = BuildSparklineCellLookup(_session.Workbook, _session.ActiveSheet);
         BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
         _activeSheetHasBackgroundImage = _session.ActiveSheet.BackgroundImage != null;
-        var grid = new AvaloniaGrid
+        var grid = new WorksheetGridSurface
         {
             Background = (IBrush?)BuildWorksheetBackgroundBrush(_session.ActiveSheet.BackgroundImage) ?? Brushes.White,
         };
+        UpdateWorksheetAutomation(grid, rowMetrics, colMetrics, cellsByAddress);
 
         if (showHeadings)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetRowHeaderWidth(viewport, zoomFactor)) });
@@ -9495,8 +9503,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             theme: _session.Workbook.Theme,
             isWorksheetCell: true);
         var accessibleCell = (WorksheetCellBorder)border;
-        accessibleCell.DisplayValue = text;
-        accessibleCell.IsSelected = selected;
 
         // Grid tracks define worksheet ownership. Give the interactive border the exact slot size
         // (cellWidth/cellHeight already include merged spans) so Linux font measurement cannot let
@@ -9530,40 +9536,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ToolTip.SetTip(border, hyperlinkTooltip);
         }
 
-        // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
-        // can announce which cell has focus, its address, its value, and (R114 parity fix for
-        // finding "Avalonia grid's screen-reader cell name silently drops comment/formula/merge/
-        // hyperlink cues that WPF announces") the same "has <note>", "is a formula", "is merged",
-        // and "has a hyperlink" cues WPF's GridViewCellAutomationPeer.GetNameCore/
-        // GridView.BuildCellAnnouncementName append (GridView.cs:688-708) -- previously this shell
-        // only ever emitted the bare "<address>" or "<address>: <value>", silently omitting every
-        // cue a sighted user gets for free from the comment corner-triangle, the formula-bar "="
-        // prefix, the merged span, and the hand cursor. HasDataValidation/IsLocked cues are
-        // intentionally left out here too, mirroring WPF: CellAnnouncementMetadata's own doc
-        // comment (GridView.cs) explains neither is wired to a live signal on that shell either.
-        // WorksheetCellBorder exposes these properties through a real DataItem peer. Decorative
-        // text layers are kept out of that peer's children so the cell is announced once.
-        // A merge has one rendered Border, including when a scrolled-away anchor is replaced by a
-        // visible member. Ctrl+. can put the active cell on any covered corner, so that Border must
-        // represent the actual active coordinate without changing its painting or pointer target.
+        // The merge's real focus target uses the true active coordinate; other logical cells
+        // remain available through the persistent worksheet automation surface.
         var representsActiveCell = address == _session.ActiveCell ||
             mergeRegion?.Contains(_session.ActiveCell) == true;
         var contentAddress = mergeRegion?.Start ?? address;
         var automationAddress = representsActiveCell ? _session.ActiveCell : contentAddress;
-        var columnName = CellAddress.NumberToColumnName(automationAddress.Col);
-        AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{automationAddress.Row}");
-        var hasHyperlink = _session.Workbook.GetSheet(contentAddress.Sheet)?.Hyperlinks.ContainsKey(contentAddress) == true;
-        AutomationProperties.SetName(
-            border,
-            CellAnnouncementPlanner.BuildName(
-                $"{columnName}{automationAddress.Row}",
-                text,
-                new CellAnnouncementMetadata(
-                    HasComment: commentDisplay is not null,
-                    CommentTitle: commentDisplay?.Title,
-                    IsFormula: isFormula,
-                    IsMerged: mergeRegion is not null,
-                    HasHyperlink: hasHyperlink)));
+        accessibleCell.SetAutomationOwner(_sheetGridHost, automationAddress.Row, automationAddress.Col);
 
         // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
         // element so keyboard focus actually moves as the user arrows around the grid, matching
@@ -9776,7 +9755,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             0,
             editorTextInset,
             0);
-        var editor = new TextBox
+        var editor = new WorksheetInlineCellEditor
         {
             Text = _inlineCellEditText ?? "",
             Background = background,

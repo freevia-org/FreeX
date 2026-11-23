@@ -178,9 +178,12 @@ public sealed class WorksheetAutomationPeerTests
             var focused = Cells(grid).Single(peer => peer.HasKeyboardFocus());
             var address = $"{CellAddress.NumberToColumnName(corner.Col)}{corner.Row}";
             focused.GetAutomationId().Should().Be($"Cell_{address}");
-            focused.GetName().Should().StartWith($"{address}: 42")
-                .And.Contain("is merged").And.Contain("has a hyperlink");
-            focused.GetProvider<IValueProvider>()!.Value.Should().Be("42");
+            if (corner == anchor)
+                focused.GetName().Should().Be($"{address}: 42, is merged, has a hyperlink");
+            else
+                focused.GetName().Should().Be($"{address}, is merged",
+                    "WPF exposes the literal covered coordinate, without copying anchor content or hyperlinks");
+            focused.GetProvider<IValueProvider>()!.Value.Should().Be(corner == anchor ? "42" : "");
             focused.GetProvider<ISelectionItemProvider>()!.IsSelected.Should().BeTrue();
             Cells(grid).Select(peer => peer.GetAutomationId()).Should().OnlyHaveUniqueItems();
         }
@@ -214,8 +217,8 @@ public sealed class WorksheetAutomationPeerTests
         window.Session.SelectedRange.Should().Be(merge);
         var focused = Cells(GridPeer(window)).Single(peer => peer.HasKeyboardFocus());
         focused.GetAutomationId().Should().Be("Cell_D9");
-        focused.GetName().Should().StartWith("D9: 73").And.Contain("is merged");
-        focused.GetProvider<IValueProvider>()!.Value.Should().Be("73");
+        focused.GetName().Should().Be("D9, is merged");
+        focused.GetProvider<IValueProvider>()!.Value.Should().BeEmpty();
         focused.GetProvider<ISelectionItemProvider>()!.IsSelected.Should().BeTrue();
     });
 
@@ -359,6 +362,7 @@ public sealed class WorksheetAutomationPeerTests
 
     private static void Refresh(MainWindow window)
     {
+        window.Session.UpdateViewportSize(482, 882);
         window.Session.UpdateViewportSize(481, 881);
         window.RefreshShellForTest();
         window.UpdateLayout();
@@ -394,5 +398,6 @@ public sealed class WorksheetAutomationPeerTests
             window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }
+        return true;
     }, CancellationToken.None);
 }
