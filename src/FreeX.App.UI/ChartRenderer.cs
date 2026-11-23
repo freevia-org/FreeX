@@ -688,6 +688,7 @@ public static partial class ChartRenderer
                 }
                 if (trendPoints is not null)
                     trendlineSources.Add((seriesIndex, trendPoints));
+                AddScatterConnectingLine(model, chart, seriesIndex, series, theme);
                 model.Series.Add(series);
             }
             else // Line / 3D Line

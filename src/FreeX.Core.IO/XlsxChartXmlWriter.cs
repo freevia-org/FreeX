@@ -235,7 +235,7 @@ internal static partial class XlsxChartXmlWriter
             ChartType.ThreeDLine => Create3DLinePlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Scatter => CreateScatterPlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Radar => new XElement(chartNs + "radarChart",
-                new XElement(chartNs + "radarStyle", new XAttribute("val", "marker")),
+                new XElement(chartNs + "radarStyle", new XAttribute("val", chart.RadarFilled == true ? "filled" : "marker")),
                 BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries, forceLineShapeProperties: true)),
             ChartType.Stock => CreateStockPlotChart(chart, workbook, sheet, chartNs, drawingNs, includeSeries),
             ChartType.Surface => new XElement(chartNs + "surfaceChart",

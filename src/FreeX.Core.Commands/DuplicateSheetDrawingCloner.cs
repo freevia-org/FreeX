@@ -870,6 +870,7 @@ internal static class DuplicateSheetDrawingCloner
             VerbatimSeriesFormulas = chart.VerbatimSeriesFormulas?.ToList(),
             EmbeddedSeriesData = chart.EmbeddedSeriesData?.ToList(),
             DoughnutHoleSize = chart.DoughnutHoleSize,
+            RadarFilled = chart.RadarFilled,
             FirstSliceAngle = chart.FirstSliceAngle,
             ExplodedSliceIndex = chart.ExplodedSliceIndex,
             ExplodedSliceDistance = chart.ExplodedSliceDistance,

@@ -110,8 +110,12 @@ public static partial class ChartRenderer
                     positiveBases[i] = end;
                 else
                     negativeBases[i] = end;
-                if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                // RectangleBarSeries draws no native labels, so every stacked column label is an annotation.
+                if (chart.ShowDataLabels)
+                {
+                    var centered = StackedLabelsAreCentered(chart);
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, centered ? (start + end) / 2 : end, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue), centered ? OxyPlot.VerticalAlignment.Middle : null);
+                }
             }
 
             model.Series.Add(series);
@@ -119,6 +123,10 @@ public static partial class ChartRenderer
 
         return model;
     }
+
+    /// <summary>Excel centres stacked-segment labels by default (best fit is not offered for stacks).</summary>
+    private static bool StackedLabelsAreCentered(ChartModel chart) =>
+        chart.DataLabelPosition is ChartDataLabelPosition.Center or ChartDataLabelPosition.BestFit;
 
     private static PlotModel BuildStackedBarModel(
         ChartModel chart,
@@ -198,8 +206,11 @@ public static partial class ChartRenderer
                     positiveBases[i] = end;
                 else
                     negativeBases[i] = end;
-                if (ShouldUseAnnotationLabels(chart))
-                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue));
+                if (chart.ShowDataLabels)
+                {
+                    var centered = StackedLabelsAreCentered(chart);
+                    AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), centered ? (start + end) / 2 : end, i, GetStackedLabelValue(chart, normalizeToPercent, value, displayValue), centered ? OxyPlot.VerticalAlignment.Middle : null);
+                }
             }
 
             model.Series.Add(series);

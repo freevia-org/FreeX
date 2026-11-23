@@ -25,7 +25,25 @@ internal static class LegendLayoutBuilder
     public static LegendLayout Build(ChartLayoutRequest request, out PlotRect plot)
     {
         var legend = BuildAutomatic(request, out plot);
+        plot = ReserveAxisTitleGutters(request, plot);
         return ApplyManualLayouts(request, legend, ref plot);
+    }
+
+    // The legend gutter is carved out first; the axis titles then take their lines from what is left, so a
+    // bottom axis title sits between the tick labels and the legend instead of under it.
+    private static PlotRect ReserveAxisTitleGutters(ChartLayoutRequest request, PlotRect plot)
+    {
+        var left = Math.Max(0, request.AxisTitleGutterLeft);
+        var right = Math.Max(0, request.AxisTitleGutterRight);
+        var bottom = Math.Max(0, request.AxisTitleGutterBottom);
+        if (left + right + bottom <= 0)
+            return plot;
+
+        return new PlotRect(
+            plot.X + left,
+            plot.Y,
+            Math.Max(1, plot.Width - left - right),
+            Math.Max(1, plot.Height - bottom));
     }
 
     private static LegendLayout ApplyManualLayouts(ChartLayoutRequest request, LegendLayout legend, ref PlotRect plot)

@@ -136,7 +136,7 @@ public sealed class R92_ChartSeriesFillAlphaTests
 
         var model = BuildPlotModel(chart, SimpleViewport());
 
-        var pie = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pie = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pie.Slices.Should().NotBeEmpty();
         foreach (var slice in pie.Slices)
             slice.Fill.A.Should().Be((byte)102, "0.4 authored alpha (0.4*255 rounded) should apply to every slice falling back to the series-level fill");

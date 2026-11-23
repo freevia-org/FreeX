@@ -182,10 +182,14 @@ public static partial class ChartRenderer
             series.StrokeThickness = thickness;
         if (format.DashStyle is { } dashStyle)
             series.LineStyle = ToOxyLineStyle(dashStyle);
+        // <a:ln><a:noFill/> is Excel's "markers only": no connecting line at all.
+        if (format.NoLine)
+            series.LineStyle = LineStyle.None;
+        if (format.Smooth == true)
+            series.InterpolationAlgorithm = InterpolationAlgorithms.CanonicalSpline;
         if (format.MarkerStyle is { } markerStyle)
             series.MarkerType = ToOxyMarkerType(markerStyle);
-        if (format.MarkerSize is { } markerSize)
-            series.MarkerSize = Math.Clamp(markerSize, 1, 20);
+        series.MarkerSize = ToOxyMarkerSize(format.MarkerSize);
         if (format.MarkerStyle == ChartMarkerStyle.Dot)
             series.MarkerSize *= DotMarkerSizeScale;
         if (format.ResolveFillColor(theme) is { } markerFill)
@@ -372,95 +376,37 @@ public static partial class ChartRenderer
         }
     }
 
-    private const string PieLegendXAxisKey = "PieLegendX";
-    private const string PieLegendYAxisKey = "PieLegendY";
-
     /// <summary>
-    /// Draws a custom pie/doughnut legend (a colored swatch + category label per slice). OxyPlot's
-    /// PieSeries does not contribute per-slice entries to the built-in legend, so this annotation-based
-    /// legend mirrors Excel's behaviour (e.g. Completed / Remaining swatches). Honors the chart's
-    /// legend position for the corner placement and skips slices whose value is non-positive.
+    /// Gives a pie/doughnut its legend (one swatch + category label per slice). OxyPlot's PieSeries contributes no
+    /// per-slice entries to the built-in legend, so every slice gets an empty marker-only helper series whose
+    /// square marker carries the slice colour: the real OxyPlot legend then lays the entries out in a gutter
+    /// outside the pie (below it for the default bottom legend, as in Excel) instead of drawing over it. The
+    /// helper series live on the hidden pie annotation axes, so they plot nothing and shift no scale.
     /// </summary>
     private static void AddPieLegendAnnotations(PlotModel model, ChartModel chart, WorkbookTheme theme, PieSeries pieSeries)
     {
         if (!chart.ShowLegend || chart.LegendPosition == ChartLegendPosition.None || pieSeries.Slices.Count == 0)
             return;
 
-        // A dedicated 0..1 normalized axis pair keeps legend placement independent of the pie's own
-        // annotation axes; it is invisible and does not affect the pie geometry.
-        if (!model.Axes.Any(axis => axis.Key == PieLegendXAxisKey))
+        AddPieAnnotationAxes(model);
+        foreach (var slice in pieSeries.Slices)
         {
-            model.Axes.Add(new LinearAxis
+            model.Series.Add(new ScatterSeries
             {
-                Key = PieLegendXAxisKey,
-                Position = AxisPosition.Bottom,
-                IsAxisVisible = false,
-                Minimum = 0,
-                Maximum = 1
-            });
-            model.Axes.Add(new LinearAxis
-            {
-                Key = PieLegendYAxisKey,
-                Position = AxisPosition.Left,
-                IsAxisVisible = false,
-                Minimum = 0,
-                Maximum = 1
+                Title = slice.Label,
+                XAxisKey = PieAnnotationXAxisKey,
+                YAxisKey = PieAnnotationYAxisKey,
+                MarkerType = MarkerType.Square,
+                MarkerSize = PieLegendMarkerHalfSize,
+                MarkerFill = slice.Fill,
+                MarkerStroke = OxyColors.Transparent,
+                MarkerStrokeThickness = 0
             });
         }
-
-        var onRight = chart.LegendPosition is ChartLegendPosition.Right;
-        var onTop = chart.LegendPosition is ChartLegendPosition.Top;
-        var onBottom = chart.LegendPosition is ChartLegendPosition.Bottom;
-        // Default (Right / tr-style) places the legend column near the top-right corner.
-        var swatchX = chart.LegendPosition is ChartLegendPosition.Left ? 0.02 : 0.86;
-        var labelX = swatchX + 0.035;
-        var startY = onBottom ? 0.12 : 0.96;
-        var step = 0.06;
-
-        var legendTextColor = ToOxyColor(chart.ResolveLegendTextColor(theme)) ?? OxyColor.FromRgb(89, 89, 89);
-
-        for (var i = 0; i < pieSeries.Slices.Count; i++)
-        {
-            var slice = pieSeries.Slices[i];
-            var y = onTop || onBottom
-                ? (onTop ? 0.96 : 0.12)
-                : startY - i * step;
-
-            // For top/bottom legends lay swatches out horizontally instead of vertically.
-            var sx = onTop || onBottom ? 0.30 + i * 0.22 : swatchX;
-            var lx = onTop || onBottom ? sx + 0.035 : labelX;
-
-            model.Annotations.Add(new RectangleAnnotation
-            {
-                XAxisKey = PieLegendXAxisKey,
-                YAxisKey = PieLegendYAxisKey,
-                MinimumX = sx,
-                MaximumX = sx + 0.028,
-                MinimumY = y - 0.018,
-                MaximumY = y + 0.018,
-                Fill = slice.Fill,
-                Stroke = OxyColors.Transparent,
-                StrokeThickness = 0
-            });
-            model.Annotations.Add(new TextAnnotation
-            {
-                XAxisKey = PieLegendXAxisKey,
-                YAxisKey = PieLegendYAxisKey,
-                Text = slice.Label,
-                TextPosition = new DataPoint(lx, y),
-                TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Left,
-                TextVerticalAlignment = OxyPlot.VerticalAlignment.Middle,
-                TextColor = legendTextColor,
-                FontSize = chart.LegendFontSize,
-                Stroke = OxyColors.Transparent,
-                StrokeThickness = 0,
-                Background = OxyColors.Transparent
-            });
-        }
-
-        // The custom annotation legend replaces the (empty) built-in legend for pies.
-        model.Legends.Clear();
     }
+
+    /// <summary>Half the side of a pie legend swatch (DIP): Excel draws a 6 pt (8 DIP) square key.</summary>
+    private const double PieLegendMarkerHalfSize = 4;
 
     private static void AddPieAnnotationAxes(PlotModel model)
     {
@@ -510,8 +456,49 @@ public static partial class ChartRenderer
             series.LineStyle = ToOxyLineStyle(dashStyle);
     }
 
+    /// <summary>
+    /// OxyPlot's marker size is the marker's radius in device-independent pixels, while Excel's
+    /// <c>&lt;c:marker&gt;&lt;c:size&gt;</c> is its diameter in points (default 5) and a point is 4/3 pixel, so
+    /// the radius is size * 2/3. Without the conversion every marker is drawn about twice as large as in Excel.
+    /// </summary>
+    internal static double ToOxyMarkerSize(double? excelMarkerSizePoints) =>
+        Math.Clamp(excelMarkerSizePoints ?? ExcelDefaultMarkerSizePoints, 1, 30) * 2.0 / 3.0;
+
+    private const double ExcelDefaultMarkerSizePoints = 5;
+
+    /// <summary>
+    /// Excel's "Scatter with Straight Lines" / "Smooth Lines" family: strokes the polyline (or spline) through a
+    /// scatter series' points underneath its markers. OxyPlot's ScatterSeries only draws markers, and a helper
+    /// LineSeries would shift the palette colours of every later series, so the line is a below-series annotation.
+    /// </summary>
+    private static void AddScatterConnectingLine(PlotModel model, ChartModel chart, int seriesIndex, ScatterSeries source, WorkbookTheme theme)
+    {
+        if (source.Points.Count < 2 || !ChartStylePlanner.ScatterConnectsPoints(chart, seriesIndex))
+            return;
+
+        if (GetSeriesFormat(chart, seriesIndex) is not { } format || format.ResolveStrokeColor(theme) is not { } stroke)
+            return;
+
+        var line = new PolylineAnnotation
+        {
+            Layer = AnnotationLayer.BelowSeries,
+            Color = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B),
+            StrokeThickness = format.StrokeThickness ?? 2,
+            LineStyle = format.DashStyle is { } dash ? ToOxyLineStyle(dash) : LineStyle.Solid,
+            LineJoin = LineJoin.Round,
+            YAxisKey = source.YAxisKey,
+            InterpolationAlgorithm = ChartStylePlanner.IsSeriesSmooth(chart, seriesIndex)
+                ? InterpolationAlgorithms.CanonicalSpline
+                : null,
+        };
+        foreach (var point in source.Points)
+            line.Points.Add(new DataPoint(point.X, point.Y));
+        model.Annotations.Add(line);
+    }
+
     private static void ApplyScatterFormat(ScatterSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
     {
+        series.MarkerSize = ToOxyMarkerSize(format?.MarkerSize);
         if (format is null)
             return;
         if (format.ResolveFillColor(theme) is { } fill)
@@ -522,8 +509,6 @@ public static partial class ChartRenderer
             series.MarkerStrokeThickness = thickness;
         if (format.MarkerStyle is { } markerStyle)
             series.MarkerType = ToOxyMarkerType(markerStyle);
-        if (format.MarkerSize is { } markerSize)
-            series.MarkerSize = Math.Clamp(markerSize, 1, 30);
         if (format.MarkerStyle == ChartMarkerStyle.Dot)
             series.MarkerSize *= DotMarkerSizeScale;
     }
@@ -555,7 +540,8 @@ public static partial class ChartRenderer
         string categoryName,
         double x,
         double y,
-        double value)
+        double value,
+        OxyPlot.VerticalAlignment? verticalAlignmentOverride = null)
     {
         var pointFormat = pointDataLabelFormats.Get(seriesIndex, pointIndex);
         var textColor = pointFormat?.ResolveTextColor(theme) ?? chart.ResolveDataLabelTextColor(theme);
@@ -570,9 +556,10 @@ public static partial class ChartRenderer
             TextPosition = new DataPoint(x, y),
             TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
             // Outside/above labels sit beyond the end of the value: above a positive point, below a negative one.
-            TextVerticalAlignment = (chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd) == (value >= 0 || chart.Type != ChartType.Column)
-                ? OxyPlot.VerticalAlignment.Top
-                : OxyPlot.VerticalAlignment.Bottom,
+            TextVerticalAlignment = verticalAlignmentOverride
+                ?? ((chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd) == (value >= 0 || chart.Type != ChartType.Column)
+                    ? OxyPlot.VerticalAlignment.Top
+                    : OxyPlot.VerticalAlignment.Bottom),
             TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
             FontSize = pointFormat?.FontSize ?? chart.DataLabelFontSize,
             Stroke = ToOxyColor(borderColor)

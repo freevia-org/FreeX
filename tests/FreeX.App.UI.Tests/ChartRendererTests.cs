@@ -373,7 +373,7 @@ public sealed partial class ChartRendererTests
                 [],
                 []));
             radarModel.Series.OfType<LineSeries>().Single().Points
-                .Select(point => point.Y)
+                .Select(point => point.X)
                 .Should().Equal(1.5, 2.5, 1.5);
 
             var stackedModel = BuildPlotModel(new ChartModel

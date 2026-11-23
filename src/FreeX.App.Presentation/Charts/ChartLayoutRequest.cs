@@ -75,8 +75,26 @@ public sealed class ChartLayoutRequest
 
     public double ChartHeight { get; init; }
 
+    /// <summary>
+    /// Gutters (px) the plot gives up to axis titles on its left, right and bottom edges, so a titled axis keeps
+    /// its title inside the chart instead of drawing over the tick labels or the legend. Resolved by the engine
+    /// from the laid-out axes (see <see cref="ChartLayoutEngine.Layout"/>); hosts leave these at zero.
+    /// </summary>
+    public double AxisTitleGutterLeft { get; init; }
+
+    public double AxisTitleGutterRight { get; init; }
+
+    public double AxisTitleGutterBottom { get; init; }
+
     /// <summary>A copy of this request that carries the chart object's pixel size.</summary>
     public ChartLayoutRequest WithChartSize(double chartWidth, double chartHeight) =>
+        Clone(chartWidth, chartHeight, AxisTitleGutterLeft, AxisTitleGutterRight, AxisTitleGutterBottom);
+
+    /// <summary>A copy of this request that reserves the given axis-title gutters.</summary>
+    public ChartLayoutRequest WithAxisTitleGutters(double left, double right, double bottom) =>
+        Clone(ChartWidth, ChartHeight, left, right, bottom);
+
+    private ChartLayoutRequest Clone(double chartWidth, double chartHeight, double gutterLeft, double gutterRight, double gutterBottom) =>
         new()
         {
             Chart = Chart,
@@ -87,5 +105,8 @@ public sealed class ChartLayoutRequest
             ReserveLegendGutter = ReserveLegendGutter,
             ChartWidth = chartWidth,
             ChartHeight = chartHeight,
+            AxisTitleGutterLeft = gutterLeft,
+            AxisTitleGutterRight = gutterRight,
+            AxisTitleGutterBottom = gutterBottom,
         };
 }

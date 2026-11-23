@@ -227,6 +227,28 @@ public static class ChartStylePlanner
         return new ChartBarPaint(fill, null, 0);
     }
 
+    /// <summary>
+    /// True when a scatter series draws a line between its points (Excel's "Scatter with Straight Lines"
+    /// family). Excel stores a markers-only scatter as an explicit <c>&lt;a:ln&gt;&lt;a:noFill/&gt;</c> and a
+    /// connected one as an explicit line fill, so a series without an authored line colour stays markers
+    /// only (the plain Insert &gt; Scatter default).
+    /// </summary>
+    public static bool ScatterConnectsPoints(ChartModel chart, int seriesIndex)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var format = FindSeriesFormat(chart, seriesIndex);
+        return format is { NoLine: false } && (format.StrokeColor is not null || format.StrokeThemeColor is not null);
+    }
+
+    /// <summary>True when the series line is drawn as a smoothed curve (<c>&lt;c:smooth val="1"/&gt;</c>).</summary>
+    public static bool IsSeriesSmooth(ChartModel chart, int seriesIndex)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        return FindSeriesFormat(chart, seriesIndex)?.Smooth == true;
+    }
+
     public static bool HasExplicitStroke(ChartSeriesFormat format)
     {
         ArgumentNullException.ThrowIfNull(format);

@@ -50,7 +50,9 @@ public sealed partial class ChartRendererTests
         series[0].Title.Should().Be("Product A");
         series[0].Points.Should().HaveCount(4);
         series[0].Points.First().Should().Be(series[0].Points.Last());
-        series[0].Points.Select(point => point.Y).Should().Equal(4, 2, 5, 4);
+        // OxyPlot polar plots take the magnitude from X and the angle from Y.
+        series[0].Points.Select(point => point.X).Should().Equal(4, 2, 5, 4);
+        series[0].Points.Select(point => point.Y).Should().Equal(0, 120, 240, 0);
     }
 
     [Fact]

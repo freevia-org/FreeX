@@ -164,6 +164,9 @@ public sealed class ChartModel
 
     /// <summary>Explicit chart-title weight from the file (<c>b</c> on the title text); null keeps the bold default.</summary>
     public bool? ChartTitleBold { get; set; }
+
+    /// <summary>Radar charts: true for Excel's "Filled Radar" (<c>&lt;c:radarStyle val="filled"/&gt;</c>), whose series areas are filled; null/false draws outlines only.</summary>
+    public bool? RadarFilled { get; set; }
     public CellColor? AxisTitleTextColor { get; set; }
     public WorkbookThemeColorReference? AxisTitleTextThemeColor { get; set; }
     public double AxisTitleFontSize { get; set; } = 12;
