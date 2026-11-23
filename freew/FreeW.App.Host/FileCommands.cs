@@ -299,6 +299,14 @@ internal sealed class FileCommands
     public bool OpenPath(string path) =>
         _fileCommands.OpenPathAsync(path).GetAwaiter().GetResult();
 
+    /// <summary>
+    /// Plans the command-line document arguments through the same shared startup-file planner the
+    /// Avalonia host uses: missing and unsupported paths are skipped and a repeated path collapses to
+    /// one entry. Entry 0 opens into the primary window, every further entry into a window of its own.
+    /// </summary>
+    internal StartupFileOpenPlan PlanStartupDocuments(IReadOnlyList<string> startupArguments) =>
+        FreeWApplicationStartup.PlanStartupDocuments(startupArguments, _persistence);
+
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
     public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
 
