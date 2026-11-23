@@ -87,7 +87,7 @@ public static partial class BuiltInFunctions
             {
                 var candidate = lookupVector[i];
                 if (candidate is ErrorValue err) return err;
-                if (ScalarEquals(candidate, lookupValue))
+                if (ScalarEqualsExactLookup(candidate, lookupValue))
                     return new NumberValue(i + 1);
             }
             return ErrorValue.NA;
@@ -345,7 +345,7 @@ public static partial class BuiltInFunctions
             {
                 var candidate = lookupVector[i];
                 if (candidate is ErrorValue err) return err;
-                if (ScalarEquals(candidate, lookupValue))
+                if (ScalarEqualsExactLookup(candidate, lookupValue))
                     return XlookupReturnAt(returnArr, i, lookupIsVertical);
             }
             return ifNotFound;

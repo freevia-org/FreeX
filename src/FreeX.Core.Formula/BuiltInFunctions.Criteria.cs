@@ -10,6 +10,20 @@ public static partial class BuiltInFunctions
         if (lookupValue is TextValue pattern && candidate is TextValue text)
             return WildcardMatch(text.Value, pattern.Value, ignoreCase: true);
 
+        // Excel: a text "" lookup value never matches a truly blank cell (VLOOKUP/HLOOKUP/MATCH/XMATCH/XLOOKUP
+        // all give #N/A / not-found), while it does match a cell holding "" text (handled above).
+        return ScalarEqualsExactLookup(candidate, lookupValue);
+    }
+
+    /// <summary>
+    /// Non-wildcard exact equality for XMATCH/XLOOKUP match_mode 0: same as <see cref="ScalarEquals"/> except a
+    /// text "" lookup value never matches a truly blank candidate cell (verified against Excel).
+    /// </summary>
+    internal static bool ScalarEqualsExactLookup(ScalarValue candidate, ScalarValue lookupValue)
+    {
+        if (lookupValue is TextValue { Value.Length: 0 } && candidate is BlankValue)
+            return false;
+
         return ScalarEquals(candidate, lookupValue);
     }
 
