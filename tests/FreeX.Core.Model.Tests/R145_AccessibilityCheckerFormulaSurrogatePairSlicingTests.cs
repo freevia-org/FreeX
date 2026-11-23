@@ -61,20 +61,12 @@ public sealed class R145_AccessibilityCheckerFormulaSurrogatePairSlicingTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaReplaceOnSurrogatePairText()
     {
-        // "😀x" == "😀x": the emoji is a 2-code-unit surrogate pair followed by "x".
-        // REPLACE($A1,1,1,"Q") must replace only the first UTF-16 code unit (the high
-        // surrogate), leaving the orphaned low surrogate + "x" behind -- exactly like Excel
-        // and the real formula engine (see Replace_SlicesOnUtf16CodeUnitBoundaries:
-        // REPLACE("😀x",1,1,"Q") == "Q\uDE00x", 3 code units).
-        //
-        // Before the fix: FormulaReplaceText treated the whole surrogate pair as one
-        // indivisible "text element", so the entire emoji was consumed by the 1-character
-        // replace, producing "Qx" (LEN 2) -- the rule evaluated FALSE and no issue was
-        // reported.
-        // After the fix: the result is "Q\uDE00x" (LEN 3), matching the real engine, and the
-        // rule fires.
+        // "😀x": the emoji is one Excel character (a surrogate pair of two UTF-16 units) followed by "x".
+        // REPLACE($A1,1,1,"Q") replaces the whole emoji, like the real formula engine and Excel itself
+        // (measured through COM: REPLACE counts code points), producing "Qx" (LEN 2) -- so the rule fires.
+        // (Round 145 pinned the older UTF-16-unit reading, "Q\uDE00x" with LEN 3.)
         var workbook = CreateWorkbook(new TextValue("😀x"), out var sheet, out var target);
-        AddFormulaContrastRule(sheet, target, "LEN(REPLACE($A1,1,1,\"Q\"))=3");
+        AddFormulaContrastRule(sheet, target, "LEN(REPLACE($A1,1,1,\"Q\"))=2");
 
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)

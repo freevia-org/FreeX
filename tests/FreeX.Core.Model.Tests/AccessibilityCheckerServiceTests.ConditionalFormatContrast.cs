@@ -3277,18 +3277,19 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialAnnuityFunctions()
     {
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A1,$C1,$D1,$G1,$H1)<-180", "B1", "B3", "B6");
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("PV($A1,$C1,$E1,$G1,$H1)<-9000", "B1", "B3", "B6");
+        // Row 4 carries payment type 2, which Excel treats as 1 (start of period) for PMT/PV/FV/NPER/RATE/IPMT/PPMT.
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A1,$C1,$D1,$G1,$H1)<-180", "B1", "B3", "B4", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PV($A1,$C1,$E1,$G1,$H1)<-9000", "B1", "B3", "B4", "B6");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("FV($A1,12,$F1)>1500", "B1", "B3", "B4", "B6");
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("NPER($A1,$F1,$D1,$G1,$H1)>50", "B1", "B3", "B6");
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("RATE($C1,$F1,$D1,$G1,$H1)>0.004", "B1", "B3", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("NPER($A1,$F1,$D1,$G1,$H1)>50", "B1", "B3", "B4", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("RATE($C1,$F1,$D1,$G1,$H1)>0.004", "B1", "B3", "B4", "B6");
     }
 
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatFinancialPaymentBreakdownFunctions()
     {
         AssertFormulaFinancialAnnuityFunctionContrastLocations("IPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B3");
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("PPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B2", "B3");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("PPMT($A1,$I1,$C1,$D1,$G1,$H1)<0", "B1", "B2", "B3", "B4");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISPMT($A1,$I1,$C1,$D1)<0", "B1", "B3", "B4");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMIPMT($A1,$C1,$D1,1,$I1,$H1)<0", "B1", "B3");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("CUMPRINC($A1,$C1,$D1,1,$I1,$H1)<0", "B1", "B3");
@@ -3306,7 +3307,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     public void FindIssues_PropagatesFormulaConditionalFormatFinancialErrorsAndRejectsRanges()
     {
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNA(PMT($A1,$C1,$D1))", "B5");
-        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(IPMT($A1,$I1,$C1,$D1,$G1,$H1))", "B4", "B5", "B6");
+        AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(IPMT($A1,$I1,$C1,$D1,$G1,$H1))", "B5", "B6");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISERROR(CUMIPMT($A1,$C1,$D1,1,$I1,$H1))", "B2", "B4", "B5", "B6");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("ISNA(CUMPRINC($A1,$C1,$D1,1,$I1,$H1))", "B5");
         AssertFormulaFinancialAnnuityFunctionContrastLocations("PMT($A$1:$A$2,$C1,$D1)<0");
@@ -4333,7 +4334,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaTextFunctionContrastLocations("ISERROR(DOLLAR(\"Open\"))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISERROR(DOLLAR(1,32768))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISERROR(SUBSTITUTE($C1,\"C\",\"x\",0))", FormulaTextFunctionAllLocations);
-        AssertFormulaTextFunctionContrastLocations("ISERROR(REPLACE($C1,99,1,\"x\"))", FormulaTextFunctionAllLocations);
+        // REPLACE past the end appends in Excel (measured through COM), so it is no longer an error.
+        AssertFormulaTextFunctionContrastLocations("ISERROR(REPLACE($C1,99,1,\"x\"))");
         AssertFormulaTextFunctionContrastLocations("ISERROR(REPLACEB($C1,99,1,\"x\"))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISNA(LENB(NA()))", FormulaTextFunctionAllLocations);
         AssertFormulaTextFunctionContrastLocations("ISERROR(LEFTB($C1,-1))", FormulaTextFunctionAllLocations);
@@ -4680,7 +4682,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaUnicodeFunctionContrastLocations("AND(UNICODE($C1)>64,$D1)", "B1", "B2", "B3", "B4", "B7");
         AssertFormulaUnicodeFunctionContrastLocations("ISNUMBER(UNICODE($C1))", "B1", "B2", "B3", "B4", "B6", "B7");
         AssertFormulaUnicodeFunctionContrastLocations("ISTEXT(UNICHAR($A1))", "B1", "B2", "B3");
-        AssertFormulaUnicodeFunctionContrastLocations("EXACT(UNICHAR($A1),LEFT($C1,2))", "B3");
+        // LEFT counts code points (an emoji is one character), so LEFT($C1,1) is the whole emoji; the A1>65535 guard keeps the intent of row 3.
+        AssertFormulaUnicodeFunctionContrastLocations("AND($A1>65535,EXACT(UNICHAR($A1),LEFT($C1,1)))", "B3");
         AssertFormulaUnicodeFunctionContrastLocations("SUM(UNICODE($C1),1)=9732", "B2");
     }
 
@@ -4763,7 +4766,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("TIME(48,0,1)<TIME(0,0,2)", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("TIME(1.9,2.9,3.9)=TIME(1,2,3)", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,3,15),$A1)>30", "B3", "B4");
-        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,2,28),DATE(2023,3,31))=30");
+        AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,2,28),DATE(2023,3,31))=30", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(1900,2,28),DATE(1900,3,31))=33", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(1900,1,30),DATE(1900,2,28))=28", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("DAYS360(DATE(2023,1,31),DATE(2023,2,28))=28", "B1", "B2", "B3", "B4");
@@ -4800,8 +4803,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,2)>1", "B3");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,3)>0.09", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,4)>0.09", "B3", "B4");
-        AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,2,28),DATE(2023,3,31))=0.08333333333333333", "B1", "B2", "B3", "B4");
-        AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(1900,2,28),DATE(1900,3,31))=0.09166666666666666", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,2,28),DATE(2023,3,31))=0.08611111111111111", "B1", "B2", "B3", "B4");
+        AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(1900,2,28),DATE(1900,3,31))=0.08611111111111111", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(1900,1,30),DATE(1900,2,28))=0.07777777777777778", "B1", "B2", "B3", "B4");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC($A1,DATE(2023,3,15),2)<0");
         AssertFormulaDateFunctionContrastLocations("YEARFRAC(DATE(2023,3,15),$A1,1.9)>1", "B3");
@@ -8804,7 +8807,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaNumericTruthyContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8815,7 +8818,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaPredicateContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8826,7 +8829,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaParityContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8837,7 +8840,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaAggregateContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8848,7 +8851,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaDatabaseAggregateContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8859,7 +8862,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaStatisticalSelectionContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8870,7 +8873,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaStatisticalTestContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8881,7 +8884,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialCashFlowFunctionContrastLocations(
@@ -8894,7 +8897,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaArithmeticContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8905,7 +8908,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaMatrixArrayFunctionContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8916,7 +8919,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaDynamicArrayFunctionContrastLocations(string formulaText, params string[] expectedLocations)
@@ -8927,7 +8930,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialDepreciationFunctionContrastLocations(
@@ -8940,7 +8943,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialCouponFunctionContrastLocations(
@@ -8953,7 +8956,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialBillDiscountFunctionContrastLocations(
@@ -8966,7 +8969,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialBondYieldFunctionContrastLocations(
@@ -8979,7 +8982,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialOddCouponFunctionContrastLocations(
@@ -8992,7 +8995,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialAccrualScheduleFunctionContrastLocations(
@@ -9005,7 +9008,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaTextFunctionContrastLocations(string formulaText, params string[] expectedLocations)
@@ -9016,7 +9019,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaPaddedTextFunctionContrastLocations(
@@ -9029,7 +9032,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaValueFunctionContrastLocations(
@@ -9042,7 +9045,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaNumberValueFunctionContrastLocations(
@@ -9056,7 +9059,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaDateValueTimeValueFunctionContrastLocations(
@@ -9069,7 +9072,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaArabicRomanFunctionContrastLocations(
@@ -9082,7 +9085,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaBaseConversionFunctionContrastLocations(
@@ -9096,7 +9099,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaNormalDistributionFunctionContrastLocations(
@@ -9110,7 +9113,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaTFChiSquareDistributionFunctionContrastLocations(
@@ -9124,7 +9127,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaContinuousDistributionFunctionContrastLocations(
@@ -9138,7 +9141,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaDiscreteStatisticalFunctionContrastLocations(
@@ -9152,7 +9155,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaFinancialAnnuityFunctionContrastLocations(
@@ -9166,7 +9169,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaUnicodeFunctionContrastLocations(
@@ -9180,7 +9183,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaConvertFunctionContrastLocations(
@@ -9193,7 +9196,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaComplexFunctionContrastLocations(
@@ -9206,7 +9209,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaDateFunctionContrastLocations(
@@ -9219,7 +9222,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaDateBooleanArithmeticContrastLocations(
@@ -9232,7 +9235,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaRowColumnFunctionContrastLocations(
@@ -9245,7 +9248,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaLookupReferenceFunctionContrastLocations(
@@ -9258,7 +9261,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaInfoScalarFunctionContrastLocations(
@@ -9271,7 +9274,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaInfoReferenceParityContrastLocations(
@@ -9284,7 +9287,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaIfContrastLocations(string formulaText, params string[] expectedLocations)
@@ -9295,7 +9298,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaReferencePredicateContrastLocations(string formulaText, params string[] expectedLocations)
@@ -9306,7 +9309,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static void AssertFormulaXorContrastLocations(string formulaText, params string[] expectedLocations)
@@ -9317,7 +9320,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         FindLowContrastCellTextIssues(workbook)
             .Select(issue => issue.Location)
             .Should()
-            .Equal(expectedLocations);
+            .Equal((IEnumerable<string>)expectedLocations, "formula {0}", formulaText);
     }
 
     private static string[] FormulaParityAllLocations =>
