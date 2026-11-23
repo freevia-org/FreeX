@@ -10,7 +10,9 @@ public sealed class WpfTransitionPlaybackParityTests
     [Fact]
     public void Wpf_transition_dispatch_covers_every_shared_playback_action()
     {
-        var hostSource = File.ReadAllText(RepoFile("freep/FreeP.App.Host/SlideShowWindow.cs"));
+        // The playback dispatch forward lives in the renderer-contracts partial linked into both hosts.
+        var hostSource = File.ReadAllText(RepoFile("freep/FreeP.App.Host/SlideShowWindow.cs")) +
+            File.ReadAllText(RepoFile("freep/RendererShared/SlideShowWindow.RendererContracts.cs"));
         var coordinatorSource = File.ReadAllText(RepoFile(
             "freep/FreeP.App.Presentation/SlideShowTransitionPlaybackCoordinator.cs"));
 
