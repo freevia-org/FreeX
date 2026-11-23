@@ -88,17 +88,16 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Sequence_AcceptsSpilledScalarControlArguments()
     {
+        // Measured against Excel 16.0 (en-US): an array argument (even a 1x1 spill) is lifted element by element
+        // and each element's sequence contributes only its first value, so this is the single value 5 -- not
+        // the 2x3 sequence a scalar reading of the arguments would give.
         var result = _eval.Evaluate("=SEQUENCE(SEQUENCE(1,,2),SEQUENCE(1,,3),SEQUENCE(1,,5),SEQUENCE(1,,2))", MakeSheet());
 
-        var rv = result.Should().BeOfType<RangeValue>().Subject;
-        rv.RowCount.Should().Be(2);
-        rv.ColCount.Should().Be(3);
-        rv.Cells[0, 0].Should().Be(new NumberValue(5));
-        rv.Cells[0, 1].Should().Be(new NumberValue(7));
-        rv.Cells[0, 2].Should().Be(new NumberValue(9));
-        rv.Cells[1, 0].Should().Be(new NumberValue(11));
-        rv.Cells[1, 1].Should().Be(new NumberValue(13));
-        rv.Cells[1, 2].Should().Be(new NumberValue(15));
+        (result is RangeValue single ? single.Cells[0, 0] : result).Should().Be(new NumberValue(5));
+        var explicitScalars = _eval.Evaluate("=SEQUENCE(2,3,5,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        explicitScalars.RowCount.Should().Be(2);
+        explicitScalars.ColCount.Should().Be(3);
+        explicitScalars.Cells[1, 2].Should().Be(new NumberValue(15));
     }
 
     [Fact]

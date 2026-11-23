@@ -6,6 +6,20 @@ public static partial class BuiltInFunctions
 {
     private static ScalarValue Sequence(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // Measured against Excel: an array argument is lifted element by element and each element's
+        // sequence contributes only its first value (SEQUENCE({2}) is 1, SEQUENCE({2,3}) is {1,1}).
+        if (args.Any(static a => a is RangeValue))
+        {
+            var padded = args.Count >= 4
+                ? args
+                : args.Concat(Enumerable.Repeat<ScalarValue>(BlankValue.Instance, 4 - args.Count)).ToArray();
+            return MapScalarArgs(padded, scalars =>
+            {
+                var one = Sequence(scalars, ctx);
+                return one is RangeValue sequence ? sequence.Cells[0, 0] : one;
+            });
+        }
+
         if (!TryGetScalarControlArgument(args[0], out var rowsArg, out var rowsError)) return rowsError;
         if (!TryGetScalarControlArgument(args.Count > 1 ? args[1] : BlankValue.Instance, out var colsArg, out var colsError)) return colsError;
         if (!TryGetScalarControlArgument(args.Count > 2 ? args[2] : BlankValue.Instance, out var startArg, out var startError)) return startError;

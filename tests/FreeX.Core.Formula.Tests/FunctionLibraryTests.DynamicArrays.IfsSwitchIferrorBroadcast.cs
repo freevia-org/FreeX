@@ -169,13 +169,14 @@ public partial class FunctionLibraryTests
             (1, 4, new NumberValue(10)), (1, 5, new NumberValue(20)),
             (2, 4, new NumberValue(30)), (2, 5, new NumberValue(40)));
 
-        // A1:B3 > 0 is 3x2; D1:E2 is 2x2 — neither axis is 1 nor equal to the 3x2 target, so this
-        // cannot broadcast on either dimension.
+        // A1:B3 > 0 is 3x2; D1:E2 is 2x2. Measured against Excel 16.0 (en-US): the rows the shorter result
+        // array does not reach are #N/A (not a per-cell #VALUE!).
         var result = _eval.Evaluate("=IFS(A1:B3>0,D1:E2,TRUE,0)", sheet)
             .Should().BeOfType<RangeValue>().Subject;
 
-        for (int r = 0; r < 3; r++)
-            for (int c = 0; c < 2; c++)
-                result.Cells[r, c].Should().Be(ErrorValue.Value);
+        result.Cells[0, 0].Should().Be(new NumberValue(10));
+        result.Cells[1, 1].Should().Be(new NumberValue(40));
+        for (int c = 0; c < 2; c++)
+            result.Cells[2, c].Should().Be(ErrorValue.NA);
     }
 }

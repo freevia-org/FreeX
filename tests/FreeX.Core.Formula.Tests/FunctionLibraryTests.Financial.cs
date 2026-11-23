@@ -96,8 +96,8 @@ public partial class FunctionLibraryTests
         // A row-vector (1x2) crossed with a column-vector (2x1) is now a valid cross-broadcast
         // (R118-formula-arity3plus-cross-broadcast), so this uses B1:B3 (a same-axis, differently
         // sized column) to keep testing a genuine shape mismatch.
-        _eval.Evaluate("=IPMT(A1:A2,B1:B3,60,10000)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=PPMT(A1:A2,B1:B3,60,10000)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=IPMT(A1:A2,B1:B3,60,10000)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=PPMT(A1:A2,B1:B3,60,10000)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]

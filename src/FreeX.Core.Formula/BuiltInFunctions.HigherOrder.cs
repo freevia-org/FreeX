@@ -216,6 +216,8 @@ public static partial class BuiltInFunctions
         }
 
         if (!double.IsFinite(rawRows) || !double.IsFinite(rawCols)) return ErrorValue.Value;
+        // Measured against Excel: MAKEARRAY wants whole-number dimensions (2.9 is #VALUE!, not truncated).
+        if (rawRows != Math.Floor(rawRows) || rawCols != Math.Floor(rawCols)) return ErrorValue.Value;
         int rows = (int)rawRows, cols = (int)rawCols;
         if (rows < 1 || cols < 1 || (long)rows * cols > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 

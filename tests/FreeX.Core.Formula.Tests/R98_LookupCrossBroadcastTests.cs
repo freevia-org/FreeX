@@ -124,6 +124,6 @@ public class R98_LookupCrossBroadcastTests
 
         var result = _eval.Evaluate("=MATCH(A1:A3,F1:F3,D1:D2)", sheet);
 
-        result.Should().Be(ErrorValue.Value);
+        result.ShouldPadMismatchedAxesWithNa();
     }
 }

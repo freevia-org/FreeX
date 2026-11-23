@@ -102,7 +102,7 @@ public sealed partial class FormulaEvaluator
     private static bool TryExpandBroadcastShape(ScalarValue value, ref int rowCount, ref int colCount)
     {
         if (value is not RangeValue range) return true;
-        if (!CanBroadcast(rowCount, range.RowCount) || !CanBroadcast(colCount, range.ColCount)) return false;
+        // Mismatched axes grow to the longer length; the shorter array contributes #N/A there (Excel).
         rowCount = Math.Max(rowCount, range.RowCount);
         colCount = Math.Max(colCount, range.ColCount);
         return true;
@@ -118,12 +118,9 @@ public sealed partial class FormulaEvaluator
     /// </summary>
     private static ScalarValue BroadcastElementAt(RangeValue range, int row, int col, int targetRows, int targetCols)
     {
-        if (!CanBroadcast(targetRows, range.RowCount) || !CanBroadcast(targetCols, range.ColCount))
-            return ErrorValue.Value;
-
         int r = range.RowCount == 1 ? 0 : row;
         int c = range.ColCount == 1 ? 0 : col;
-        return range.Cells[r, c];
+        return r >= range.RowCount || c >= range.ColCount ? ErrorValue.NA : range.Cells[r, c];
     }
 
     /// <summary>Whether a dimension of size <paramref name="source"/> can broadcast to <paramref name="target"/> (equal, or either side is 1).</summary>
