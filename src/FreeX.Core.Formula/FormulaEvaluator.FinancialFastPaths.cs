@@ -195,7 +195,7 @@ public sealed partial class FormulaEvaluator
 
         if (!double.IsFinite(guess) || guess <= -1)
         {
-            result = ErrorValue.Num;
+            result = double.IsFinite(guess) ? ErrorValue.Value : ErrorValue.Num;
             return true;
         }
 

@@ -23,7 +23,8 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
-        if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
+        // A treasury bill runs at most one CALENDAR year (maturity up to settlement + 1 year, 366 days in a leap year).
+        if (dsm <= 0 || md > sd.AddYears(1)) return ErrorValue.Num;
         if (dsm <= 182)
             return NumberResult((365 * discount) / (360 - discount * dsm));
 
@@ -55,8 +56,10 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
-        if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
-        return NumberResult(100 * (1 - discount * dsm / 360.0));
+        // A treasury bill runs at most one CALENDAR year (maturity up to settlement + 1 year, 366 days in a leap year).
+        if (dsm <= 0 || md > sd.AddYears(1)) return ErrorValue.Num;
+        double price = 100 * (1 - discount * dsm / 360.0);
+        return price <= 0 ? ErrorValue.Num : NumberResult(price);
     }
 
     private static ScalarValue Tbillyield(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -76,7 +79,8 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(settlement, out DateTime sd) ||
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         double dsm = (md - sd).TotalDays;
-        if (dsm <= 0 || dsm > 365) return ErrorValue.Num;
+        // A treasury bill runs at most one CALENDAR year (maturity up to settlement + 1 year, 366 days in a leap year).
+        if (dsm <= 0 || md > sd.AddYears(1)) return ErrorValue.Num;
         return NumberResult((100 - pr) / pr * 360.0 / dsm);
     }
 }

@@ -53,15 +53,16 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue FindText(string findText, string withinText, int startNum)
     {
-        int startIdx = startNum - 1;
+        int total = CodePointLength(withinText);
         if (findText.Length == 0)
-            return startNum <= withinText.Length + 1
+            return startNum <= total + 1
                 ? new NumberValue(startNum)
                 : ErrorValue.Value;
-        if (startIdx >= withinText.Length) return ErrorValue.Value;
+        if (startNum - 1 >= total) return ErrorValue.Value;
+        int startIdx = CodePointToUtf16Index(withinText, startNum - 1);
         int pos = withinText.IndexOf(findText, startIdx, StringComparison.Ordinal);
         if (pos < 0) return ErrorValue.Value;
-        return new NumberValue(pos + 1);
+        return new NumberValue(Utf16ToCodePointIndex(withinText, pos) + 1);
     }
 
     private static ScalarValue Search(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -140,12 +141,14 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue SearchText(string findText, string withinText, int startNum)
     {
-        int startIdx = startNum - 1;
+        int total = CodePointLength(withinText);
+        // SEARCH("", text, n) needs n within the text (unlike FIND, n = length + 1 is #VALUE!).
         if (findText.Length == 0)
-            return startNum <= withinText.Length + 1
+            return startNum <= total
                 ? new NumberValue(startNum)
                 : ErrorValue.Value;
-        if (startIdx >= withinText.Length) return ErrorValue.Value;
+        if (startNum - 1 >= total) return ErrorValue.Value;
+        int startIdx = CodePointToUtf16Index(withinText, startNum - 1);
 
         var regex = GetSearchRegex(findText);
         Match match;
@@ -159,7 +162,7 @@ public static partial class BuiltInFunctions
         }
 
         if (!match.Success) return ErrorValue.Value;
-        return new NumberValue(match.Index + 1);
+        return new NumberValue(Utf16ToCodePointIndex(withinText, match.Index) + 1);
     }
 
     private static ScalarValue FindBText(string findText, string withinText, int startByte)

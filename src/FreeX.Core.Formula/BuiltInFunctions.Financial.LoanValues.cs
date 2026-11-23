@@ -6,8 +6,10 @@ public static partial class BuiltInFunctions
 {
     // -- Core loan value helpers ------------------------------------------
 
+    // Excel (verified through COM) treats ANY non-zero type as "payments due at the beginning of the period"
+    // (PMT(0.05,5,10000,0,2) equals the type-1 payment); only a non-numeric type is an error.
     private static bool IsValidPaymentType(double type) =>
-        double.IsFinite(type) && (type == 0 || type == 1);
+        double.IsFinite(type);
 
     private static ScalarValue Pmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -33,8 +35,9 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        type = type != 0 ? 1 : 0;
         double nper = nperValue;
-        if (nper == 0) return ErrorValue.DivByZero;
+        if (nper == 0 || rate <= -1) return ErrorValue.Num;
         // Excel only special-cases a rate that is exactly (bit-for-bit) 0.0 -- it has no
         // epsilon-collapse for tiny-but-nonzero rates, however small, because rate*nper can
         // still be far from negligible when nper is huge (e.g. rate=5e-11, nper=1e9 compounds
@@ -72,6 +75,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        type = type != 0 ? 1 : 0;
         double nper = nperValue;
         // Unlike PMT (where nper == 0 is a genuine division by zero), PV has no such
         // singularity: when nper == 0, rn == (1+rate)^0 == 1 and the pmt term vanishes
@@ -109,6 +113,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        type = type != 0 ? 1 : 0;
         double nper = nperValue;
         // See PmtScalar above: only an exact 0.0 rate takes the zero-rate shortcut.
         if (rate == 0)
@@ -141,6 +146,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
+        type = type != 0 ? 1 : 0;
         // See PmtScalar above: only an exact 0.0 rate takes the zero-rate shortcut.
         if (rate == 0)
         {
@@ -186,7 +192,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(nperValue) || !double.IsFinite(pmt) || !double.IsFinite(pv) || !double.IsFinite(fv) || !double.IsFinite(type) || !double.IsFinite(guess))
             return ErrorValue.Num;
         if (!IsValidPaymentType(type)) return ErrorValue.Num;
-        if (nperValue == 0) return ErrorValue.DivByZero;
+        type = type != 0 ? 1 : 0;
+        if (nperValue <= 0) return ErrorValue.Num; // RATE(0,..) and RATE(-60,..) are #NUM! in Excel
         double nper = nperValue;
         double r = guess;
         for (int i = 0; i < 100; i++)

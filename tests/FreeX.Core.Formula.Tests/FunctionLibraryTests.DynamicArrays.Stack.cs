@@ -66,30 +66,19 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Vstack_ScalarErrorArgument_SpillsErrorAsCell()
+    public void Vstack_ScalarErrorArgument_IsTheWholeResult()
     {
+        // A scalar error ARGUMENT is the whole result in Excel (measured through COM); errors inside a range are data.
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        var result = _eval.Evaluate("=VSTACK(A1:A1,NA())", sheet)
-            .Should().BeOfType<RangeValue>().Subject;
-
-        result.RowCount.Should().Be(2);
-        result.ColCount.Should().Be(1);
-        result.Cells[0, 0].Should().Be(new NumberValue(1));
-        result.Cells[1, 0].Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=VSTACK(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
-    public void Hstack_ScalarErrorArgument_SpillsErrorAsCell()
+    public void Hstack_ScalarErrorArgument_IsTheWholeResult()
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        var result = _eval.Evaluate("=HSTACK(A1:A1,NA())", sheet)
-            .Should().BeOfType<RangeValue>().Subject;
-
-        result.RowCount.Should().Be(1);
-        result.ColCount.Should().Be(2);
-        result.Cells[0, 0].Should().Be(new NumberValue(1));
-        result.Cells[0, 1].Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=HSTACK(A1:A1,NA())", sheet).Should().Be(ErrorValue.NA);
     }
 }

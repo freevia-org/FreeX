@@ -12,6 +12,56 @@ public static partial class BuiltInFunctions
     internal static bool ExceedsExcelTextLimit(string text) =>
         text.Length > 32767;
 
+    // Excel's character functions (LEN, LEFT, RIGHT, MID, FIND, SEARCH, REPLACE) count Unicode code points, not
+    // UTF-16 units (verified through COM: LEN of a string holding one emoji is 1, and MID returns the whole emoji).
+    // These helpers translate between the two index spaces; text without surrogate pairs takes the identity path.
+    private static bool HasSurrogatePair(string text)
+    {
+        foreach (var ch in text)
+            if (char.IsSurrogate(ch)) return true;
+        return false;
+    }
+
+    private static int CodePointLength(string text)
+    {
+        if (!HasSurrogatePair(text)) return text.Length;
+        int count = 0;
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) i++;
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>UTF-16 index of the code point at zero-based <paramref name="codePointIndex"/> (text length when past the end).</summary>
+    private static int CodePointToUtf16Index(string text, int codePointIndex)
+    {
+        if (codePointIndex <= 0) return 0;
+        if (!HasSurrogatePair(text)) return Math.Min(codePointIndex, text.Length);
+        int index = 0;
+        for (int cp = 0; cp < codePointIndex && index < text.Length; cp++)
+        {
+            index += char.IsHighSurrogate(text[index]) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]) ? 2 : 1;
+        }
+
+        return index;
+    }
+
+    private static int Utf16ToCodePointIndex(string text, int utf16Index)
+    {
+        if (!HasSurrogatePair(text)) return utf16Index;
+        int count = 0;
+        for (int i = 0; i < utf16Index && i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) i++;
+            count++;
+        }
+
+        return count;
+    }
+
     private static RangeValue MapUnaryTextRange(RangeValue range, Func<ScalarValue, ScalarValue> map)
     {
         var cells = new ScalarValue[range.RowCount, range.ColCount];

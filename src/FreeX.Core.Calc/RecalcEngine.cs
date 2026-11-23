@@ -142,6 +142,22 @@ public sealed class RecalcEngine
     internal int DependencyPlanCacheOrderCountForSheetForTests(SheetId sheetId) =>
         _dependencyPlanCacheOrder.Count(key => key.SheetId.Equals(sheetId));
 
+    private static RangeValue ZeroFillBlankElements(RangeValue range)
+    {
+        var cells = range.Cells;
+        int rows = range.RowCount, cols = range.ColCount;
+        ScalarValue[,]? copy = null;
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
+                if (cells[r, c] is BlankValue)
+                {
+                    copy ??= (ScalarValue[,])cells.Clone();
+                    copy[r, c] = new NumberValue(0d);
+                }
+
+        return copy is null ? range : range with { Cells = copy };
+    }
+
     public RecalcEngine(DependencyGraph graph, FormulaEvaluator evaluator)
     {
         _graph = graph;
@@ -505,8 +521,11 @@ public sealed class RecalcEngine
                     _spillBlockedAnchors.Remove(addr);
                     AddRecalculatedCell(ref recalculatedCount, ref singleRecalculated, ref recalculated, addr);
                 }
-                else if (result is RangeValue rv)
+                else if (result is RangeValue rawRv)
                 {
+                    // An array result never holds empty cells: Excel materializes a blank element (an empty
+                    // cell reached through =A1:A5, FILTER, SORT, UNIQUE, TAKE, VSTACK ...) as 0 when it spills.
+                    var rv = ZeroFillBlankElements(rawRv);
                     sheet.ClearSpillRange(addr);
                     if (cell.LegacyArrayRows > 0)
                     {

@@ -88,9 +88,10 @@ public sealed class R68_FmlTextEngineeringFixesTests
     // ── R68-formula-text-format-6-2: UPPER must expand German ß to "SS" ─────────────────────
 
     [Fact]
-    public void Upper_GermanSharpS_ExpandsToDoubleS()
+    public void Upper_GermanSharpS_IsLeftAlone()
     {
-        _eval.Evaluate("=UPPER(\"straße\")", MakeSheet()).Should().Be(new TextValue("STRASSE"));
+        // Excel's casing is 1:1 per character: UPPER("straße") is "STRAßE" (measured through COM), not "STRASSE".
+        _eval.Evaluate("=UPPER(\"straße\")", MakeSheet()).Should().Be(new TextValue("STRAßE"));
     }
 
     [Fact]

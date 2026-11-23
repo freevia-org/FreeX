@@ -84,7 +84,7 @@ public static partial class BuiltInFunctions
 
         var text = ToText(value);
         if (text.Length == 0)
-            return TextResult("");
+            return options.Delimiters.Any(delimiter => delimiter.Length == 0) ? TextResult("") : options.IfNotFound;
 
         var textLength = text.Length;
         // Use long arithmetic here: Math.Abs(int) throws OverflowException for int.MinValue
@@ -112,17 +112,42 @@ public static partial class BuiltInFunctions
 
     private static TextDelimiterMatch? FindDelimiterOccurrence(string text, TextExtractOptions options)
     {
-        var matches = FindAllDelimiterMatches(text, options.Delimiters, options.Comparison);
-        if (options.MatchEnd)
-            matches.Add(new TextDelimiterMatch(text.Length, 0));
-
         if (options.InstanceNum > 0)
         {
+            var matches = FindAllDelimiterMatches(text, options.Delimiters, options.Comparison);
+            if (options.MatchEnd)
+                matches.Add(new TextDelimiterMatch(text.Length, 0));
             return matches.Count >= options.InstanceNum ? matches[options.InstanceNum - 1] : null;
         }
 
+        // Negative instance_num counts from the end of the text; candidate matches may overlap
+        // (TEXTBEFORE("aaa","aa",-1) is "a"), and match_end then stands in for a delimiter at the START of the text.
         var fromEnd = -options.InstanceNum;
-        return matches.Count >= fromEnd ? matches[^fromEnd] : null;
+        int endExclusive = text.Length;
+        for (var found = 0; found < fromEnd; found++)
+        {
+            TextDelimiterMatch? best = null;
+            if (endExclusive > 0)
+            {
+                foreach (var delimiter in options.Delimiters)
+                {
+                    if (delimiter.Length == 0 || delimiter.Length > endExclusive) continue;
+                    var index = text.LastIndexOf(delimiter, endExclusive - 1, endExclusive, options.Comparison);
+                    if (index < 0) continue;
+                    if (best is null || index > best.Value.Index ||
+                        (index == best.Value.Index && delimiter.Length > best.Value.Length))
+                        best = new TextDelimiterMatch(index, delimiter.Length);
+                }
+            }
+
+            if (best is null)
+                return options.MatchEnd && found == fromEnd - 1 ? new TextDelimiterMatch(0, 0) : null;
+            if (found == fromEnd - 1)
+                return best;
+            endExclusive = best.Value.Index + best.Value.Length - 1;
+        }
+
+        return null;
     }
 
     private static ScalarValue Textsplit(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

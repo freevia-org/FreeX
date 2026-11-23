@@ -5,59 +5,51 @@ using Xunit;
 namespace FreeX.Core.Formula.Tests;
 
 /// <summary>
-/// r519: Excel's text functions count UTF-16 CODE UNITS, not characters a reader would recognise.
-/// A non-BMP character such as U+1F600 occupies two units, so in Excel LEN("A&#128512;B") is 4, MID at
-/// position 2 for length 2 returns the whole emoji, and LEFT(...,2) deliberately cuts it in half and
-/// yields a lone surrogate. FreeX matches that exactly, and these tests pin it.
-///
-/// <para>They exist because the formula text layer carried four private helpers that walked text by
-/// SURROGATE PAIR rather than by code unit -- an alternative, friendlier semantics that Excel does
-/// not implement. All four were dead, but dead code encoding the wrong rule is worse than neutral
-/// cruft: it reads as the intended design, so a later reader could "fix" emoji handling by wiring
-/// them in and silently break compatibility. The helpers are removed and this is the guard that makes
-/// such a change fail loudly instead of shipping.</para>
+/// Non-BMP text (an emoji such as U+1F600, two UTF-16 units) is counted in CODE POINTS by LEN, LEFT, RIGHT, MID,
+/// FIND, SEARCH and REPLACE. Round 519 pinned the opposite (UTF-16 units, LEFT splitting the pair) from the
+/// general belief about older Excel builds; measured against the installed Excel 16.0 (build 20625) through COM,
+/// LEN("A" &amp; emoji &amp; "B") is 3, MID(...,2,1) is the whole emoji, UNICODE(MID(...)) is 128512 and
+/// LEN(UNICHAR(128512)) is 1 -- no function ever returns half of a pair. The 32767-character cell limit is still
+/// counted in UTF-16 units (REPT(emoji,16384) is #VALUE! although LEN would say 16384). The byte-oriented
+/// LENB/MIDB/FINDB family is unchanged.
 /// </summary>
 public partial class FunctionLibraryTests
 {
-    private const string Grinning = "😀"; // U+1F600, two UTF-16 units
+    private const string Grinning = "\U0001F600"; // U+1F600, two UTF-16 units, ONE Excel character
     private static readonly string Mixed = "A" + Grinning + "B";
 
     [Fact]
-    public void Len_CountsUtf16UnitsLikeExcel()
+    public void Len_CountsCodePointsLikeExcel()
     {
         var sheet = MakeSheet((1, 1, new TextValue(Mixed)));
 
-        // Four units: 'A', high surrogate, low surrogate, 'B'. A text-element count would say 3.
-        _eval.Evaluate("=LEN(A1)", sheet).Should().Be(new NumberValue(4));
+        _eval.Evaluate("=LEN(A1)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=LEN(UNICHAR(128512))", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]
-    public void Mid_AddressesTheSurrogatePairByItsUnitPositions()
+    public void Mid_AddressesTheSurrogatePairAsOneCharacter()
     {
         var sheet = MakeSheet((1, 1, new TextValue(Mixed)));
 
-        _eval.Evaluate("=MID(A1,2,2)", sheet).Should().Be(new TextValue(Grinning));
+        _eval.Evaluate("=MID(A1,2,1)", sheet).Should().Be(new TextValue(Grinning));
+        _eval.Evaluate("=MID(A1,3,1)", sheet).Should().Be(new TextValue("B"));
     }
 
     [Fact]
-    public void Left_SplitsASurrogatePairExactlyAsExcelDoes()
+    public void Left_KeepsASurrogatePairTogether()
     {
         var sheet = MakeSheet((1, 1, new TextValue(Mixed)));
 
-        // Excel does NOT keep the pair together here; it returns 'A' plus the lone high surrogate.
-        // Pinning the broken-looking result is the point: it is the compatible one.
-        var result = _eval.Evaluate("=LEFT(A1,2)", sheet);
-
-        result.Should().BeOfType<TextValue>();
-        ((TextValue)result).Value.Should().Be("A\uD83D");
+        _eval.Evaluate("=LEFT(A1,2)", sheet).Should().Be(new TextValue("A" + Grinning));
     }
 
     [Fact]
-    public void Right_CountsFromTheEndInUnitsToo()
+    public void Right_CountsFromTheEndInCodePoints()
     {
         var sheet = MakeSheet((1, 1, new TextValue(Mixed)));
 
         _eval.Evaluate("=RIGHT(A1,1)", sheet).Should().Be(new TextValue("B"));
-        _eval.Evaluate("=RIGHT(A1,3)", sheet).Should().Be(new TextValue(Grinning + "B"));
+        _eval.Evaluate("=RIGHT(A1,2)", sheet).Should().Be(new TextValue(Grinning + "B"));
     }
 }

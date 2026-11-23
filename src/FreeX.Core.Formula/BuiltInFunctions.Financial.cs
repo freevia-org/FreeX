@@ -147,10 +147,20 @@ public static partial class BuiltInFunctions
         while (prev > settlement)
         {
             k++;
-            prev = maturity.AddMonths(-k * months);
+            prev = CouponScheduleDate(maturity, k * months);
         }
-        DateTime next = maturity.AddMonths(-(k - 1) * months);
+        DateTime next = CouponScheduleDate(maturity, (k - 1) * months);
         return (prev, next);
+    }
+
+    // Excel (verified through COM) keeps a month-end maturity on month ends for the whole coupon schedule:
+    // COUPPCD(1/15/2020, 6/30/2025, 2) is 12/31/2019 and COUPNCD(1/31/2020, 2/28/2025, 2) is 2/29/2020.
+    private static DateTime CouponScheduleDate(DateTime maturity, int monthsBack)
+    {
+        var shifted = maturity.AddMonths(-monthsBack);
+        return maturity.Day == DateTime.DaysInMonth(maturity.Year, maturity.Month)
+            ? new DateTime(shifted.Year, shifted.Month, DateTime.DaysInMonth(shifted.Year, shifted.Month))
+            : shifted;
     }
 
     private static DateTime CouponDateBefore(DateTime settlement, DateTime maturity, int frequency)

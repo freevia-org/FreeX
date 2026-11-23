@@ -90,6 +90,14 @@ public static partial class BuiltInFunctions
                 if (!TryDirectTextNumber(direct, out double value)) return (null, ErrorValue.Value);
                 list.Add(value);
             }
+            else if (a is RangeValue inlineArray)
+            {
+                // An inline array constant (SKEW({1,2,10})) or other computed array reaches the function whole,
+                // unlike worksheet ranges, which are expanded cell by cell before the call.
+                var (arrayNums, arrayErr) = CollectRangeNumbers(inlineArray);
+                if (arrayErr is not null) return (null, arrayErr);
+                list.AddRange(arrayNums!);
+            }
             else if (a is UnionValue union)
             {
                 // R93-AREAS-union-value-model: a union reference argument (e.g.

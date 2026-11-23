@@ -82,6 +82,14 @@ public static partial class BuiltInFunctions
         // neither of which is the #VALUE! error a naive Int32 range check produces. Truncating a huge or
         // boundary double to Int32 first would also risk overflow (e.g. Math.Abs(int.MinValue)).
         double magnitude = Math.Abs(raw);
+        if (magnitude < 1 && !isTake)
+        {
+            // DROP(array,0) drops nothing: Excel returns the array unchanged (only TAKE(...,0) is #CALC!).
+            start = 0;
+            count = dimensionLength;
+            return dimensionLength > 0;
+        }
+
         if (magnitude < 1)
         {
             start = 0;

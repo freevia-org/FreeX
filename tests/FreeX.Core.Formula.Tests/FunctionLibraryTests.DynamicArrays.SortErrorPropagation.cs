@@ -4,10 +4,10 @@ using FluentAssertions;
 
 namespace FreeX.Core.Formula.Tests;
 
-// R23-error-propagation-2: SORT()/SORTBY() must propagate an error found anywhere in the sort
-// key as the whole function result (an all-or-nothing dynamic array, like FILTER's deciding
-// array a few lines away in the same source file), instead of silently placing the erroring
-// cell at a deterministic type-ordered position via CompareScalar's cross-type fallback.
+// Errors inside a SORT / SORTBY key are ordinary values, not a reason to fail the whole call: measured against
+// Excel 16.0 (build 20625) through COM, SORT({#N/A;1;#DIV/0!;2}) is {1;2;#DIV/0!;#N/A} -- numbers, then text,
+// then logicals, then errors in error-code order (#NULL! < #DIV/0! < #VALUE! < #REF! < #NAME? < #NUM! < #N/A) --
+// and descending order reverses all of it. (An older round pinned "all-or-nothing" propagation; Excel disagrees.)
 public class FunctionLibraryTestsSortErrorPropagation
 {
     private readonly FormulaEvaluator _eval = new();
@@ -21,28 +21,42 @@ public class FunctionLibraryTestsSortErrorPropagation
     }
 
     [Fact]
-    public void Sort_ErrorInSortKeyColumn_PropagatesErrorInsteadOfTypeOrderingIt()
+    public void Sort_ErrorInSortKeyColumn_SortsErrorsLast()
     {
-        // A1:A4 = {3;1;#DIV/0!;2}: default sort_index is column 1, which is also the only
-        // column, so the whole array is the sort key. Real Excel returns #DIV/0! for the
-        // entire SORT result rather than sorting the numbers around the error.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(3)),
             (2, 1, new NumberValue(1)),
             (3, 1, ErrorValue.DivByZero),
             (4, 1, new NumberValue(2)));
 
-        var result = _eval.Evaluate("=SORT(A1:A4)", sheet);
+        var result = _eval.Evaluate("=SORT(A1:A4)", sheet).Should().BeOfType<RangeValue>().Subject;
 
-        result.Should().Be(ErrorValue.DivByZero,
-            "an error anywhere in the sort key must propagate as the whole SORT result");
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[1, 0].Should().Be(new NumberValue(2));
+        result.Cells[2, 0].Should().Be(new NumberValue(3));
+        result.Cells[3, 0].Should().Be(ErrorValue.DivByZero);
     }
 
     [Fact]
-    public void Sort_ErrorInNonKeyColumn_DoesNotPropagate()
+    public void Sort_Descending_PutsErrorsFirstInReverseErrorOrder()
     {
-        // The sort key is column 1 (default); column 2 holds an error but is never used as a
-        // sort key, so it must not affect whether the SORT call as a whole errors.
+        var sheet = MakeSheet(
+            (1, 1, ErrorValue.NA),
+            (2, 1, new NumberValue(1)),
+            (3, 1, ErrorValue.DivByZero),
+            (4, 1, new NumberValue(2)));
+
+        var result = _eval.Evaluate("=SORT(A1:A4,1,-1)", sheet).Should().BeOfType<RangeValue>().Subject;
+
+        result.Cells[0, 0].Should().Be(ErrorValue.NA);
+        result.Cells[1, 0].Should().Be(ErrorValue.DivByZero);
+        result.Cells[2, 0].Should().Be(new NumberValue(2));
+        result.Cells[3, 0].Should().Be(new NumberValue(1));
+    }
+
+    [Fact]
+    public void Sort_ErrorInNonKeyColumn_DoesNotAffectOrdering()
+    {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(3)), (1, 2, ErrorValue.DivByZero),
             (2, 1, new NumberValue(1)), (2, 2, new NumberValue(20)),
@@ -57,47 +71,48 @@ public class FunctionLibraryTestsSortErrorPropagation
     }
 
     [Fact]
-    public void Sort_ErrorInSelectedSortIndexColumn_Propagates()
+    public void Sort_ErrorInSelectedSortIndexColumn_SortsThatRowLast()
     {
-        // sort_index=2 selects column 2 as the key; that column contains an error, so the
-        // result must be that error even though column 1 (unused as a key) is error-free.
         var sheet = MakeSheet(
             (1, 1, new TextValue("A")), (1, 2, new NumberValue(3)),
             (2, 1, new TextValue("B")), (2, 2, ErrorValue.NA),
             (3, 1, new TextValue("C")), (3, 2, new NumberValue(1)));
 
-        var result = _eval.Evaluate("=SORT(A1:B3,2,1)", sheet);
+        var result = _eval.Evaluate("=SORT(A1:B3,2,1)", sheet).Should().BeOfType<RangeValue>().Subject;
 
-        result.Should().Be(ErrorValue.NA,
-            "the sort key column contains an error, so the whole SORT result must be that error");
+        result.Cells[0, 0].Should().Be(new TextValue("C"));
+        result.Cells[1, 0].Should().Be(new TextValue("A"));
+        result.Cells[2, 0].Should().Be(new TextValue("B"));
+        result.Cells[2, 1].Should().Be(ErrorValue.NA);
     }
 
     [Fact]
-    public void Sort_ErrorInSortKeyRow_ColumnOrientation_Propagates()
+    public void Sort_ErrorInSortKeyRow_ColumnOrientation_SortsThatColumnLast()
     {
-        // byCol=TRUE sorts columns using row 1 as the key; row 1 contains an error.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(3)), (1, 2, ErrorValue.Ref), (1, 3, new NumberValue(1)),
             (2, 1, new NumberValue(10)), (2, 2, new NumberValue(20)), (2, 3, new NumberValue(30)));
 
-        var result = _eval.Evaluate("=SORT(A1:C2,1,1,TRUE)", sheet);
+        var result = _eval.Evaluate("=SORT(A1:C2,1,1,TRUE)", sheet).Should().BeOfType<RangeValue>().Subject;
 
-        result.Should().Be(ErrorValue.Ref,
-            "column-oriented SORT with an error in the sort key row must propagate that error");
+        result.Cells[0, 0].Should().Be(new NumberValue(1));
+        result.Cells[0, 1].Should().Be(new NumberValue(3));
+        result.Cells[0, 2].Should().Be(ErrorValue.Ref);
+        result.Cells[1, 2].Should().Be(new NumberValue(20));
     }
 
     [Fact]
-    public void Sortby_ErrorInByArray_Propagates()
+    public void Sortby_ErrorInByArray_SortsThatRowLast()
     {
-        // SORTBY's key array (column B) contains an error; the whole result must be that error.
         var sheet = MakeSheet(
             (1, 1, new TextValue("A")), (1, 2, new NumberValue(3)),
             (2, 1, new TextValue("B")), (2, 2, ErrorValue.DivByZero),
             (3, 1, new TextValue("C")), (3, 2, new NumberValue(1)));
 
-        var result = _eval.Evaluate("=SORTBY(A1:A3,B1:B3)", sheet);
+        var result = _eval.Evaluate("=SORTBY(A1:A3,B1:B3)", sheet).Should().BeOfType<RangeValue>().Subject;
 
-        result.Should().Be(ErrorValue.DivByZero,
-            "an error anywhere in a SORTBY key array must propagate as the whole result");
+        result.Cells[0, 0].Should().Be(new TextValue("C"));
+        result.Cells[1, 0].Should().Be(new TextValue("A"));
+        result.Cells[2, 0].Should().Be(new TextValue("B"));
     }
 }

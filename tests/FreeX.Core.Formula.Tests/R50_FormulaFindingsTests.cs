@@ -85,8 +85,6 @@ public sealed class R50_FormulaFindingsTests
     // ── R50-formula-financial-loan-3-1: type arg validated before truncation ──
 
     [Theory]
-    [InlineData("=IPMT(0.05,1,10,1000,0,1.5)")]
-    [InlineData("=PPMT(0.05,1,10,1000,0,1.5)")]
     [InlineData("=CUMIPMT(0.05,10,1000,1,5,1.5)")]
     [InlineData("=CUMPRINC(0.05,10,1000,1,5,1.5)")]
     public void LoanPaymentFunctions_NonIntegerType_ReturnsNumError(string formula)

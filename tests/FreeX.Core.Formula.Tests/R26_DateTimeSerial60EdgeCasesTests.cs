@@ -118,10 +118,9 @@ public sealed class R26_DateTimeSerial60EdgeCasesTests
     [Fact]
     public void Yearfrac_Basis0_OrdinaryPair_UnaffectedByFix()
     {
-        // Sibling: ordinary (non-1900) last-day-of-February case must keep applying the
-        // existing NASD Feb-end adjustment unchanged.
+        // Sibling: ordinary (non-1900) last-day-of-February case: 31/360 in Excel (measured through COM).
         var result = _eval.Evaluate("=YEARFRAC(DATE(2024,2,29),DATE(2024,3,31),0)", Sheet())
             .Should().BeOfType<NumberValue>().Subject;
-        result.Value.Should().BeApproximately(30.0 / 360.0, 1e-12);
+        result.Value.Should().BeApproximately(31.0 / 360.0, 1e-12);
     }
 }

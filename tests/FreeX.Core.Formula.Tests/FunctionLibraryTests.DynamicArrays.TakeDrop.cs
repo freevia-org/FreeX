@@ -156,13 +156,16 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Drop_ZeroRowsOrColumns_ReturnsCalcError()
+    public void Drop_ZeroRowsOrColumns_ReturnsTheArrayUnchanged()
     {
+        // DROP(array,0) drops nothing (Excel, measured through COM); only TAKE(array,0) is #CALC!.
         var sheet = MakeSheet((1,1,new NumberValue(1)), (1,2,new NumberValue(2)));
 
-        _eval.Evaluate("=DROP(A1:B1,0)", sheet).Should().Be(ErrorValue.Calc);
-        _eval.Evaluate("=DROP(A1:B1,,0)", sheet).Should().Be(ErrorValue.Calc);
-        _eval.Evaluate("=DROP(5,0)", MakeSheet()).Should().Be(ErrorValue.Calc);
+        var rows = _eval.Evaluate("=DROP(A1:B1,0)", sheet).Should().BeOfType<RangeValue>().Subject;
+        rows.ColCount.Should().Be(2);
+        _eval.Evaluate("=DROP(A1:B1,,0)", sheet).Should().BeOfType<RangeValue>();
+        _eval.Evaluate("=DROP(5,0)", MakeSheet()).Should().BeOfType<RangeValue>().Which.Cells[0, 0].Should().Be(new NumberValue(5));
+        _eval.Evaluate("=TAKE(A1:B1,0)", sheet).Should().Be(ErrorValue.Calc);
     }
 
     [Fact]

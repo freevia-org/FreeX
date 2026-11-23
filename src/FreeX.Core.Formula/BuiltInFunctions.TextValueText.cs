@@ -15,7 +15,15 @@ public static partial class BuiltInFunctions
             return TextResult(ValueText(singleCellRange.Cells[0, 0], format == 1));
 
         if (args[0] is RangeValue range)
-            return TextResult(format == 1 ? StrictArrayText(range) : ConciseArrayText(range));
+        {
+            // VALUETOTEXT works cell by cell over a range (Excel returns an array of texts, ARRAYTOTEXT is the
+            // one that joins them).
+            var cells = new ScalarValue[range.RowCount, range.ColCount];
+            for (int r = 0; r < range.RowCount; r++)
+                for (int c = 0; c < range.ColCount; c++)
+                    cells[r, c] = TextResult(ValueText(range.Cells[r, c], format == 1));
+            return new RangeValue(cells);
+        }
 
         return TextResult(ValueText(args[0], format == 1));
     }
@@ -25,6 +33,7 @@ public static partial class BuiltInFunctions
         if (!TryGetValueTextFormat(args, out int format, out var error))
             return error;
 
+        if (args[0] is ErrorValue scalarError) return scalarError;
         var range = args[0] as RangeValue ?? new RangeValue(new ScalarValue[1, 1] { { args[0] } });
         return TextResult(format == 1 ? StrictArrayText(range) : ConciseArrayText(range));
     }

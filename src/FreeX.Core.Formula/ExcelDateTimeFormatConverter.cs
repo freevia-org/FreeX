@@ -117,7 +117,10 @@ internal static class ExcelDateTimeFormatConverter
             }
         }
 
-        return sb.ToString();
+        // A one-character custom pattern is read by .NET as a STANDARD format ("d" short date, "m" month-day,
+        // "y" year-month, "s" sortable ...): the %-prefix forces custom-pattern interpretation so TEXT(date,"d") is
+        // the day number.
+        return sb.Length == 1 ? "%" + sb : sb.ToString();
     }
 
     private static bool TryConsumeFractionalSeconds(

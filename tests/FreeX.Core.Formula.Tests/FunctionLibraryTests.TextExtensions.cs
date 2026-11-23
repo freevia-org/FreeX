@@ -75,10 +75,10 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        // Excel REPLACE counts UTF-16 code units; 😀 is a surrogate pair (😀).
-        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Q\uDE00x"));
-        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQ\uDE00y"));
-        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("\uD83DQ\uDE00x"));
+        // REPLACE counts code points (measured against Excel through COM); the emoji is replaced as a whole.
+        _eval.Evaluate("=REPLACE(\"😀x\",1,1,\"Q\")", sheet).Should().Be(new TextValue("Qx"));
+        _eval.Evaluate("=REPLACE(\"x😀y\",2,1,\"Q\")", sheet).Should().Be(new TextValue("xQy"));
+        _eval.Evaluate("=REPLACE(\"😀x\",2,0,\"Q\")", sheet).Should().Be(new TextValue("😀Qx"));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        // Q12 regression: REPLACE("😀",1,2,"Q") replaces the full emoji (2 code units) with Q.
+        // REPLACE("😀",1,2,"Q") replaces the full emoji (and more than is there) with Q.
         _eval.Evaluate("=REPLACE(\"😀\",1,2,\"Q\")", sheet).Should().Be(new TextValue("Q"));
         // BMP-only text unchanged.
         _eval.Evaluate("=REPLACE(\"abcd\",2,2,\"XY\")", sheet).Should().Be(new TextValue("aXYd"));
@@ -128,10 +128,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Replace_StartNumPastAppendBoundary_ReturnsValueError()
+    public void Replace_StartNumPastAppendBoundary_Appends()
     {
         var sheet = MakeSheet();
-        _eval.Evaluate("=REPLACE(\"abc\",5,0,\"x\")", sheet).Should().Be(ErrorValue.Value);
+        // REPLACE appends when start_num is past the end (REPLACE("abcdef",8,1,"X") is "abcdefX" in Excel).
+        _eval.Evaluate("=REPLACE(\"abc\",5,0,\"x\")", sheet).Should().Be(new TextValue("abcx"));
         _eval.Evaluate("=REPLACEB(\"A\u754cB\",6,0,\"x\")", sheet).Should().Be(ErrorValue.Value);
     }
 
@@ -783,8 +784,14 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=UNICHAR(1114112)", MakeSheet()).Should().Be(ErrorValue.Value);
 
     [Fact]
-    public void Unichar_Surrogate_ReturnsValueError() =>
-        _eval.Evaluate("=UNICHAR(55296)", MakeSheet()).Should().Be(ErrorValue.Value);
+    public void Unichar_SurrogateAndNoncharacters_ReturnNaError()
+    {
+        // Measured against Excel through COM: surrogate halves and the U+xxFFFE/U+xxFFFF noncharacters are #N/A.
+        _eval.Evaluate("=UNICHAR(55296)", MakeSheet()).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=UNICHAR(65535)", MakeSheet()).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=UNICHAR(1114111)", MakeSheet()).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=UNICODE(UNICHAR(55357))", MakeSheet()).Should().Be(ErrorValue.NA);
+    }
 
     [Fact]
     public void Unicode_BasicAscii_ReturnsCodePoint() =>

@@ -93,9 +93,10 @@ public static partial class BuiltInFunctions
 
         if (returnMode == 1)
         {
-            var cells = new ScalarValue[matches.Count, 1];
+            // All matches come back as a ROW (Excel spills REGEXEXTRACT(...,1) horizontally).
+            var cells = new ScalarValue[1, matches.Count];
             for (int i = 0; i < matches.Count; i++)
-                cells[i, 0] = TextResult(matches[i].Value);
+                cells[0, i] = TextResult(matches[i].Value);
 
             return new RangeValue(cells);
         }
@@ -104,11 +105,11 @@ public static partial class BuiltInFunctions
         {
             var first = matches[0];
             if (first.Groups.Count <= 1)
-                return ErrorValue.NA;
+                return ErrorValue.Value;
 
             var cells = new ScalarValue[1, first.Groups.Count - 1];
             for (int i = 1; i < first.Groups.Count; i++)
-                cells[0, i - 1] = first.Groups[i].Success ? TextResult(first.Groups[i].Value) : new TextValue("");
+                cells[0, i - 1] = first.Groups[i].Success ? TextResult(first.Groups[i].Value) : ErrorValue.NA;
 
             return new RangeValue(cells);
         }

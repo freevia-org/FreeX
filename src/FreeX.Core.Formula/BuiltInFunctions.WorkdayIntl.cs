@@ -25,7 +25,6 @@ public static partial class BuiltInFunctions
             var pattern = ToText(value);
             if (pattern.Length != 7) return (null, ErrorValue.Value);
             if (pattern.Any(c => c is not '0' and not '1')) return (null, ErrorValue.Value);
-            if (pattern.All(c => c == '1')) return (null, ErrorValue.Value); // all-weekend not allowed
             for (int i = 0; i < 7; i++) mask[i] = pattern[i] == '1';
             return (mask, null);
         }
@@ -123,7 +122,10 @@ public static partial class BuiltInFunctions
         double rawDays = ToNumber(daysValue);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
-        int days = (int)rawDays;
+        int days = (int)Math.Floor(rawDays);
+        // Every day a weekend ("1111111"): NETWORKDAYS.INTL is 0 and WORKDAY.INTL with 0 days is the start date, but
+        // a non-zero day count can never be satisfied (#VALUE!).
+        if (days != 0 && mask.All(m => m)) return ErrorValue.Value;
 
         int sign = days < 0 ? -1 : 1;
         int remaining = Math.Abs(days);

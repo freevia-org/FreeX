@@ -58,15 +58,13 @@ public sealed class RegexFunctionsRe2CompatAndArrayGuardTests
     }
 
     [Fact]
-    public void RegexExtract_SingleCellLiteralWithAllMatchesMode_StillSpillsAsColumn()
+    public void RegexExtract_SingleCellLiteralWithAllMatchesMode_StillSpills()
     {
-        // Pre-existing, already-covered sibling case (scalar text argument, not a range) must be
-        // unaffected by the new multi-cell guard.
-        AssertColumn(
-            _eval.Evaluate("=REGEXEXTRACT(\"A1 B22 C333\",\"[0-9]+\",1)", Sheet()),
-            new TextValue("1"),
-            new TextValue("22"),
-            new TextValue("333"));
+        // Scalar text argument (not a range) must be unaffected by the multi-cell guard; the matches spill as a row.
+        var result = _eval.Evaluate("=REGEXEXTRACT(\"A1 B22 C333\",\"[0-9]+\",1)", Sheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(3);
     }
 
     [Fact]

@@ -35,7 +35,7 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=TEXTBEFORE(\"Socrates\",\" \",,,1)", "Socrates")]
     [InlineData("=TEXTBEFORE(\"abc\",\"\",1)", "")]
     [InlineData("=TEXTBEFORE(\"abc\",\"\",-1)", "abc")]
-    [InlineData("=TEXTBEFORE(\"\",\"x\")", "")]
+    [InlineData("=TEXTBEFORE(\"x\",\"x\")", "")]
     [InlineData("=TEXTBEFORE(\"\",\"\",-1)", "")]
     [InlineData("=TEXTAFTER(\"Little Red Riding Hood's red hood\",\"Red\")", " Riding Hood's red hood")]
     [InlineData("=TEXTAFTER(\"Little red Riding Hood's red hood\",\"red\",2)", " hood")]
@@ -43,7 +43,7 @@ public sealed class ExcelParityModernTextTests
     [InlineData("=TEXTAFTER(\"Marcus Aurelius\",\" \",,,1)", "Aurelius")]
     [InlineData("=TEXTAFTER(\"abc\",\"\",1)", "abc")]
     [InlineData("=TEXTAFTER(\"abc\",\"\",-1)", "")]
-    [InlineData("=TEXTAFTER(\"\",\"x\")", "")]
+    [InlineData("=TEXTAFTER(\"x\",\"x\")", "")]
     [InlineData("=TEXTAFTER(\"\",\"\",1)", "")]
     public void TextBeforeAfter_ReturnDocumentedExcelResults(string formula, string expected)
     {
@@ -380,10 +380,17 @@ public sealed class ExcelParityModernTextTests
     public void ValueToText_FormatsErrorsAndArrayValues()
     {
         _eval.Evaluate("=VALUETOTEXT(NA(),0)", Sheet()).Should().Be(new TextValue("#N/A"));
-        _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},0)", Sheet())
+        // VALUETOTEXT works per element over an array (Excel, measured through COM); ARRAYTOTEXT joins.
+        var elementwise = _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},0)", Sheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        elementwise.At(1, 1).Should().Be(new TextValue("TRUE"));
+        elementwise.At(1, 2).Should().Be(new TextValue("#VALUE!"));
+        elementwise.At(2, 2).Should().Be(new TextValue("Seattle"));
+        _eval.Evaluate("=ARRAYTOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},0)", Sheet())
             .Should().Be(new TextValue("TRUE, #VALUE!, 1234, Seattle"));
-        _eval.Evaluate("=VALUETOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},1)", Sheet())
+        _eval.Evaluate("=ARRAYTOTEXT({TRUE,#VALUE!;1234,\"Seattle\"},1)", Sheet())
             .Should().Be(new TextValue("{TRUE,#VALUE!;1234,\"Seattle\"}"));
+        _eval.Evaluate("=ARRAYTOTEXT(NA())", Sheet()).Should().Be(ErrorValue.NA);
     }
 
     [Fact]
@@ -443,13 +450,16 @@ public sealed class ExcelParityModernTextTests
     }
 
     [Fact]
-    public void RegexExtract_ReturnsAllMatchesAsColumn()
+    public void RegexExtract_ReturnsAllMatchesAsRow()
     {
-        AssertColumn(
-            _eval.Evaluate("=REGEXEXTRACT(\"A1 B22 C333\",\"[0-9]+\",1)", Sheet()),
-            new TextValue("1"),
-            new TextValue("22"),
-            new TextValue("333"));
+        // return_mode 1 spills horizontally in Excel (measured through COM).
+        var result = _eval.Evaluate("=REGEXEXTRACT(\"A1 B22 C333\",\"[0-9]+\",1)", Sheet())
+            .Should().BeOfType<RangeValue>().Subject;
+        result.RowCount.Should().Be(1);
+        result.ColCount.Should().Be(3);
+        result.At(1, 1).Should().Be(new TextValue("1"));
+        result.At(1, 2).Should().Be(new TextValue("22"));
+        result.At(1, 3).Should().Be(new TextValue("333"));
     }
 
     [Fact]
@@ -468,7 +478,8 @@ public sealed class ExcelParityModernTextTests
     public void RegexExtract_ReturnsNaWhenNoMatchOrNoCaptureGroup()
     {
         _eval.Evaluate("=REGEXEXTRACT(\"abc\",\"[0-9]+\")", Sheet()).Should().Be(ErrorValue.NA);
-        _eval.Evaluate("=REGEXEXTRACT(\"abc\",\"[a-z]+\",2)", Sheet()).Should().Be(ErrorValue.NA);
+        // A pattern without capture groups under return_mode 2 is #VALUE! in Excel (not #N/A).
+        _eval.Evaluate("=REGEXEXTRACT(\"abc\",\"[a-z]+\",2)", Sheet()).Should().Be(ErrorValue.Value);
     }
 
     [Theory]
