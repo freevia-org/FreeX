@@ -79,6 +79,29 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
     });
 
     [Fact]
+    public Task StartupOffer_WithoutQuotedDisplayName_UsesTheUnquotedStartupWording() => OnUiThread(async owner =>
+    {
+        var candidate = CreateCandidate("unquoted", "Alpha");
+        var prompts = new List<string>();
+        var host = NewHost(
+            hasExplicitDocument: false,
+            restore: AutosaveRecoveryRestore<HostTestDocument>.FromDocument((_, _) => { }),
+            promptOverride: message =>
+            {
+                prompts.Add(message);
+                return true;
+            },
+            quoteStartupDisplayName: false);
+
+        (await host.OfferRecoveryAsync(owner)).Should().BeTrue();
+
+        prompts.Should().Equal(Recovery.CreateOffer(
+            new AutosaveRecoveryPlan(candidate, "Alpha"),
+            1,
+            AutosaveRecoveryPromptMode.Startup).Prompt);
+    });
+
+    [Fact]
     public Task StartupOffer_WindowWithExplicitDocument_NeverRestoresIntoTheCurrentWindow() => OnUiThread(async owner =>
     {
         CreateCandidate("explicit", "Alpha");
@@ -263,7 +286,8 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
         Func<string, bool?>? promptOverride = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
         Func<Task<bool>>? confirmDiscardOrSaveAsync = null,
-        Action<AutosaveApplicationSession<HostTestDocument>>? onSessionCreated = null)
+        Action<AutosaveApplicationSession<HostTestDocument>>? onSessionCreated = null,
+        bool quoteStartupDisplayName = true)
     {
         var ports = new AutosaveDocumentPorts<HostTestDocument>(
             GetOriginalFilePath: () => null,
@@ -287,7 +311,8 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
                 var session = new AutosaveApplicationSession<HostTestDocument>(Profile, sessionPorts, _store);
                 onSessionCreated?.Invoke(session);
                 return session;
-            });
+            },
+            quoteStartupDisplayName: quoteStartupDisplayName);
         _hosts.Add(host);
         return host;
     }
