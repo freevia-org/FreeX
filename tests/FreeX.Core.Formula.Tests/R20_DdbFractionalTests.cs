@@ -24,12 +24,12 @@ public class R20_financial_ddb_Tests
     public void Ddb_WithFractionalPeriodBetweenZeroAndOne_ReturnsProRatedFirstPeriodDepreciation()
     {
         // DDB(cost=2400, salvage=300, life=10, period=0.1, factor=2)
-        // Excel prorates the first full-period depreciation (cost*factor/life = 480)
-        // by the fractional period (0.1), giving 48 — not 0.
+        // Measured against Excel 16.0 (en-US): a period below 1 is the whole first-period amount
+        // (cost*factor/life = 480), not a pro-rated slice and not 0.
         var result = Eval("DDB(2400,300,10,0.1,2)");
 
         var number = result.Should().BeOfType<NumberValue>().Subject;
-        number.Value.Should().BeApproximately(48.0, 1e-9);
+        number.Value.Should().BeApproximately(480.0, 1e-9);
         number.Value.Should().BeGreaterThan(0);
     }
 
@@ -49,12 +49,12 @@ public class R20_financial_ddb_Tests
     [Fact]
     public void Ddb_WithFractionalPeriodGreaterThanOne_ProratesTheTrailingFraction()
     {
-        // Period 2.5: full period 1 depreciation = 480 (bookValue -> 1920),
-        // full period 2 depreciation = 384 (bookValue -> 1536),
-        // then the fractional 0.5 slice of period 3's rate: 1536*2/10*0.5 = 153.6.
+        // Measured against Excel 16.0 (en-US): a fractional period follows the continuous curve
+        // D(p) - D(p-1) with D(x) = cost * (1 - (1 - factor/life)^x), i.e.
+        // 2400 * (0.8^1.5 - 0.8^2.5) = 343.46.
         var result = Eval("DDB(2400,300,10,2.5,2)");
 
         var number = result.Should().BeOfType<NumberValue>().Subject;
-        number.Value.Should().BeApproximately(153.6, 1e-9);
+        number.Value.Should().BeApproximately(343.460041344, 1e-8);
     }
 }

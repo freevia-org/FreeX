@@ -25,9 +25,13 @@ public static partial class BuiltInFunctions
     {
         DateTime pcd = CouponDateBefore(settlement, maturity, frequency);
         DateTime ncd = CouponDateAfter(settlement, maturity, frequency);
-        double daysInPeriod = CouponPeriodDayCount(pcd, ncd, frequency, basis);
-        double daysToNext = CouponDayCount(settlement, ncd, basis);
-        double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
+        // Excel's PRICE/YIELD: E (days in the coupon period), A (days since the previous coupon) and
+        // DSC = E - A for every basis (measured against Excel; for the 30/360 bases this is exactly the
+        // convention, for the actual bases it differs from ncd - settlement only around month ends).
+        double daysInPeriod = ExcelCouponPeriodDays(pcd, frequency, basis);
+        double daysSincePrevious = ExcelCouponDaysSincePrevious(pcd, settlement, basis);
+        double a = daysInPeriod > 0 ? (daysInPeriod - daysSincePrevious) / daysInPeriod : 1.0;
+        double accrued = daysInPeriod > 0 ? daysSincePrevious / daysInPeriod : 0.0;
 
         // Count coupons from the first post-settlement coupon date (ncd) through maturity.
         // Derive every schedule candidate as an offset from the ORIGINAL maturity
@@ -56,13 +60,16 @@ public static partial class BuiltInFunctions
 
         double c = couponRate / frequency * redemption;
         double y = yld / frequency;
+        // A single remaining coupon uses simple interest over the stub (Excel's N = 1 formula).
+        if (n == 1)
+            return (redemption + c) / (1 + a * y) - c * accrued;
         double price = 0;
         for (int k = 1; k <= n; k++)
             price += c / Math.Pow(1 + y, k - 1 + a);
         price += redemption / Math.Pow(1 + y, n - 1 + a);
         // PRICE/YIELD quote the clean price: subtract accrued interest for the partial
         // first period so the dirty (full) price above is converted to Excel's clean price.
-        price -= c * (1 - a);
+        price -= c * accrued;
         return price;
     }
 
@@ -312,9 +319,9 @@ public static partial class BuiltInFunctions
         // Build coupon schedule
         DateTime pcd = CouponDateBefore(sd, md, frequency);
         DateTime ncd = CouponDateAfter(sd, md, frequency);
-        double daysInPeriod = CouponPeriodDayCount(pcd, ncd, frequency, basis);
-        double daysToNext = CouponDayCount(sd, ncd, basis);
-        double a = daysInPeriod > 0 ? daysToNext / daysInPeriod : 1.0;
+        double daysInPeriod = ExcelCouponPeriodDays(pcd, frequency, basis);
+        double daysSincePrevious = ExcelCouponDaysSincePrevious(pcd, sd, basis);
+        double a = daysInPeriod > 0 ? (daysInPeriod - daysSincePrevious) / daysInPeriod : 1.0;
 
         int months = 12 / frequency;
         // Anchor each schedule candidate off the ORIGINAL maturity (md.AddMonths(-count*months)),

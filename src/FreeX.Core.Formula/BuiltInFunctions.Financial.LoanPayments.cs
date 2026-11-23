@@ -54,12 +54,15 @@ public static partial class BuiltInFunctions
         if (pvValue is ErrorValue pvError) return pvError;
 
         double rate = ToNumber(rateValue);
-        double per = Math.Truncate(ToNumber(periodValue));
+        // Measured against Excel: ISPMT is the plain formula pv * rate * (per / nper - 1) -- the period is
+        // neither truncated nor range-checked (ISPMT(0.05,6,5,10000) is 100, a negative period is allowed)
+        // and only a zero nper is an error (#DIV/0!).
+        double per = ToNumber(periodValue);
         double nper = ToNumber(nperValue);
         double pv = ToNumber(pvValue);
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) || !double.IsFinite(pv))
             return ErrorValue.Num;
-        if (nper <= 0 || per < 0 || per > nper) return ErrorValue.Num;
+        if (nper == 0) return ErrorValue.DivByZero;
 
         return NumberResult(-pv * rate * (nper - per) / nper);
     }
@@ -93,9 +96,9 @@ public static partial class BuiltInFunctions
         // only CUMIPMT/CUMPRINC insist on exactly 0 or 1.
         int itype = type != 0 ? 1 : 0; // any non-zero type means start-of-period (Excel)
         if (nper <= 0) return ErrorValue.Num;
-        int iper = (int)Math.Truncate(per);
-        if (iper < 1 || iper > (int)Math.Truncate(nper)) return ErrorValue.Num;
-        return NumberResult(CalcIpmt(rate, iper, nper, pv, fv, itype));
+        // Measured against Excel: a fractional period is NOT truncated (IPMT(0.05,1.5,5,10000) is -455.308).
+        if (per < 1 || per > nper) return ErrorValue.Num;
+        return NumberResult(CalcIpmt(rate, per, nper, pv, fv, itype));
     }
 
     private static ScalarValue Ppmt(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -126,10 +129,9 @@ public static partial class BuiltInFunctions
         // See IpmtScalar: any non-zero type means start-of-period.
         int itype = type != 0 ? 1 : 0;
         if (nper <= 0) return ErrorValue.Num;
-        int iper = (int)Math.Truncate(per);
-        if (iper < 1 || iper > (int)Math.Truncate(nper)) return ErrorValue.Num;
+        if (per < 1 || per > nper) return ErrorValue.Num;
         double pmt  = CalcPmt(rate, nper, pv, fv, itype);
-        double ipmt = CalcIpmt(rate, iper, nper, pv, fv, itype);
+        double ipmt = CalcIpmt(rate, per, nper, pv, fv, itype);
         return NumberResult(pmt - ipmt);
     }
 
@@ -175,6 +177,7 @@ public static partial class BuiltInFunctions
         if (startValue is ErrorValue startError) return startError;
         if (endValue is ErrorValue endError) return endError;
         if (typeValue is ErrorValue typeError) return typeError;
+        if (typeValue is BoolValue) return ErrorValue.Value; // measured: a boolean type is #VALUE!, not 1
         return CumipmtScalar(ToNumber(rateValue), ToNumber(nperValue), ToNumber(pvValue), startValue, ToNumber(endValue), ToNumber(typeValue));
     }
 
@@ -188,7 +191,10 @@ public static partial class BuiltInFunctions
         if (type != 0 && type != 1) return ErrorValue.Num;
         int itype  = (int)type;
         if (rate <= 0 || nper <= 0 || pv <= 0) return ErrorValue.Num;
-        int is_ = (int)Math.Truncate(start), ie = (int)Math.Truncate(end);
+        // Measured against Excel: a fractional start_period rounds UP and a fractional end_period down
+        // (CUMIPMT(...,1.5,12.5,0) sums periods 2..12).
+        if (start < 1) return ErrorValue.Num;
+        int is_ = (int)Math.Ceiling(start), ie = (int)Math.Truncate(end);
         if (is_ < 1 || ie < is_ || ie > (int)Math.Truncate(nper)) return ErrorValue.Num;
         // Closed form: IPMT(per) + PPMT(per) = pmt for every period by construction, so the
         // cumulative interest over [is_, ie] is just the total payments over the span minus the
@@ -214,6 +220,7 @@ public static partial class BuiltInFunctions
         if (startValue is ErrorValue startError) return startError;
         if (endValue is ErrorValue endError) return endError;
         if (typeValue is ErrorValue typeError) return typeError;
+        if (typeValue is BoolValue) return ErrorValue.Value;
         return CumprincScalar(ToNumber(rateValue), ToNumber(nperValue), ToNumber(pvValue), startValue, ToNumber(endValue), ToNumber(typeValue));
     }
 
@@ -227,7 +234,10 @@ public static partial class BuiltInFunctions
         if (type != 0 && type != 1) return ErrorValue.Num;
         int itype = (int)type;
         if (rate <= 0 || nper <= 0 || pv <= 0) return ErrorValue.Num;
-        int is_ = (int)Math.Truncate(start), ie = (int)Math.Truncate(end);
+        // Measured against Excel: a fractional start_period rounds UP and a fractional end_period down
+        // (CUMIPMT(...,1.5,12.5,0) sums periods 2..12).
+        if (start < 1) return ErrorValue.Num;
+        int is_ = (int)Math.Ceiling(start), ie = (int)Math.Truncate(end);
         if (is_ < 1 || ie < is_ || ie > (int)Math.Truncate(nper)) return ErrorValue.Num;
         // Closed form via CumulativeBalance (see its doc comment) -- avoids an O(nper) loop that
         // would hang for a bounds-valid-but-huge nper.

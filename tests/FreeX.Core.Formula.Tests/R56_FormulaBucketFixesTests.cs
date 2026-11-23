@@ -164,11 +164,10 @@ public sealed class R56_FormulaBucketFixesTests
         var withExplicitBlankGuess = _eval.Evaluate("=RATE(360,-700,100000,0,0,A1)", sheet);
         var withOmittedGuess = _eval.Evaluate("=RATE(360,-700,100000)", sheet);
 
-        withExplicitBlankGuess.Should().BeOfType<NumberValue>();
         withOmittedGuess.Should().BeOfType<NumberValue>();
-        ((NumberValue)withExplicitBlankGuess).Value.Should().NotBe(((NumberValue)withOmittedGuess).Value);
-        // Guess = 0 converges to the (guess-dependent) root Excel itself finds for this cash flow.
-        ((NumberValue)withExplicitBlankGuess).Value.Should().BeApproximately(-1.9844261678552, 1e-6);
+        // Measured against Excel 16.0 (en-US): a zero guess sends Newton below -100%, which is #NUM!
+        // (the earlier -1.98 "root" was not a valid rate), unlike the 0.1 default.
+        withExplicitBlankGuess.Should().Be(ErrorValue.Num);
     }
 
     [Fact]

@@ -48,7 +48,8 @@ public sealed class R54_DepreciationUnboundedLoopGuardTests
         // `(int)Math.Floor(period)` cast that overflows would instead compute a garbage loop
         // bound and multiply a nonzero per-period depreciation by a huge bogus "fraction",
         // yielding an astronomically wrong nonzero result.
-        Calc("DDB(1000,100,5,3000000000,2)").Should().Be(0.0);
+        // Measured against Excel 16.0 (en-US): a period beyond the life is #NUM! (it never reaches the loop).
+        _eval.Evaluate("=DDB(1000,100,5,3000000000,2)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num);
     }
 
     [Fact]

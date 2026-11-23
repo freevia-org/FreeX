@@ -95,7 +95,7 @@ public static partial class BuiltInFunctions
         double issue = ToNumber(issueValue);
         double firstInterest = ToNumber(firstInterestValue);
         double settlement = ToNumber(settlementValue);
-        double par = ToNumber(parValue);
+        double par = parValue is BlankValue ? 1000.0 : ToNumber(parValue); // an omitted par defaults to 1000
         double frequency = ToNumber(frequencyValue);
         double rate = ToNumber(rateValue);
         if (!double.IsFinite(issue) || !double.IsFinite(firstInterest) || !double.IsFinite(settlement) ||
@@ -111,10 +111,12 @@ public static partial class BuiltInFunctions
             !TryGetFinancialDate(firstInterest, out DateTime fi) ||
             !TryGetFinancialDate(settlement, out DateTime sett)) return ErrorValue.Num;
         if (sd >= sett || fi < sd) return ErrorValue.Num;
-        // calc_method (default TRUE) accrues from the issue date; FALSE accrues from first_interest when it
-        // precedes settlement (Excel ACCRINT semantics). Previously calc_method/first_interest were ignored.
+        // calc_method (default TRUE) accrues from the issue date. Measured against Excel, FALSE does NOT
+        // start at first_interest as documented: it accrues from the coupon date one period BEFORE
+        // first_interest (first_interest minus 12/frequency months), whether settlement is before or after it
+        // (a settlement ahead of that date gives a negative amount); it never starts before issue.
         bool calcMethod = calcMethodValue is BlankValue || ToBool(calcMethodValue);
-        DateTime accrualStart = !calcMethod && sett > fi ? fi : sd;
+        DateTime accrualStart = calcMethod ? sd : Max(sd, fi.AddMonths(-12 / freq));
         // Basis 1 (Actual/Actual) must accrue over the bond's own quasi-coupon periods (Excel's documented
         // ACCRINT = par*(rate/frequency)*Sum(Ai/NLi)), not a single calendar-year-split fraction over the
         // whole span -- a leap day inside the span otherwise throws off an accrual that should land on an
@@ -185,4 +187,5 @@ public static partial class BuiltInFunctions
         double dcf = DayCountFraction(issueDate, settlementDate, basis);
         return NumberResult(par * rate * dcf);
     }
+    private static DateTime Max(DateTime a, DateTime b) => a >= b ? a : b;
 }

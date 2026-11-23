@@ -9,6 +9,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue Effect(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
+        if (args[1] is BoolValue) return ErrorValue.Value; // measured: EFFECT(0.05,TRUE) is #VALUE!
         return MapBinaryMathArgs(args[0], args[1], EffectScalar);
     }
 

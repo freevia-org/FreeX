@@ -106,7 +106,9 @@ public sealed class R28_AccrintFrequencyAndActualActualTests
         //   From issue (the pre-R21-fix bug): 30/360 days(2020-01-01,2021-01-01) = 360 -> dcf=1 -> 60.
         double accrued = Calc("ACCRINT(DATE(2020,1,1),DATE(2020,7,1),DATE(2021,1,1),0.06,1000,2,0,FALSE)");
 
-        accrued.Should().BeApproximately(30.0, 1e-9);
-        accrued.Should().NotBeApproximately(60.0, 1e-9);
+        // Measured against Excel 16.0 (en-US): FALSE accrues from the coupon date one period BEFORE
+        // first_interest (here 2020-01-01, never earlier than issue), not from first_interest itself, so the
+        // documented 30 is really 60 -- see ExcelParityRound8FinancialTests for the cases where the two differ.
+        accrued.Should().BeApproximately(60.0, 1e-9);
     }
 }

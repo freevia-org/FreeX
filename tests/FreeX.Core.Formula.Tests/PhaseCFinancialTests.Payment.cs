@@ -26,9 +26,10 @@ public partial class PhaseCFinancialTests
     [Fact]
     public void Ispmt_InvalidPeriodOrNper_ReturnsNumError()
     {
-        CalcError("ISPMT(10%,-1,3,8000000)").Should().Be("#NUM!");
-        CalcError("ISPMT(10%,4,3,8000000)").Should().Be("#NUM!");
-        CalcError("ISPMT(10%,1,0,8000000)").Should().Be("#NUM!");
+        // Measured against Excel 16.0 (en-US): ISPMT does not range-check the period, only a zero nper fails.
+        Calc("ISPMT(10%,-1,3,8000000)").Should().BeApproximately(-1066666.66667, 1e-4);
+        Calc("ISPMT(10%,4,3,8000000)").Should().BeApproximately(266666.666667, 1e-4);
+        CalcError("ISPMT(10%,1,0,8000000)").Should().Be("#DIV/0!");
     }
 
     [Fact]

@@ -56,8 +56,8 @@ public partial class PhaseCFinancialTests
     }
 
     [Fact]
-    public void Db_InvalidCost_ReturnsNumError()
-        => CalcError("DB(0,100,6,1)").Should().Be("#NUM!");
+    public void Db_ZeroCost_ReturnsZero()
+        => Calc("DB(0,100,6,1)").Should().Be(0); // measured against Excel 16.0 (en-US)
 
     // ── VDB ───────────────────────────────────────────────────────────────
 

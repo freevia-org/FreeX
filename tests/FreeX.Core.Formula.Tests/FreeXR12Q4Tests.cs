@@ -44,8 +44,9 @@ public sealed class FreeXR12Q4Tests
     [Fact]
     public void Coupdaybs_DefaultBasisUses30360DayCount()
     {
-        // 30/360 US from pcd 2020-02-29 to settlement 2020-03-31 = 30 + (31-29) = 32.
-        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(32.0);
+        // Measured against Excel 16.0 (en-US): pcd 2020-02-29 (a last-day-of-February start counts as day 30,
+        // but the end day 31 is only reduced when the ORIGINAL start day was 30/31) to settlement 2020-03-31 = 31.
+        Number("COUPDAYBS(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(31.0);
     }
 
     [Fact]
@@ -67,8 +68,9 @@ public sealed class FreeXR12Q4Tests
     public void Coupdaysnc_DefaultBasisUses30360DayCount()
     {
         // Next coupon after 2020-03-31 (freq=2, month-end maturity 2025-08-31) is 2020-08-31.
-        // 30/360 US from settlement 2020-03-31 to ncd 2020-08-31 = (8-3)*30 = 150.
-        Number("COUPDAYSNC(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(150.0);
+        // Measured against Excel 16.0 (en-US): under 30/360 US, Excel reports E - A = 180 - 31 = 149
+        // rather than counting settlement to ncd directly (150).
+        Number("COUPDAYSNC(DATE(2020,3,31),DATE(2025,8,31),2)").Should().Be(149.0);
     }
 
     [Fact]

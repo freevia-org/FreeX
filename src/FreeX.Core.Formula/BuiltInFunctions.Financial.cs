@@ -101,6 +101,45 @@ public static partial class BuiltInFunctions
     }
 
     /// <summary>
+    /// The 30/360 US count Excel's coupon functions use (measured against Excel over a month-end grid, 513 of
+    /// 513 cases): a last-day-of-February start counts as day 30, the end day 31 only drops to 30 when the
+    /// ORIGINAL start day was 30 or 31 (so Feb-29 to Mar-31 is 31 days, not 30), and two last-day-of-February
+    /// dates are zero days apart.
+    /// </summary>
+    private static double Days30360UsCoupon(DateTime d1, DateTime d2)
+    {
+        int y1 = d1.Year, m1 = d1.Month, a = d1.Day;
+        int y2 = d2.Year, m2 = d2.Month, b = d2.Day;
+        bool d1LastFeb = m1 == 2 && a == DateTime.DaysInMonth(y1, 2);
+        bool d2LastFeb = m2 == 2 && b == DateTime.DaysInMonth(y2, 2);
+        if (d1LastFeb && d2LastFeb) b = 30;
+        if (b == 31 && a >= 30) b = 30;
+        if (a == 31) a = 30;
+        else if (d1LastFeb) a = 30;
+        return (y2 - y1) * 360 + (m2 - m1) * 30 + (b - a);
+    }
+
+    /// <summary>
+    /// Days in the coupon period E that Excel's bond functions use: the actual length of the period
+    /// starting at <paramref name="pcd"/> (pcd plus 12/frequency months, day clamped) for basis 1, a fixed
+    /// 365/frequency for basis 3 and 360/frequency otherwise.
+    /// </summary>
+    private static double ExcelCouponPeriodDays(DateTime pcd, int frequency, int basis)
+    {
+        if (basis == 1) return (pcd.AddMonths(12 / frequency) - pcd).TotalDays;
+        if (basis == 3) return 365.0 / frequency;
+        return 360.0 / frequency;
+    }
+
+    /// <summary>Days from the previous coupon date to settlement (A in Excel's PRICE/DURATION formulas).</summary>
+    private static double ExcelCouponDaysSincePrevious(DateTime pcd, DateTime settlement, int basis) => basis switch
+    {
+        0 => Days30360UsCoupon(pcd, settlement),
+        4 => Days30360European(pcd, settlement),
+        _ => (settlement - pcd).TotalDays,
+    };
+
+    /// <summary>
     /// Day count between two dates per the coupon-day-count-basis rules used by
     /// COUPDAYBS/COUPDAYSNC (30/360 for bases 0 and 4, actual calendar days otherwise).
     /// </summary>

@@ -94,8 +94,9 @@ public sealed class R20_financial_daycount_Tests
         double priceBasis0 = Calc("PRICE(DATE(2023,4,1),DATE(2023,7,1),0.05,0.06,100,2,0)");
         double priceBasis1 = Calc("PRICE(DATE(2023,4,1),DATE(2023,7,1),0.05,0.06,100,2,1)");
 
-        priceBasis0.Should().BeApproximately(99.74625101184004, 1e-9);
-        priceBasis1.Should().BeApproximately(99.7449106628569, 1e-9);
+        // Measured against Excel 16.0 (en-US).
+        priceBasis0.Should().BeApproximately(99.7352216749, 1e-9);
+        priceBasis1.Should().BeApproximately(99.7338831633, 1e-9);
         priceBasis0.Should().NotBe(priceBasis1);
     }
 
@@ -110,6 +111,9 @@ public sealed class R20_financial_daycount_Tests
         double durationBasis0 = Calc("DURATION(DATE(2023,4,1),DATE(2023,7,1),0.05,0.06,2,0)");
         double durationBasis2 = Calc("DURATION(DATE(2023,4,1),DATE(2023,7,1),0.05,0.06,2,2)");
 
-        durationBasis0.Should().NotBe(durationBasis2);
+        // Measured against Excel 16.0 (en-US): with a single coupon left the duration is just the time
+        // to maturity (0.25) under both bases.
+        durationBasis0.Should().BeApproximately(0.25, 1e-9);
+        durationBasis2.Should().BeApproximately(0.25, 1e-9);
     }
 }
