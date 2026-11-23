@@ -115,6 +115,7 @@ public static partial class NumberFormatter
         cleanFmt = RemoveSpacingAndFillDirectives(directiveFormat.Format);
         try
         {
+            oaDate = RoundLegacySerialToDisplayPrecision(oaDate, cleanFmt, uses1904DateSystem);
             var dt = SerialToFormatDate(oaDate, uses1904DateSystem);
             if (IsDateTimeFormat(cleanFmt))
             {

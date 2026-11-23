@@ -117,17 +117,17 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Sequence_NonFiniteStart_ReturnsNumError()
+    public void Sequence_NonFiniteStart_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=SEQUENCE(1,1,A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SEQUENCE(1,1,A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Sequence_NonFiniteStep_ReturnsNumError()
+    public void Sequence_NonFiniteStep_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=SEQUENCE(1,1,1,A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SEQUENCE(1,1,1,A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

@@ -19,8 +19,12 @@ internal static class ExcelNumberTextGrammar
 {
     // Excel refuses typed/parsed numbers outside this magnitude band: 1E308 and above is #VALUE!,
     // and anything below the smallest normal double is flushed (0 for DBL_MIN itself, #VALUE! under).
-    private const double MaxMagnitude = 9.99999999999999E+307;
     private const double MinNormal = 2.2250738585072014E-308;
+    // Measured: a non-zero magnitude below 1E-309 is #VALUE!, one from there up to the smallest normal
+    // double is accepted and flushed to 0 ("1E-309" and "1E-308" are 0, "9E-310" is #VALUE!).
+    private const double MinAccepted = 1E-309;
+    // Measured: a literal exponent beyond +/-308 is #VALUE! when the mantissa is zero ("0E309").
+    private const int MaxZeroMantissaExponent = 308;
 
     /// <summary>
     /// Maps non-ASCII decimal digits (Arabic-Indic, Devanagari, ...) to ASCII. Excel accepts them in
@@ -95,14 +99,14 @@ internal static class ExcelNumberTextGrammar
         // Beyond Excel's range the text is "a number too large": report it as +/-Infinity and let the
         // caller decide (VALUE and NUMBERVALUE answer #VALUE!; the operand coercion used by other
         // functions has always surfaced it as a non-finite number that each function rejects itself).
-        if (!double.IsFinite(result) || abs > MaxMagnitude)
+        if (!double.IsFinite(result) || abs >= 1E308)
         {
             value = result < 0 ? double.NegativeInfinity : double.PositiveInfinity;
             return true;
         }
 
-        if (abs != 0 && abs < MinNormal) return false;
-        if (abs == MinNormal) result = 0;
+        if (abs != 0 && abs < MinAccepted) return false;
+        if (abs <= MinNormal) result = 0;
 
         value = result == 0 ? 0 : result;
         return true;
@@ -174,13 +178,11 @@ internal static class ExcelNumberTextGrammar
                 // A literal exponent beyond the double range is #VALUE! even for a zero mantissa.
                 var expText = s.AsSpan(digitsStart, j - digitsStart).TrimStart('0');
                 exponent = expText.Length > 3 ? 1000 : expText.Length == 0 ? 0 : long.Parse(expText, CultureInfo.InvariantCulture);
-                if (exponent > 400)
-                {
-                    // Out of range even for a zero mantissa ("0e500" is #VALUE!); otherwise it simply
-                    // overflows/underflows below.
-                    if (!ContainsNonZeroDigit(intDigits) && !ContainsNonZeroDigit(fracDigits)) return false;
-                    exponent = 400;
-                }
+                bool zeroMantissa = !ContainsNonZeroDigit(intDigits) && !ContainsNonZeroDigit(fracDigits);
+                // Out of range even for a zero mantissa ("0E309" is #VALUE!); otherwise a big exponent
+                // simply overflows/underflows below (clamped so the decimal text stays parseable).
+                if (zeroMantissa && exponent > MaxZeroMantissaExponent) return false;
+                if (exponent > 400) exponent = 400;
 
                 if (expNegative) exponent = -exponent;
                 i = j;

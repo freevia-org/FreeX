@@ -117,7 +117,7 @@ public static partial class BuiltInFunctions
         int count = 0;
         foreach (var arg in args)
         {
-            var (values, error) = CollectAValues(arg);
+            var (values, error) = CollectAValues(arg, arrayTextAsZero: true);
             if (error is not null) return error;
             foreach (var value in values)
             {

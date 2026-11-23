@@ -196,15 +196,25 @@ internal static class ExcelTextNumberParser
         culture.NumberFormat.NumberGroupSeparator == "," &&
         culture.DateTimeFormat.ShortDatePattern.StartsWith('M');
 
+    private const int MaxConvertibleTextLength = 255;
+
     private static bool TryParseUsStyle(string text, out double number, bool uses1904DateSystem)
     {
         number = 0;
+        // Measured: text longer than 255 characters never converts to a number (or date/time).
+        if (text.Length > MaxConvertibleTextLength) return false;
         // Only the ASCII space is whitespace to Excel here: a tab, newline or NBSP is #VALUE!.
         var s = ExcelNumberTextGrammar.NormalizeDigits(text).Trim(' ');
         if (s.Length == 0) return false;
 
         if (ExcelNumberTextGrammar.TryParseStrict(s, out number))
-            return true;
+        {
+            // A magnitude beyond Excel's range ("1E309", "1E308") is not a number at all: every consumer
+            // (+, SUM, ABS, COUNT, ...) treats the text as non-numeric, i.e. #VALUE! / not counted.
+            if (double.IsFinite(number)) return true;
+            number = 0;
+            return false;
+        }
 
         if (ExcelTextDateTimeParser.TryParse(s, DateTime.Today, out var parsed))
         {

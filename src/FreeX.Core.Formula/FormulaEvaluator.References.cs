@@ -992,6 +992,31 @@ public sealed partial class FormulaEvaluator
         return new RangeValue(cells);
     }
 
+    /// <summary>
+    /// Expands a range-valued aggregate argument. A literal or computed array reaching one of the
+    /// "A" statistical functions keeps its array provenance (<see cref="ArrayElementScalarValue"/>)
+    /// because Excel treats array booleans/text differently from the same values read through a cell
+    /// reference (see BuiltInFunctions.AddAValues); everything else expands as before.
+    /// </summary>
+    private static void AddAggregateRangeValue(
+        List<ScalarValue> expandedArgs,
+        RangeValue range,
+        string functionName,
+        bool preservesReferenceProvenance)
+    {
+        if (!range.IsSheetReference && IsStatisticalAFunction(functionName))
+        {
+            foreach (var value in range.Flatten())
+                expandedArgs.Add(value is ErrorValue or RangeMaterializationErrorValue ? value : new ArrayElementScalarValue(value));
+            return;
+        }
+
+        AddRangeValues(expandedArgs, range.Flatten(), preservesReferenceProvenance);
+    }
+
+    private static bool IsStatisticalAFunction(string name) =>
+        name is "AVERAGEA" or "MINA" or "MAXA" or "VARA" or "VARPA" or "STDEVA" or "STDEVPA";
+
     private static void AddRangeValues(
         List<ScalarValue> expandedArgs,
         IReadOnlyList<ScalarValue> values,

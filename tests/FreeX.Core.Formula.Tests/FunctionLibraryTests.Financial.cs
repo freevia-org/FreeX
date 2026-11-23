@@ -181,10 +181,10 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=PMT(0.05/12,60,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
-    public void Pmt_NonFiniteRate_ReturnsNumError()
+    public void Pmt_NonFiniteRate_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=PMT(A1,60,10000)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PMT(A1,60,10000)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -209,10 +209,10 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=PV(0.05/12,60,188.71,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
-    public void Pv_NonFiniteRate_ReturnsNumError()
+    public void Pv_NonFiniteRate_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=PV(A1,60,188.71)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PV(A1,60,188.71)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -236,10 +236,10 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=FV(0.05/12,12,-100,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
-    public void Fv_NonFiniteRate_ReturnsNumError()
+    public void Fv_NonFiniteRate_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=FV(A1,12,-100)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=FV(A1,12,-100)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -262,10 +262,10 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=NPER(0.05/12,-188.71,10000,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
-    public void Nper_NonFiniteRate_ReturnsNumError()
+    public void Nper_NonFiniteRate_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=NPER(A1,-188.71,10000)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=NPER(A1,-188.71,10000)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -292,17 +292,17 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=RATE(60,-188.71,10000,0,0,NA())", MakeSheet()).Should().Be(ErrorValue.NA);
 
     [Fact]
-    public void Rate_NonFiniteNper_ReturnsNumError()
+    public void Rate_NonFiniteNper_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=RATE(A1,-188.71,10000)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=RATE(A1,-188.71,10000)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Rate_NonFiniteGuess_ReturnsNumError()
+    public void Rate_NonFiniteGuess_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=RATE(60,-188.71,10000,0,0,A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=RATE(60,-188.71,10000,0,0,A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -353,10 +353,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Npv_NonFiniteRate_ReturnsNumError()
+    public void Npv_NonFiniteRate_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=NPV(A1,100)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=NPV(A1,100)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -433,14 +433,14 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Irr_NonFiniteGuess_ReturnsNumError()
+    public void Irr_NonFiniteGuess_ReturnsValueError()
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(-1000)),
             (2, 1, new NumberValue(1100)),
             (3, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=IRR(A1:A2,A3)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=IRR(A1:A2,A3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -483,9 +483,9 @@ public partial class FunctionLibraryTests
 
 
     [Fact]
-    public void Sln_NonFiniteCost_ReturnsNumError()
+    public void Sln_NonFiniteCost_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=SLN(A1,1000,9)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SLN(A1,1000,9)", sheet).Should().Be(ErrorValue.Value);
     }
 }

@@ -202,6 +202,7 @@ public static partial class NumberFormatter
         // (reached when a cell literally holds a date-typed value, e.g. one the user typed or
         // that a formula returned, rather than a raw number handed to TEXT()) that needed the
         // same correction applied to the format string it hands down.
+        oaDate = RoundLegacySerialToDisplayPrecision(oaDate, formatString, uses1904DateSystem);
         var effectiveFormatString = NeedsLegacy1900DateOverride(oaDate, uses1904DateSystem)
             ? OverrideLegacy1900DateTokens(formatString, oaDate)
             : formatString;
@@ -249,6 +250,22 @@ public static partial class NumberFormatter
         !uses1904DateSystem && serial >= 0 && serial < 1
             ? ExcelDateSystem.SerialToDate(serial + 1, false)
             : ExcelDateSystem.SerialToDate(serial, uses1904DateSystem);
+
+    /// <summary>
+    /// Excel rounds a date/time serial to the display precision (a second, or the format's fractional-second
+    /// digits) BEFORE splitting it into date and time -- for every date/time format, including date-only ones
+    /// -- so 0.99999999 reads Jan 1 1900 under "yyyy-mm-dd h:mm", "d" and "dddd" alike: the rounding carries
+    /// into the day. The legacy-1900 day-literal override (serial 0 is "day 0") must therefore be decided on
+    /// the rounded serial, not the raw one.
+    /// </summary>
+    private static double RoundLegacySerialToDisplayPrecision(double serial, string format, bool uses1904DateSystem)
+    {
+        if (!(serial >= 0) || serial >= 2958465)
+            return serial;
+        TryGetFractionalSecondPrecision(format, out var precision);
+        var scale = 86400.0 * Math.Pow(10, precision);
+        return Math.Round(serial * scale, MidpointRounding.AwayFromZero) / scale;
+    }
 
     private static readonly Regex Legacy1900PhantomDayRegex = new(@"(?<!\d)28(?!\d)");
     private static readonly Regex Legacy1900DayOneRegex = new(@"(?<!\d)0?1(?!\d)");
@@ -881,6 +898,7 @@ public static partial class NumberFormatter
             // ArgumentOutOfRangeException that the unchecked SerialToDate throws here, since that
             // exception was being swallowed by the catch-all below and replaced with the plain
             // numeric text.
+            value = RoundLegacySerialToDisplayPrecision(value, format, uses1904DateSystem);
             if (!ExcelDateSystem.TrySerialToDate(value, uses1904DateSystem, out var dt))
                 return BuildInvalidDateTimeIndicator(format, targetWidthCharacters);
 

@@ -71,11 +71,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Sqrt_NonFiniteInput_ReturnsNumError()
+    public void Sqrt_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=SQRT(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SQRT(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -217,19 +217,19 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Abs_NonFiniteInput_ReturnsNumError()
+    public void Abs_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ABS(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ABS(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Int_NonFiniteInput_ReturnsNumError()
+    public void Int_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=INT(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=INT(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -339,11 +339,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Round_NonFiniteInput_ReturnsNumError()
+    public void Round_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ROUND(A1,2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ROUND(A1,2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -376,11 +376,11 @@ public partial class FunctionLibraryTests
 
 
     [Fact]
-    public void Ceiling_NonFiniteInput_ReturnsNumError()
+    public void Ceiling_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=CEILING(A1,1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=CEILING(A1,1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -420,11 +420,11 @@ public partial class FunctionLibraryTests
 
 
     [Fact]
-    public void Floor_NonFiniteInput_ReturnsNumError()
+    public void Floor_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=FLOOR(A1,1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=FLOOR(A1,1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -608,11 +608,11 @@ public partial class FunctionLibraryTests
 
 
     [Fact]
-    public void Sign_NonFiniteInput_ReturnsNumError()
+    public void Sign_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=SIGN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SIGN(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -642,17 +642,17 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Log_NonFiniteInput_ReturnsNumError()
+    public void Log_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=LOG(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=LOG(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Log_NonFiniteBase_ReturnsNumError()
+    public void Log_NonFiniteBase_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=LOG(100,A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=LOG(100,A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -679,10 +679,10 @@ public partial class FunctionLibraryTests
 
 
     [Fact]
-    public void Ln_NonFiniteInput_ReturnsNumError()
+    public void Ln_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=LN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=LN(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -759,33 +759,33 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=SIN(0)", MakeSheet()).Should().Be(new NumberValue(0));
 
     [Fact]
-    public void Sin_NonFiniteInput_ReturnsNumError()
+    public void Sin_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=SIN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SIN(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Cos_Zero_ReturnsOne() =>
         _eval.Evaluate("=COS(0)", MakeSheet()).Should().Be(new NumberValue(1));
 
     [Fact]
-    public void Cos_NonFiniteInput_ReturnsNumError()
+    public void Cos_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=COS(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=COS(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Tan_Zero_ReturnsZero() =>
         _eval.Evaluate("=TAN(0)", MakeSheet()).Should().Be(new NumberValue(0));
 
     [Fact]
-    public void Tan_NonFiniteInput_ReturnsNumError()
+    public void Tan_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=TAN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=TAN(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -829,11 +829,11 @@ public partial class FunctionLibraryTests
             .Should().BeApproximately(Math.PI / 2, 1e-10);
 
     [Fact]
-    public void Asin_NonFiniteInput_ReturnsNumError()
+    public void Asin_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ASIN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ASIN(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Acos_One_ReturnsZero() =>
@@ -841,11 +841,11 @@ public partial class FunctionLibraryTests
             .Should().BeApproximately(0, 1e-10);
 
     [Fact]
-    public void Acos_NonFiniteInput_ReturnsNumError()
+    public void Acos_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ACOS(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ACOS(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Atan_One_ReturnsQuarterPi() =>
@@ -853,11 +853,11 @@ public partial class FunctionLibraryTests
             .Should().BeApproximately(Math.PI / 4, 1e-10);
 
     [Fact]
-    public void Atan_NonFiniteInput_ReturnsNumError()
+    public void Atan_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ATAN(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ATAN(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Atan2_XY_ReturnsCorrect() =>
@@ -926,11 +926,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Atan2_NonFiniteInput_ReturnsNumError()
+    public void Atan2_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ATAN2(A1,1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ATAN2(A1,1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Degrees_Pi_Returns180() =>
@@ -938,11 +938,11 @@ public partial class FunctionLibraryTests
             .Should().BeApproximately(180, 1e-10);
 
     [Fact]
-    public void Degrees_NonFiniteInput_ReturnsNumError()
+    public void Degrees_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=DEGREES(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=DEGREES(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Radians_180_ReturnsPi() =>
@@ -950,35 +950,35 @@ public partial class FunctionLibraryTests
             .Should().BeApproximately(Math.PI, 1e-10);
 
     [Fact]
-    public void Radians_NonFiniteInput_ReturnsNumError()
+    public void Radians_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=RADIANS(A1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=RADIANS(A1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Sum_NonFiniteDirectNumericText_ReturnsNumError()
+    public void Sum_NonFiniteDirectNumericText_ReturnsValueError()
     {
-        _eval.Evaluate("=SUM(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SUM(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Average_NonFiniteDirectNumericText_ReturnsNumError()
+    public void Average_NonFiniteDirectNumericText_ReturnsValueError()
     {
-        _eval.Evaluate("=AVERAGE(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=AVERAGE(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Min_NonFiniteDirectNumericText_ReturnsNumError()
+    public void Min_NonFiniteDirectNumericText_ReturnsValueError()
     {
-        _eval.Evaluate("=MIN(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=MIN(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Max_NonFiniteDirectNumericText_ReturnsNumError()
+    public void Max_NonFiniteDirectNumericText_ReturnsValueError()
     {
-        _eval.Evaluate("=MAX(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=MAX(\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Product_Range_MultipliesAll()
@@ -1018,10 +1018,10 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=QUOTIENT(5,2)", MakeSheet()).Should().Be(new NumberValue(2));
 
     [Fact]
-    public void Quotient_NonFiniteNumerator_ReturnsNumError()
+    public void Quotient_NonFiniteNumerator_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=QUOTIENT(A1,2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=QUOTIENT(A1,2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Gcd_12_8_Returns4() =>
@@ -1064,11 +1064,11 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=ROUNDDOWN(1.29,1)", MakeSheet()).Should().Be(new NumberValue(1.2));
 
     [Fact]
-    public void Rounddown_NonFiniteInput_ReturnsNumError()
+    public void Rounddown_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ROUNDDOWN(A1,2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ROUNDDOWN(A1,2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Rounddown_ExcessiveDigits_ClampsLikeExcel() =>
@@ -1078,11 +1078,11 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=ROUNDUP(1.21,1)", MakeSheet()).Should().Be(new NumberValue(1.3));
 
     [Fact]
-    public void Roundup_NonFiniteInput_ReturnsNumError()
+    public void Roundup_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=ROUNDUP(A1,2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=ROUNDUP(A1,2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Roundup_ExcessiveDigits_ClampsLikeExcel() =>
@@ -1092,11 +1092,11 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=TRUNC(1.29,1)", MakeSheet()).Should().Be(new NumberValue(1.2));
 
     [Fact]
-    public void Trunc_NonFiniteInput_ReturnsNumError()
+    public void Trunc_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=TRUNC(A1,2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=TRUNC(A1,2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Trunc_ExcessiveDigits_ClampsLikeExcel() =>
@@ -1155,11 +1155,11 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=MROUND(14,0)", MakeSheet()).Should().Be(new NumberValue(0));
 
     [Fact]
-    public void Mround_NonFiniteInput_ReturnsNumError()
+    public void Mround_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=MROUND(A1,5)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=MROUND(A1,5)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

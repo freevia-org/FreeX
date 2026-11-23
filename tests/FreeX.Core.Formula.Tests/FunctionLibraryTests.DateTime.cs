@@ -57,10 +57,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Date_NonFiniteYear_ReturnsNumError()
+    public void Date_NonFiniteYear_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new TextValue("1E309")));
-        _eval.Evaluate("=DATE(A1,1,1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=DATE(A1,1,1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     // ── YEAR / MONTH / DAY ────────────────────────────────────────────────────
@@ -483,11 +483,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Weekday_NonFiniteReturnType_ReturnsNumError()
+    public void Weekday_NonFiniteReturnType_ReturnsValueError()
     {
         var serial = new DateTime(2024, 1, 14).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(serial)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=WEEKDAY(A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WEEKDAY(A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -532,11 +532,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Edate_NonFiniteMonths_ReturnsNumError()
+    public void Edate_NonFiniteMonths_ReturnsValueError()
     {
         var serial = new DateTime(2024, 1, 15).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(serial)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=EDATE(A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=EDATE(A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -701,11 +701,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Eomonth_NonFiniteMonths_ReturnsNumError()
+    public void Eomonth_NonFiniteMonths_ReturnsValueError()
     {
         double jan15 = new DateTime(2024, 1, 15).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(jan15)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=EOMONTH(A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=EOMONTH(A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Weeknum_Jan8_Returns2()
@@ -732,11 +732,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Weeknum_NonFiniteReturnType_ReturnsNumError()
+    public void Weeknum_NonFiniteReturnType_ReturnsValueError()
     {
         double jan8 = new DateTime(2024, 1, 8).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(jan8)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=WEEKNUM(A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WEEKNUM(A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Isoweeknum_Jan8_2024_Returns2()
@@ -757,11 +757,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Workday_NonFiniteDays_ReturnsNumError()
+    public void Workday_NonFiniteDays_ReturnsValueError()
     {
         double mon = new DateTime(2024, 1, 8).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(mon)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=WORKDAY(A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=WORKDAY(A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -998,12 +998,12 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Yearfrac_NonFiniteBasis_ReturnsNumError()
+    public void Yearfrac_NonFiniteBasis_ReturnsValueError()
     {
         double jan1 = new DateTime(2024, 1, 1).ToOADate();
         double jul1 = new DateTime(2024, 7, 1).ToOADate();
         var sheet = MakeSheet((1, 1, new NumberValue(jan1)), (1, 2, new NumberValue(jul1)), (1, 3, new TextValue("1E309")));
-        _eval.Evaluate("=YEARFRAC(A1,B1,C1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=YEARFRAC(A1,B1,C1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     // ── Statistical ──────────────────────────────────────────────────────────────

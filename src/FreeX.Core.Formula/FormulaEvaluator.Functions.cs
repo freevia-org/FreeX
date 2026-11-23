@@ -377,7 +377,7 @@ public sealed partial class FormulaEvaluator
                     if (isStructured && lambdaBound is RangeValue)
                         expandedArgs.Add(lambdaBound);
                     else if (!isStructured && lambdaBound is RangeValue flatRv)
-                        AddRangeValues(expandedArgs, flatRv.Flatten(), preservesReferenceProvenance);
+                        AddAggregateRangeValue(expandedArgs, flatRv, functionName, preservesReferenceProvenance);
                     else if (!isStructured && isAggregate && lambdaBound is UnionValue lambdaUnion)
                         AddRangeValues(expandedArgs, FlattenUnionAreas(lambdaUnion), preservesReferenceProvenance);
                     else if (isStructured && lambdaBound is UnionValue lambdaStructuredUnion &&
@@ -443,7 +443,7 @@ public sealed partial class FormulaEvaluator
                         // RefersTo is "=(Sheet1!A1:A2,Sheet1!B1:B2)" -- a UnionValue; unwrap the
                         // same way a literal parenthesized union argument is unwrapped below.
                         if (!isStructured && isAggregate && namedFormulaArg is RangeValue namedRv)
-                            AddRangeValues(expandedArgs, namedRv.Flatten(), preservesReferenceProvenance);
+                            AddAggregateRangeValue(expandedArgs, namedRv, functionName, preservesReferenceProvenance);
                         else if (!isStructured && isAggregate && namedFormulaArg is UnionValue namedUnion)
                             AddRangeValues(expandedArgs, FlattenUnionAreas(namedUnion), preservesReferenceProvenance);
                         else if (isStructured && namedFormulaArg is UnionValue namedStructuredUnion &&
@@ -462,7 +462,7 @@ public sealed partial class FormulaEvaluator
             {
                 var value = EvaluateNode(arg, context);
                 if (!isStructured && isAggregate && value is RangeValue rangeValue)
-                    AddRangeValues(expandedArgs, rangeValue.Flatten(), preservesReferenceProvenance);
+                    AddAggregateRangeValue(expandedArgs, rangeValue, functionName, preservesReferenceProvenance);
                 else if (!isStructured && isAggregate && value is UnionValue union)
                     // R93-AREAS-union-value-model gap close: a parenthesized union argument (e.g.
                     // the "(A1:A2,B1:B2)" in MIN((A1:A2,B1:B2))) evaluates to a UnionValue here --
