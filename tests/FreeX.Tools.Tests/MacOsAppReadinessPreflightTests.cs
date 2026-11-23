@@ -2618,7 +2618,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     WorkbookStatisticsFormatter.Format(statistics)
                     _selectAllMenuItem.Header = "Select All";
                     _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
-                    _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
+                    _selectAllMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.SelectAll));
+                    internal async Task ExecuteNativeEditMenuCommandAsync(NativeMenuItemId command)
+                    if (GetNativeTextEditMenuTarget() is { } editor)
+                    editor.SelectAll();
+                    RefreshNativeTextEditMenuAvailability();
                     homeMenu.Items.Add(_selectAllMenuItem);
                     _selectAllMenuItem.IsEnabled = isIdle;
                     private readonly NativeMenuItem _findMenuItem = new();
