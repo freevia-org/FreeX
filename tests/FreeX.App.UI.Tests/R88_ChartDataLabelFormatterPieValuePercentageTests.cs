@@ -23,7 +23,7 @@ public sealed class R88_ChartDataLabelFormatterPieValuePercentageTests
         var format = ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share");
 
         // Applied the way OxyPlot applies it: string.Format(format, value, label, fraction).
-        string.Format(format, 50.0, "label", 0.2).Should().Be("50.00, 20%");
+        string.Format(format, 50.0, "label", 20.0).Should().Be("50.00, 20%");
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class R88_ChartDataLabelFormatterPieValuePercentageTests
 
         var format = ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share");
 
-        string.Format(format, 50.0, "label", 0.2).Should().Be("50.00");
+        string.Format(format, 50.0, "label", 20.0).Should().Be("50.00");
     }
 
     [Fact]
@@ -53,6 +53,6 @@ public sealed class R88_ChartDataLabelFormatterPieValuePercentageTests
 
         var format = ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share");
 
-        string.Format(format, 50.0, "label", 0.2).Should().Be("20%");
+        string.Format(format, 50.0, "label", 20.0).Should().Be("20%");
     }
 }

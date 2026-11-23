@@ -14,6 +14,9 @@ internal static class LegendLayoutBuilder
     private const double SwatchLabelGap = 4;
     private const double EntrySpacing = 6;
     private const double LegendPadding = 6;
+    private const double LegendEdgeMargin = 4;
+    // Height of the tick-label band the plot rectangle leaves below itself for the category axis.
+    private const double AxisLabelBand = 20;
 
     /// <summary>
     /// Builds the legend and outputs the <paramref name="plot"/> rectangle remaining for the series
@@ -97,15 +100,18 @@ internal static class LegendLayoutBuilder
         {
             var width = LegendPadding * 2 + SwatchSize + SwatchLabelGap + maxLabelWidth;
             var height = LegendPadding * 2 + (measured.Length * entryHeight) + ((measured.Length - 1) * EntrySpacing);
+            var legendHeight = Math.Min(height, plot.Height);
+            // Excel centres a side legend vertically beside the plot rather than hanging it from the top.
+            var legendTop = request.ChartHeight > 0 ? plot.Y + ((plot.Height - legendHeight) / 2.0) : plot.Y;
             if (chart.LegendPosition == ChartLegendPosition.Right)
             {
-                bounds = new LayoutRect(plot.Right - width, plot.Y, width, Math.Min(height, plot.Height));
+                bounds = new LayoutRect(plot.Right - width, legendTop, width, legendHeight);
                 if (!chart.LegendOverlay)
                     plot = new PlotRect(plot.X, plot.Y, Math.Max(0, plot.Width - width), plot.Height);
             }
             else
             {
-                bounds = new LayoutRect(plot.X, plot.Y, width, Math.Min(height, plot.Height));
+                bounds = new LayoutRect(plot.X, legendTop, width, legendHeight);
                 if (!chart.LegendOverlay)
                     plot = new PlotRect(plot.X + width, plot.Y, Math.Max(0, plot.Width - width), plot.Height);
             }
@@ -115,15 +121,31 @@ internal static class LegendLayoutBuilder
             var entryWidths = measured.Sum(m => SwatchSize + SwatchLabelGap + m.Width);
             var width = LegendPadding * 2 + entryWidths + ((measured.Length - 1) * EntrySpacing);
             var height = LegendPadding * 2 + entryHeight;
+            var legendWidth = Math.Min(width, plot.Width);
+            // Excel centres a top/bottom legend horizontally and parks a bottom legend under the axis
+            // labels at the chart's lower edge (not on top of them, inside the plot rectangle).
+            var legendLeft = request.ChartWidth > 0 ? plot.X + ((plot.Width - legendWidth) / 2.0) : plot.X;
             if (chart.LegendPosition == ChartLegendPosition.Top)
             {
-                bounds = new LayoutRect(plot.X, plot.Y, Math.Min(width, plot.Width), height);
+                bounds = new LayoutRect(legendLeft, plot.Y, legendWidth, height);
                 if (!chart.LegendOverlay)
                     plot = new PlotRect(plot.X, plot.Y + height, plot.Width, Math.Max(0, plot.Height - height));
             }
+            else if (request.ChartHeight > 0 && request.ChartHeight - plot.Bottom >= 0)
+            {
+                // The request's plot rectangle leaves a band below it for the axis labels; the legend
+                // sits below that band at the chart's lower edge and the plot gives up the legend height.
+                var legendTop = Math.Max(plot.Y, request.ChartHeight - height - LegendEdgeMargin);
+                bounds = new LayoutRect(legendLeft, legendTop, legendWidth, height);
+                if (!chart.LegendOverlay)
+                {
+                    var reserve = Math.Max(0, plot.Bottom + AxisLabelBand - legendTop);
+                    plot = new PlotRect(plot.X, plot.Y, plot.Width, Math.Max(0, plot.Height - reserve));
+                }
+            }
             else
             {
-                bounds = new LayoutRect(plot.X, plot.Bottom - height, Math.Min(width, plot.Width), height);
+                bounds = new LayoutRect(legendLeft, plot.Bottom - height, legendWidth, height);
                 if (!chart.LegendOverlay)
                     plot = new PlotRect(plot.X, plot.Y, plot.Width, Math.Max(0, plot.Height - height));
             }
@@ -200,6 +222,14 @@ internal static class LegendLayoutBuilder
             if (ChartRenderPolicyPlanner.IsLegendEntryDeleted(chart, series.SeriesIndex))
                 continue;
             entries.Add((series.SeriesIndex, series.Name ?? $"Series {series.SeriesIndex + 1}", null));
+        }
+
+        // Excel lists the series of a stacked column/area top-down in stacking order when the legend is
+        // beside the plot (last series first), matching the order of the stack itself.
+        if (chart.LegendPosition is ChartLegendPosition.Left or ChartLegendPosition.Right or ChartLegendPosition.TopRight &&
+            chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.StackedArea or ChartType.PercentStackedArea)
+        {
+            entries.Reverse();
         }
 
         // Excel lists every trendline after the series ("Linear (Sales)", "Expon. (Sales)", ...).

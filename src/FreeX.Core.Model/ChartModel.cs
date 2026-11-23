@@ -161,6 +161,9 @@ public sealed class ChartModel
     public CellColor? ChartTitleTextColor { get; set; }
     public WorkbookThemeColorReference? ChartTitleTextThemeColor { get; set; }
     public double ChartTitleFontSize { get; set; } = 16;
+
+    /// <summary>Explicit chart-title weight from the file (<c>b</c> on the title text); null keeps the bold default.</summary>
+    public bool? ChartTitleBold { get; set; }
     public CellColor? AxisTitleTextColor { get; set; }
     public WorkbookThemeColorReference? AxisTitleTextThemeColor { get; set; }
     public double AxisTitleFontSize { get; set; } = 12;

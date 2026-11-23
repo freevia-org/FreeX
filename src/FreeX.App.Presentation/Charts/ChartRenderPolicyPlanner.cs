@@ -186,6 +186,32 @@ public static class ChartRenderPolicyPlanner
         };
     }
 
+    /// <summary>
+    /// Percent-stacked charts keep their value axis in 0..100 internally while Excel stores the axis as
+    /// 0..1 with a <c>0%</c> format. When the axis carries a percent number format the tick value is
+    /// therefore divided by 100 before formatting, otherwise the labels read 0%..10000%.
+    /// </summary>
+    public static double ScalePercentStackedAxisLabelValue(
+        ChartModel chart,
+        bool isXAxis,
+        ChartDataLabelNumberFormat format,
+        string? formatCode,
+        double value)
+    {
+        var isValueAxis = chart.Type switch
+        {
+            ChartType.PercentStackedColumn or ChartType.PercentStackedArea => !isXAxis,
+            ChartType.PercentStackedBar => isXAxis,
+            _ => false,
+        };
+        if (!isValueAxis)
+            return value;
+
+        var isPercentFormat = format == ChartDataLabelNumberFormat.Percent ||
+            (!string.IsNullOrEmpty(formatCode) && formatCode.Contains('%', StringComparison.Ordinal));
+        return isPercentFormat ? value / 100.0 : value;
+    }
+
     /// <summary>Resolves the half-width of a column/bar category slot from Excel's gap width.</summary>
     public static double ResolveBarHalfWidth(ChartModel chart) =>
         chart.BarGapWidth is int gapWidth
@@ -210,24 +236,31 @@ public static class ChartRenderPolicyPlanner
                 ? -27
                 : 0);
 
-    /// <summary>Returns one clustered series' left/right offsets inside a category slot.</summary>
+    /// <summary>
+    /// Returns one clustered series' left/right offsets inside a category slot using Excel's own
+    /// geometry. With <c>n</c> series, series overlap <c>o</c> and gap width <c>g</c> (both as fractions of
+    /// one bar width), a bar is <c>1 / (n - (n - 1) * o + g)</c> of the category slot wide, neighbouring
+    /// bars are <c>bar * (1 - o)</c> apart and the whole cluster is centred in the slot. The single-series
+    /// case degenerates to <c>1 / (1 + g)</c>, i.e. exactly <paramref name="halfWidth"/> either side.
+    /// </summary>
     public static (double Left, double Right) ResolveClusteredBarOffsets(
         double halfWidth,
         int clusterOrdinal,
         int clusterCount,
         int overlapPercent)
     {
-        if (clusterCount <= 1)
+        if (clusterCount <= 1 || halfWidth <= 0)
             return (-halfWidth, halfWidth);
 
         var overlap = Math.Clamp(overlapPercent, -100, 100) / 100.0;
-        var denominator = clusterCount - (overlap * (clusterCount - 1));
-        var unitWidth = Math.Abs(denominator) < 1e-9
-            ? 2.0 * halfWidth
-            : 2.0 * halfWidth / denominator;
-        var step = unitWidth * (1 - overlap);
-        var left = -halfWidth + clusterOrdinal * step;
-        return (left, left + unitWidth);
+        // halfWidth encodes the gap: slot / (1 + gap) == 2 * halfWidth.
+        var gap = Math.Max(0, 0.5 / halfWidth - 1.0);
+        var barUnits = clusterCount - (overlap * (clusterCount - 1));
+        var barWidth = 1.0 / (barUnits + gap);
+        var step = barWidth * (1 - overlap);
+        var clusterWidth = barWidth + step * (clusterCount - 1);
+        var left = -clusterWidth / 2.0 + clusterOrdinal * step;
+        return (left, left + barWidth);
     }
 
     /// <summary>Returns whether a physical source column is the scatter family's shared X column.</summary>

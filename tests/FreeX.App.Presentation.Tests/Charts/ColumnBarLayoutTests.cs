@@ -327,10 +327,11 @@ public sealed class ColumnBarLayoutTests
     }
 
     [Fact]
-    public void ThreeSeries_column_bars_fill_the_same_total_slot_width_as_single_series()
+    public void ThreeSeries_column_cluster_is_centred_and_each_bar_is_narrower_like_excel()
     {
-        // The 3 clustered bars together must span the same total width as the single bar would,
-        // i.e. each sub-slot is exactly slot/3 wide and they tile perfectly.
+        // Excel: with gap 219 and overlap -27 a three series cluster is three bars of
+        // slot / (3 + 2 * 0.27 + 2.19) joined by 0.27-bar gaps, centred in the slot (measured: 31 px bars in a
+        // 178 px slot, against 56 px for a single series).
         var plot = new PlotRect(0, 0, 600, 300);
         var singleRequest = Request(Chart(ChartType.Column), ["A"], [Series(0, "S0", 10)], plot);
         var multiRequest = Request(Chart(ChartType.Column), ["A"],
@@ -343,10 +344,11 @@ public sealed class ColumnBarLayoutTests
         var multiLeft  = multiLayout.Series[0].Bars[0].Rect.Left;
         var multiRight = multiLayout.Series[2].Bars[0].Rect.Right;
 
-        multiLeft.Should().BeApproximately(singleBar.Left, 1e-6,
-            "leftmost sub-slot must align with the full slot's left edge");
-        multiRight.Should().BeApproximately(singleBar.Right, 1e-6,
-            "rightmost sub-slot must align with the full slot's right edge");
+        ((multiLeft + multiRight) / 2).Should().BeApproximately((singleBar.Left + singleBar.Right) / 2, 1e-6,
+            "the cluster is centred in the category slot");
+        multiLayout.Series[0].Bars[0].Rect.Width.Should().BeApproximately(
+            singleBar.Width * (1 + 2.19) / (3 + (2 * 0.27) + 2.19), 1e-6,
+            "Excel's bar width is slot / (series - (series - 1) * overlap + gap)");
     }
 
     [Fact]

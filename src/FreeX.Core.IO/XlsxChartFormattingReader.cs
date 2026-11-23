@@ -6,33 +6,67 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxChartFormattingReader
 {
+    private static readonly XNamespace ChartNs = "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     public static void ApplyChartTitleFormatting(XElement? titleElement, ChartModel chart)
     {
-        XElement? runProperties = null;
+        // Run properties win; modern Excel (2013+) instead keeps the whole title style (size, colour,
+        // weight) in the title's own <c:txPr>/<a:defRPr> (or the rich text's <a:pPr>/<a:defRPr>).
+        var candidates = new List<XElement>();
         foreach (var candidate in titleElement?.Descendants(DrawingNs + "rPr") ?? [])
         {
-            runProperties = candidate;
+            candidates.Add(candidate);
+            break;
+        }
+        foreach (var candidate in titleElement?.Elements(ChartNs + "txPr").Descendants(DrawingNs + "defRPr") ?? [])
+        {
+            candidates.Add(candidate);
+            break;
+        }
+        foreach (var candidate in titleElement?.Descendants(DrawingNs + "defRPr") ?? [])
+        {
+            candidates.Add(candidate);
             break;
         }
 
-        if (runProperties is null)
+        if (candidates.Count == 0)
             return;
 
-        if (int.TryParse(runProperties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
-            chart.ChartTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
-
-        var solidFill = runProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        foreach (var properties in candidates)
         {
-            chart.ChartTitleTextThemeColor = themeColor;
-            chart.ChartTitleTextColor = null;
+            if (int.TryParse(properties.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size))
+            {
+                chart.ChartTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
+                break;
+            }
         }
-        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+
+        foreach (var properties in candidates)
         {
-            chart.ChartTitleTextColor = color;
-            chart.ChartTitleTextThemeColor = null;
+            if (properties.Attribute("b")?.Value is { } bold)
+            {
+                chart.ChartTitleBold = XlsxChartScalarReader.IsTrue(bold);
+                break;
+            }
+        }
+
+        foreach (var properties in candidates)
+        {
+            var solidFill = properties.Element(DrawingNs + "solidFill");
+            if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+            {
+                chart.ChartTitleTextThemeColor = themeColor;
+                chart.ChartTitleTextColor = null;
+                break;
+            }
+
+            if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+            {
+                chart.ChartTitleTextColor = color;
+                chart.ChartTitleTextThemeColor = null;
+                break;
+            }
         }
     }
 

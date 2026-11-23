@@ -30,12 +30,11 @@ public static partial class ChartRenderer
         if (model == null) return null;
 
         renderScale = NormalizeRenderScale(renderScale);
-        ApplyManualLayouts(model, chart, renderScale);
-        var exporter = new PngExporter
-        {
-            Width  = Math.Max(1, (int)Math.Ceiling(chart.Width * renderScale)),
-            Height = Math.Max(1, (int)Math.Ceiling(chart.Height * renderScale)),
-        };
+        // OxyPlot lays the model out in device-independent units (bitmap pixels / (Resolution / 96)),
+        // so a Resolution of 96 * renderScale renders the identical chart-pixel layout (fonts, line
+        // widths, padding) with renderScale times the pixels instead of a 1x layout in a bigger canvas.
+        ApplyManualLayouts(model, chart, 1.0);
+        var exporter = CreateExporter(chart, renderScale);
 
         BitmapSource bitmap;
         try
@@ -105,6 +104,14 @@ public static partial class ChartRenderer
             System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
         return result!;
     }
+
+    internal static PngExporter CreateExporter(ChartModel chart, double normalizedScale) =>
+        new()
+        {
+            Width = Math.Max(1, (int)Math.Ceiling(chart.Width * normalizedScale)),
+            Height = Math.Max(1, (int)Math.Ceiling(chart.Height * normalizedScale)),
+            Resolution = 96.0 * normalizedScale,
+        };
 
     private static double NormalizeRenderScale(double renderScale)
     {
@@ -504,8 +511,10 @@ public static partial class ChartRenderer
                         series.Items.Add(columnBarItem);
                         trendPoints?.Add(new DataPoint(x, v));
                         barCategoryValues.Add(v);
-                        if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x, v, v);
+                        // OxyPlot's RectangleBarSeries never draws its own LabelFormatString, so plain value
+                        // labels on clustered columns use the same annotation path as the other label styles.
+                        if (ShouldUseAnnotationLabels(chart) || ShouldUseNativeValueLabels(chart))
+                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), x + ((clusterLeft + clusterRight) / 2.0), v, v);
                     }
                     else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero
                         && cellLookup.TryGetValue((r, col), out cell)

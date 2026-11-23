@@ -135,8 +135,9 @@ public sealed partial class ChartRendererTests
             source.IndexOf("internal static PlotModel? BuildPlotModel", StringComparison.Ordinal)];
 
         render.Should().Contain("renderScale = NormalizeRenderScale(renderScale);");
-        render.Should().Contain("chart.Width * renderScale");
-        render.Should().Contain("chart.Height * renderScale");
+        render.Should().Contain("chart.Width * normalizedScale");
+        render.Should().Contain("chart.Height * normalizedScale");
+        render.Should().Contain("Resolution = 96.0 * normalizedScale");
         render.Should().Contain("IsVisiblyBlank(bitmap)");
         render.Should().Contain("RenderDirectFallback(chart, viewport, resolvedTheme, renderScale)");
         source.Should().Contain("private static double NormalizeRenderScale(double renderScale)");

@@ -18,10 +18,12 @@ public sealed class ChartRenderPolicyPlannerTests
 
         var first = ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(0.15673981191222572, 0, 2, -27);
         var second = ChartRenderPolicyPlanner.ResolveClusteredBarOffsets(0.15673981191222572, 1, 2, -27);
-        first.Left.Should().BeApproximately(-0.15673981191222572, 1e-12);
-        first.Right.Should().BeApproximately(-0.018643061328766947, 1e-12);
-        second.Left.Should().BeApproximately(0.01864306132876692, 1e-12);
-        second.Right.Should().BeApproximately(0.1567398119122257, 1e-12);
+        // Excel geometry (gap 219, overlap -27, two series): bar = 1 / (2.27 + 2.19) of the slot, pitch = bar * 1.27,
+        // cluster centred in the slot.
+        first.Left.Should().BeApproximately(-0.2544843049, 1e-9);
+        first.Right.Should().BeApproximately(-0.0302690583, 1e-9);
+        second.Left.Should().BeApproximately(0.0302690583, 1e-9);
+        second.Right.Should().BeApproximately(0.2544843049, 1e-9);
 
         chart.BarGapWidth = 0;
         ChartRenderPolicyPlanner.ResolveBarHalfWidth(chart).Should().Be(0.5);
