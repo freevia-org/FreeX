@@ -100,6 +100,16 @@ public sealed partial class MainWindow
         if (TryTrackStandaloneAltKeyTip(args))
             return true;
 
+        if (ShouldPassOptionTextToInput(
+                OperatingSystem.IsMacOS(), args.KeyModifiers, args.KeySymbol,
+                _ribbonKeyTipSession.IsActive || _ribbonKeyTipsVisible))
+        {
+            // Native macOS sends modified KeyDown before text composition and suppresses
+            // composition if it is handled. Stop shell shortcut routing (including QAT digits
+            // and the generic Alt fallback), leaving the event unhandled for the input method.
+            return true;
+        }
+
         if (TryHandleQuickAccessKeyTipSequence(args))
             return true;
 
@@ -235,6 +245,26 @@ public sealed partial class MainWindow
         if (!match.HasLongerRoute)
             ResetRibbonKeyTipSequence();
         return true;
+    }
+
+    internal static bool ShouldPassOptionTextToInput(
+        bool isMacOs,
+        KeyModifiers modifiers,
+        string? keySymbol,
+        bool keyTipModeActive)
+    {
+        if (!isMacOs || keyTipModeActive || !modifiers.HasFlag(KeyModifiers.Alt) ||
+            (modifiers & ~(KeyModifiers.Alt | KeyModifiers.Shift)) != 0 ||
+            string.IsNullOrEmpty(keySymbol))
+        {
+            return false;
+        }
+
+        // KeySymbol carries the layout's Unicode display symbol, including a dead key's
+        // accent. AppKit's private-use function/arrow symbols are navigation, not text.
+        return keySymbol.All(character =>
+            !char.IsControl(character) &&
+            char.GetUnicodeCategory(character) != System.Globalization.UnicodeCategory.PrivateUse);
     }
 
     private bool CanHandleRibbonKeyTipInput(KeyEventArgs args) =>

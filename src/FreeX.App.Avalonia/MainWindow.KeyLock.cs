@@ -1,4 +1,5 @@
 using Avalonia.Input;
+using Avalonia.Threading;
 using Free.Shared.AppServices;
 
 namespace FreeX.App.Avalonia;
@@ -6,24 +7,17 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// Parity for the WPF host's r79 CAPS LOCK / NUM LOCK status-bar indicators (mirrors the WPF
 /// shell's key-lock indicator refresh in its grid-status partial). The WPF shell reads the OS-level
-/// toggle state directly via a Win32-only keyboard toggle-state API on every refresh, so it is always
-/// correct there. Avalonia has no cross-platform equivalent of that API, so this shell instead tracks
-/// each key's on/off state by flipping it every time a CapsLock/NumLock key-down reaches
-/// <see cref="MainWindow_KeyDownAsync"/> while the window has focus -- the same alternate-on-each-press
-/// semantics a physical toggle key has. That tracking alone desyncs from the real toggle whenever the
-/// key was pressed before this window existed or while some other window had focus (a key-down that
-/// never reaches this shell), so <see cref="ResyncKeyLockToggleStateFromOs"/> additionally
-/// initializes/resyncs the tracked state from a direct OS query where one is available (today: Windows,
-/// via <see cref="TryGetOsKeyToggleState"/>) both at construction and on every window activation --
-/// the two moments a desync could have crept in unnoticed. Platforms without such a query keep the
-/// prior key-down-tracked approximation unchanged (a still-accepted, pre-existing limitation). Both
-/// shells still funnel through the shared, fully-tested <see cref="KeyLockIndicatorPlanner"/> so the
-/// visibility rule itself (only while the key is toggled on) is identical.
+/// toggle state directly on every refresh. This shell queries Windows toggle state and macOS Caps Lock
+/// state too, keeping a key-down-tracked fallback only where a native query is unavailable. Avalonia's
+/// macOS backend does not forward Caps Lock flagsChanged events as key-downs, so an active window also
+/// refreshes its indicators periodically. Both shells use <see cref="KeyLockIndicatorPlanner"/> for
+/// the visibility rule.
 /// </summary>
 public sealed partial class MainWindow
 {
     private bool _isCapsLockToggleOnForShell;
     private bool _isNumLockToggleOnForShell;
+    private DispatcherTimer? _macOsKeyLockRefreshTimer;
 
     /// <summary>Flips the tracked toggle state for a CapsLock/NumLock key-down; no-op for any other key.</summary>
     private void UpdateKeyLockToggleState(Key key)
@@ -44,18 +38,40 @@ public sealed partial class MainWindow
     /// </summary>
     private void ResyncKeyLockToggleStateFromOs()
     {
+        EnsureMacOsKeyLockRefresh();
         if (TryGetOsKeyToggleState(Key.CapsLock) is { } capsLockOn)
             _isCapsLockToggleOnForShell = capsLockOn;
         if (TryGetOsKeyToggleState(Key.NumLock) is { } numLockOn)
             _isNumLockToggleOnForShell = numLockOn;
     }
 
+    private void EnsureMacOsKeyLockRefresh()
+    {
+        if (!OperatingSystem.IsMacOS() || _macOsKeyLockRefreshTimer is not null)
+            return;
+
+        // Avalonia.Native 12.0.4's flagsChanged forwards Shift/Control/Option/Command, but
+        // not Caps Lock. Poll only while this window is active; no global input monitor or
+        // accessibility permission is needed, and a closed window never retains a live timer.
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(250),
+        };
+        timer.Tick += (_, _) => RefreshKeyLockIndicators();
+        _macOsKeyLockRefreshTimer = timer;
+        Activated += (_, _) => timer.Start();
+        Deactivated += (_, _) => timer.Stop();
+        Closed += (_, _) => timer.Stop();
+        if (IsActive)
+            timer.Start();
+    }
+
     /// <summary>
     /// Best-effort direct OS toggle-state query for <paramref name="key"/> (CapsLock/NumLock only).
     /// Returns null when no such query is available (or it fails), so callers keep whatever value they
     /// already had instead of clobbering it with a false negative. Windows exposes this directly via
-    /// user32's GetKeyState (the low-order bit reflects the toggle state); there is no Avalonia-visible
-    /// equivalent on other platforms today, so this returns null there.
+    /// user32's GetKeyState (the low-order bit reflects the toggle state). macOS provides Caps Lock
+    /// through Quartz's combined-session modifier flags; its numeric-pad flag is not a Num Lock toggle.
     /// </summary>
     private bool? TryGetOsKeyToggleState(Key key)
     {
@@ -63,6 +79,9 @@ public sealed partial class MainWindow
         ResolveKeyLockToggleStateOverride(ref overrideHandler);
         if (overrideHandler is not null)
             return overrideHandler(key);
+
+        if (OperatingSystem.IsMacOS())
+            return key == Key.CapsLock ? TryGetMacOsCapsLockToggleState() : null;
 
         if (!OperatingSystem.IsWindows())
             return null;
@@ -88,6 +107,25 @@ public sealed partial class MainWindow
         }
     }
 
+    internal static bool? TryGetMacOsCapsLockToggleState()
+    {
+        if (!OperatingSystem.IsMacOS())
+            return null;
+
+        try
+        {
+            return (KeyLockNativeMethods.CGEventSourceFlagsState(0) & 0x00010000UL) != 0;
+        }
+        catch (DllNotFoundException)
+        {
+            return null;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
+
     static partial void ResolveKeyLockToggleStateOverride(ref Func<Key, bool?>? handler);
 
     private static class KeyLockNativeMethods
@@ -97,6 +135,11 @@ public sealed partial class MainWindow
 
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         public static extern short GetKeyState(int nVirtKey);
+
+        // CGEventSourceStateID is int32_t; CGEventFlags is uint64_t. 0 selects
+        // kCGEventSourceStateCombinedSessionState; 0x00010000 is kCGEventFlagMaskAlphaShift.
+        [System.Runtime.InteropServices.DllImport("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")]
+        public static extern ulong CGEventSourceFlagsState(int stateId);
     }
 
     /// <summary>
@@ -107,6 +150,8 @@ public sealed partial class MainWindow
     /// </summary>
     private void RefreshKeyLockIndicators()
     {
+        // The OS is authoritative even when a synthetic/repeated KeyDown was delivered.
+        ResyncKeyLockToggleStateFromOs();
         var plan = KeyLockIndicatorPlanner.Build(_isCapsLockToggleOnForShell, _isNumLockToggleOnForShell);
         _statusCapsLockText.IsVisible = plan.CapsLockVisible;
         _statusNumLockText.IsVisible = plan.NumLockVisible;

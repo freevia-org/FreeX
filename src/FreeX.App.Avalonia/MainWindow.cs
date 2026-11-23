@@ -2456,21 +2456,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
 
-        _undoMenuItem.Click += (_, _) => UndoLastEdit();
+        _undoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Undo));
 
-        _redoMenuItem.Click += (_, _) => RedoLastEdit();
+        _redoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Redo));
 
-        _cutMenuItem.Click += (_, _) => RunGuarded(CutSelectedRangeToClipboardAsync);
+        _cutMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Cut));
 
-        _copyMenuItem.Click += (_, _) => RunGuarded(CopySelectedRangeToClipboardAsync);
+        _copyMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Copy));
 
-        _pasteMenuItem.Click += (_, _) => RunGuarded(PasteClipboardTextAsync);
+        _pasteMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Paste));
 
         _pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();
 
         _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
 
-        _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
+        _selectAllMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.SelectAll));
 
         _findMenuItem.Click += (_, _) => RunGuarded(ShowFindDialogAsync);
 
@@ -4854,6 +4854,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (item.IsChecked is { } isChecked)
                 nativeMenuItem.IsChecked = isChecked;
         }
+
+        RefreshNativeTextEditMenuAvailability();
     }
 
     private int FindActiveSheetTabIndex()
@@ -29360,6 +29362,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         e.Handled = true;
     }
 
+    private readonly PointerWheelNotchAccumulator _worksheetWheelAccumulator = new();
+    private (bool Horizontal, bool Zoom)? _worksheetWheelMode;
+
+    private int ResolveWorksheetWheelNotches(double delta, bool horizontal, bool zoom)
+    {
+        if (!double.IsFinite(delta) || delta == 0)
+            return 0;
+        if (!OperatingSystem.IsMacOS())
+            return WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(delta);
+
+        var mode = (horizontal, zoom);
+        if (_worksheetWheelMode != mode)
+        {
+            _worksheetWheelAccumulator.Reset();
+            _worksheetWheelMode = mode;
+        }
+
+        return _worksheetWheelAccumulator.Accumulate(delta);
+    }
+
     private void SheetScrollViewer_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
     {
         if (_formulaBox.IsFocused)
@@ -29367,36 +29389,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         CloseAutoFilterFlyout();
 
-        var vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.Y);
-        var horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.X);
+        // Select the axis before quantizing: both axes may carry tiny trackpad deltas, and rounding
+        // each to a sign loses which direction the gesture actually favors.
+        var vertical = double.IsFinite(e.Delta.Y) ? e.Delta.Y : 0;
+        var horizontal = double.IsFinite(e.Delta.X) ? e.Delta.X : 0;
+        if (!OperatingSystem.IsMacOS())
+        {
+            vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(vertical);
+            horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(horizontal);
+        }
+        var horizontalDominant = Math.Abs(horizontal) > Math.Abs(vertical);
 
         if (IsWheelZoomModifier(e.KeyModifiers))
         {
             // Ctrl+Scroll (Cmd+Scroll on macOS) = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
-            var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
+            var wheelScroll = ResolveWorksheetWheelNotches(
+                horizontalDominant ? horizontal : vertical, horizontalDominant, zoom: true);
             if (wheelScroll != 0)
-                ApplyZoomPercent(_session.ZoomPercent + wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
+                ApplyZoomPercent((int)Math.Clamp(
+                    _session.ZoomPercent + (long)wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent,
+                    int.MinValue, int.MaxValue), "Zoom failed.");
 
             e.Handled = true;
             return;
         }
 
-        var rowDelta = 0;
-        var colDelta = 0;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||
-            Math.Abs(horizontal) > Math.Abs(vertical))
-        {
-            var scroll = Math.Abs(horizontal) > 0 ? horizontal : vertical;
-            colDelta = -scroll;
-        }
-        else if (Math.Abs(vertical) > 0)
-        {
-            rowDelta = -vertical;
-        }
-
-        if (rowDelta == 0 && colDelta == 0)
+        var horizontalScroll = e.KeyModifiers.HasFlag(KeyModifiers.Shift) || horizontalDominant;
+        var scroll = OperatingSystem.IsMacOS()
+            ? (horizontalDominant ? horizontal : vertical)
+            : (horizontalScroll && horizontal != 0 ? horizontal : vertical);
+        var notches = ResolveWorksheetWheelNotches(scroll, horizontalScroll, zoom: false);
+        // Consume the packet even while a fractional Mac gesture is waiting for its next whole step,
+        // so an ancestor ScrollViewer cannot scroll independently of the worksheet viewport.
+        e.Handled = true;
+        if (notches == 0)
             return;
 
+        var rowDelta = horizontalScroll ? 0 : -notches;
+        var colDelta = horizontalScroll ? -notches : 0;
         var visibleSpan = colDelta != 0
             ? _horizontalWorksheetScrollBar.ViewportSize
             : _verticalWorksheetScrollBar.ViewportSize;
@@ -29432,7 +29462,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             splitTarget is { Region: SplitPanePointerRegion.TopRight, Horizontal: true } ||
             splitTarget is { Region: SplitPanePointerRegion.BottomLeft, Horizontal: false };
         var changed = routesToSharedScrollbar
-            ? _session.PanViewport(rowDelta * step, colDelta * step)
+            ? _session.PanViewport(
+                (int)Math.Clamp((long)rowDelta * step, int.MinValue, int.MaxValue),
+                (int)Math.Clamp((long)colDelta * step, int.MinValue, int.MaxValue))
             : false;
 
         if (changed)
