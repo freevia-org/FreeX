@@ -80,14 +80,15 @@ public sealed class DocxOpcRelationshipHelperTests
             .Contain("OpcMediaTypes.ReadDefaultContentTypes(archive)")
             .And.NotContain("Elements(Ct + \"Default\")");
 
-        SourceBetween(
-                writerSource,
-                "private static byte[] BuildChartWorkbook",
-                "    /// <summary>Builds an inline-string worksheet cell")
-            .Should()
+        // The embedded chart workbook scaffold (content types, package and workbook relationships) lives once
+        // in the shared EmbeddedChartWorkbookPackage; the writer only supplies the sheet data.
+        var sharedWorkbookSource = ReadRepoText("shared", "Free.Shared.Opc", "EmbeddedChartWorkbookPackage.cs");
+        sharedWorkbookSource.Should()
             .Contain("OpcRelationships.CreateRelationship(")
-            .And.Contain("OfficeDocumentRel")
             .And.NotContain("new XElement(Rel + \"Relationship\"");
+        writerSource.Should()
+            .Contain("EmbeddedChartWorkbookPackage.InlineStringCell(")
+            .And.NotContain("Builds an inline-string worksheet cell");
     }
 
     [Fact]
