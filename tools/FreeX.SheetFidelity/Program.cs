@@ -82,6 +82,12 @@ internal static class Program
         {
             Emit($"  Status: EXCEPTION — {ex.GetType().FullName}: {ex.Message}");
             Emit($"  Stack top: {FirstStackLine(ex)}");
+            for (var inner = ex.InnerException; inner is not null; inner = inner.InnerException)
+            {
+                Emit($"  Inner: {inner.GetType().FullName}: {inner.Message} @ {FirstStackLine(inner)}");
+                if (Environment.GetEnvironmentVariable("FIDELITY_FULL_STACK") == "1")
+                    Emit(inner.StackTrace ?? string.Empty);
+            }
             File.WriteAllText(reportPath, sb.ToString(), Encoding.UTF8);
             return 1;
         }

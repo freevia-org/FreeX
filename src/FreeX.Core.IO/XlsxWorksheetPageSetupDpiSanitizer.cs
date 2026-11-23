@@ -1,6 +1,8 @@
 using System.IO;
 using System.IO.Compression;
+using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
 
 namespace FreeX.Core.IO;
 
@@ -16,6 +18,8 @@ namespace FreeX.Core.IO;
 internal static class XlsxWorksheetPageSetupDpiSanitizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    private const long MaxStreamedWorksheetCharacters = 4L * 1024L * 1024L * 1024L;
 
     private static readonly string[] DpiAttributeNames = ["horizontalDpi", "verticalDpi"];
 
@@ -33,6 +37,10 @@ internal static class XlsxWorksheetPageSetupDpiSanitizer
         var changedAny = false;
         foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry).ToList())
         {
+            // Streaming pre-check per part so the DOM load below only ever runs for the rare part that needs it.
+            if (!EntryHasInvalidDpi(entry))
+                continue;
+
             var xml = XlsxPackageXmlEditor.LoadXml(entry);
             var root = xml.Root;
             if (root is null)
@@ -58,10 +66,49 @@ internal static class XlsxWorksheetPageSetupDpiSanitizer
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
         foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
         {
-            var xml = XlsxPackageXmlEditor.LoadXml(entry);
-            var pageSetup = xml.Root?.Element(WorksheetNs + "pageSetup");
-            if (pageSetup is not null && HasInvalidDpiAttribute(pageSetup))
+            if (EntryHasInvalidDpi(entry))
                 return true;
+        }
+
+        return false;
+    }
+
+    // STREAMING scan of one worksheet part: skips sheetData without building a DOM, so memory is bounded for
+    // very large worksheets (a 130-200 MB part otherwise tripped the DOM character cap and made the whole
+    // workbook fail to open as "not a valid .xlsx package").
+    private static bool EntryHasInvalidDpi(ZipArchiveEntry entry)
+    {
+        var settings = SecureXmlReaderSettings.Create(MaxStreamedWorksheetCharacters);
+        settings.IgnoreComments = true;
+        settings.IgnoreProcessingInstructions = true;
+        using var stream = entry.Open();
+        using var reader = XmlReader.Create(stream, settings);
+        if (reader.MoveToContent() != XmlNodeType.Element || reader.IsEmptyElement)
+            return false;
+
+        var depth = reader.Depth;
+        reader.Read();
+        while (!reader.EOF && reader.Depth > depth)
+        {
+            if (reader.NodeType != XmlNodeType.Element)
+            {
+                reader.Read();
+                continue;
+            }
+
+            if (reader.LocalName == "pageSetup" && reader.NamespaceURI == WorksheetNs.NamespaceName)
+            {
+                foreach (var name in DpiAttributeNames)
+                {
+                    var value = reader.GetAttribute(name);
+                    if (value is not null && !IsPositiveInt(value))
+                        return true;
+                }
+
+                return false;
+            }
+
+            reader.Skip();
         }
 
         return false;

@@ -628,7 +628,7 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
-                if (BuiltInFunctions.ScalarEquals(candidate, lookupValue))
+                if (BuiltInFunctions.ScalarEqualsExactLookup(candidate, lookupValue))
                 {
                     matchIndex = index;
                     return null;
@@ -644,7 +644,7 @@ public sealed partial class FormulaEvaluator
             if (candidate is ErrorValue error)
                 return error;
 
-            if (BuiltInFunctions.ScalarEquals(candidate, lookupValue))
+            if (BuiltInFunctions.ScalarEqualsExactLookup(candidate, lookupValue))
             {
                 matchIndex = index;
                 return null;
@@ -764,7 +764,7 @@ public sealed partial class FormulaEvaluator
             if (candidate is ErrorValue error)
                 return error;
 
-            if (BuiltInFunctions.ScalarEquals(candidate, lookupValue))
+            if (BuiltInFunctions.ScalarEqualsExactLookup(candidate, lookupValue))
             {
                 matchIndex = index;
                 return null;

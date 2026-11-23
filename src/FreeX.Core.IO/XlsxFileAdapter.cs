@@ -2363,6 +2363,11 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             if (IsClosedXmlRelationshipLookupFailure(ex))
                 return OpenPivotStripped();
 
+            // Must precede the shared-formula check: that predicate matches ANY ArgumentException thrown from
+            // inside ClosedXML, which includes this comments-load failure.
+            if (IsClosedXmlCommentsLoadFailure(ex))
+                return OpenWithMalformedVmlRepaired();
+
             if (IsClosedXmlSharedFormulaReconstructionFailure(ex))
                 return OpenOrphanedSharedFormulaSlavesStripped();
 
@@ -2486,6 +2491,34 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             {
                 if (!ReferenceEquals(definedNameStrippedPackageStream, packageStream))
                     definedNameStrippedPackageStream.Dispose();
+                throw;
+            }
+        }
+
+        ClosedXmlLoadResult OpenWithMalformedVmlRepaired()
+        {
+            packageStream.Position = 0;
+            var vmlRepairedPackageStream = MeasurePackagePreparation(() =>
+            {
+                var basePackageStream = CreateClosedXmlParsePackage(
+                    packageStream,
+                    styleOnlyWorksheetPathsToStrip,
+                    sanitizationHints,
+                    removeUnsupportedConditionalFormatting: false);
+                var repairedPackageStream = XlsxClosedXmlVmlRepair.CreateRepairedCopy(basePackageStream);
+                if (!ReferenceEquals(basePackageStream, packageStream))
+                    basePackageStream.Dispose();
+                return repairedPackageStream;
+            });
+            try
+            {
+                return Complete(
+                    vmlRepairedPackageStream,
+                    MeasureWorkbookOpen(() => new XLWorkbook(vmlRepairedPackageStream)));
+            }
+            catch
+            {
+                vmlRepairedPackageStream.Dispose();
                 throw;
             }
         }
@@ -2666,6 +2699,23 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
         return false;
     }
 
+    // ClosedXML's XLWorkbook.GetCommentShapes throws ArgumentException("Could not load comments file") when a
+    // sheet's legacy VML drawing is not well-formed XML -- e.g. Excel's form-button captions contain an unclosed
+    // <br>. Excel itself opens such files, so recover by repairing the VML in the ClosedXML-only parse copy.
+    private static bool IsClosedXmlCommentsLoadFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is ArgumentException argument &&
+                argument.Message.StartsWith("Could not load comments file", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsClosedXmlAssembly(Assembly? assembly) =>
         assembly?.GetName().Name?.StartsWith("ClosedXML", StringComparison.Ordinal) == true;
 
@@ -2756,6 +2806,22 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             body = body[1..].Trim();
 
         var scanStart = body.Length > 0 && body[0] == '\'' ? 1 : 0;
+
+        // An UNQUOTED sheet prefix that embeds an external-workbook ordinal after a space or text -- e.g.
+        // "VIPP [16]NA!$G$15:$DG$1042", which Excel itself wrote for a defined name -- is likewise a token
+        // ClosedXML cannot parse (it expects the sheet name to be quoted when it holds a space or bracket).
+        if (scanStart == 0)
+        {
+            var bang = body.IndexOf('!');
+            if (bang > 0)
+            {
+                var prefix = body[..bang];
+                var open = prefix.IndexOf('[');
+                if (open > 0 && prefix.IndexOf(']', open) > open)
+                    return true;
+            }
+        }
+
         if (scanStart >= body.Length || body[scanStart] != '[')
             return false;
 

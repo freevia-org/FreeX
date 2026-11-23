@@ -8,6 +8,12 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxClosedXmlStyleOnlyCellStripper
 {
+    // These passes STREAM a worksheet part (XmlReader -> XmlWriter, no DOM for the whole part), so memory is
+    // bounded regardless of part size; the default 64M-character document cap exists for DOM loads and made
+    // legitimate Excel workbooks with a single 130-200 MB worksheet part fail to open as "not a valid package".
+    // Zip-bomb protection stays with WorkbookOpenSizeGuard (central-directory totals) and DTD/resolver bans.
+    private const long MaxStreamedWorksheetCharacters = 4L * 1024L * 1024L * 1024L;
+
     public static MemoryStream Create(MemoryStream sourcePackage)
         => Create(sourcePackage, worksheetPathsToStrip: null);
 
@@ -108,7 +114,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
 
     private static bool ContainsDuplicateStyleOnlyCells(Stream worksheetStream)
     {
-        var settings = SecureXmlReaderSettings.Create();
+        var settings = SecureXmlReaderSettings.Create(MaxStreamedWorksheetCharacters);
         settings.IgnoreComments = true;
         settings.IgnoreProcessingInstructions = true;
         using var reader = XmlReader.Create(worksheetStream, settings);
@@ -193,7 +199,7 @@ internal static class XlsxClosedXmlStyleOnlyCellStripper
         var seenStyleIndexes = new HashSet<string>(StringComparer.Ordinal);
 
         // Comments and processing instructions are deliberately preserved (both default to false).
-        var readerSettings = SecureXmlReaderSettings.Create();
+        var readerSettings = SecureXmlReaderSettings.Create(MaxStreamedWorksheetCharacters);
         using var reader = XmlReader.Create(worksheetStream, readerSettings);
         var writerSettings = new XmlWriterSettings
         {
