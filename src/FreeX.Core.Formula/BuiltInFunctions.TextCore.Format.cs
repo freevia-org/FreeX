@@ -55,7 +55,16 @@ public static partial class BuiltInFunctions
             ExcelTextNumberParser.TryParse(numericLooking.Value, out var parsedNumber, uses1904DateSystem))
             return TextResult(NumberFormatter.Format(new NumberValue(parsedNumber), fmt, uses1904DateSystem));
         if (val is NumberValue or DateTimeValue or TextValue)
-            return TextResult(NumberFormatter.Format(val, fmt, uses1904DateSystem));
+        {
+            var formatted = NumberFormatter.Format(val, fmt, uses1904DateSystem);
+            // Measured against Excel: a date/time format applied to a number outside the date range is #VALUE!
+            // (TEXT(-1,"yyyy-mm-dd")), where a cell would merely display ####.
+            if (val is NumberValue && formatted.Length > 0 && formatted.All(static c => c == '#') &&
+                fmt.IndexOfAny(['y', 'Y', 'd', 'D', 'h', 'H', 's', 'S']) >= 0)
+                return ErrorValue.Value;
+            return TextResult(formatted);
+        }
+
         return TextResult(ToText(val));
     }
 

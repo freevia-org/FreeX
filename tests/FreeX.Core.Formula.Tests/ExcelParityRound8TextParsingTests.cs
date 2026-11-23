@@ -231,5 +231,25 @@ public class ExcelParityRound8TextParsingTests : IDisposable
         Eval("=DATEVALUE(\"13/1\")").Should().Be(ErrorValue.Value);
     }
 
+    // ------------------------------------------------------------------ DATE / TEXT edges
+
+    [Fact]
+    public void Date_SerialZero_IsAllowedOnlyBelowTheFirstOfAMonthIn1900()
+    {
+        Eval("=DATE(1900,1,0)").Should().Be(new NumberValue(0));
+        Eval("=DATE(0,1,0)").Should().Be(new NumberValue(0));
+        Eval("=DATE(1900,0,31)").Should().Be(ErrorValue.Num);   // the same day reached by a month underflow
+        Eval("=DATE(1900,1,-1)").Should().Be(ErrorValue.Num);
+        Eval("=DATE(-0.5,1,1)").Should().Be(ErrorValue.Num);
+    }
+
+    [Fact]
+    public void Text_DateFormatOutsideTheDateRange_IsValueError()
+    {
+        Eval("=TEXT(-1,\"yyyy-mm-dd\")").Should().Be(ErrorValue.Value);
+        Eval("=TEXT(2958466,\"yyyy-mm-dd\")").Should().Be(ErrorValue.Value);
+        Eval("=TEXT(1,\"yyyy-mm-dd\")").Should().Be(new TextValue("1900-01-01"));
+    }
+
     private static double ExcelSerial(DateTime date) => (date - new DateTime(1899, 12, 30)).TotalDays;
 }
