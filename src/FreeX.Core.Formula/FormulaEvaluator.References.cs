@@ -1139,13 +1139,20 @@ public sealed partial class FormulaEvaluator
             return range;
 
         var sheet = sheetContext.ResolveSheetForFastRange(range.SheetName);
-        if (sheet is null)
-            return range;
-
         uint endRow = range.End.Row;
         uint endCol = range.End.ColumnNumber;
 
-        if (sheet.GetUsedRange() is { } used)
+        if (sheet is null)
+        {
+            // An external-workbook sheet has no local used range; its link cache extent plays that role
+            // (the cache holds every non-blank cell of the ranges Excel referenced, full columns included).
+            if (!sheetContext.TryGetExternalCachedExtent(range.SheetName, out var extRow, out var extCol))
+                return range;
+
+            if (fullColumn) endRow = Math.Min(endRow, Math.Max(extRow, range.Start.Row));
+            if (fullRow) endCol = Math.Min(endCol, Math.Max(extCol, range.Start.ColumnNumber));
+        }
+        else if (sheet.GetUsedRange() is { } used)
         {
             if (fullColumn) endRow = Math.Min(endRow, Math.Max(used.End.Row, range.Start.Row));
             if (fullRow) endCol = Math.Min(endCol, Math.Max(used.End.Col, range.Start.ColumnNumber));
