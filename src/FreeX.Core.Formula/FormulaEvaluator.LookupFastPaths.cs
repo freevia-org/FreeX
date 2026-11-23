@@ -525,22 +525,8 @@ public sealed partial class FormulaEvaluator
         {
             // R75-formula-lookup-vhx-4-2: see EvaluateLegacyLookupDirectTable above for why the
             // blank-lookup-value coercion is needed here too.
-            var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
-            var descendingBest = -1;
-            for (var index = 0; index < reader.Count; index++)
-            {
-                var candidate = reader.GetValue(index);
-                if (candidate is ErrorValue error)
-                    return error;
-
-                if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
-                // Full scan keeping the last qualifying candidate (no early break) -- descending
-                // MATCH mirror of the R29-lookup-repass-1 fix; do not abort on the first row that
-                // falls below the lookup value. A genuinely blank candidate is let through the
-                // type-class filter for the same reason as above.
-                if (BuiltInFunctions.CompareScalar(candidate, lookupValue) >= 0)
-                    descendingBest = index;
-            }
+            // Excel's MATCH(-1) is a linear early-exit scan; see ApproximateDescendingIndex.
+            var descendingBest = BuiltInFunctions.ApproximateDescendingIndex(reader.Count, reader.GetValue, lookupValue);
 
             return descendingBest >= 0 ? new NumberValue(descendingBest + 1) : ErrorValue.NA;
         }

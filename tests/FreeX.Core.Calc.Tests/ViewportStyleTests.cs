@@ -61,7 +61,7 @@ public class ViewportStyleTests
         var vp = svc.GetViewport(workbook, sheet.Id, new ViewportRequest(1, 1, 500, 500));
 
         vp.Cells.Single(c => c.Row == 1 && c.Col == 1).DisplayText
-            .Should().Be("$     1,234.50");
+            .Should().Be(" $   1,234.50 "); // Excel keeps the _( and _) skip spaces at the edges
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public class ViewportStyleTests
 
         var negative = viewport.Cells.Single(c => c.Row == 1 && c.Col == 1);
         var positive = viewport.Cells.Single(c => c.Row == 1 && c.Col == 2);
-        negative.DisplayText.Should().Be("-2.50");
+        negative.DisplayText.Should().Be("2.50"); // Excel: a [<0] section drops the implicit minus
         positive.DisplayText.Should().Be("2.50");
         negative.Style!.FontColor.Should().Be(CellColor.FromArgb(255, 0, 0));
         // [Blue] maps to the Excel legacy palette pure blue (#0000FF = RGB 0,0,255),

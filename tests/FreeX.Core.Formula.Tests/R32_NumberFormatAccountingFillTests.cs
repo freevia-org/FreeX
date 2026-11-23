@@ -46,6 +46,6 @@ public class R32_NumberFormatAccountingFillTests
 
         var result = NumberFormatter.Format(new NumberValue(1234.5), format, 14);
 
-        result.Should().Be("$     1,234.50");
+        result.Should().Be(" $   1,234.50 ");
     }
 }

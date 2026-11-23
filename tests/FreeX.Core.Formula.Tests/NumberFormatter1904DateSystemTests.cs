@@ -49,7 +49,7 @@ public sealed class NumberFormatter1904DateSystemTests
             .Should().Be("1904-01-01");
 
         NumberFormatter.Format(new DateTimeValue(0), "yyyy-mm-dd", uses1904DateSystem: false)
-            .Should().Be("1899-12-31");
+            .Should().Be("1900-01-00"); // Excel: serial 0 is the non-date 1900-01-00 (COM verified)
     }
 
     [Fact]

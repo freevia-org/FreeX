@@ -60,8 +60,22 @@ public static partial class NumberFormatter
                FixedDenominatorFractionFormatRegex.IsMatch(stripped);
     }
 
+    private static readonly Regex FixedDenominatorLiteralRegex = new(@"(?<=\?)/(\d{2,})");
+
     private static string FormatSimpleFraction(double value, string format)
     {
+        // A multi-digit literal denominator ("# ?/100") contains 0 digits that the numeric-affix
+        // split would take for placeholders; lift it out and carry it separately.
+        int? literalDenominator = null;
+        var literalMatch = FixedDenominatorLiteralRegex.Match(format);
+        if (literalMatch.Success &&
+            int.TryParse(literalMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var literalValue) &&
+            literalValue > 0)
+        {
+            literalDenominator = literalValue;
+            format = format[..literalMatch.Index] + "/9" + format[(literalMatch.Index + literalMatch.Length)..];
+        }
+
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
         var stripped = FractionQuotedTextRegex.Replace(numericFormat, "");
         int? fixedDenominator = null;
@@ -70,7 +84,7 @@ public static partial class NumberFormatter
             int.TryParse(fixedDenominatorMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedDenominator) &&
             parsedDenominator > 0)
         {
-            fixedDenominator = parsedDenominator;
+            fixedDenominator = literalDenominator ?? parsedDenominator;
             suffix = suffix[fixedDenominatorMatch.Length..];
         }
 
@@ -209,27 +223,16 @@ public static partial class NumberFormatter
             // from the second iteration on), any term this large is already guaranteed to push
             // k past maxDenominator, so clamping avoids flooring a huge/overflowing double into
             // a long while still detecting the overshoot correctly below.
-            long a = x > maxDenominator + 2 ? maxDenominator + 2 : (long)Math.Floor(x);
+            long a = i > 0 && x > maxDenominator + 2 ? maxDenominator + 2 : (long)Math.Floor(x);
             long h = a * hPrev1 + hPrev2;
             long k = a * kPrev1 + kPrev2;
 
             if (k > maxDenominator || k <= 0)
             {
-                // The full convergent overshoots the bound. Fall back to the best
-                // semiconvergent (the largest partial term that still fits) and compare it
-                // against the previous convergent, keeping whichever is numerically closer.
-                long remainingA = kPrev1 > 0 ? (maxDenominator - kPrev2) / kPrev1 : 0;
-                if (remainingA > 0)
-                {
-                    long semiNumerator = remainingA * hPrev1 + hPrev2;
-                    long semiDenominator = remainingA * kPrev1 + kPrev2;
-                    double semiError = Math.Abs(value - semiNumerator / (double)semiDenominator);
-                    double prevError = kPrev1 > 0 ? Math.Abs(value - hPrev1 / (double)kPrev1) : double.MaxValue;
-                    (bestNumerator, bestDenominator) = semiError <= prevError
-                        ? (semiNumerator, semiDenominator)
-                        : (hPrev1, kPrev1);
-                }
-                else if (kPrev1 > 0)
+                // The next convergent overshoots the bound: Excel keeps the previous CONVERGENT and
+                // never a closer semiconvergent (verified against real Excel: 3.14159 with "??/??"
+                // is 22/7, not the closer 311/99; 0.333 with "???/???" is 1/3, not 332/997).
+                if (kPrev1 > 0)
                 {
                     bestNumerator = hPrev1;
                     bestDenominator = kPrev1;
@@ -282,6 +285,36 @@ public static partial class NumberFormatter
         return ScientificFormatRegex.IsMatch(stripped);
     }
 
+    /// <summary>
+    /// True for a scientific format whose mantissa part is made only of digit placeholders
+    /// (0 # ?) around an optional decimal point, e.g. "00.0E+00", "#.##E+0", "0.0##E+0". Excel
+    /// rounds the exponent down to a multiple of the integer placeholder count and zero-pads the
+    /// mantissa per placeholder (verified against real Excel), which .NET's custom numeric
+    /// formatter does not do, so these go through <see cref="FormatEngineering"/>.
+    /// </summary>
+    private static bool IsPlaceholderScientificFormat(string format)
+    {
+        var (_, rawNumericFormat, _) = ExtractNumericAffixes(format);
+        var numericFormat = FractionQuotedTextRegex.Replace(rawNumericFormat, "");
+        var eIndex = numericFormat.IndexOfAny(['e', 'E']);
+        if (eIndex <= 0)
+            return false;
+
+        var mantissa = numericFormat[..eIndex];
+        var dot = mantissa.IndexOf('.');
+        var intPart = dot >= 0 ? mantissa[..dot] : mantissa;
+        if (intPart.Length == 0)
+            return false;
+
+        foreach (var ch in mantissa)
+        {
+            if (ch is not ('0' or '#' or '?' or '.'))
+                return false;
+        }
+
+        return mantissa.IndexOf('.') == mantissa.LastIndexOf('.');
+    }
+
     private static bool IsEngineeringFormat(string format)
     {
         var stripped = FractionQuotedTextRegex.Replace(format, "");
@@ -290,7 +323,7 @@ public static partial class NumberFormatter
 
     private static string FormatScientific(double value, string format, IFormatProvider formatProvider)
     {
-        if (IsEngineeringFormat(format))
+        if (IsEngineeringFormat(format) || IsPlaceholderScientificFormat(format))
             return FormatEngineering(value, format, formatProvider);
 
         var (prefix, numericFormat, suffix) = ExtractNumericAffixes(format);
@@ -338,12 +371,16 @@ public static partial class NumberFormatter
 
         // Count digit-placeholders before the decimal (determines mantissa integer-digit width).
         string intPart = dotIndex >= 0 ? mantissaFmt[..dotIndex] : mantissaFmt;
-        int intWidth = intPart.Count(static c => c is '0' or '#');
+        int intWidth = intPart.Count(static c => c is '0' or '#' or '?');
+        string fracPattern = dotIndex >= 0 ? mantissaFmt[(dotIndex + 1)..] : "";
+        int requiredFractionDigits = fracPattern.LastIndexOf('0') + 1;
 
-        // Determine exponent grouping: count the zeros in the exponent format.
-        // "E+0" → group 1 (but snapped to 3 for engineering). For the ##0 pattern always snap to 3.
-        // Excel always uses groups of 3 when there is a leading # block before the 0.
-        const int exponentGroup = 3;
+        // Excel snaps the exponent down to a multiple of the integer-placeholder count
+        // ("0.0E+0" -> 1, "00.0E+0" -> 2, "##0.0E+0" -> 3, ...), verified against real Excel.
+        int exponentGroup = Math.Max(intWidth, 1);
+        decimal groupScale = 1m;
+        for (var g = 0; g < exponentGroup && g < 28; g++)
+            groupScale *= 10m;
 
         bool negative = value < 0;
         double absValue = Math.Abs(value);
@@ -395,7 +432,7 @@ public static partial class NumberFormatter
             exponent += exponentGroup;
             if (mantissaDecimal is { } md)
             {
-                md = Math.Round(md / 1000m, decimalPlaces, MidpointRounding.AwayFromZero);
+                md = Math.Round(md / groupScale, decimalPlaces, MidpointRounding.AwayFromZero);
                 mantissaDecimal = md;
                 mantissa = (double)md;
             }
@@ -406,19 +443,41 @@ public static partial class NumberFormatter
             }
         }
 
+        // Zero fills every integer placeholder with 0 ("000.0E+0" for "##0.0E+0", "0.E+0" for
+        // "#.##E+0"); a non-zero mantissa is zero/space padded only per the 0 / ? placeholders.
+
         // Format the mantissa using the decimal-place count.
         // For value == 0, Excel fills every digit placeholder (including # positions) with "0",
         // producing e.g. "000.0E+0" for "##0.0E+0".  Replicate that by using the full intWidth
         // as minimum padding when the mantissa is exactly zero.
-        string mantissaFmtSpec = absValue == 0
-            ? new string('0', intWidth) + (decimalPlaces > 0 ? "." + new string('0', decimalPlaces) : "")
-            : "F" + decimalPlaces.ToString(CultureInfo.InvariantCulture);
-        string mantissaStr = absValue == 0
-            ? mantissa.ToString(mantissaFmtSpec, formatProvider)
-            : mantissaDecimal is { } finalDecimal
-                ? finalDecimal.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture), formatProvider)
-                : mantissa.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture),
-                    formatProvider);
+        var fixedMantissa = mantissaDecimal is { } finalDecimal
+            ? finalDecimal.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture)
+            : mantissa.ToString("F" + decimalPlaces.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        var pointIndex = fixedMantissa.IndexOf('.');
+        var integerDigits = pointIndex >= 0 ? fixedMantissa[..pointIndex] : fixedMantissa;
+        var fractionDigits = pointIndex >= 0 ? fixedMantissa[(pointIndex + 1)..] : "";
+        // '#'/'?' fraction placeholders do not show trailing zeros beyond the required ones.
+        fractionDigits = fractionDigits.Length > requiredFractionDigits
+            ? fractionDigits[..requiredFractionDigits] + fractionDigits[requiredFractionDigits..].TrimEnd('0')
+            : fractionDigits;
+        if (absValue == 0)
+            integerDigits = new string('0', Math.Max(intWidth, 1));
+        else
+        {
+            for (var k = intPart.Length - integerDigits.Length - 1; k >= 0; k--)
+            {
+                if (intPart[k] == '0')
+                    integerDigits = "0" + integerDigits;
+                else if (intPart[k] == '?')
+                    integerDigits = " " + integerDigits;
+                else
+                    break;
+            }
+        }
+
+        var mantissaStr = integerDigits + (dotIndex >= 0 ? "." + fractionDigits : "");
+        if (formatProvider is NumberFormatInfo numberInfo && dotIndex >= 0)
+            mantissaStr = integerDigits + numberInfo.NumberDecimalSeparator + fractionDigits;
 
         // Format the exponent part to match Excel's sign and padding.
         // Excel uses E+3, E-3 etc. (always sign, minimal digits unless padded).
