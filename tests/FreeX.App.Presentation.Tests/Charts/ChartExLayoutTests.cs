@@ -232,14 +232,14 @@ public sealed class ChartExLayoutTests
     }
 
     [Fact]
-    public void Histogram_AutomaticBinCount_MatchesSqrtRule()
+    public void Histogram_AutomaticBinCount_MatchesExcelScottRule()
     {
-        // 9 values → ceil(sqrt(9)) = 3 bins.
+        // Excel (measured via ChartGroup.BinsCountValue): 1..10 -> Scott width 4.9 -> 2 bins.
         var chart = Chart(ChartType.Histogram);
-        var series = Series(0, "Hist", 1, 2, 3, 4, 5, 6, 7, 8, 9);
+        var series = Series(0, "Hist", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
         var layout = ChartLayoutEngine.Layout(Request(chart, [], [series]));
 
-        layout.Series[0].Bars.Should().HaveCount(3);
+        layout.Series[0].Bars.Should().HaveCount(2);
     }
 
     [Fact]
@@ -275,7 +275,7 @@ public sealed class ChartExLayoutTests
         layout.CategoryAxis.Should().NotBeNull();
         layout.CategoryAxis!.Ticks.Should().HaveCountGreaterThan(0);
         layout.ValueAxis.Should().NotBeNull();
-        layout.ValueAxis!.Title.Should().Be("Frequency", "default Y-axis title for histogram");
+        layout.ValueAxis!.Title.Should().BeNullOrEmpty("Excel draws no default value-axis title on a histogram");
     }
 
     [Fact]

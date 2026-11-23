@@ -479,6 +479,13 @@ public static partial class ChartRenderer
         if (GetSeriesFormat(chart, seriesIndex) is not { } format || format.ResolveStrokeColor(theme) is not { } stroke)
             return;
 
+        // Excel's legend swatch for a scatter-with-lines series is a short line through the marker.
+        if (source is ConnectedScatterSeries connected)
+        {
+            connected.LegendLineColor = OxyColor.FromRgb(stroke.R, stroke.G, stroke.B);
+            connected.LegendLineThickness = format.StrokeThickness ?? 2;
+        }
+
         var line = new PolylineAnnotation
         {
             Layer = AnnotationLayer.BelowSeries,
@@ -494,6 +501,35 @@ public static partial class ChartRenderer
         foreach (var point in source.Points)
             line.Points.Add(new DataPoint(point.X, point.Y));
         model.Annotations.Add(line);
+    }
+
+    /// <summary>
+    /// A scatter series whose legend swatch also shows the connecting line (a short stroke through the
+    /// marker, like Excel's "Scatter with Straight Lines and Markers") — the line itself is drawn by a
+    /// polyline annotation, which OxyPlot does not include in the legend.
+    /// </summary>
+    private sealed class ConnectedScatterSeries : ScatterSeries
+    {
+        public OxyColor? LegendLineColor { get; set; }
+
+        public double LegendLineThickness { get; set; } = 2;
+
+        public override void RenderLegend(IRenderContext rc, OxyRect legendBox)
+        {
+            if (LegendLineColor is { } color)
+            {
+                var midY = (legendBox.Top + legendBox.Bottom) / 2;
+                rc.DrawLine(
+                    [new ScreenPoint(legendBox.Left, midY), new ScreenPoint(legendBox.Right, midY)],
+                    color,
+                    LegendLineThickness,
+                    EdgeRenderingMode.Automatic,
+                    null,
+                    LineJoin.Round);
+            }
+
+            base.RenderLegend(rc, legendBox);
+        }
     }
 
     private static void ApplyScatterFormat(ScatterSeries series, ChartSeriesFormat? format, WorkbookTheme theme)
@@ -640,6 +676,9 @@ public static partial class ChartRenderer
         // means "no combo lines", so a plain stacked/clustered chart is unaffected.
         return ChartRenderPolicyPlanner.IsComboLineSeries(chart, seriesIndex);
     }
+
+    private static bool IsComboAreaSeries(ChartModel chart, int seriesIndex) =>
+        ChartRenderPolicyPlanner.IsComboAreaSeries(chart, seriesIndex);
 
     private static bool IsComboScatterSeries(ChartModel chart, int seriesIndex)
     {

@@ -51,12 +51,12 @@ public sealed class HistogramBinPlannerTests
     }
 
     [Fact]
-    public void AutomaticMode_UsesSquareRootBinCountAndCountsEveryValue()
+    public void AutomaticMode_UsesScottRuleAndCountsEveryValue()
     {
         var bins = HistogramBinPlanner.Compute(OneToTen, new HistogramBinningModel());
 
-        // sqrt(10) -> ceil = 4 bins.
-        bins.Should().HaveCount(4);
+        // Excel (COM ChartGroup): Scott width 4.9, ceil(9 / 4.9) = 2 bins.
+        bins.Should().HaveCount(2);
         bins.Sum(b => b.Count).Should().Be(OneToTen.Length);
     }
 
@@ -111,6 +111,36 @@ public sealed class HistogramBinPlannerTests
         bins.Sum(b => b.Count).Should().Be(OneToTen.Length);
     }
 
+    // Ground truth measured from real Excel (ChartGroup.BinWidthValue / BinsCountValue, automatic binning).
+    [Theory]
+    [InlineData(new double[] { 2, 3, 3, 4, 4, 4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 12, 12, 15, 18 }, 5.6, 3)]
+    [InlineData(new double[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, 4.9, 2)]
+    [InlineData(new double[] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210, 220, 230, 240, 250 }, 88, 3)]
+    [InlineData(new double[] { 0.1, 0.2, 0.25, 0.4, 0.5, 0.55, 0.9, 1.0, 1.4, 1.9, 2.2, 3.1 }, 1.4, 3)]
+    [InlineData(new double[] { 1000, 1200, 1500, 1700, 2100, 2500, 3000, 3100, 4800, 9000, 12000, 15000 }, 7100, 2)]
+    [InlineData(new double[] { 5, 5, 5, 5, 6, 6, 7 }, 1.4, 2)]
+    [InlineData(new double[] { -5, -3, -2, 0, 1, 2, 4, 8, 9, 15, 22, 30, 31 }, 18, 2)]
+    [InlineData(new double[] { 1, 50, 3, 77, 12, 34, 56, 89, 23, 45, 67, 90, 11, 13, 99, 100, 2, 4, 6, 8, 200, 150, 175, 60, 66, 70, 71, 72, 73, 74, 75 }, 56, 4)]
+    public void AutomaticMode_MatchesExcelMeasuredBinWidthAndCount(double[] values, double excelWidth, int excelCount)
+    {
+        var bins = HistogramBinPlanner.Compute(values, new HistogramBinningModel());
+
+        bins.Should().HaveCount(excelCount);
+        (bins[0].Max - bins[0].Min).Should().BeApproximately(excelWidth, 1e-6);
+        bins.Sum(b => b.Count).Should().Be(values.Length);
+    }
+
+    [Fact]
+    public void AutomaticMode_UsesRightClosedBinsAndExcelLabels()
+    {
+        double[] values = [2, 3, 3, 4, 4, 4, 5, 5, 6, 7, 7, 8, 9, 9, 10, 11, 12, 12, 15, 18];
+        var bins = HistogramBinPlanner.Compute(values, new HistogramBinningModel());
+
+        // Excel renders [2, 7.6] / (7.6, 13.2] / (13.2, 18.8] with 11 / 7 / 2 values.
+        bins.Select(b => b.Label).Should().Equal("[2, 7.6]", "(7.6, 13.2]", "(13.2, 18.8]");
+        bins.Select(b => b.Count).Should().Equal(11, 7, 2);
+    }
+
     [Fact]
     public void AllEqualValues_ProduceASingleBinHoldingEveryValue()
     {
@@ -135,7 +165,7 @@ public sealed class HistogramBinPlannerTests
 
         bins.First().Label.Should().StartWith("≤");
         bins.Last().Label.Should().StartWith(">");
-        bins.Single(b => b.Kind == HistogramBinKind.Normal && b == bins[1]).Label.Should().Contain("–");
+        bins.Single(b => b.Kind == HistogramBinKind.Normal && b == bins[1]).Label.Should().StartWith("(").And.EndWith("]");
     }
 
     [Fact]

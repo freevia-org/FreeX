@@ -33,6 +33,12 @@ public sealed class ChartSeriesData
 
     /// <summary>For stock series: the per-category open values (open-high-low-close). Optional.</summary>
     public IReadOnlyList<double?>? OpenValues { get; init; }
+
+    /// <summary>
+    /// For stock series: the legend names of the merged columns in plotting order (Open?, High, Low, Close),
+    /// taken from the header cells. Null falls back to the English column roles.
+    /// </summary>
+    public IReadOnlyList<string>? StockLegendNames { get; init; }
 }
 
 /// <summary>

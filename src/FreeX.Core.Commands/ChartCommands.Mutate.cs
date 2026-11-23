@@ -234,6 +234,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private List<int>? _previousSecondaryAxisSeriesIndexes;
     private List<int>? _previousComboLineSeriesIndexes;
     private List<int>? _previousComboScatterSeriesIndexes;
+    private List<int>? _previousComboAreaSeriesIndexes;
     private int? _previousTrendlineSeriesIndex;
     private int? _previousErrorBarSeriesIndex;
     private bool? _previousShowLinearTrendline;
@@ -345,6 +346,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             _previousSecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes;
             _previousComboLineSeriesIndexes = chart.ComboLineSeriesIndexes;
             _previousComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes;
+            _previousComboAreaSeriesIndexes = chart.ComboAreaSeriesIndexes;
             _previousTrendlineSeriesIndex = chart.TrendlineSeriesIndex;
             _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
             _previousShowLinearTrendline = chart.ShowLinearTrendline;
@@ -372,6 +374,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.SecondaryAxisSeriesIndexes = [];
             chart.ComboLineSeriesIndexes = [];
             chart.ComboScatterSeriesIndexes = [];
+            chart.ComboAreaSeriesIndexes = [];
             chart.TrendlineSeriesIndex = 0;
             chart.ErrorBarSeriesIndex = 0;
             chart.ShowLinearTrendline = false;
@@ -421,6 +424,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.SecondaryAxisSeriesIndexes = _previousSecondaryAxisSeriesIndexes ?? [];
             chart.ComboLineSeriesIndexes = _previousComboLineSeriesIndexes ?? [];
             chart.ComboScatterSeriesIndexes = _previousComboScatterSeriesIndexes ?? [];
+            chart.ComboAreaSeriesIndexes = _previousComboAreaSeriesIndexes ?? [];
             chart.TrendlineSeriesIndex = _previousTrendlineSeriesIndex ?? 0;
             chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex ?? 0;
             chart.ShowLinearTrendline = _previousShowLinearTrendline ?? false;
@@ -453,6 +457,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousSecondaryAxisSeriesIndexes = null;
         _previousComboLineSeriesIndexes = null;
         _previousComboScatterSeriesIndexes = null;
+        _previousComboAreaSeriesIndexes = null;
         _previousTrendlineSeriesIndex = null;
         _previousErrorBarSeriesIndex = null;
         _previousShowLinearTrendline = null;

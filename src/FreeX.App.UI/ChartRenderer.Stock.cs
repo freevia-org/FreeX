@@ -42,7 +42,12 @@ public static partial class ChartRenderer
             return model;
 
         if (hasVolumeColumn)
+        {
+            // Excel plots the volume columns against the primary (left) axis and the price series on a
+            // secondary (right) axis, so the prices keep their own scale.
+            model.Axes.Add(new LinearAxis { Position = AxisPosition.Right, Key = SecondaryYAxisKey });
             AddStockVolumeSeries(model, cellLookup, dataStartRow, endRow, dataStartCol, xValues);
+        }
 
         var openCol = hasOpenColumn ? dataStartCol + volumeOffset : (uint?)null;
         var highCol = dataStartCol + volumeOffset + (hasOpenColumn ? 1u : 0u);
@@ -52,6 +57,8 @@ public static partial class ChartRenderer
             return model;
 
         var series = CreateStockPriceSeries(chart, hasOpenColumn, theme);
+        if (hasVolumeColumn)
+            series.YAxisKey = SecondaryYAxisKey;
 
         for (uint row = dataStartRow; row <= endRow; row++)
         {
@@ -71,9 +78,41 @@ public static partial class ChartRenderer
         }
 
         model.Series.Add(series);
+        AddStockLegendEntries(model, chart, cellLookup, headerRow, volumeOffset, hasOpenColumn, dataStartCol);
         AddHighLowLinesIfRequested(model, chart, theme, series.Items);
         AddDropLinesIfRequested(model, chart, theme, series.Items);
         return model;
+    }
+
+    /// <summary>
+    /// Excel's stock legend lists the plotted series by name (<c>Open High Low Close</c>, or just
+    /// <c>High Low Close</c>) instead of one "Stock" entry. OxyPlot draws legend rows from series titles, so
+    /// each name is carried by an empty, invisible line series; the real price series stays out of the legend.
+    /// </summary>
+    private static void AddStockLegendEntries(
+        PlotModel model,
+        ChartModel chart,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup,
+        uint headerRow,
+        uint volumeOffset,
+        bool hasOpenColumn,
+        uint dataStartCol)
+    {
+        var defaults = hasOpenColumn
+            ? new[] { "Open", "High", "Low", "Close" }
+            : new[] { "High", "Low", "Close" };
+        for (var i = 0; i < defaults.Length; i++)
+        {
+            var name = defaults[i];
+            if (chart.FirstRowIsHeader &&
+                cellLookup.TryGetValue((headerRow, dataStartCol + volumeOffset + (uint)i), out var header) &&
+                !string.IsNullOrWhiteSpace(header.DisplayText))
+            {
+                name = header.DisplayText;
+            }
+
+            model.Series.Add(new LineSeries { Title = name, Color = OxyColors.Transparent, StrokeThickness = 0, MarkerType = MarkerType.None });
+        }
     }
 
     private static HighLowSeries CreateStockPriceSeries(ChartModel chart, bool hasOpenColumn, WorkbookTheme theme)
@@ -82,7 +121,7 @@ public static partial class ChartRenderer
         {
             return new CandleStickSeries
             {
-                Title = "Stock",
+                Title = null,
                 StrokeThickness = GetUpDownBarBorderThickness(chart),
                 Color = ToOxyColor(GetUpDownBarBorderColor(chart, theme)) ?? OxyColors.Black,
                 IncreasingColor = ToOxyColor(chart.UpBarFillThemeColor?.Resolve(theme) ?? chart.UpBarFillColor) ?? OxyColors.White,
@@ -93,9 +132,10 @@ public static partial class ChartRenderer
 
         return new HighLowSeries
         {
-            Title = "Stock",
-            StrokeThickness = 1.5,
-            Color = OxyColors.Black
+            Title = null,
+            StrokeThickness = 1,
+            // Excel's high-low line is tx1 65% (595959), not black.
+            Color = OxyColor.FromRgb(0x59, 0x59, 0x59)
         };
     }
 
@@ -190,7 +230,8 @@ public static partial class ChartRenderer
     private static double GetUpDownBarBorderThickness(ChartModel chart)
     {
         var thickness = Math.Max(chart.UpBarBorderThickness ?? 1.5, chart.DownBarBorderThickness ?? 1.5);
-        return double.IsFinite(thickness) ? Math.Clamp(thickness, 0, 20) : 1.5;
+        // 0.75 pt (Excel's default 9525 EMU rule) would anti-alias to a faint hairline at 1:1; keep it a visible 1 px.
+        return double.IsFinite(thickness) ? Math.Clamp(thickness, 1, 20) : 1.5;
     }
 
     private static CellColor? GetUpDownBarBorderColor(ChartModel chart, WorkbookTheme theme) =>
@@ -207,12 +248,12 @@ public static partial class ChartRenderer
         uint volumeCol,
         IReadOnlyList<double> xValues)
     {
+        // Excel draws the volume columns in the first accent colour, opaque, with a 150 % gap (half width 0.2).
         var series = new RectangleBarSeries
         {
             Title = "Volume",
-            FillColor = OxyColor.FromArgb(90, 91, 155, 213),
-            StrokeColor = OxyColor.FromArgb(140, 91, 155, 213),
-            StrokeThickness = 0.5
+            FillColor = model.DefaultColors[0],
+            StrokeThickness = 0
         };
 
         var i = 0;
@@ -222,7 +263,7 @@ public static partial class ChartRenderer
                 break;
 
             if (TryGetNumericCell(cellLookup, row, volumeCol, out var volume))
-                series.Items.Add(new RectangleBarItem(xValues[i] - 0.35, 0, xValues[i] + 0.35, volume));
+                series.Items.Add(new RectangleBarItem(xValues[i] - 0.2, 0, xValues[i] + 0.2, volume));
         }
 
         model.Series.Add(series);

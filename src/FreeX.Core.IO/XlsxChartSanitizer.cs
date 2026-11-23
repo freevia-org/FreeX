@@ -10,7 +10,8 @@ internal static class XlsxChartSanitizer
         ChartSeriesIndexSanitizer.SanitizeSecondaryAxisAndComboLineIndexes(chart, seriesCount);
 
         ChartTrendlineSupportPolicy.NormalizeUnsupported(chart);
-        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
+        // A waterfall's connector lines reuse ShowSeriesLines (<cx:visibility connectorLines>).
+        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type) && chart.Type != ChartType.Waterfall)
         {
             chart.ShowSeriesLines = false;
             chart.SeriesLineColor = null;

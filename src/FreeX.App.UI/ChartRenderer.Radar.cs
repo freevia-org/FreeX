@@ -49,12 +49,14 @@ public static partial class ChartRenderer
             var seriesName = chart.FirstRowIsHeader && cellLookup.TryGetValue((headerRow, col), out var header)
                 ? header.DisplayText
                 : $"Series {seriesIndex + 1}";
-            var series = CreateLineSeries(chart, seriesName, seriesIndex, theme);
+            var series = chart.RadarFilled == true
+                ? CreateFilledRadarSeries(chart, seriesName, seriesIndex, theme)
+                : CreateLineSeries(chart, seriesName, seriesIndex, theme);
             series.MarkerType = MarkerType.Circle;
             if (chart.RadarFilled == true)
             {
-                // Excel's filled radar has no markers and an outline-less fill; OxyPlot's polar plot cannot fill a
-                // polygon, so the series is drawn as its coloured outline instead of vanishing.
+                // Excel's filled radar has no markers and an opaque polygon fill in the series colour; the
+                // polygon itself is painted by FilledRadarSeries (OxyPlot's polar plot has no area series).
                 series.MarkerType = MarkerType.None;
                 if (series.LineStyle == LineStyle.None)
                     series.LineStyle = LineStyle.Solid;
@@ -84,5 +86,53 @@ public static partial class ChartRenderer
         }
 
         return model;
+    }
+
+    private static FilledRadarSeries CreateFilledRadarSeries(ChartModel chart, string seriesName, int seriesIndex, WorkbookTheme theme)
+    {
+        var line = CreateLineSeries(chart, seriesName, seriesIndex, theme);
+        var filled = new FilledRadarSeries
+        {
+            Title = line.Title,
+            Color = line.Color,
+            StrokeThickness = line.StrokeThickness,
+            LineStyle = line.LineStyle,
+            MarkerType = line.MarkerType,
+        };
+        var fill = GetSeriesFormat(chart, seriesIndex)?.ResolveFillColor(theme);
+        filled.AreaFill = fill is { } f
+            ? ApplyFillAlpha(OxyColor.FromRgb(f.R, f.G, f.B), GetSeriesFormat(chart, seriesIndex)?.FillAlpha)
+            : line.Color;
+        return filled;
+    }
+
+    /// <summary>
+    /// A polar line series that also paints the closed polygon its points enclose. OxyPlot's polar plot
+    /// has no area series, so the polygon is filled through the same polar transform the line uses and the
+    /// outline is then drawn on top by the base series — Excel's "Filled Radar".
+    /// </summary>
+    private sealed class FilledRadarSeries : LineSeries
+    {
+        public OxyColor AreaFill { get; set; }
+
+        public override void Render(IRenderContext rc)
+        {
+            // The series colour is Automatic until OxyPlot assigns it from the palette at update time.
+            var fill = AreaFill.IsAutomatic() ? ActualColor : AreaFill;
+            if (Points.Count >= 3 && !fill.IsInvisible())
+            {
+                var polygon = new List<ScreenPoint>(Points.Count);
+                foreach (var point in Points)
+                {
+                    if (!double.IsNaN(point.X) && !double.IsNaN(point.Y))
+                        polygon.Add(Transform(point));
+                }
+
+                if (polygon.Count >= 3)
+                    rc.DrawPolygon(polygon, fill, OxyColors.Undefined, 0, EdgeRenderingMode.Automatic);
+            }
+
+            base.Render(rc);
+        }
     }
 }

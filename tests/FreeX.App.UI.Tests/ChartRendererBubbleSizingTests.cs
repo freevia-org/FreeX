@@ -54,7 +54,7 @@ public sealed class ChartRendererBubbleSizingTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Select(p => p.Size).Should().Equal(
             ExpectedRadius(4, 8, ChartBubbleSizeRepresents.Area) * 0.5,
             ExpectedRadius(8, 8, ChartBubbleSizeRepresents.Area) * 0.5);
@@ -87,7 +87,7 @@ public sealed class ChartRendererBubbleSizingTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Select(p => p.Size).Should().Equal(
             ExpectedRadius(4, 8, ChartBubbleSizeRepresents.Width),
             ExpectedRadius(8, 8, ChartBubbleSizeRepresents.Width));
@@ -122,7 +122,7 @@ public sealed class ChartRendererBubbleSizingTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Select(p => (p.X, p.Y)).Should().Equal((1, 10));
     }
 
@@ -153,7 +153,7 @@ public sealed class ChartRendererBubbleSizingTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Select(p => (p.X, p.Y, p.Size)).Should().Equal(
             (1, 10, ExpectedRadius(4, 8, ChartBubbleSizeRepresents.Area)),
             (2, 20, ExpectedRadius(-8, 8, ChartBubbleSizeRepresents.Area)));

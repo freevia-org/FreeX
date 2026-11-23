@@ -28,7 +28,15 @@ public static partial class ChartRenderer
         }
 
         int n = values.Count;
-        var bars = new RectangleBarSeries { FillColor = OxyColors.Transparent };
+        // Excel lists (and colours) the columns by role: Increase = accent 1, Decrease = accent 2,
+        // Total = accent 3. One series per role so the legend carries Excel's three entries.
+        var palette = model.DefaultColors;
+        var roleSeries = new[]
+        {
+            new RectangleBarSeries { Title = "Increase", FillColor = palette[0], StrokeThickness = 0 },
+            new RectangleBarSeries { Title = "Decrease", FillColor = palette[1], StrokeThickness = 0 },
+            new RectangleBarSeries { Title = "Total", FillColor = palette[2], StrokeThickness = 0 },
+        };
         var connectors = chart.ShowSeriesLines
             ? CreateSeriesLineConnectorSeries(chart, theme)
             : null;
@@ -42,10 +50,13 @@ public static partial class ChartRenderer
         for (int i = 0; i < plan.Count; i++)
         {
             var bar = plan[i];
-            var color = ToOxyColor(ChartRenderPolicyPlanner.ResolveWaterfallBarColor(bar.Kind))
-                ?? OxyColors.Transparent;
-
-            bars.Items.Add(new RectangleBarItem(i - 0.35, bar.Bottom, i + 0.35, bar.Top) { Color = color });
+            var roleIndex = bar.Kind switch
+            {
+                WaterfallBarKind.Increase => 0,
+                WaterfallBarKind.Decrease => 1,
+                _ => 2,
+            };
+            roleSeries[roleIndex].Items.Add(new RectangleBarItem(i - 0.35, bar.Bottom, i + 0.35, bar.Top));
 
             // Connect each column to the next at the running-cumulative level (no connector after the
             // final column). Totals are anchors but the running total still flows through them.
@@ -53,7 +64,8 @@ public static partial class ChartRenderer
                 AddWaterfallConnector(connectors, i, bar.CumulativeAfter);
         }
 
-        model.Series.Add(bars);
+        foreach (var role in roleSeries)
+            model.Series.Add(role);
         if (connectors?.Points.Count > 0)
             model.Series.Add(connectors);
 
@@ -171,19 +183,22 @@ public static partial class ChartRenderer
         var bins = HistogramBinPlanner.Compute(rawValues, chart.HistogramBinning ?? new HistogramBinningModel());
         if (bins.Count == 0) return model;
 
+        // Excel draws histogram columns edge to edge (gap width 0) in the first accent colour.
         var bars = new RectangleBarSeries
         {
-            FillColor = ToOxyColor(ChartRenderPolicyPlanner.WaterfallTotalColor) ?? OxyColors.Transparent
+            FillColor = model.DefaultColors[0],
+            StrokeColor = OxyColors.White,
+            StrokeThickness = 1,
         };
         for (int i = 0; i < bins.Count; i++)
-            bars.Items.Add(new RectangleBarItem(i - 0.45, 0, i + 0.45, bins[i].Count));
+            bars.Items.Add(new RectangleBarItem(i - 0.5, 0, i + 0.5, bins[i].Count));
         model.Series.Add(bars);
 
         var catAxis = new CategoryAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle };
         foreach (var bin in bins)
             catAxis.Labels.Add(bin.Label);
         model.Axes.Add(catAxis);
-        model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle?.Length > 0 ? chart.YAxisTitle : "Frequency" });
+        model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
 
         return model;
     }

@@ -46,7 +46,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Title.Should().Be("Revenue");
         series.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (2, 20));
     }
@@ -95,8 +95,8 @@ public sealed partial class ChartRendererTests
             []));
 
         model.Series.Should().HaveCount(2);
-        var first = model.Series[0].Should().BeOfType<ScatterSeries>().Subject;
-        var second = model.Series[1].Should().BeOfType<ScatterSeries>().Subject;
+        var first = model.Series[0].Should().BeAssignableTo<ScatterSeries>().Subject;
+        var second = model.Series[1].Should().BeAssignableTo<ScatterSeries>().Subject;
 
         first.Title.Should().Be("Revenue");
         first.MarkerType.Should().Be(MarkerType.Diamond);
@@ -141,7 +141,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Title.Should().Be("Revenue");
         series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
             (1, 10, ExpectedBubbleRadius(4, 8)),
@@ -187,7 +187,7 @@ public sealed partial class ChartRendererTests
 
         // The shared bubble-size maximum is 8 (the largest |size| across both series), so Series B's
         // radii (sizes 3 and 6) scale relative to that same maximum rather than its own local max.
-        var series = model.Series.Should().HaveCount(2).And.AllBeOfType<ScatterSeries>().Subject.Cast<ScatterSeries>().ToList();
+        var series = model.Series.Should().HaveCount(2).And.AllBeAssignableTo<ScatterSeries>().Subject.Cast<ScatterSeries>().ToList();
         series[0].Title.Should().Be("Margin A");
         series[0].Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
             (1, 10, ExpectedBubbleRadius(4, 8)),
@@ -226,7 +226,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Title.Should().Be("Revenue");
         series.Points.Select(point => (point.X, point.Y, point.Size)).Should().Equal(
             (1, 10, ExpectedBubbleRadius(4, 8)),

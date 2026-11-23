@@ -647,6 +647,30 @@ public static class ChartLayoutRequestBuilder
             opens?.Add(openCol is { } oc && cellAccessor(r, oc, out var o, out _) ? o : null);
         }
 
+        var legendNames = new List<string>(4);
+        var headerRow = dataStartRow > 0 ? dataStartRow - 1 : 0;
+        void AddName(uint? column, string fallback)
+        {
+            if (column is not { } col)
+                return;
+            var name = fallback;
+            if (chart.FirstRowIsHeader && cellAccessor(headerRow, col, out _, out var header) && !string.IsNullOrWhiteSpace(header))
+                name = header;
+            else if (chart.FirstRowIsHeader)
+            {
+                cellAccessor(headerRow, col, out _, out var text);
+                if (!string.IsNullOrWhiteSpace(text))
+                    name = text;
+            }
+
+            legendNames.Add(name);
+        }
+
+        AddName(openCol, "Open");
+        AddName(highCol, "High");
+        AddName(lowCol, "Low");
+        AddName(closeCol, "Close");
+
         return
         [
             new ChartSeriesData
@@ -657,6 +681,7 @@ public static class ChartLayoutRequestBuilder
                 HighValues = highs,
                 LowValues = lows,
                 OpenValues = opens,
+                StockLegendNames = legendNames,
             }
         ];
     }

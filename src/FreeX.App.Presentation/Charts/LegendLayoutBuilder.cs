@@ -170,6 +170,15 @@ internal static class LegendLayoutBuilder
         }
 
         var entries = BuildEntries(measured, bounds, isVertical, entryHeight);
+        if (chart.Type == ChartType.Stock)
+            entries = entries.Select(e => e with { HideSwatch = true }).ToList();
+        if (chart.Type == ChartType.Waterfall)
+        {
+            // Index 0/1/2 of the synthetic waterfall labels map to Increase / Decrease / Total.
+            entries = entries
+                .Select(e => e with { WaterfallKind = (WaterfallBarKind)Math.Clamp(e.SeriesIndex, 0, 2) })
+                .ToList();
+        }
 
         // A host whose own renderer already settled the plot rectangle (WPF/OxyPlot) lays the series out
         // inside exactly that rectangle instead of letting the portable legend gutter shrink it again.
@@ -234,8 +243,28 @@ internal static class LegendLayoutBuilder
             return labels;
         }
 
+        // A waterfall legend lists the column roles, not the series (Excel: Increase, Decrease, Total).
+        if (chart.Type == ChartType.Waterfall)
+            return [(0, "Increase", null), (1, "Decrease", null), (2, "Total", null)];
+
+        // A stock legend lists the High / Low / Close (and Open) columns by name, without swatches.
+        if (chart.Type == ChartType.Stock && request.Series.Count > 0)
+        {
+            var stock = request.Series[0];
+            IReadOnlyList<string> names = stock.StockLegendNames
+                ?? (stock.OpenValues is null ? new[] { "High", "Low", "Close" } : new[] { "Open", "High", "Low", "Close" });
+            var stockLabels = new List<(int, string, ChartModel?)>(names.Count);
+            for (var i = 0; i < names.Count; i++)
+                stockLabels.Add((i, names[i], null));
+            return stockLabels;
+        }
+
         var entries = new List<(int, string, ChartModel?)>(request.Series.Count);
-        foreach (var series in request.Series)
+        // A column + area combo lists the area group first (Excel declares <c:areaChart> before <c:barChart>).
+        IEnumerable<ChartSeriesData> orderedSeries = chart.ComboAreaSeriesIndexes.Count > 0 && chart.SeriesPlotOrder.Count > 0
+            ? request.Series.OrderBy(s => { var at = chart.SeriesPlotOrder.IndexOf(s.SeriesIndex); return at < 0 ? int.MaxValue : at; })
+            : request.Series;
+        foreach (var series in orderedSeries)
         {
             if (ChartRenderPolicyPlanner.IsLegendEntryDeleted(chart, series.SeriesIndex))
                 continue;

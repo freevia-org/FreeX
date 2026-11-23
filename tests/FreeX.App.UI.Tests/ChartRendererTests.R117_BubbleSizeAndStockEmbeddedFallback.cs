@@ -53,7 +53,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model!.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Should().HaveCount(2);
 
         // THE FIX: pre-fix, the reserved size column was always empty (SizeValues didn't exist on
@@ -88,7 +88,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model!.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Should().HaveCount(2);
         series.Points[0].Size.Should().Be(series.Points[1].Size, "no cached size data means every bubble keeps the uniform default radius");
     }
@@ -114,7 +114,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<HighLowSeries>().Subject;
+        var series = model!.Series.OfType<HighLowSeries>().Should().ContainSingle().Subject;
         series.Items.Should().HaveCount(2, "2 cached OHLC rows must produce 2 stock bars, not a blank chart");
         series.Items[0].High.Should().Be(108.0);
         series.Items[0].Low.Should().Be(98.0);
@@ -146,7 +146,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<HighLowSeries>().Subject;
+        var series = model!.Series.OfType<HighLowSeries>().Should().ContainSingle().Subject;
         series.Items.Should().ContainSingle().Which.Open.Should().Be(15.0, "HighLowClose (3-column) has no Open series, so Open falls back to Close");
     }
 
@@ -181,7 +181,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, viewport);
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<HighLowSeries>().Subject;
+        var series = model!.Series.OfType<HighLowSeries>().Should().ContainSingle().Subject;
         var item = series.Items.Should().ContainSingle().Subject;
         item.Open.Should().Be(101.0);
         item.High.Should().Be(108.0);

@@ -353,6 +353,21 @@ public sealed class AvaloniaChartRenderer
         // Fix 7: NoFill / NoLine — transparent helper/invisible bars.
         var paint = ChartStylePlanner.ResolveBarPaint(_chart, series.SeriesIndex, _theme, ThemePalette);
         var stroke = paint.StrokeColor is { } strokeColor ? SolidBrush(strokeColor) : null;
+        var barStrokeThickness = paint.StrokeThickness;
+        if (_chart.Type == ModelChartType.Waterfall)
+        {
+            // Excel draws waterfall columns without an outline.
+            stroke = null;
+            barStrokeThickness = 0;
+        }
+
+        if (_chart.Type == ModelChartType.Histogram && stroke is null)
+        {
+            // Excel separates the edge-to-edge histogram columns with a thin white rule.
+            stroke = Brushes.White;
+            barStrokeThickness = 1;
+        }
+
         var isThreeD = _chart.Type is ModelChartType.ThreeDColumn or ModelChartType.ThreeDBar;
 
         foreach (var bar in series.Bars)
@@ -365,7 +380,11 @@ public sealed class AvaloniaChartRenderer
             // increase/decrease/total coloring also arrives via FillColorOverride.
             var varyColorsFill = ChartStylePlanner.ResolveVaryColorsPointFill(
                 _chart, series.SeriesIndex, bar.PointIndex, barSeriesCount, _theme, ThemePalette);
-            CellColor? barColor = bar.FillColorOverride
+            CellColor? waterfallColor = bar.WaterfallKind is { } waterfallKind
+                ? ChartRenderPolicyPlanner.ResolveWaterfallBarColor(waterfallKind, ThemePalette)
+                : null;
+            CellColor? barColor = waterfallColor
+                ?? bar.FillColorOverride
                 ?? varyColorsFill
                 ?? paint.FillColor;
             IBrush barFill = barColor is { } resolvedColor
@@ -384,7 +403,7 @@ public sealed class AvaloniaChartRenderer
                 Height = Math.Max(1, bar.Rect.Height),
                 Fill = barFill,
                 Stroke = stroke,
-                StrokeThickness = paint.StrokeThickness,
+                StrokeThickness = barStrokeThickness,
             };
             Canvas.SetLeft(rect, bar.Rect.Left);
             Canvas.SetTop(rect, bar.Rect.Top);
@@ -519,7 +538,7 @@ public sealed class AvaloniaChartRenderer
             return;
 
         var format = FindSeriesFormat(series.SeriesIndex);
-        var fill = SeriesFill(series.SeriesIndex, alpha: 0xA0);
+        var fill = SeriesFill(series.SeriesIndex);
         var stroke = SeriesStroke(series.SeriesIndex);
         var dashStyle = format?.DashStyle;
         // F19: honor the series' persisted StrokeThickness, falling back to DefaultSeriesStrokeThickness
@@ -676,7 +695,7 @@ public sealed class AvaloniaChartRenderer
 
         var format = FindSeriesFormat(series.SeriesIndex);
         // Only Excel's "Filled Radar" fills the polygons; the default radar is an outline per series.
-        var fill = _chart.RadarFilled == true ? SeriesFill(series.SeriesIndex, alpha: 0xB0) : Brushes.Transparent;
+        var fill = _chart.RadarFilled == true ? SeriesFill(series.SeriesIndex, alpha: 0xFF) : Brushes.Transparent;
         var stroke = SeriesStroke(series.SeriesIndex);
         // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
         var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
@@ -700,9 +719,16 @@ public sealed class AvaloniaChartRenderer
 
     private void RenderStock(Canvas canvas, SeriesLayout series)
     {
-        var stroke = SeriesStroke(series.SeriesIndex);
-        var upFill = SolidBrush(0xFF, 0xFF, 0xFF);
-        var downFill = stroke;
+        // Excel draws stock charts in neutral greys, not the series colour: up bars white, down bars dark
+        // grey, both outlined (and the high-low line drawn) in tx1 65% unless the chart authors its own
+        // Up/Down Bars formatting.
+        CellColor? Resolve(WorkbookThemeColorReference? themed, CellColor? plain) => themed?.Resolve(_theme) ?? plain;
+        var strokeColor = Resolve(_chart.UpBarBorderThemeColor, _chart.UpBarBorderColor)
+            ?? Resolve(_chart.DownBarBorderThemeColor, _chart.DownBarBorderColor)
+            ?? new CellColor(0x59, 0x59, 0x59);
+        var stroke = SolidBrush(strokeColor);
+        var upFill = SolidBrush(Resolve(_chart.UpBarFillThemeColor, _chart.UpBarFillColor) ?? new CellColor(0xFF, 0xFF, 0xFF));
+        var downFill = SolidBrush(Resolve(_chart.DownBarFillThemeColor, _chart.DownBarFillColor) ?? new CellColor(0x40, 0x40, 0x40));
         const double tickLength = 4;
 
         foreach (var element in series.StockElements)
@@ -1821,10 +1847,18 @@ public sealed class AvaloniaChartRenderer
                 continue;
             }
 
-            var entryFormat = isPie ? null : FindSeriesFormat(entry.SeriesIndex);
-            IBrush swatchFill = entryFormat?.NoFill == true
-                ? Brushes.Transparent
-                : isPie ? PaletteFill(entry.SeriesIndex) : SeriesFill(entry.SeriesIndex);
+            if (entry.HideSwatch)
+            {
+                AddLegendLabel(canvas, entry, fontSize, legendTextBrush);
+                continue;
+            }
+
+            var entryFormat = isPie || entry.WaterfallKind is not null ? null : FindSeriesFormat(entry.SeriesIndex);
+            IBrush swatchFill = entry.WaterfallKind is { } legendWaterfallKind
+                ? SolidBrush(ChartRenderPolicyPlanner.ResolveWaterfallBarColor(legendWaterfallKind, ThemePalette))
+                : entryFormat?.NoFill == true
+                    ? Brushes.Transparent
+                    : isPie ? PaletteFill(entry.SeriesIndex) : SeriesFill(entry.SeriesIndex);
 
             var swatch = new AvaloniaRectangle
             {

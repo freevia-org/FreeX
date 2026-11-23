@@ -59,7 +59,7 @@ public sealed partial class ChartRendererTests
         model.Should().NotBeNull();
         var series = model!.Series.Should().ContainSingle(
             "the cached (x,y) data must still produce one bubble series, not a completely blank chart")
-            .Which.Should().BeOfType<ScatterSeries>().Subject;
+            .Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Should().HaveCount(3,
             "3 cached (x,y) pairs must produce 3 bubble points regardless of the real worksheet column the resolved cross-sheet range started at");
         series.Points[0].X.Should().BeApproximately(1.0, 0.001);
@@ -92,11 +92,11 @@ public sealed partial class ChartRendererTests
 
         model.Should().NotBeNull();
         model!.Series.Should().HaveCount(2, "2 cached series must produce 2 bubble series, not a blank chart");
-        var first = model.Series[0].Should().BeOfType<ScatterSeries>().Subject;
+        var first = model.Series[0].Should().BeAssignableTo<ScatterSeries>().Subject;
         first.Points.Should().HaveCount(2);
         first.Points[0].X.Should().BeApproximately(1.0, 0.001);
         first.Points[0].Y.Should().BeApproximately(10.0, 0.001);
-        var second = model.Series[1].Should().BeOfType<ScatterSeries>().Subject;
+        var second = model.Series[1].Should().BeAssignableTo<ScatterSeries>().Subject;
         second.Points.Should().HaveCount(2);
         second.Points[0].X.Should().BeApproximately(1.0, 0.001);
         second.Points[0].Y.Should().BeApproximately(7.0, 0.001);
@@ -134,7 +134,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, viewport);
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model!.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Should().HaveCount(2);
         series.Points[0].X.Should().BeApproximately(1.0, 0.001);
         series.Points[0].Y.Should().BeApproximately(10.0, 0.001);

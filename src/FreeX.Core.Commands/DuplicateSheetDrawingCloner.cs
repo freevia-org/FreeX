@@ -1083,6 +1083,7 @@ internal static class DuplicateSheetDrawingCloner
             ShowSecondaryAxisDisplayUnitLabel = chart.ShowSecondaryAxisDisplayUnitLabel,
             ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes.ToList(),
             ComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes.ToList(),
+            ComboAreaSeriesIndexes = chart.ComboAreaSeriesIndexes.ToList(),
             SeriesPlotOrder = chart.SeriesPlotOrder.ToList(),
             SeriesFormats = chart.SeriesFormats.ToList(),
             SeriesDataLabelFormats = chart.SeriesDataLabelFormats.ToList(),

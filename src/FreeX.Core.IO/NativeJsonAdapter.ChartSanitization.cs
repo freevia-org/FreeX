@@ -149,7 +149,7 @@ public sealed partial class NativeJsonAdapter
         chart.HighLowLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.HighLowLineDashStyle, ChartLineDashStyle.Solid);
         chart.SeriesLineThickness = Math.Clamp(chart.SeriesLineThickness, 0.5, 10);
         chart.SeriesLineDashStyle = NativeJsonValueSanitizer.ValidEnumOrDefault(chart.SeriesLineDashStyle, ChartLineDashStyle.Solid);
-        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type))
+        if (!ChartTypeSupport.SupportsSeriesLines(chart.Type) && chart.Type != ChartType.Waterfall)
         {
             chart.ShowSeriesLines = false;
             chart.SeriesLineColor = null;

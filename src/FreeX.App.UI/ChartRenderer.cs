@@ -321,6 +321,8 @@ public static partial class ChartRenderer
         if (chart.Type == ChartType.Stock)
         {
             var stockModel = BuildStockModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
+            // Excel's automatic value-axis scale (zero baseline only for a wide spread, 5% headroom).
+            ApplyAxisBounds(stockModel, chart, theme);
             AddChartDataTableAnnotations(stockModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
             return stockModel;
         }
@@ -333,10 +335,20 @@ public static partial class ChartRenderer
         }
 
         if (chart.Type == ChartType.Waterfall)
-            return BuildWaterfallModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+        {
+            var waterfallModel = BuildWaterfallModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
+            ApplyAxisBounds(waterfallModel, chart, theme);
+            SuppressChartExPlotBorder(waterfallModel, chart);
+            return waterfallModel;
+        }
 
         if (chart.Type == ChartType.Histogram)
-            return BuildHistogramModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, theme);
+        {
+            var histogramModel = BuildHistogramModel(chart, model, cellLookup, dataStartRow, endRow, dataStartCol, theme);
+            ApplyAxisBounds(histogramModel, chart, theme);
+            SuppressChartExPlotBorder(histogramModel, chart);
+            return histogramModel;
+        }
 
         if (chart.Type == ChartType.Pareto)
             return BuildParetoModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, theme);
@@ -451,6 +463,27 @@ public static partial class ChartRenderer
                         }
                     }
                     model.Series.Add(scatterSeries);
+                    continue;
+                }
+
+                if (IsComboAreaSeries(chart, seriesIndex))
+                {
+                    var comboArea = new AreaSeries
+                    {
+                        Title = IsLegendEntryDeleted(chart, seriesIndex) ? "" : seriesName,
+                        YAxisKey = UsesSecondaryAxis(chart, seriesIndex) ? SecondaryYAxisKey : null
+                    };
+                    ApplyAreaFormat(comboArea, GetSeriesFormat(chart, seriesIndex), theme);
+                    var comboAreaIndex = 0;
+                    for (uint r = dataStartRow; r <= endRow; r++, comboAreaIndex++)
+                    {
+                        var areaX = dateCategoryPositions is not null && comboAreaIndex < dateCategoryPositions.Length ? dateCategoryPositions[comboAreaIndex] : comboAreaIndex;
+                        if (cellLookup.TryGetValue((r, col), out var areaCell) && TryGetChartNumericValue(areaCell, out var areaValue))
+                            comboArea.Points.Add(new DataPoint(areaX, areaValue));
+                        else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+                            comboArea.Points.Add(new DataPoint(areaX, 0));
+                    }
+                    model.Series.Add(comboArea);
                     continue;
                 }
 
@@ -659,7 +692,7 @@ public static partial class ChartRenderer
                     AddSecondaryAxisIfRequested(model, chart);
                 }
 
-                var series = new ScatterSeries
+                var series = new ConnectedScatterSeries
                 {
                     Title = seriesName,
                     MarkerType = MarkerType.Circle,
@@ -719,6 +752,18 @@ public static partial class ChartRenderer
 
         FlushSeriesTags();
 
+        // Excel z-order for a column + area combo: filled areas sit behind the columns and lines.
+        if (chart.ComboAreaSeriesIndexes.Count > 0)
+        {
+            var comboAreas = model.Series
+                .Where(s => s is AreaSeries && s.Tag is int tagged && ChartRenderPolicyPlanner.IsComboAreaSeries(chart, tagged))
+                .ToList();
+            foreach (var comboArea in comboAreas)
+                model.Series.Remove(comboArea);
+            for (var k = 0; k < comboAreas.Count; k++)
+                model.Series.Insert(k, comboAreas[k]);
+        }
+
         // OxyPlot has no native three-dimensional bar primitives.  Keep the ordinary series as
         // the front faces (so axes, hit testing and data labels retain their established behavior)
         // and add the small projected top/right faces Excel shows for the native bar3DChart family.
@@ -741,6 +786,13 @@ public static partial class ChartRenderer
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
 
         return model;
+    }
+
+    /// <summary>Excel draws no outline around a chartEx (waterfall / histogram) plot area unless one is authored.</summary>
+    private static void SuppressChartExPlotBorder(PlotModel model, ChartModel chart)
+    {
+        if (chart.PlotAreaNoLine is null && chart.PlotAreaBorderColor is null && chart.PlotAreaBorderThemeColor is null)
+            model.PlotAreaBorderThickness = new OxyThickness(0);
     }
 
     /// <summary>

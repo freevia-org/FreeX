@@ -11,13 +11,15 @@ public static partial class XlsxChartPartReader
         IReadOnlyList<XElement> barCharts,
         IReadOnlyList<XElement> lineCharts,
         IReadOnlyList<XElement> scatterCharts,
+        IReadOnlyList<XElement> areaCharts,
         SheetId sheetId,
         IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         out ChartModel chart)
     {
         var firstBarChart = FirstChartElement(barCharts);
         var barDirection = firstBarChart?.Element(ChartNs + "barDir")?.Attribute("val")?.Value;
-        if (barDirection is not ("col" or "bar"))
+        // An area group only combines with vertical columns (Excel offers no horizontal bar + area combo).
+        if (barDirection is not ("col" or "bar") || (areaCharts.Count > 0 && barDirection != "col"))
         {
             chart = new ChartModel();
             return false;
@@ -33,6 +35,43 @@ public static partial class XlsxChartPartReader
             UseComboLineForSecondarySeries = true
         };
         ApplyBarChartMetadata(firstBarChart!, result);
+
+        // Excel declares the <c:areaChart> group before the <c:barChart> (z-order: area, column,
+        // line, scatter), so its series come first in the legend/plot order and draw behind the columns.
+        foreach (var areaChart in areaCharts)
+        {
+            var areaUsesSecondaryAxis = XlsxChartSeriesRangeReader.UsesSecondaryValueAxis(plotArea, areaChart);
+            var fallbackAreaIndex = 0;
+            foreach (var series in areaChart.Elements(ChartNs + "ser"))
+            {
+                var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, fallbackAreaIndex);
+                result.SeriesPlotOrder.Add(seriesIndex);
+                XlsxChartSeriesRangeReader.CaptureSeriesRoundTripMetadata(series, seriesIndex, result);
+                hasTitleRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "tx");
+                hasCategoryRange |= XlsxChartSeriesRangeReader.HasSeriesRangeFormula(series, "cat");
+                foreach (var formula in XlsxChartSeriesRangeReader.ReadSeriesRangeFormulas(series))
+                {
+                    if (XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
+                        ranges.Add(range);
+                }
+
+                result.ComboAreaSeriesIndexes.Add(seriesIndex);
+                if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } areaValueColumn)
+                    result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, areaValueColumn));
+                if (areaUsesSecondaryAxis)
+                    result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
+
+                if (XlsxChartSeriesFormatReader.TryReadSeriesFill(series, seriesIndex, out var format))
+                    result.SeriesFormats.Add(format);
+
+                XlsxChartSeriesFormatReader.ApplyPiePointFills(series, seriesIndex, result);
+                XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
+                XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
+                XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
+                XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
+                fallbackAreaIndex++;
+            }
+        }
 
         foreach (var barChart in barCharts)
         {
@@ -161,7 +200,7 @@ public static partial class XlsxChartPartReader
 
         // When all val/cat formulas are named ranges, fall back to embedded cache data.
         // Also fall back when all formulas are cross-sheet refs (viewport can't provide those cells).
-        var allComboSeriesElements = barCharts.Concat(lineCharts).Concat(scatterCharts)
+        var allComboSeriesElements = areaCharts.Concat(barCharts).Concat(lineCharts).Concat(scatterCharts)
             .SelectMany(c => c.Elements(ChartNs + "ser"))
             .ToList();
         var comboEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allComboSeriesElements, sheetId)
@@ -190,11 +229,11 @@ public static partial class XlsxChartPartReader
             // regardless of which return branch is taken.
             result.SeriesColumnMappings = NormalizeSeriesColumnMappings(result.SeriesColumnMappings);
             result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
-                barCharts.Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+                areaCharts.Concat(barCharts).Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
                 sheetId,
                 sheetNameResolver);
             ApplyVerbatimSeriesFormulasIfNeeded(
-                barCharts.Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+                areaCharts.Concat(barCharts).Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
                 sheetId,
                 sheetNameResolver,
                 result);
@@ -231,6 +270,11 @@ public static partial class XlsxChartPartReader
             .Distinct()
             .Order()
             .ToList();
+        result.ComboAreaSeriesIndexes = result.ComboAreaSeriesIndexes
+            .Where(index => index >= 0)
+            .Distinct()
+            .Order()
+            .ToList();
         result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
         result.UseComboLineForSecondarySeries = result.ComboLineSeriesIndexes.Count > 0;
         result.SeriesColumnMappings = NormalizeSeriesColumnMappings(result.SeriesColumnMappings);
@@ -238,11 +282,11 @@ public static partial class XlsxChartPartReader
         result.FirstRowIsHeader = hasTitleRange;
         result.FirstColIsCategories = hasCategoryRange;
         result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
-            barCharts.Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+            areaCharts.Concat(barCharts).Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
             sheetNameResolver);
         ApplyVerbatimSeriesFormulasIfNeeded(
-            barCharts.Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+            areaCharts.Concat(barCharts).Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
             sheetNameResolver,
             result);
