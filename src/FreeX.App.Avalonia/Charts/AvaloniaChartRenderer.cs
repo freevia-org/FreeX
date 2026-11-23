@@ -107,12 +107,6 @@ public sealed class AvaloniaChartRenderer
         // Chart-area border (on top of background, under everything else).
         AddChartAreaBorder(canvas, width, height);
 
-        // Chart title — rendered above the plot, centered horizontally. Constrained to the space
-        // already reserved above layout.PlotArea so a large title font (or a small chart box) never
-        // overlaps the plot/top axis (see AddChartTitle).
-        if (!string.IsNullOrWhiteSpace(_chart.Title))
-            AddChartTitle(canvas, width, layout.PlotArea.Top);
-
         var isPie = layout.Series.Any(s => s.Kind == SeriesGeometryKind.PieSlices);
         if (!isPie)
             AddPlotBackground(canvas, layout.PlotArea);
@@ -152,6 +146,13 @@ public sealed class AvaloniaChartRenderer
         // Treemap labels are rendered inline with white text inside RenderTreemapTiles.
         if (!isTreemap)
             RenderDataLabels(canvas, layout.DataLabels);
+
+        // Chart title -- drawn last so a title dragged over the plot area (manual layout) stays on top
+        // of the plot background, gridlines and series like Excel, instead of disappearing behind them.
+        // Constrained to the space reserved above layout.PlotArea so a large title font (or a small
+        // chart box) never overlaps the plot/top axis (see AddChartTitle).
+        if (!string.IsNullOrWhiteSpace(_chart.Title))
+            AddChartTitle(canvas, width, layout.PlotArea.Top);
 
         return canvas;
     }

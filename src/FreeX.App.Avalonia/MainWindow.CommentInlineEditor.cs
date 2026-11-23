@@ -19,7 +19,12 @@ public sealed partial class MainWindow
 {
     private const double InlineCommentEditorWidth = 300;
     private const double InlineCommentEditorNewHeight = 230;
-    private const double InlineCommentEditorExistingHeight = 300;
+    // An existing thread's card (conversation, edit box, optional reply picker, reply box, resolve
+    // toggle, thread actions, Save/Cancel) measures far taller than a new comment's. These are the
+    // measured content heights; the card auto-sizes up to them instead of clipping the bottom
+    // controls out of a fixed 300 DIP box.
+    private const double InlineCommentEditorExistingHeight = 400;
+    private const double InlineCommentEditorExistingWithRepliesHeight = 540;
 
     private CellAddress? _inlineThreadedCommentEditAddress;
     private ThreadedComment? _inlineThreadedCommentEditExisting;
@@ -291,7 +296,7 @@ public sealed partial class MainWindow
 
         var editorHeight = _inlineThreadedCommentEditExisting is null
             ? InlineCommentEditorNewHeight
-            : InlineCommentEditorExistingHeight;
+            : ResolveExistingThreadCardHeight(_inlineThreadedCommentEditExisting);
         var left = Math.Clamp(cellLeft, 0, Math.Max(0, overlay.Width - InlineCommentEditorWidth));
         var top = cellTop + cellHeight + 2;
         if (top + editorHeight > overlay.Height && cellTop > editorHeight + 2)
@@ -301,7 +306,9 @@ public sealed partial class MainWindow
         var editor = new Border
         {
             Width = InlineCommentEditorWidth,
-            MinHeight = editorHeight,
+            // A new comment keeps the fixed box; an existing thread sizes to its content (capped at
+            // the measured maximum) so Save/Cancel and the thread actions are never clipped.
+            MinHeight = _inlineThreadedCommentEditExisting is null ? editorHeight : 0,
             MaxHeight = editorHeight,
             Background = new SolidColorBrush(Color.FromRgb(255, 255, 225)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(158, 151, 113)),
@@ -325,6 +332,11 @@ public sealed partial class MainWindow
         Canvas.SetTop(editor, top);
         overlay.Children.Add(editor);
     }
+
+    internal static double ResolveExistingThreadCardHeight(ThreadedComment existing) =>
+        existing.Replies.Count > 0
+            ? InlineCommentEditorExistingWithRepliesHeight
+            : InlineCommentEditorExistingHeight;
 
     private StackPanel BuildInlineThreadedCommentPanel()
     {
