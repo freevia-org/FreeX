@@ -194,13 +194,16 @@ public sealed class DocumentEditorInteractionSession
         }
 
         var text = new StringBuilder();
+        var hasSelectedParagraph = false;
         for (var blockIndex = range.Start.BlockIndex; blockIndex <= range.End.BlockIndex; blockIndex++)
         {
             if (_editing.Document.Blocks[blockIndex] is not Paragraph paragraph)
                 continue;
 
-            if (text.Length > 0)
+            // Paragraph marks are selected even when the first selected text slice is empty.
+            if (hasSelectedParagraph)
                 text.Append('\n');
+            hasSelectedParagraph = true;
             var start = blockIndex == range.Start.BlockIndex ? range.Start.Offset : 0;
             var end = blockIndex == range.End.BlockIndex ? range.End.Offset : paragraph.PlainText.Length;
             start = Math.Clamp(start, 0, paragraph.PlainText.Length);

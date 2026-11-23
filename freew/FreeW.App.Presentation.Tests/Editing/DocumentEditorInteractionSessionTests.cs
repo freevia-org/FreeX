@@ -41,6 +41,51 @@ public sealed class DocumentEditorInteractionSessionTests
         text.Should().Be("pha\nbravo\nchar");
     }
 
+    [Theory]
+    [InlineData("", "", false, "\n")]
+    [InlineData("", "", true, "\n")]
+    [InlineData("", "bravo", false, "\nbravo")]
+    [InlineData("", "bravo", true, "\nbravo")]
+    [InlineData("alpha", "bravo", false, "\nbravo")]
+    [InlineData("alpha", "bravo", true, "\nbravo")]
+    public void SelectionProjectionKeepsTheParagraphMarkWhenTheFirstSelectedSliceIsEmpty(
+        string first,
+        string second,
+        bool reversed,
+        string expected)
+    {
+        var session = SessionWith(new Paragraph(first), new Paragraph(second));
+        var start = new DocumentTextPosition(0, first.Length);
+        var end = new DocumentTextPosition(1, second.Length);
+        var range = reversed
+            ? new DocumentTextRange(end, start)
+            : new DocumentTextRange(start, end);
+
+        var text = session.Interaction.ProjectSelectionText(range);
+
+        text.Should().Be(expected);
+        session.Interaction.PlanPasteText(text, DocumentPasteTextKind.TextOnly)
+            .Lines.Should().Equal("", second);
+    }
+
+    [Fact]
+    public void SelectionProjectionKeepsMultipleLeadingBlankParagraphsAcrossSkippedBlocks()
+    {
+        var session = SessionWith(
+            new Paragraph(),
+            new Table(),
+            new Paragraph(),
+            new Paragraph("last"));
+
+        var text = session.Interaction.ProjectSelectionText(new DocumentTextRange(
+            new DocumentTextPosition(0, 0),
+            new DocumentTextPosition(3, 4)));
+
+        text.Should().Be("\n\nlast");
+        session.Interaction.PlanPasteText(text, DocumentPasteTextKind.TextOnly)
+            .Lines.Should().Equal("", "", "last");
+    }
+
     [Fact]
     public void SelectionRangeProjectionsClampAndSkipNonTextBlocks()
     {
