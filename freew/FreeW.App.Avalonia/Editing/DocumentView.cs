@@ -18421,6 +18421,13 @@ public sealed partial class DocumentView : Control
             return;
         }
 
+        if (FreeWKeyboardGestures.IsCommandRedo(e))
+        {
+            Redo();
+            e.Handled = true;
+            return;
+        }
+
         if (_shapeCaret is { } shapeCaret)
         {
             switch (e.Key)

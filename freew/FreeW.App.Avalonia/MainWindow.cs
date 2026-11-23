@@ -3297,6 +3297,13 @@ public sealed partial class MainWindow : Window
         if (TryHandleRibbonKeyTips(e))
             return;
 
+        if (FreeWKeyboardGestures.IsCommandRedo(e))
+        {
+            _applicationCommands.Execute(FreeWKeyboardCommand.Redo);
+            e.Handled = true;
+            return;
+        }
+
         if (TryMapKeyboardKey(e.Key, out var key) &&
             _applicationCommands.TryExecute(
                 key,
@@ -4510,7 +4517,7 @@ public sealed partial class MainWindow : Window
             || e.Key is not (Key.Z or Key.Y))
             return;
 
-        if (e.Key == Key.Z)
+        if (e.Key == Key.Z && !FreeWKeyboardGestures.IsCommandRedo(e))
             ResolveHistoryDocumentEditor().Undo();
         else
             ResolveHistoryDocumentEditor().Redo();
