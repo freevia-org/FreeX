@@ -31,7 +31,7 @@ public sealed class MacOsKeyboardMouseModifierParityTests
         bool metaIsCommand,
         FreeKeyModifiers expected)
     {
-        FormulaBarAvaloniaInputAdapter.ToFreeKeyModifiers(modifiers, metaIsCommand).Should().Be(expected);
+        FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(modifiers, metaIsCommand).Should().Be(expected);
     }
 
     [Fact]
