@@ -24,7 +24,13 @@ public static partial class ChartRenderer
         for (var i = 0; i < points.Count; i++)
             sourcePoints[i] = new TrendPoint(points[i].X, points[i].Y);
 
-        var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints, swapTrendlineAxes);
+        var seriesName = model.Series
+            .FirstOrDefault(s => s.Tag is int tagged && tagged == trendlineSeriesIndex)?.Title;
+        var plan = TrendlineProjectionPlanner.Plan(
+            trendChart,
+            sourcePoints,
+            swapTrendlineAxes,
+            string.IsNullOrEmpty(seriesName) ? $"Series {trendlineSeriesIndex + 1}" : seriesName);
         if (plan is null)
             return;
 

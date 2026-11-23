@@ -68,6 +68,7 @@ public static partial class ChartRenderer
             var series = new ScatterSeries
             {
                 Title = seriesName,
+                Tag = seriesIndex,
                 MarkerType = MarkerType.Circle,
                 LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 1),
                 LabelMargin = ToLabelMargin(chart.DataLabelPosition)

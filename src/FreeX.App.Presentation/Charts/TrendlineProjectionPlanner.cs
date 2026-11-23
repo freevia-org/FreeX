@@ -18,7 +18,8 @@ public static class TrendlineProjectionPlanner
     public static TrendlineProjectionPlan? Plan(
         ChartModel chart,
         IReadOnlyList<TrendPoint> sourcePoints,
-        bool swapAxes = false)
+        bool swapAxes = false,
+        string? seriesName = null)
     {
         ArgumentNullException.ThrowIfNull(chart);
         ArgumentNullException.ThrowIfNull(sourcePoints);
@@ -56,7 +57,9 @@ public static class TrendlineProjectionPlanner
 
         return new TrendlineProjectionPlan(
             chart.TrendlineType,
-            TrendlineAnnotationFormatter.GetTitle(chart.TrendlineType),
+            seriesName is null
+                ? TrendlineAnnotationFormatter.GetTitle(chart.TrendlineType)
+                : TrendlineAnnotationFormatter.GetLegendName(chart, seriesName),
             projectedPoints,
             annotationLines,
             annotationAnchor);

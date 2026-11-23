@@ -1685,6 +1685,26 @@ public sealed class AvaloniaChartRenderer
             // CE2: When the series has NoFill, its legend swatch must also be transparent so the
             // legend doesn't show a solid colored rectangle for an invisible helper/spacer series.
             // Mirroring RenderBars which honors NoFill via Brushes.Transparent.
+            if (entry.IsTrendline)
+            {
+                // Trendline rows show a short stroke in the trendline's own colour/dash, like Excel.
+                var trendStyle = entry.TrendlineStyle ?? _chart;
+                var trendLine = new global::Avalonia.Controls.Shapes.Line
+                {
+                    StartPoint = new AvaloniaPoint(entry.SwatchRect.Left, entry.SwatchRect.Top + (entry.SwatchRect.Height / 2)),
+                    EndPoint = new AvaloniaPoint(entry.SwatchRect.Right, entry.SwatchRect.Top + (entry.SwatchRect.Height / 2)),
+                    Stroke = trendStyle.ResolveTrendlineColor(_theme) is { } legendTrendColor
+                        ? SolidBrush(legendTrendColor)
+                        : TrendlineBrush,
+                    StrokeThickness = trendStyle.TrendlineThickness > 0 ? trendStyle.TrendlineThickness : 1.5,
+                };
+                if (ToAvaloniaStrokeDashArray(trendStyle.TrendlineDashStyle) is { } legendDash)
+                    trendLine.StrokeDashArray = legendDash;
+                canvas.Children.Add(trendLine);
+                AddLegendLabel(canvas, entry, fontSize, legendTextBrush);
+                continue;
+            }
+
             var entryFormat = isPie ? null : FindSeriesFormat(entry.SeriesIndex);
             IBrush swatchFill = entryFormat?.NoFill == true
                 ? Brushes.Transparent
@@ -1700,20 +1720,25 @@ public sealed class AvaloniaChartRenderer
             Canvas.SetTop(swatch, entry.SwatchRect.Top);
             canvas.Children.Add(swatch);
 
-            if (string.IsNullOrEmpty(entry.Label))
-                continue;
-
-            var label = new TextBlock
-            {
-                Text = entry.Label,
-                FontSize = fontSize,
-                Foreground = legendTextBrush,
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            };
-            Canvas.SetLeft(label, entry.LabelRect.Left);
-            Canvas.SetTop(label, entry.LabelRect.Top);
-            canvas.Children.Add(label);
+            AddLegendLabel(canvas, entry, fontSize, legendTextBrush);
         }
+    }
+
+    private static void AddLegendLabel(Canvas canvas, LegendEntry entry, double fontSize, IBrush legendTextBrush)
+    {
+        if (string.IsNullOrEmpty(entry.Label))
+            return;
+
+        var label = new TextBlock
+        {
+            Text = entry.Label,
+            FontSize = fontSize,
+            Foreground = legendTextBrush,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        Canvas.SetLeft(label, entry.LabelRect.Left);
+        Canvas.SetTop(label, entry.LabelRect.Top);
+        canvas.Children.Add(label);
     }
 
     // ── Surface / heatmap cells ──────────────────────────────────────────────

@@ -468,6 +468,8 @@ public static class ChartElementMapPlanner
         for (var i = 0; i < legend.Entries.Count; i++)
         {
             var entry = legend.Entries[i];
+            if (entry.IsTrendline)
+                continue;
             labels[entry.SeriesIndex] = entry.Label;
             nested.Add(new ChartElementRegion(
                 ChartElementRef.ForLegendEntry(entry.SeriesIndex),

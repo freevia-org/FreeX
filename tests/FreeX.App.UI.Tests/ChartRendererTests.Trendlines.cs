@@ -75,7 +75,7 @@ public sealed partial class ChartRendererTests
 
         model.Series.Should().HaveCount(2);
         var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
-        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Title.Should().StartWith("Linear (").And.EndWith(")");
         trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (3, 30));
     }
 
@@ -104,7 +104,7 @@ public sealed partial class ChartRendererTests
 
         model.Series.Should().HaveCount(2);
         var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
-        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Title.Should().StartWith("Linear (").And.EndWith(")");
         trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((10, 0), (30, 1));
     }
 
@@ -197,7 +197,7 @@ public sealed partial class ChartRendererTests
 
         model.Series.Should().HaveCount(2);
         var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
-        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Title.Should().StartWith("Linear (").And.EndWith(")");
         trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((0, 10), (1, 30));
     }
 
@@ -230,7 +230,7 @@ public sealed partial class ChartRendererTests
 
         model.Series.Should().HaveCount(2);
         var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
-        trendline.Title.Should().Be("Linear Trendline");
+        trendline.Title.Should().StartWith("Linear (").And.EndWith(")");
         trendline.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (3, 30));
     }
 }

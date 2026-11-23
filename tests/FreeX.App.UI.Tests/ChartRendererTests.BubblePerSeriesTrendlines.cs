@@ -41,7 +41,7 @@ public sealed partial class ChartRendererTests
 
         var model = BuildPlotModel(chart, TwoSeriesBubbleViewport());
 
-        var trendlines = model.Series.OfType<LineSeries>().Where(s => s.Title is not null && s.Title.Contains("Trendline")).ToList();
+        var trendlines = model.Series.OfType<LineSeries>().Where(s => s.Title is not null && s.Title.EndsWith(")")).ToList();
         trendlines.Should().HaveCount(2, "each bubble series carries its own trendline");
         trendlines.Select(t => t.StrokeThickness).Should().BeEquivalentTo(new[] { 2.0, 4.0 });
     }
@@ -53,7 +53,7 @@ public sealed partial class ChartRendererTests
 
         var model = BuildPlotModel(chart, TwoSeriesBubbleViewport());
 
-        model.Series.OfType<LineSeries>().Where(s => s.Title is not null && s.Title.Contains("Trendline"))
+        model.Series.OfType<LineSeries>().Where(s => s.Title is not null && s.Title.EndsWith(")"))
             .Should().ContainSingle().Which.StrokeThickness.Should().Be(5);
     }
 
@@ -64,6 +64,6 @@ public sealed partial class ChartRendererTests
 
         var model = BuildPlotModel(chart, TwoSeriesBubbleViewport());
 
-        model.Series.OfType<LineSeries>().Count(s => s.Title is not null && s.Title.Contains("Trendline")).Should().Be(2);
+        model.Series.OfType<LineSeries>().Count(s => s.Title is not null && s.Title.EndsWith(")")).Should().Be(2);
     }
 }
