@@ -145,7 +145,7 @@ jobs:
     needs: prepare
     # Only FreeX's x64 Windows/Linux gates use the I5 pool. Other apps and platforms,
     # including macOS, stay on the hosted runner recorded in the test-gate matrix.
-    runs-on: ${{ inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'windows' && fromJSON('["self-hosted","freex-i5-windows"]') || inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'linux' && fromJSON('["self-hosted","freex-i5-linux"]') || matrix.runner }}
+    runs-on: ${{ inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'windows' && 'freex-i5-windows' || inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'linux' && 'freex-i5-linux' || matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false

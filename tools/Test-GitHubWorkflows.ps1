@@ -405,22 +405,12 @@ foreach ($workflow in $workflows) {
 
     foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
         $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
-        if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {
-            $isFreeXCiRunnerPool = $workflow.Name -eq "ci.yml" -and
-                $runnerBlock.Contains("inputs.runner_pool == 'self-hosted'") -and
-                $runnerBlock.Contains("matrix.app == 'FreeX'") -and
-                $runnerBlock.Contains("matrix.platform == 'windows'") -and
-                $runnerBlock.Contains("freex-i5-windows") -and
-                $runnerBlock.Contains("matrix.platform == 'linux'") -and
-                $runnerBlock.Contains("freex-i5-linux") -and
-                $runnerBlock -match "\|\|\s*matrix\.runner"
-            if (-not $isFreeXCiRunnerPool) {
-                $errors.Add("$($workflow.Name): self-hosted runners are allowed only for the opt-in FreeX CI Windows/Linux matrix route with the hosted matrix runner as fallback.")
-            }
+        if ($runnerBlock -match '(?im)(\[\s*self-hosted\s*(?:,|\])|\[\s*"self-hosted"\s*(?:,|\])|\[\s*''self-hosted''\s*(?:,|\])|,\s*self-hosted\s*(?:,|\])|,\s*"self-hosted"\s*(?:,|\])|,\s*''self-hosted''\s*(?:,|\])|^\s*-\s*self-hosted\s*$|^\s*-\s*"self-hosted"\s*$|^\s*-\s*''self-hosted''\s*$)') {
+            $errors.Add("$($workflow.Name): runs-on must use the exact registered FreeX custom label without requiring the self-hosted label.")
         }
     }
 
-    if ($workflow.Name -eq "ci.yml" -and $content.Contains("freex-i5-windows")) {
+    if ($workflow.Name -in @("ci.yml", "release-readiness.yml") -and $content.Contains("freex-i5-windows")) {
         $runnerPoolBlock = Get-IndentedYamlBlock `
             -Lines $lines `
             -Pattern "^(?<indent>\s*)runner_pool\s*:\s*(?:#.*)?$"
@@ -429,7 +419,18 @@ foreach ($workflow in $workflows) {
             $runnerPoolBlock -notmatch "(?m)^\s*default:\s*self-hosted\s*$" -or
             $runnerPoolBlock -notmatch "(?m)^\s*-\s+self-hosted\s*$" -or
             $runnerPoolBlock -notmatch "(?m)^\s*-\s+hosted\s*$") {
-            $errors.Add("ci.yml: the FreeX runner_pool input must be a self-hosted-default choice with an explicit hosted fallback.")
+            $errors.Add("$($workflow.Name): the FreeX runner_pool input must be a self-hosted-default choice with an explicit hosted fallback.")
+        }
+
+        $runnerRouteIsScoped = $content.Contains("inputs.runner_pool == 'self-hosted'") -and
+            $content.Contains("matrix.app == 'FreeX'") -and
+            $content.Contains("matrix.platform == 'windows'") -and
+            $content.Contains("&& 'freex-i5-windows'") -and
+            $content.Contains("matrix.platform == 'linux'") -and
+            $content.Contains("&& 'freex-i5-linux'") -and
+            $content -match "(?m)^\s*runs-on:\s*\$\{\{.*\|\|\s*matrix\.runner\s*\}\}\s*$"
+        if (-not $runnerRouteIsScoped) {
+            $errors.Add("$($workflow.Name): local runner routing must select the exact FreeX Windows/Linux labels only for FreeX matrix entries and retain matrix.runner as the hosted fallback.")
         }
     }
 
