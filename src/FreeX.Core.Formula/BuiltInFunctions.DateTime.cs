@@ -134,6 +134,7 @@ public static partial class BuiltInFunctions
         double rawYear = ToNumber(yearValue);
         if (!double.IsFinite(rawYear) || !double.IsFinite(rawMonth) || !double.IsFinite(rawDay))
             return ErrorValue.Num;
+        if (rawYear < 0) return ErrorValue.Num; // measured: DATE(-0.5,1,1) is #NUM! (the year is not truncated towards 0 first)
         if (rawYear > int.MaxValue || rawMonth > int.MaxValue || rawDay > int.MaxValue ||
             rawYear < int.MinValue || rawMonth < int.MinValue || rawDay < int.MinValue)
             return ErrorValue.Num;
@@ -155,7 +156,9 @@ public static partial class BuiltInFunctions
             int effectiveMonth = monthAnchor.Month;
             var dt = monthAnchor.AddDays(day - 1);
             double serial = DateToSerial(dt, uses1904DateSystem);
-            if (serial < (uses1904DateSystem ? 0 : 1)) return ErrorValue.Num;
+            // Measured against Excel: DATE(1900,1,0) and DATE(0,1,0) are serial 0 (a day count below the first of a
+            // month in 1900), but the same date reached by a month underflow, DATE(1900,0,31), is #NUM!.
+            if (serial < 0 || (!uses1904DateSystem && serial == 0 && !(year == 1900 && month >= 1 && month <= 12))) return ErrorValue.Num;
             if (!uses1904DateSystem && effectiveYear == 1900 && effectiveMonth >= 3 && dt < new DateTime(1900, 3, 1))
                 return new NumberValue(serial + 1);
             if (!uses1904DateSystem && effectiveYear == 1900 && effectiveMonth == 3 && day == 0)
@@ -485,6 +488,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue TimevalueScalar(ScalarValue value)
     {
         var text = ToText(value);
+        if (ExcelTextNumberParser.IsUsStyle(ExcelCulture.Current))
+        {
+            return ExcelTextDateTimeParser.TryParse(text, DateTime.Today, out var usParsed)
+                ? new NumberValue(ExcelTextDateTimeParser.TimeFraction(usParsed))
+                : ErrorValue.Value;
+        }
+
         var hasTimeComponent = TextHasTimeComponent(text);
         // TIMEVALUE ignores any date portion and returns just the time-of-day fraction, so a
         // date-only string (no time component) is still valid input - it yields 0 (midnight) -
@@ -558,6 +568,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue DatevalueScalar(ScalarValue value, bool uses1904DateSystem)
     {
         var text = ToText(value);
+        if (ExcelTextNumberParser.IsUsStyle(ExcelCulture.Current))
+        {
+            if (!ExcelTextDateTimeParser.TryParse(text, DateTime.Today, out var usParsed)) return ErrorValue.Value;
+            var usSerial = Math.Floor(ExcelTextDateTimeParser.ToSerial(usParsed, uses1904DateSystem));
+            // A time-only text is day 0; a text with a date outside the date base is #VALUE!.
+            return usParsed.HasDate && usSerial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Value : new NumberValue(usSerial);
+        }
+
         if (!uses1904DateSystem && TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out _)) return new NumberValue(60);
         if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (TryParseMonthYearDateValueText(text, out var monthYearDate))

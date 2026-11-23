@@ -54,6 +54,7 @@ public static partial class BuiltInFunctions
             }
         }
         if (values.Count == 0) return ErrorValue.Value;
+        if (sum > 170) return ErrorValue.Num; // measured: the factorial of the total overflows (MULTINOMIAL(100,100) is #NUM!)
 
         // Use log-gamma to avoid overflow: log(sum!) - sum(log(n_i!))
         double logResult = LogGamma(sum + 1.0);

@@ -675,11 +675,69 @@ public static partial class BuiltInFunctions
     public static bool Exists(string name) => Functions.ContainsKey(name);
 
     /// <summary>Get a function by name.</summary>
-    public static (FormulaFunction Func, int MinArgs, int MaxArgs) Get(string name) => Functions[name];
+    public static (FormulaFunction Func, int MinArgs, int MaxArgs) Get(string name) => WithShapePolicy(name, Functions[name]);
 
     /// <summary>Try to get a function by name.</summary>
-    public static bool TryGet(string name, out (FormulaFunction Func, int MinArgs, int MaxArgs) entry) =>
-        Functions.TryGetValue(name, out entry);
+    public static bool TryGet(string name, out (FormulaFunction Func, int MinArgs, int MaxArgs) entry)
+    {
+        if (!Functions.TryGetValue(name, out entry)) return false;
+        entry = WithShapePolicy(name, entry);
+        return true;
+    }
+
+    // Excel pads array arguments whose lengths disagree on an axis with #N/A (measured: LEFT, MID, REPT, TEXT,
+    // ROUND, PMT, FIND, DATEDIF, ... all do), which the shared broadcast helpers now implement. A few
+    // Analysis-ToolPak style functions behave differently in Excel (CONVERT answers a plain #VALUE!, the
+    // DEC2BIN family a #VALUE! array, EDATE/EOMONTH reject the array outright); until each is measured they keep
+    // the conservative whole-result #VALUE! for conflicting shapes.
+    private static readonly HashSet<string> ConflictingShapesAreValueError = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CONVERT", "COMPLEX", "EDATE", "EOMONTH", "HYPERLINK", "FILTERXML",
+        "DEC2BIN", "DEC2HEX", "DEC2OCT", "BIN2HEX", "BIN2OCT", "HEX2BIN", "HEX2OCT", "OCT2BIN", "OCT2HEX",
+        "BITAND", "BITOR", "BITXOR", "BITLSHIFT", "BITRSHIFT",
+    };
+
+    private static readonly Dictionary<string, FormulaFunction> ShapeCheckedFunctions = new(StringComparer.OrdinalIgnoreCase);
+
+    private static (FormulaFunction Func, int MinArgs, int MaxArgs) WithShapePolicy(string name, (FormulaFunction Func, int MinArgs, int MaxArgs) entry)
+    {
+        if (!ConflictingShapesAreValueError.Contains(name)) return entry;
+        FormulaFunction wrapped;
+        lock (ShapeCheckedFunctions)
+        {
+            if (!ShapeCheckedFunctions.TryGetValue(name, out wrapped!))
+            {
+                var inner = entry.Func;
+                wrapped = (args, ctx) => HasConflictingArrayShapes(args) ? ErrorValue.Value : inner(args, ctx);
+                ShapeCheckedFunctions[name] = wrapped;
+            }
+        }
+
+        return (wrapped, entry.MinArgs, entry.MaxArgs);
+    }
+
+    /// <summary>True when two array arguments disagree on an axis and neither is length 1 there.</summary>
+    private static bool HasConflictingArrayShapes(IReadOnlyList<ScalarValue> args)
+    {
+        int rows = 1, cols = 1;
+        foreach (var arg in args)
+        {
+            if (arg is not RangeValue range) continue;
+            if (range.RowCount != 1)
+            {
+                if (rows != 1 && rows != range.RowCount) return true;
+                rows = range.RowCount;
+            }
+
+            if (range.ColCount != 1)
+            {
+                if (cols != 1 && cols != range.ColCount) return true;
+                cols = range.ColCount;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Validate argument count for a function.</summary>
     public static bool ValidateArgCount(string name, int count)

@@ -306,7 +306,7 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=DAYS360(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=DAYS360(A1:A2,B1,B1:B3)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=YEARFRAC(A1:A2,B1:B3,0)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=YEARFRAC(A1:A2,B1,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1,B1:B3)", sheet).Should().BeOfType<RangeValue>(); // 3x1: the axes grow to the longer length
     }
 
     [Fact]
@@ -419,7 +419,7 @@ public partial class FunctionLibraryTests
         _eval.Evaluate("=EDATE(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=EOMONTH(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=WORKDAY(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=WEEKDAY(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=WEEKDAY(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     private static void AssertGrid(ScalarValue value, double[,] expected)
@@ -602,8 +602,8 @@ public partial class FunctionLibraryTests
         // A row-vector (1x2) crossed with a column-vector (2x1) is now a valid cross-broadcast
         // (R118-formula-arity3plus-cross-broadcast), so this uses B1:B3 (a same-axis, differently
         // sized column) to keep testing a genuine shape mismatch.
-        _eval.Evaluate("=DATEDIF(A1:A2,B1:B3,\"D\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DATEDIF(A1:A2,B1,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DATEDIF(A1:A2,B1:B3,\"D\")", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=DATEDIF(A1:A2,B1,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]

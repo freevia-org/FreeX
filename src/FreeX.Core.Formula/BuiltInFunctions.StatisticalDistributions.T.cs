@@ -24,7 +24,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TDistScalar(ScalarValue xValue, double df, bool cum)
     {
         double x = ToNumber(xValue);
-        if (df < 1) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom) return ErrorValue.Num;
         return cum ? NumberResult(TCdf(x, df)) : NumberResult(TPdf(x, df));
     }
 
@@ -61,9 +61,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue TDistRtScalar(ScalarValue xValue, double df)
     {
         double x = ToNumber(xValue);
-        if (df < 1) return ErrorValue.Num;
-        if (x < 0) return ErrorValue.Num;
-        return NumberResult(1.0 - TCdf(x, df));
+        if (df < 1 || df > MaxDegreesOfFreedom) return ErrorValue.Num;
+        // Measured against Excel: a negative x is allowed here (T.DIST.RT(-1,10) is 0.8296).
+        return NumberResult(TCdf(-x, df));
     }
 
     private static ScalarValue TDist2T(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -82,9 +82,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue TDist2TScalar(ScalarValue xValue, double df)
     {
         double x = ToNumber(xValue);
-        if (df < 1) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom) return ErrorValue.Num;
         if (x < 0) return ErrorValue.Num;
-        return NumberResult(2.0 * (1.0 - TCdf(x, df)));
+        return NumberResult(2.0 * TCdf(-x, df));
     }
 
     private static ScalarValue TInvFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -103,7 +103,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue TInvScalar(ScalarValue probabilityValue, double df)
     {
         double prob = ToNumber(probabilityValue);
-        if (df < 1 || prob <= 0 || prob >= 1) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom || prob <= 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(TInv(prob, df));
     }
 
@@ -123,10 +123,11 @@ public static partial class BuiltInFunctions
     private static ScalarValue TInv2TScalar(ScalarValue probabilityValue, double df)
     {
         double prob = ToNumber(probabilityValue);
-        if (df < 1 || prob <= 0 || prob > 1) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom || prob <= 0 || prob > 1) return ErrorValue.Num;
         // T.INV.2T(p, df) returns the positive t s.t. P(|T| > t) = p
-        // i.e. the one-tail area is p/2, so we solve TCdf(-t) = p/2
-        return NumberResult(TInv(1.0 - prob / 2.0, df));
+        // i.e. the one-tail area is p/2, so we solve TCdf(-t) = p/2 (the lower tail is solved directly:
+        // 1 - p/2 would throw away the precision of a tiny p).
+        return NumberResult(-TInv(prob / 2.0, df) + 0.0);
     }
 
     private static ScalarValue TTest(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -147,6 +148,7 @@ public static partial class BuiltInFunctions
         {
             if (a.Count != b.Count) return ErrorValue.NA;
             int n = a.Count;
+            if (n < 2) return ErrorValue.DivByZero; // measured: fewer than two pairs is #DIV/0!
             double[] diffs = new double[n];
             for (int i = 0; i < n; i++) diffs[i] = a[i] - b[i];
             double meanD = diffs.Average();
@@ -158,6 +160,7 @@ public static partial class BuiltInFunctions
         else if (type == 2) // equal variances
         {
             int n1 = a.Count, n2 = b.Count;
+            if (n1 < 2 || n2 < 2) return ErrorValue.DivByZero;
             double m1 = a.Average(), m2 = b.Average();
             double s1 = a.Sum(x => (x - m1) * (x - m1));
             double s2 = b.Sum(x => (x - m2) * (x - m2));
@@ -169,6 +172,7 @@ public static partial class BuiltInFunctions
         else // unequal variances (Welch)
         {
             int n1 = a.Count, n2 = b.Count;
+            if (n1 < 2 || n2 < 2) return ErrorValue.DivByZero;
             double m1 = a.Average(), m2 = b.Average();
             double v1 = a.Sum(x => (x - m1) * (x - m1)) / (n1 - 1);
             double v2 = b.Sum(x => (x - m2) * (x - m2)) / (n2 - 1);
@@ -179,7 +183,7 @@ public static partial class BuiltInFunctions
             df = (v1n + v2n) * (v1n + v2n) / (v1n * v1n / (n1 - 1) + v2n * v2n / (n2 - 1));
         }
 
-        double p = tails == 1 ? 1.0 - TCdf(Math.Abs(t), df) : 2.0 * (1.0 - TCdf(Math.Abs(t), df));
+        double p = tails == 1 ? TCdf(-Math.Abs(t), df) : 2.0 * TCdf(-Math.Abs(t), df);
         return NumberResult(p);
     }
 }

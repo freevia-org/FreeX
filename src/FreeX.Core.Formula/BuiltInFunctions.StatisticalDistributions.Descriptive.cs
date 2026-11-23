@@ -25,7 +25,7 @@ public static partial class BuiltInFunctions
         var (nums, err) = CollectNumbers(args);
         if (err is not null) return err;
         int n = nums!.Count;
-        if (n < 1) return ErrorValue.DivByZero;
+        if (n < 3) return ErrorValue.DivByZero; // measured: SKEW.P(1,2) is #DIV/0!
         double mean = nums.Average();
         double s2 = nums.Sum(x => (x - mean) * (x - mean)) / n;
         if (s2 == 0) return ErrorValue.DivByZero;
@@ -141,8 +141,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue ConfidenceTScalar(ScalarValue alphaValue, double stdev, double size)
     {
         double alpha = ToNumber(alphaValue);
-        if (alpha <= 0 || alpha >= 1 || stdev <= 0 || size < 2) return ErrorValue.Num;
+        if (alpha <= 0 || alpha >= 1 || stdev <= 0 || size < 1) return ErrorValue.Num;
         int n = (int)Math.Truncate(size);
+        if (n < 2) return ErrorValue.DivByZero; // measured: a sample size of 1 is #DIV/0!
         double df = n - 1;
         return NumberResult(TInv(1.0 - alpha / 2.0, df) * stdev / Math.Sqrt(n));
     }

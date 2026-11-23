@@ -74,12 +74,11 @@ public sealed class R49_FormulaFindingsTests
     // ── formula-text-format-parse-3-1: NUMBERVALUE trailing-minus negative ──
 
     [Fact]
-    public void Numbervalue_TrailingMinus_ParsesAsNegative()
+    public void Numbervalue_TrailingMinus_IsValueError()
     {
-        // Pre-fix, NUMBERVALUE's double.TryParse used NumberStyles.Float only (no
-        // AllowTrailingSign), so a trailing '-' failed to parse and returned #VALUE!, unlike
-        // VALUE() which already accepts this accounting convention.
-        Num(Eval("=NUMBERVALUE(\"1234-\")")).Should().Be(-1234.0);
+        // Measured against Excel 16.0 (en-US): neither NUMBERVALUE("1234-") nor VALUE("1234-") accepts a
+        // trailing minus (the accounting convention is the parenthesised form); both are #VALUE!.
+        Eval("=NUMBERVALUE(\"1234-\")").Should().Be(ErrorValue.Value);
     }
 
     [Fact]

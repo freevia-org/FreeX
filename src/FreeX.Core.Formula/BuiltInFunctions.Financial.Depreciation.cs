@@ -33,7 +33,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue Db(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        var monthArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        // An omitted month defaults to 12, but an explicitly empty one is 0 (and therefore #NUM!).
+        var monthArg = args.Count > 4 ? args[4] : new NumberValue(12);
         return MapScalarArgs([args[0], args[1], args[2], args[3], monthArg], values => DbScalar(values[0], values[1], values[2], values[3], values[4]));
     }
 
@@ -42,7 +43,7 @@ public static partial class BuiltInFunctions
         double cost = ToNumber(costValue);
         double salvage = ToNumber(salvageValue);
         double life = ToNumber(lifeValue);
-        double month = monthValue is BlankValue ? 12 : ToNumber(monthValue);
+        double month = ToNumber(monthValue);
         return DbScalar(cost, salvage, life, periodValue, month);
     }
 
@@ -54,8 +55,13 @@ public static partial class BuiltInFunctions
             return ErrorValue.Num;
         int ilife = (int)Math.Truncate(life), iper = (int)Math.Truncate(period);
         int imonth = (int)Math.Truncate(month);
-        if (cost <= 0 || salvage < 0 || ilife <= 0 || iper <= 0 || iper > ilife + 1) return ErrorValue.Num;
+        // Measured against Excel: a period between 0 and 1 counts as period 1; a period beyond the life is
+        // #NUM! unless the first year is partial (month < 12), which adds one extra period.
+        if (period > 0 && iper < 1) iper = 1;
+        if (cost < 0 || salvage < 0 || ilife <= 0 || iper <= 0) return ErrorValue.Num;
         if (imonth < 1 || imonth > 12) return ErrorValue.Num;
+        if (imonth == 12 ? iper > life : iper > ilife + 1) return ErrorValue.Num;
+        if (cost == 0) return new NumberValue(0);
         // Excel's DB has no special case for salvage >= cost: it always evaluates the
         // declining-balance rate formula below, which naturally yields 0 when salvage == cost
         // and a small negative rate (i.e. a book-value increase) when salvage > cost.
@@ -80,7 +86,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue Ddb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        var factorArg = args.Count > 4 ? args[4] : BlankValue.Instance;
+        // An omitted factor defaults to 2, but an explicitly empty one is 0 (and therefore #NUM!).
+        var factorArg = args.Count > 4 ? args[4] : new NumberValue(2);
         return MapScalarArgs([args[0], args[1], args[2], args[3], factorArg], values => DdbScalar(values[0], values[1], values[2], values[3], values[4]));
     }
 
@@ -89,7 +96,7 @@ public static partial class BuiltInFunctions
         double cost = ToNumber(costValue);
         double salvage = ToNumber(salvageValue);
         double life = ToNumber(lifeValue);
-        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        double factor = ToNumber(factorValue);
         return DdbScalar(cost, salvage, life, periodValue, factor);
     }
 
@@ -100,43 +107,28 @@ public static partial class BuiltInFunctions
             !double.IsFinite(period) || !double.IsFinite(factor))
             return ErrorValue.Num;
         if (cost < 0 || salvage < 0 || life <= 0 || period <= 0 || factor <= 0) return ErrorValue.Num;
-        double bookValue = cost;
-        // Excel supports fractional periods: full periods before the target period fully
-        // deplete book value in the usual double-declining-balance way, and any remaining
-        // fractional part of the target period contributes a pro-rated slice of the
-        // depreciation that the *next* full period would have produced (this also covers the
-        // 0 < period < 1 case, where there are no full periods and the whole result is a
-        // fraction of period-one's depreciation).
-        double flooredPeriod = Math.Floor(period);
-        double fraction = period - flooredPeriod;
-        double dep = 0;
-        // Iterate using a double counter (never truncate `period`/`flooredPeriod` into an int
-        // loop bound: a huge-but-legal period, e.g. 500,000,000 or one exceeding Int32.MaxValue,
-        // would otherwise force an unbounded synchronous loop and, past int range, an undefined
-        // cast). Once book value has been driven down to the salvage floor, `dep` is pinned at 0
-        // and book value stops changing, so every remaining full period is provably identical to
-        // the last one computed -- the loop can stop as soon as that convergence is detected
-        // without altering the result.
-        for (double p = 1; p <= flooredPeriod; p++)
+        if (period > life) return ErrorValue.Num;
+        // Measured against Excel: fractional periods use the continuous double-declining curve,
+        // DDB(p) = D(p) - D(p - 1) with D(x) = min(cost * (1 - (1 - factor/life)^x), cost - salvage)
+        // (DDB(10000,1000,5,1.5) is 3098.39), and a period below 1 is the first-period amount.
+        double ratio = factor / life;
+        double p = Math.Max(period, 1.0);
+        double Accumulated(double x)
         {
-            dep = Math.Min(bookValue - salvage, bookValue * factor / life);
-            dep = Math.Max(dep, 0);
-            bookValue -= dep;
-            if (dep <= 0)
-                break;
+            if (x <= 0) return 0;
+            double d = ratio >= 1 ? cost : cost * (1 - Math.Pow(1 - ratio, x));
+            return Math.Min(d, cost - salvage);
         }
-        if (fraction > 0)
-        {
-            dep = Math.Min(bookValue - salvage, bookValue * factor / life);
-            dep = Math.Max(dep, 0) * fraction;
-        }
-        return NumberResult(dep);
+
+        double dep = Accumulated(p) - Accumulated(p - 1);
+        return NumberResult(Math.Max(dep, 0));
     }
 
     private static ScalarValue Vdb(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (FirstError(args) is { } e) return e;
-        var factorArg = args.Count > 5 ? args[5] : BlankValue.Instance;
+        // An omitted factor defaults to 2; an explicitly empty one is 0 (straight-line unless no_switch).
+        var factorArg = args.Count > 5 ? args[5] : new NumberValue(2);
         var noSwitchArg = args.Count > 6 ? args[6] : BlankValue.Instance;
         return MapScalarArgs([args[0], args[1], args[2], args[3], args[4], factorArg, noSwitchArg], values => VdbScalar(values[0], values[1], values[2], values[3], values[4], values[5], values[6]));
     }
@@ -147,7 +139,7 @@ public static partial class BuiltInFunctions
         double salvage = ToNumber(salvageValue);
         double life = ToNumber(lifeValue);
         double startPeriod = ToNumber(startPeriodValue);
-        double factor = factorValue is BlankValue ? 2.0 : ToNumber(factorValue);
+        double factor = ToNumber(factorValue);
         bool noSwitch = noSwitchValue is not BlankValue && ToBool(noSwitchValue);
         return VdbScalar(cost, salvage, life, startPeriod, endPeriodValue, factor, noSwitch);
     }
@@ -158,7 +150,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(life) ||
             !double.IsFinite(startPeriod) || !double.IsFinite(endPeriod) || !double.IsFinite(factor))
             return ErrorValue.Num;
-        if (cost < 0 || salvage < 0 || life <= 0 || startPeriod < 0 || endPeriod < startPeriod || factor <= 0)
+        if (cost < 0 || salvage < 0 || life <= 0 || startPeriod < 0 || endPeriod < startPeriod || factor < 0)
             return ErrorValue.Num;
         if (endPeriod > life) return ErrorValue.Num;
 
@@ -178,7 +170,7 @@ public static partial class BuiltInFunctions
             double ddbDep = bookValue * factor / life;
             double slnDep = (bookValue - salvage) / (life - p);
             double dep = !noSwitch && slnDep > ddbDep ? slnDep : ddbDep;
-            dep = Math.Max(0, Math.Min(dep, bookValue - salvage));
+            dep = Math.Min(dep, bookValue - salvage); // negative when salvage exceeds cost (Excel: -2000)
             double partialDep = dep * fraction;
             double overlapStart = Math.Max(currentPeriod, startPeriod);
             double overlapLength = Math.Max(0, periodEnd - overlapStart);

@@ -103,7 +103,7 @@ public sealed partial class FormulaEvaluator
         "PERCENTOF",
         "LOOKUP",
         "IRR",
-        "RANDARRAY",
+        "RANDARRAY", "SEQUENCE",
         "FILTER", "SORT", "SORTBY", "TAKE", "DROP", "TRANSPOSE",
         "CHOOSEROWS", "CHOOSECOLS", "VSTACK", "HSTACK",
         "TOROW", "TOCOL", "WRAPROWS", "WRAPCOLS", "EXPAND", "UNIQUE",

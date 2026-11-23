@@ -24,7 +24,7 @@ public static partial class BuiltInFunctions
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
-        return NumberResult(CouponDayCount(pcd, sd, basis));
+        return NumberResult(ExcelCouponDaysSincePrevious(pcd, sd, basis));
     }
 
     private static ScalarValue Coupdays(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -45,13 +45,7 @@ public static partial class BuiltInFunctions
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime pcd = CouponDateBefore(sd, md, frequency);
-        DateTime ncd = CouponDateAfter(sd, md, frequency);
-        if (basis == 1)
-            return NumberResult((ncd - pcd).TotalDays);
-        if (basis == 3)
-            return NumberResult(365.0 / frequency);
-        // Bases 0 (US 30/360), 2 (Actual/360) and 4 (European 30/360) all use a 360-day year.
-        return NumberResult(360.0 / frequency);
+        return NumberResult(ExcelCouponPeriodDays(pcd, frequency, basis));
     }
 
     private static ScalarValue Coupdaysnc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -72,6 +66,13 @@ public static partial class BuiltInFunctions
             !TryGetFinancialDate(maturity, out DateTime md)) return ErrorValue.Num;
         if (sd >= md) return ErrorValue.Num;
         DateTime ncd = CouponDateAfter(sd, md, frequency);
+        if (basis == 0)
+        {
+            // Excel derives the 30/360 US days-to-next-coupon as E minus the days since the previous one.
+            DateTime pcd = CouponDateBefore(sd, md, frequency);
+            return NumberResult(ExcelCouponPeriodDays(pcd, frequency, basis) - ExcelCouponDaysSincePrevious(pcd, sd, basis));
+        }
+
         return NumberResult(CouponDayCount(sd, ncd, basis));
     }
 

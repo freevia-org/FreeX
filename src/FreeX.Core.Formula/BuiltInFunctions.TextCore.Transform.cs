@@ -138,8 +138,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue ValueFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e) return e;
-        if (args[0] is RangeValue range) return MapUnaryTextRange(range, ValueScalar);
-        return ValueScalar(args[0]);
+        bool uses1904 = ctx.Uses1904DateSystem;
+        if (args[0] is RangeValue range) return MapUnaryTextRange(range, v => ValueScalar(v, uses1904));
+        return ValueScalar(args[0], uses1904);
     }
 
     /// <summary>
@@ -162,11 +163,13 @@ public static partial class BuiltInFunctions
     /// what r516 had to retract. Settling it needs real Excel: what are =VALUE("1E309") and
     /// =VALUE("NaN")?</para>
     /// </summary>
-    private static ScalarValue ValueScalar(ScalarValue value)
+    private static ScalarValue ValueScalar(ScalarValue value, bool uses1904DateSystem = false)
     {
         if (value is NumberValue nv) return nv;
-        var text = ToText(value).Trim();
-        if (ExcelTextNumberParser.TryParse(text, out var d) && !double.IsNaN(d))
+        // No Trim here: Excel's VALUE only ignores the ASCII space, so a tab/NBSP is #VALUE!; the
+        // culture-specific parser trims however its own grammar requires.
+        var text = ToText(value);
+        if (ExcelTextNumberParser.TryParse(text, out var d, uses1904DateSystem) && double.IsFinite(d))
             return new NumberValue(d);
         return ErrorValue.Value;
     }

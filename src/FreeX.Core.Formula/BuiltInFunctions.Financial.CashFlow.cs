@@ -34,7 +34,10 @@ public static partial class BuiltInFunctions
         for (int i = 0; i < n; i++)
             if (cf[i] > 0) npvPos += cf[i] / Math.Pow(1 + reinvestRate, i);
 
-        if (npvNeg == 0 || npvPos == 0) return ErrorValue.DivByZero;
+        // Measured against Excel: no negative flow is #DIV/0!, but all-negative flows (no positive) give -100%.
+        if (npvNeg == 0) return ErrorValue.DivByZero;
+        if (npvPos == 0) return new NumberValue(-1);
+        if (1 + reinvestRate == 0) return ErrorValue.DivByZero;
         double mirr = Math.Pow((-npvPos * Math.Pow(1 + reinvestRate, n - 1)) / npvNeg, 1.0 / (n - 1)) - 1;
         return NumberResult(mirr);
     }
@@ -65,9 +68,11 @@ public static partial class BuiltInFunctions
     private static ScalarValue XirrScalar(RangeValue valRange, RangeValue dateRange, ScalarValue guessValue)
     {
         if (guessValue is ErrorValue guessError) return guessError;
+        if (guessValue is BoolValue) return ErrorValue.Value; // measured: a boolean guess is #VALUE!
         double guess = ToNumber(guessValue);
         // 1 + guess must be > 0 for the Newton iteration to make sense (mirrors IRR's guard).
         if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
+        if (RangeHasTextOrBoolean(valRange) || RangeHasTextOrBoolean(dateRange)) return ErrorValue.Value;
         var (vals, ve) = CollectRangeNumbers(valRange);
         var (datesRaw, de) = CollectRangeNumbers(dateRange);
         if (ve is not null) return ve;
@@ -84,8 +89,9 @@ public static partial class BuiltInFunctions
             else if (cf[i] < 0) xirrHasNegative = true;
         }
         if (!xirrHasPositive || !xirrHasNegative) return ErrorValue.Num;
-        // Excel's documented XIRR contract: "dates" must not contain any date that precedes
-        // the first (anchor) date; such input returns #NUM! rather than converging to a rate.
+        // Measured against Excel: XIRR does NOT enforce the documented "no date before the first" rule; it
+        // truncates each date to a whole serial and uses (serial - first serial) / 365 (negative allowed).
+        // Only a negative serial is #NUM!.
         if (!NormalizeDateSerialsToYearFractions(ds)) return ErrorValue.Num;
         double r = guess;
         bool converged = false;
@@ -101,8 +107,12 @@ public static partial class BuiltInFunctions
             }
             if (Math.Abs(df) < 1e-14) { r = double.NaN; break; }
             double delta = f / df;
-            r -= delta;
-            if (r <= -1) { r = double.NaN; break; }
+            double next = r - delta;
+            // A Newton step that would leave the domain (rate <= -100%) is damped back inside it, which lets
+            // the iteration reach the (very negative) roots Excel finds for flows like -1000, 1, 1, 1.
+            if (next <= -1) next = (r - 1) / 2;
+            delta = r - next;
+            r = next;
             if (Math.Abs(delta) < 1e-10) { converged = true; break; }
         }
 
@@ -131,8 +141,11 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue XnpvScalar(ScalarValue rateValue, RangeValue valRange, RangeValue dateRange)
     {
+        if (rateValue is BoolValue) return ErrorValue.Value;
         double rate = ToNumber(rateValue);
-        if (!double.IsFinite(rate) || rate <= -1) return ErrorValue.Num;
+        // Measured against Excel: XNPV(0, ...) and any negative rate are #NUM!.
+        if (!double.IsFinite(rate) || rate <= 0) return ErrorValue.Num;
+        if (RangeHasTextOrBoolean(valRange) || RangeHasTextOrBoolean(dateRange)) return ErrorValue.Value;
 
         var (valueCount, valueError) = CountRangeNumbers(valRange);
         if (valueError is not null) return valueError;
@@ -147,7 +160,8 @@ public static partial class BuiltInFunctions
         if (!TryReadNextRangeNumber(dateRange, ref dateRow, ref dateCol, out var firstDateSerial))
             return ErrorValue.Num;
 
-        var firstDate = SerialToDate(firstDateSerial);
+        firstDateSerial = Math.Floor(firstDateSerial);
+        if (firstDateSerial < 1) return ErrorValue.Num;
         var valueRow = 0;
         var valueCol = 0;
         dateRow = 0;
@@ -162,9 +176,10 @@ public static partial class BuiltInFunctions
 
             // Excel's documented XNPV contract: "If any number in dates precedes the starting
             // date, XNPV returns the #NUM! error value."
+            dateSerial = Math.Floor(dateSerial);
             if (dateSerial < firstDateSerial) return ErrorValue.Num;
 
-            var yearFraction = (SerialToDate(dateSerial) - firstDate).TotalDays / 365.0;
+            var yearFraction = (dateSerial - firstDateSerial) / 365.0;
             result += cashFlow / Math.Pow(1 + rate, yearFraction);
         }
 
@@ -207,14 +222,25 @@ public static partial class BuiltInFunctions
     /// </summary>
     private static bool NormalizeDateSerialsToYearFractions(List<double> serials)
     {
-        var firstSerial = serials[0];
-        var firstDate = SerialToDate(firstSerial);
+        var firstSerial = Math.Floor(serials[0]);
         for (var i = 0; i < serials.Count; i++)
         {
-            if (serials[i] < firstSerial) return false;
-            serials[i] = (SerialToDate(serials[i]) - firstDate).TotalDays / 365.0;
+            var serial = Math.Floor(serials[i]);
+            if (serial < 0) return false;
+            // Raw serial arithmetic, like Excel: converting through DateTime would collapse serials 59
+            // and 60 (the phantom 1900 leap day) into the same calendar day.
+            serials[i] = (serial - firstSerial) / 365.0;
         }
         return true;
+    }
+
+    /// <summary>True when the range holds a text or boolean cell (Excel answers #VALUE! for these in XIRR/XNPV/FVSCHEDULE).</summary>
+    private static bool RangeHasTextOrBoolean(RangeValue range)
+    {
+        for (int r = 0; r < range.RowCount; r++)
+            for (int c = 0; c < range.ColCount; c++)
+                if (range.Cells[r, c] is TextValue or BoolValue) return true;
+        return false;
     }
 
     private static ScalarValue Npv(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

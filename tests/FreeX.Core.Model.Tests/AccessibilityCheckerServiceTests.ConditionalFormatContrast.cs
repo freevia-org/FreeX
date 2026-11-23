@@ -862,7 +862,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,IRR($A1:$D1)>0.1)", "B1");
         AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,MIRR($A1:$D1,$H1,$I1)>0.12)", "B1");
         AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XNPV(0.1,$A1:$D1,$E1:$G1)>100)", "B1");
-        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XIRR($A1:$D1,$E1:$G1)>0.1)", "B1");
+        AssertFormulaFinancialCashFlowFunctionContrastLocations("AND($A1<0,XIRR($A1:$D1,$E1:$G1)>0.1)");
     }
 
     [Fact]
@@ -1515,7 +1515,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaAggregateContrastLocations("SUM(\"n/a\"+$A1)>0");
         AssertFormulaAggregateContrastLocations("SUM(SUM($A1:$A20000))>0", "B1", "B2", "B3", "B4");
         AssertFormulaAggregateContrastLocations("SUMSQ($A1:$A20000)>0", "B1", "B2", "B3", "B4");
-        AssertFormulaAggregateContrastLocations("SUMSQ(\"n/a\",$A1)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaAggregateContrastLocations("SUMSQ(\"n/a\",$A1)>0");
         AssertFormulaAggregateContrastLocations("SUMSQ(1E308)>0");
         AssertFormulaAggregateContrastLocations("SUMSQ(KURT($A1))>0");
         AssertFormulaAggregateContrastLocations("SUMSQ($A1/0)>0");
@@ -2265,7 +2265,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(EXP(1000),1)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL($A1,EXP(1000))>0");
-        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1E308,1)>0", "B1", "B2", "B3", "B4");
+        AssertFormulaArithmeticContrastLocations("MULTINOMIAL(1E308,1)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(2000,1000)>0");
         AssertFormulaArithmeticContrastLocations("MULTINOMIAL(100000,50000)>0");
     }
@@ -3137,9 +3137,9 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTFChiSquareDistributionErrorPredicates()
     {
-        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(T.DIST.RT($A1,$C1))", "B5", "B6", "B8", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(T.DIST.RT($A1,$C1))", "B6", "B8", "B9");
         AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISNA(T.DIST.RT($A1,$C1))", "B8");
-        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERR(T.DIST.RT($A1,$C1))", "B5", "B6", "B9");
+        AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERR(T.DIST.RT($A1,$C1))", "B6", "B9");
         AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(T.INV($E1,$C1))", "B6", "B7", "B8", "B9", "B10");
         AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(F.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaTFChiSquareDistributionFunctionContrastLocations("ISERROR(F.INV($E1,$C1,$D1))", "B6", "B7", "B8", "B9", "B10");
@@ -3255,7 +3255,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(BINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISNA(BINOM.DIST($A1,$C1,$D1,TRUE))", "B8");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERR(BINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B9");
-        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(HYPGEOM.DIST($A1,$C1,2,$H1,TRUE))", "B3", "B5", "B6", "B8", "B9");
+        AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(HYPGEOM.DIST($A1,$C1,2,$H1,TRUE))", "B5", "B6", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(NEGBINOM.DIST($A1,$C1,$D1,TRUE))", "B5", "B6", "B7", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(POISSON.DIST($A1,$C1,TRUE))", "B5", "B6", "B8", "B9");
         AssertFormulaDiscreteStatisticalFunctionContrastLocations("ISERROR(SERIESSUM($A1,$I1,$J1,$K1))", "B8", "B9");
@@ -3876,7 +3876,7 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(\"5\")>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE($A1&\"x\")>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(KURT($A1))>0");
-        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(-1)>0");
+        AssertFormulaArithmeticContrastLocations("FACTDOUBLE(-1)>0", "B1", "B2", "B3", "B4");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(1E308*1E308)>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(EXP(1000))>0");
         AssertFormulaArithmeticContrastLocations("FACTDOUBLE(301)>0");
@@ -4446,8 +4446,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaValueFunctionContrastLocations("VALUE(42)>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
         AssertFormulaValueFunctionContrastLocations("VALUE(\"Open\")>0");
         AssertFormulaValueFunctionContrastLocations("VALUE(\"\")>0");
-        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
-        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1&\"x\")>0");
     }
 
@@ -4539,7 +4539,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(DATEVALUE($A1)>60,TRUE,FALSE)", "B4", "B5", "B6", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(DATEVALUE($A1)>60,$D1)", "B4", "B5", "B7");
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNUMBER(DATEVALUE($A1))", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        // Row 8 holds "12:00 PM": measured against Excel 16.0 (en-US), DATEVALUE of a time-only text is 0 (a number).
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNUMBER(DATEVALUE($A1))", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)+1=45294", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("SUM(DATEVALUE($A1),1)=45307", "B6");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(TIMEVALUE($C1)>=0.5,TRUE,FALSE)", "B2", "B3", "B5", "B6");
@@ -4551,7 +4552,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueErrorPredicates()
     {
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(TIMEVALUE(\"2024-01-02\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"Open\"))", FormulaDateValueTimeValueAllLocations);
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNA(TIMEVALUE(NA()))", FormulaDateValueTimeValueAllLocations);
@@ -5583,7 +5584,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("IF(ACCRINT($A1,$C1,$D1,$E1,$F1,$G1)>45,TRUE,FALSE)", "B1", "B2");
         AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("AND(ISNUMBER(ACCRINTM($A1,$D1,$E1)),FVSCHEDULE($I1,$J1:$K1)>100)", "B1", "B2", "B8");
-        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A1,$C1,$D1,$E1,$F1,$G1,$H1,FALSE)<25", "B3", "B4");
+        AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("ACCRINT($A1,$C1,$D1,$E1,$F1,$G1,$H1,FALSE)<25", "B3");
         AssertFormulaFinancialAccrualScheduleFunctionContrastLocations("SUM(DOLLARDE($L1,$N1),DOLLARFR($M1,$N1))>6", "B8");
     }
 

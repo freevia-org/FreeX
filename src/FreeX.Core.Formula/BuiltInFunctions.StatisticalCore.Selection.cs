@@ -19,7 +19,8 @@ public static partial class BuiltInFunctions
     {
         var kD = ToNumber(kValue);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
-        int k = (int)kD;
+        // Measured against Excel: a fractional k rounds UP (LARGE(A1:A10,1.9) is the 2nd largest).
+        int k = (int)Math.Ceiling(kD);
         var (values, err) = CollectRangeNumbersForSelection(range);
         if (err is not null) return err;
         var nums = values!;
@@ -42,7 +43,8 @@ public static partial class BuiltInFunctions
     {
         var kD = ToNumber(kValue);
         if (!double.IsFinite(kD)) return ErrorValue.Num;
-        int k = (int)kD;
+        // Measured against Excel: a fractional k rounds UP (LARGE(A1:A10,1.9) is the 2nd largest).
+        int k = (int)Math.Ceiling(kD);
         var (values, err) = CollectRangeNumbersForSelection(range);
         if (err is not null) return err;
         var nums = values!;

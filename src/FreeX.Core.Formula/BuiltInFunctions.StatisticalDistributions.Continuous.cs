@@ -51,6 +51,7 @@ public static partial class BuiltInFunctions
         double x = ToNumber(xValue);
         if (x < 0 || alpha <= 0 || beta <= 0) return ErrorValue.Num;
         if (cum) return NumberResult(1.0 - Math.Exp(-Math.Pow(x / beta, alpha)));
+        if (x == 0) return new NumberValue(0); // measured: the density at 0 is 0 for every shape
         return NumberResult((alpha / beta) * Math.Pow(x / beta, alpha - 1) * Math.Exp(-Math.Pow(x / beta, alpha)));
     }
 }

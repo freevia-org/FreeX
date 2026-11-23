@@ -48,15 +48,12 @@ public class R28_Db_FinalStubPeriodTests
     }
 
     [Fact]
-    public void Db_FinalStubPeriod_WithDefaultTwelveMonth_IsZero()
+    public void Db_FinalStubPeriod_WithDefaultTwelveMonth_IsNumError()
     {
-        // When month defaults to 12 (a full first year), the trailing stub period after
-        // the depreciable life has zero remaining months to prorate: (12-12)/12 = 0.
-        // The pre-fix formula ((12-month+1)/12 = 1/12) would have produced a spurious
-        // non-zero residual here.
+        // When month defaults to 12 (a full first year) there is no stub period: a period beyond the
+        // life is #NUM! (measured against Excel 16.0, en-US; only a partial first year adds the extra period).
         var result = Eval("DB(1000000,100000,6,7)");
 
-        var number = result.Should().BeOfType<NumberValue>().Subject;
-        number.Value.Should().BeApproximately(0.0, 1e-9);
+        result.Should().Be(ErrorValue.Num);
     }
 }

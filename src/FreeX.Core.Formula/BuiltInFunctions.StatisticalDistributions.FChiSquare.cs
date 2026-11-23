@@ -31,7 +31,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FDistScalar(ScalarValue xValue, double d1, double d2, bool cum)
     {
         double x = ToNumber(xValue);
-        if (d1 < 1 || d2 < 1 || d1 >= MaxDegreesOfFreedom || d2 >= MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
+        if (d1 < 1 || d2 < 1 || d1 > MaxDegreesOfFreedom || d2 > MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
         return cum ? NumberResult(FCdf(x, d1, d2)) : NumberResult(FPdf(x, d1, d2));
     }
 
@@ -53,7 +53,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FDistRtScalar(ScalarValue xValue, double d1, double d2)
     {
         double x = ToNumber(xValue);
-        if (d1 < 1 || d2 < 1 || d1 >= MaxDegreesOfFreedom || d2 >= MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
+        if (d1 < 1 || d2 < 1 || d1 > MaxDegreesOfFreedom || d2 > MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
         return NumberResult(1.0 - FCdf(x, d1, d2));
     }
 
@@ -75,7 +75,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FInvScalar(ScalarValue probabilityValue, double d1, double d2)
     {
         double prob = ToNumber(probabilityValue);
-        if (d1 < 1 || d2 < 1 || d1 >= MaxDegreesOfFreedom || d2 >= MaxDegreesOfFreedom || prob < 0 || prob >= 1) return ErrorValue.Num;
+        if (d1 < 1 || d2 < 1 || d1 > MaxDegreesOfFreedom || d2 > MaxDegreesOfFreedom || prob < 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(FInv(prob, d1, d2));
     }
 
@@ -97,7 +97,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FInvRtScalar(ScalarValue probabilityValue, double d1, double d2)
     {
         double prob = ToNumber(probabilityValue);
-        if (d1 < 1 || d2 < 1 || d1 >= MaxDegreesOfFreedom || d2 >= MaxDegreesOfFreedom || prob <= 0 || prob > 1) return ErrorValue.Num;
+        if (d1 < 1 || d2 < 1 || d1 > MaxDegreesOfFreedom || d2 > MaxDegreesOfFreedom || prob <= 0 || prob > 1) return ErrorValue.Num;
         return NumberResult(FInv(1.0 - prob, d1, d2));
     }
 
@@ -111,7 +111,7 @@ public static partial class BuiltInFunctions
         double m1 = a.Average(), m2 = b.Average();
         double v1 = a.Sum(x => (x - m1) * (x - m1)) / (a.Count - 1);
         double v2 = b.Sum(x => (x - m2) * (x - m2)) / (b.Count - 1);
-        if (v2 == 0) return ErrorValue.DivByZero;
+        if (v1 == 0 || v2 == 0) return ErrorValue.DivByZero;
         double f = v1 / v2;
         double d1 = a.Count - 1, d2 = b.Count - 1;
         double p1 = FCdf(f, d1, d2);
@@ -138,7 +138,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue ChiSqDistScalar(ScalarValue xValue, double df, bool cum)
     {
         double x = ToNumber(xValue);
-        if (df < 1 || df >= MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
         return cum ? NumberResult(ChiSqCdf(x, df)) : NumberResult(ChiSqPdf(x, df));
     }
 
@@ -158,7 +158,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue ChiSqDistRtScalar(ScalarValue xValue, double df)
     {
         double x = ToNumber(xValue);
-        if (df < 1 || df >= MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom || x < 0) return ErrorValue.Num;
         return NumberResult(1.0 - ChiSqCdf(x, df));
     }
 
@@ -178,7 +178,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue ChiSqInvScalar(ScalarValue probabilityValue, double df)
     {
         double prob = ToNumber(probabilityValue);
-        if (df < 1 || df >= MaxDegreesOfFreedom || prob < 0 || prob >= 1) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom || prob < 0 || prob >= 1) return ErrorValue.Num;
         return NumberResult(ChiSqInv(prob, df));
     }
 
@@ -198,7 +198,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue ChiSqInvRtScalar(ScalarValue probabilityValue, double df)
     {
         double prob = ToNumber(probabilityValue);
-        if (df < 1 || df >= MaxDegreesOfFreedom || prob <= 0 || prob > 1) return ErrorValue.Num;
+        if (df < 1 || df > MaxDegreesOfFreedom || prob <= 0 || prob > 1) return ErrorValue.Num;
         return NumberResult(ChiSqInv(1.0 - prob, df));
     }
 
@@ -221,8 +221,9 @@ public static partial class BuiltInFunctions
         int n = actualFlat.Length;
         for (int i = 0; i < n; i++)
         {
-            if (actualFlat[i] is not NumberValue av) continue;
-            if (expectedFlat[i] is not NumberValue ev) return ErrorValue.Value;
+            // Measured against Excel: a pair with a non-numeric cell on either side is skipped.
+            if (actualFlat[i] is not NumberValue av || expectedFlat[i] is not NumberValue ev) continue;
+            if (ev.Value < 0) return ErrorValue.Num;
             if (ev.Value == 0) return ErrorValue.DivByZero;
             double diff = av.Value - ev.Value;
             chiSq += diff * diff / ev.Value;

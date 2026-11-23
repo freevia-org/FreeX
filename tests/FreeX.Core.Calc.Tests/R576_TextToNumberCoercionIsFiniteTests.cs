@@ -81,24 +81,12 @@ public sealed class R576_TextToNumberCoercionIsFiniteTests
     }
 
     [Fact]
-    public void An_overflowing_literal_still_reaches_the_cell_as_infinity()
+    public void An_overflowing_literal_is_a_value_error()
     {
-        // Recorded as a KNOWN GAP rather than fixed, so it is visible instead of silent.
-        //
-        // VALUE("1E309") still yields Infinity, and this test pins that so the state of the code
-        // is written down. It is not fixed because
-        // AccessibilityCheckerServiceTests.FindIssues_UsesCanonicalFormulaConditionalFormatValue
-        // FunctionOperandCoercionAndErrorSemantics deliberately expects VALUE("1E309")>0 to be
-        // TRUE, in a test whose whole subject is this function's coercion and error semantics.
-        //
-        // Excel most likely answers #NUM! there -- its own range stops near 9.99E307 -- but Excel
-        // COM is not registered on this machine, and overturning a deliberately pinned expectation
-        // on an unverified reading is exactly what r516 had to retract. What settles it: evaluate
-        // =VALUE("1E309") in real Excel. If it is #NUM!, both this test and the accessibility
-        // expectation change together.
+        // Measured against Excel 16.0 (en-US): =VALUE("1E309") is #VALUE! (Excel's own range stops near
+        // 9.99E307), so the cell never receives a non-finite number from VALUE.
         var value = Evaluate("=VALUE(\"1E309\")");
 
-        value.Should().BeOfType<NumberValue>()
-            .Which.Value.Should().Be(double.PositiveInfinity);
+        value.Should().Be(ErrorValue.Value);
     }
 }

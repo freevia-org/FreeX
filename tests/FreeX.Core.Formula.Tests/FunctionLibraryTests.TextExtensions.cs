@@ -65,9 +65,9 @@ public partial class FunctionLibraryTests
         // A row-vector (1x2) crossed with a column-vector (2x1) is now a valid cross-broadcast
         // (R118-formula-arity3plus-cross-broadcast), so this uses B1:B3 (a same-axis, differently
         // sized column) to keep testing a genuine shape mismatch.
-        _eval.Evaluate("=REPLACE(A1:A2,B1:B3,2,\"X\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=REPLACE(A1:A2,2,B1:B3,\"X\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=REPLACE(A1:A2,2,2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,B1:B3,2,\"X\")", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=REPLACE(A1:A2,2,B1:B3,\"X\")", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=REPLACE(A1:A2,2,2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -547,8 +547,8 @@ public partial class FunctionLibraryTests
             (2, 2, new NumberValue(0)),
             (3, 2, new NumberValue(2)));
 
-        _eval.Evaluate("=FIXED(A1:A2,B1:B3,TRUE)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DOLLAR(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FIXED(A1:A2,B1:B3,TRUE)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=DOLLAR(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -1152,8 +1152,8 @@ public partial class FunctionLibraryTests
             (1, 2, new TextValue(",")),
             (1, 3, new TextValue(".")));
 
-        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B3,\".\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B3,\".\")", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]

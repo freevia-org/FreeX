@@ -67,6 +67,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue FvscheduleScalar(ScalarValue principalValue, RangeValue schedRange)
     {
         if (principalValue is ErrorValue principalError) return principalError;
+        if (principalValue is BoolValue || RangeHasTextOrBoolean(schedRange)) return ErrorValue.Value; // measured
         double principal = ToNumber(principalValue);
         if (!double.IsFinite(principal)) return ErrorValue.Num;
         var (rates, re) = CollectRangeNumbers(schedRange);

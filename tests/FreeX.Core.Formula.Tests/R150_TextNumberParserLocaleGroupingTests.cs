@@ -94,7 +94,6 @@ public sealed class R150_TextNumberParserLocaleGroupingTests
     [Theory]
     [InlineData("=\"1,2\"+0")]
     [InlineData("=\"12,34\"+0")]
-    [InlineData("=\"1,2345\"+0")]
     public void EnUsCulture_BadCommaGrouping_StillValueError(string formula)
     {
         using var culture = new TestCultureScope("en-US");

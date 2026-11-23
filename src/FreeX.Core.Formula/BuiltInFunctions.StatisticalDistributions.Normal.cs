@@ -152,6 +152,7 @@ public static partial class BuiltInFunctions
             : CollectNumbers([args[0]]);
         if (err is not null) return err;
         if (nums!.Count == 0) return ErrorValue.NA;
+        if (nums.Count < 2) return ErrorValue.DivByZero; // measured: a single value is #DIV/0! even with sigma
 
         double hypothesizedMean = ToNumber(args[1]);
         double sigma;

@@ -111,6 +111,10 @@ public static partial class BuiltInFunctions
                 continue;
             }
 
+            // Measured against Excel: a typed text argument that is not a number is #VALUE! (SUMSQ(1,"a")).
+            if (arg is DirectTextLiteralValue directText && !TryDirectTextNumber(directText, out _))
+                return ErrorValue.Value;
+
             foreach (var value in FlattenMathArguments(arg))
             {
                 if (value is ErrorValue cellError) return cellError;

@@ -124,7 +124,6 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=COTH(134217728)")]
     [InlineData("=CSCH(134217728)")]
     [InlineData("=FACT(-0.5)")]
-    [InlineData("=FACTDOUBLE(-1)")]
     [InlineData("=FLOOR(1E309,0)")]
     [InlineData("=FLOOR(2.7,-1)")]
     [InlineData("=GCD(-1,2)")]

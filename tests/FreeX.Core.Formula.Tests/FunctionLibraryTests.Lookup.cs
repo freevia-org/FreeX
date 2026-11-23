@@ -1160,7 +1160,7 @@ public partial class FunctionLibraryTests
             (1, 6, new NumberValue(1)), (2, 6, new NumberValue(1)), (3, 6, new NumberValue(1)));
 
         AssertColumn(_eval.Evaluate("=XMATCH(D1:D2,A1:A4,E1:E2)", sheet), new NumberValue(2), new NumberValue(3));
-        _eval.Evaluate("=XMATCH(D1:D2,A1:A4,E1:E2,F1:F3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=XMATCH(D1:D2,A1:A4,E1:E2,F1:F3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]

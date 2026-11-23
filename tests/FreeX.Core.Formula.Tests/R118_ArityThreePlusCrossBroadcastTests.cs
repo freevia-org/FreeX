@@ -128,6 +128,6 @@ public class R118_ArityThreePlusCrossBroadcastTests
 
         var result = _eval.Evaluate("=PMT(A1:A3,D1:D2,-1000)", sheet);
 
-        result.Should().Be(ErrorValue.Value);
+        result.ShouldPadMismatchedAxesWithNa();
     }
 }

@@ -47,6 +47,13 @@ public static partial class BuiltInFunctions
         if (rate == 0)
             return NumberResult(-(pv + fv) / nper);
         double rn  = Math.Pow(1 + rate, nper);
+        // A rate so small that (1+rate)^nper rounds to exactly 1 behaves as a zero rate (Excel answers
+        // PMT(1E-20,5,10000) = -2000); a huge nper (rn overflows) tends to the interest-only payment
+        // (Excel answers PMT(0.05,1E10,1000) = -50).
+        if (rn == 1)
+            return NumberResult(-(pv + fv) / nper);
+        if (double.IsInfinity(rn))
+            return NumberResult(-pv * rate / (1 + rate * type));
         double pmt = -(pv * rn + fv) * rate / ((1 + rate * type) * (rn - 1));
         return NumberResult(pmt);
     }
@@ -85,6 +92,7 @@ public static partial class BuiltInFunctions
         if (rate == 0)
             return NumberResult(-pmt * nper - fv);
         double rn = Math.Pow(1 + rate, nper);
+        if (rn == 0) return ErrorValue.DivByZero; // rate of -100%: PV(-1,5,-100) is #DIV/0! in Excel
         double pv = (-pmt * (1 + rate * type) * (rn - 1) / rate - fv) / rn;
         return NumberResult(pv);
     }
@@ -153,6 +161,7 @@ public static partial class BuiltInFunctions
             if (Math.Abs(pmt) < 1e-10) return ErrorValue.DivByZero;
             return NumberResult(-(pv + fv) / pmt);
         }
+        if (rate <= -1) return ErrorValue.Num;
         double pmtAdj = pmt * (1 + rate * type);
         double ratio  = (pmtAdj - fv * rate) / (pmtAdj + pv * rate);
         if (ratio <= 0) return ErrorValue.Num;
@@ -196,7 +205,7 @@ public static partial class BuiltInFunctions
         if (nperValue <= 0) return ErrorValue.Num; // RATE(0,..) and RATE(-60,..) are #NUM! in Excel
         double nper = nperValue;
         double r = guess;
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 200; i++)
         {
             double rn   = Math.Pow(1 + r, nper);
             double rn1  = nper * Math.Pow(1 + r, nper - 1);
@@ -216,7 +225,12 @@ public static partial class BuiltInFunctions
             if (Math.Abs(df) < 1e-15) break;
             double delta = f / df;
             r -= delta;
-            if (Math.Abs(delta) < 1e-10) break;
+            // A step that leaves the domain (rate <= -100%) has no valid result: Excel answers #NUM!
+            // (RATE(60,-200,10000,0,0,-0.5) and RATE(1,0,-100,0) are #NUM!).
+            if (r <= -1) return ErrorValue.Num;
+            // Excel stops once successive iterates differ by less than 1E-7 and returns that iterate
+            // (RATE(5,-100,500) is 1.8589E-09, not an exact 0).
+            if (Math.Abs(delta) < 1e-7) break;
         }
         if (double.IsNaN(r) || double.IsInfinity(r)) return ErrorValue.Num;
         // Verify the solution actually satisfies the TVM equation; non-converged iterates

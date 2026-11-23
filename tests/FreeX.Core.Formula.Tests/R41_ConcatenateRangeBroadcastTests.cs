@@ -71,6 +71,6 @@ public class R41_ConcatenateRangeBroadcastTests
 
         var result = _eval.Evaluate("=CONCATENATE(A1:A3,B1:B2)", sheet);
 
-        result.Should().Be(ErrorValue.Value);
+        result.ShouldPadMismatchedAxesWithNa();
     }
 }

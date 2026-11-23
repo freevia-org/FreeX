@@ -115,7 +115,8 @@ public sealed class Round36StatDistBoundaryTests
     {
         // Bug case: p=1 means every trial succeeds, so 0 failures before the r-th success
         // is certain.
-        Calc("NEGBINOM.DIST(0,3,1,FALSE)").Should().BeApproximately(1.0, 1e-12);
+        // Measured against Excel 16.0 (en-US): p = 1 is #NUM! for NEGBINOM.DIST (every form).
+        _eval.Evaluate("=NEGBINOM.DIST(0,3,1,FALSE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
@@ -123,7 +124,7 @@ public sealed class Round36StatDistBoundaryTests
     {
         // Sibling boundary: p=1 with f>0 already worked pre-fix (finite * -Infinity = -Infinity
         // -> exp -> 0), still must hold post-fix.
-        Calc("NEGBINOM.DIST(2,3,1,FALSE)").Should().BeApproximately(0.0, 1e-12);
+        _eval.Evaluate("=NEGBINOM.DIST(2,3,1,FALSE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num); // measured against Excel 16.0 (en-US)
     }
 
     [Fact]
@@ -137,7 +138,7 @@ public sealed class Round36StatDistBoundaryTests
     public void NegBinomDist_Cdf_WithProbabilityOne_StillWorks_NoRegression()
     {
         // Cumulative branch (uses BetaInc, unaffected by the PMF fix): CDF at f=0,p=1 is 1.
-        Calc("NEGBINOM.DIST(0,3,1,TRUE)").Should().BeApproximately(1.0, 1e-10);
+        _eval.Evaluate("=NEGBINOM.DIST(0,3,1,TRUE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num); // measured against Excel 16.0 (en-US)
     }
 
     // ── POISSON.DIST ────────────────────────────────────────────────────────

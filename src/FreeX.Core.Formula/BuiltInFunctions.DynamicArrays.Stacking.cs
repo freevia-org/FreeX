@@ -288,7 +288,11 @@ public static partial class BuiltInFunctions
         if ((long)rowCount * colCount > FormulaSafetyLimits.MaxMaterializedRangeCells) return ErrorValue.Value;
 
         var padWith = (ScalarValue)ErrorValue.NA;
-        if (args.Count > 3 && args[3] is not BlankValue)
+        if (args.Count > 3 && args[3] is BlankValue)
+        {
+            padWith = new NumberValue(0); // measured: an explicitly empty pad_with pads with 0, not #N/A
+        }
+        else if (args.Count > 3)
         {
             if (!TryGetScalarFillArgument(args[3], out padWith, out var padError)) return padError;
         }

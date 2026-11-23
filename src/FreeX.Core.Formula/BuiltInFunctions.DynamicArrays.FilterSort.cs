@@ -227,6 +227,8 @@ public static partial class BuiltInFunctions
             if (aErr && bErr) return sortOrder * SortErrorRank(((ErrorValue)va).Code).CompareTo(SortErrorRank(((ErrorValue)vb).Code));
             return sortOrder * (aErr ? 1 : -1);
         }
+        if (va is TextValue textA && vb is TextValue textB)
+            return sortOrder * ExcelTextCollation.Compare(textA.Value, textB.Value);
         return sortOrder * CompareScalar(va, vb);
     }
 

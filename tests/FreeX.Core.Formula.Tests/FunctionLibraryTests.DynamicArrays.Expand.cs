@@ -60,11 +60,15 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet((1,1,new NumberValue(1)));
 
-        var result = _eval.Evaluate("=EXPAND(A1:A1,2,2,)", sheet);
+        // Measured against Excel 16.0 (en-US): a pad_with argument that is left out pads with #N/A, but an
+        // explicitly empty one (the trailing comma) pads with 0.
+        var omitted = _eval.Evaluate("=EXPAND(A1:A1,2,2)", sheet).Should().BeOfType<RangeValue>().Subject;
+        omitted.Cells[0, 1].Should().Be(ErrorValue.NA);
+        omitted.Cells[1, 0].Should().Be(ErrorValue.NA);
 
-        var rv = result.Should().BeOfType<RangeValue>().Subject;
-        rv.Cells[0, 1].Should().Be(ErrorValue.NA);
-        rv.Cells[1, 0].Should().Be(ErrorValue.NA);
+        var empty = _eval.Evaluate("=EXPAND(A1:A1,2,2,)", sheet).Should().BeOfType<RangeValue>().Subject;
+        empty.Cells[0, 1].Should().Be(new NumberValue(0));
+        empty.Cells[1, 0].Should().Be(new NumberValue(0));
     }
 
     [Fact]

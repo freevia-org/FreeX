@@ -170,8 +170,8 @@ public partial class FunctionLibraryTests
             (2, 2, new NumberValue(4)),
             (3, 2, new NumberValue(1)));
 
-        _eval.Evaluate("=LEFT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=RIGHT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=LEFT(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=RIGHT(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -297,7 +297,7 @@ public partial class FunctionLibraryTests
             (2, 2, new TextValue("000")),
             (3, 2, new TextValue("0")));
 
-        _eval.Evaluate("=TEXT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=TEXT(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     // TRIM / CASE / SUBSTITUTE / SEARCH / VALUE
@@ -500,8 +500,8 @@ public partial class FunctionLibraryTests
             (1, 2, new TextValue("a")),
             (1, 3, new TextValue("x")));
 
-        _eval.Evaluate("=SUBSTITUTE(A1:A2,B1:B3,\"x\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,B1:B3,\"x\")", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
         _eval.Evaluate("=SUBSTITUTE(A1:A2,\"a\",\"x\",B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
@@ -726,7 +726,7 @@ public partial class FunctionLibraryTests
         // A row-vector (1x2) crossed with a column-vector (2x1) is now a valid cross-broadcast
         // (R118-formula-arity3plus-cross-broadcast), so this uses B1:B3 (a same-axis, differently
         // sized column) to keep testing a genuine shape mismatch.
-        _eval.Evaluate("=FIND(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FIND(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -750,7 +750,7 @@ public partial class FunctionLibraryTests
             (1, 2, new NumberValue(2)),
             (1, 3, new NumberValue(3)));
 
-        _eval.Evaluate("=FIND(\"a\",A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FIND(\"a\",A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -830,7 +830,7 @@ public partial class FunctionLibraryTests
             (1, 2, new TextValue("Apple")),
             (1, 3, new TextValue("Banana")));
 
-        _eval.Evaluate("=SEARCH(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -854,7 +854,7 @@ public partial class FunctionLibraryTests
             (1, 2, new NumberValue(2)),
             (1, 3, new NumberValue(3)));
 
-        _eval.Evaluate("=SEARCH(\"A\",A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"A\",A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -942,8 +942,8 @@ public partial class FunctionLibraryTests
             (1, 2, new NumberValue(2)),
             (1, 3, new NumberValue(3)));
 
-        _eval.Evaluate("=MID(A1:A2,B1:B3,2)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=MID(A1:A2,2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=MID(A1:A2,B1:B3,2)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=MID(A1:A2,2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
@@ -1082,7 +1082,7 @@ public partial class FunctionLibraryTests
             (2, 2, new NumberValue(2)),
             (3, 2, new NumberValue(1)));
 
-        _eval.Evaluate("=REPT(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPT(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]

@@ -117,13 +117,14 @@ public sealed partial class FormulaEvaluator
             return true;
         }
 
-        if (!TryCoerceToNumberValue(rateValue, out var rate))
+        // Measured against Excel: a boolean rate is #VALUE!, and XNPV(0, ...) / a negative rate is #NUM!.
+        if (rateValue is BoolValue || !TryCoerceToNumberValue(rateValue, out var rate))
         {
             result = ErrorValue.Value;
             return true;
         }
 
-        if (!double.IsFinite(rate) || rate <= -1)
+        if (!double.IsFinite(rate) || rate <= 0)
         {
             result = ErrorValue.Num;
             return true;
@@ -223,7 +224,10 @@ public sealed partial class FormulaEvaluator
         if (!TryReadNextDirectRangeNumber(ref dates, context, out var firstDateSerial, out var dateError))
             return dateError ?? ErrorValue.Num;
 
-        var firstDate = ExcelDateSystem.SerialToDate(firstDateSerial);
+        // Raw whole-serial arithmetic like Excel (converting through DateTime would collapse the phantom
+        // 1900 leap day); a first date below serial 1 is #NUM!.
+        firstDateSerial = Math.Floor(firstDateSerial);
+        if (firstDateSerial < 1) return ErrorValue.Num;
         double result = firstCashFlow;
 
         while (true)
@@ -244,10 +248,11 @@ public sealed partial class FormulaEvaluator
             // Excel's XNPV returns #NUM! when any date precedes the first (anchor) date
             // (mirrors the slow-path guard in BuiltInFunctions.Financial.CashFlow.cs,
             // R32-formula-financial-remaining-1).
+            dateSerial = Math.Floor(dateSerial);
             if (dateSerial < firstDateSerial)
                 return ErrorValue.Num;
 
-            var yearFraction = (ExcelDateSystem.SerialToDate(dateSerial) - firstDate).TotalDays / 365.0;
+            var yearFraction = (dateSerial - firstDateSerial) / 365.0;
             result += cashFlow / Math.Pow(1 + rate, yearFraction);
         }
 

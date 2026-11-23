@@ -122,8 +122,13 @@ public static partial class BuiltInFunctions
     // matches the target shape exactly on both axes, or is a full 1x1 scalar), and required for
     // TryGrowBroadcastShape's row-vector x column-vector 2-D grow below, where a range can be 1 on
     // only ONE axis while still needing its other axis indexed by the running row/col.
-    private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col) =>
-        range.Cells[range.RowCount == 1 ? 0 : row, range.ColCount == 1 ? 0 : col];
+    // An index past the end of a longer-than-one axis is #N/A (Excel pads mismatched arrays with #N/A).
+    private static ScalarValue ValueAtBroadcastCell(RangeValue range, int row, int col)
+    {
+        int r = range.RowCount == 1 ? 0 : row;
+        int c = range.ColCount == 1 ? 0 : col;
+        return r >= range.RowCount || c >= range.ColCount ? ErrorValue.NA : range.Cells[r, c];
+    }
 
     /// <summary>Whether a dimension of size <paramref name="source"/> can broadcast to <paramref name="target"/> (equal, or either side is 1).</summary>
     private static bool CanBroadcastAxis(int target, int source) => target == source || target == 1 || source == 1;
@@ -149,13 +154,8 @@ public static partial class BuiltInFunctions
         foreach (var range in ranges)
         {
             if (range is null) continue;
-            if (!CanBroadcastAxis(rows, range.RowCount) || !CanBroadcastAxis(cols, range.ColCount))
-            {
-                rows = 0;
-                cols = 0;
-                return false;
-            }
-
+            // Measured against Excel: arrays whose lengths disagree on an axis (neither being 1) still
+            // combine -- the result takes the longer length and the missing positions are #N/A.
             rows = Math.Max(rows, range.RowCount);
             cols = Math.Max(cols, range.ColCount);
         }

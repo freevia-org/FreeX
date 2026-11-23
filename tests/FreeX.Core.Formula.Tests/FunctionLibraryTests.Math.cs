@@ -332,10 +332,10 @@ public partial class FunctionLibraryTests
             (2, 2, new NumberValue(-1)),
             (3, 2, new NumberValue(2)));
 
-        _eval.Evaluate("=ROUND(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=ROUNDUP(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=ROUNDDOWN(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=TRUNC(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=ROUND(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=ROUNDUP(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=ROUNDDOWN(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
+        _eval.Evaluate("=TRUNC(A1:A2,B1:B3)", sheet).ShouldPadMismatchedAxesWithNa();
     }
 
     [Fact]
