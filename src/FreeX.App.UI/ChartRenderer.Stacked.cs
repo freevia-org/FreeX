@@ -251,7 +251,7 @@ public static partial class ChartRenderer
         if (hasDateCategoryAxis && dateCategoryAxisTemplate is not null)
             model.Axes.Add(dateCategoryAxisTemplate);
         else
-            model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+            model.Axes.Add(CreateLineAreaCategoryAxis(chart, categories));
         model.Axes.Add(new LinearAxis
         {
             Position = AxisPosition.Left,

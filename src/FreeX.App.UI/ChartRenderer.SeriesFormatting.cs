@@ -883,6 +883,10 @@ public static partial class ChartRenderer
 
                 any = true;
                 var point = points[i];
+                // Standard Deviation whiskers hang off the series mean, not the point (Excel measured).
+                var center = ChartRenderPolicyPlanner.ResolveErrorBarCenter(errorChart, values, i);
+                if (center != values[i])
+                    point = isHorizontal ? new DataPoint(center, point.Y) : new DataPoint(point.X, center);
                 AddWhisker(whiskers, point, plus, minus, isHorizontal, errorChart.ErrorBarEndCaps, endCapHalfWidth);
             }
 

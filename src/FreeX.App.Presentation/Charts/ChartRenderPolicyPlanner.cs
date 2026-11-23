@@ -529,6 +529,45 @@ public static class ChartRenderPolicyPlanner
         return new ErrorBarAmounts(plus, minus);
     }
 
+    /// <summary>
+    /// The value a whisker is centred on. Excel's "Standard Deviation" error bars are drawn around the
+    /// series MEAN (every point shows the same mean +- k*sd interval, measured in real Excel); every
+    /// other kind is centred on the plotted value itself.
+    /// </summary>
+    public static double ResolveErrorBarCenter(ChartModel chart, IReadOnlyList<double> values, int index)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        ArgumentNullException.ThrowIfNull(values);
+        if ((uint)index >= (uint)values.Count)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        return chart.ErrorBarKind == ChartErrorBarKind.StdDev && values.Count > 1
+            ? values.Average()
+            : values[index];
+    }
+
+    /// <summary>
+    /// Whether a column/line/area category axis lays its points BETWEEN tick marks (each point in the
+    /// middle of a half-open slot, axis spans -0.5..count-0.5) rather than ON the tick marks (first/last
+    /// point on the plot edges). Excel defaults to between for column/bar and line charts and to on-tick
+    /// ("midCat") for area charts; an authored <c>crossBetween</c> on the value axis overrides the default.
+    /// </summary>
+    public static bool CategoryAxisIsBetweenTicks(ChartModel chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        var authored = chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar
+            ? chart.XAxisCrossBetween
+            : chart.YAxisCrossBetween;
+        return chart.Type switch
+        {
+            ChartType.Area or ChartType.ThreeDArea or ChartType.StackedArea or ChartType.PercentStackedArea
+                => authored == ChartAxisCrossBetween.Between,
+            ChartType.Line or ChartType.ThreeDLine
+                => authored != ChartAxisCrossBetween.MidCategory,
+            _ => true,
+        };
+    }
+
     /// <summary>Parses an OOXML numeric cache into index order for custom error bars.</summary>
     public static IReadOnlyList<double>? ParseErrorBarRangeCache(string? cacheXml)
     {

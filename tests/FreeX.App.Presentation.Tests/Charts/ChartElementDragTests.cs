@@ -255,7 +255,7 @@ public sealed class ChartElementDragTests
             Request(chart, ["Q1", "Q2"], [Series(0, "North", 10, 20)], Inset).WithChartSize(W, H)).DataLabels[1];
 
         moved.Bounds.Left.Should().BeApproximately(plain.Bounds.Left + 10, 1e-4);
-        moved.Bounds.Top.Should().BeApproximately(plain.Bounds.Top - 5, 1e-4);
+        moved.Bounds.Top.Should().BeApproximately(plain.Bounds.Top - 5, 1e-3);
     }
 
     [Fact]

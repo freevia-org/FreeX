@@ -159,7 +159,7 @@ public static class ChartLayoutEngine
     /// chart type supports a log X axis (<see cref="ChartTypeSupport.SupportsXAxisLogScale"/>);
     /// otherwise falls back to the normal linear axis.
     /// </summary>
-    private static AxisScale CreateXValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side, bool includeZeroBaseline = true)
+    private static AxisScale CreateXValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side, bool includeZeroBaseline = true, bool exactDataRange = false)
     {
         if (chart.XAxisLogScale && ChartTypeSupport.SupportsXAxisLogScale(chart.Type))
         {
@@ -169,7 +169,7 @@ public static class ChartLayoutEngine
 
         return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
             chart.XAxisMinimum, chart.XAxisMaximum, chart.XAxisMajorUnit, reverseOrder: chart.XAxisReverseOrder,
-            includeZeroBaseline: includeZeroBaseline);
+            includeZeroBaseline: includeZeroBaseline, exactDataRange: exactDataRange);
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public static class ChartLayoutEngine
     /// chart type supports a log Y axis (<see cref="ChartTypeSupport.SupportsYAxisLogScale"/>);
     /// otherwise falls back to the normal linear axis.
     /// </summary>
-    private static AxisScale CreateYValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side, bool includeZeroBaseline = true)
+    private static AxisScale CreateYValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side, bool includeZeroBaseline = true, bool exactDataRange = false)
     {
         if (chart.YAxisLogScale && ChartTypeSupport.SupportsYAxisLogScale(chart.Type))
         {
@@ -188,7 +188,7 @@ public static class ChartLayoutEngine
 
         return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
             chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit, reverseOrder: chart.YAxisReverseOrder,
-            includeZeroBaseline: includeZeroBaseline);
+            includeZeroBaseline: includeZeroBaseline, exactDataRange: exactDataRange);
     }
 
     /// <summary>
@@ -435,32 +435,38 @@ public static class ChartLayoutEngine
         // completely unaffected by this ever being attempted.
         var hasDateCategoryAxis = TryBuildDateCategoryPositions(chart, request.Categories, out var categoryPositions, out var dateMin, out var dateMax);
 
-        // Category axis: columns center categories over [-0.5, count-0.5]; line/area use [0, count-1].
+        // Category axis: points sit between tick marks (axis spans [-0.5, count-0.5]) for column charts,
+        // for line charts by default and for area charts when authored; otherwise on the tick marks
+        // ([0, count-1]). A trendline's Forward forecast appends extra category slots, like Excel.
         var isColumnFamily = chart.Type is ChartType.Column or ChartType.ThreeDColumn
             or ChartType.StackedColumn or ChartType.PercentStackedColumn;
+        var betweenTicks = ChartRenderPolicyPlanner.CategoryAxisIsBetweenTicks(chart);
+        var forecastSlots = hasDateCategoryAxis ? 0 : CategoryForecastSlots(request, betweenTicks);
         var (catMin, catMax) = hasDateCategoryAxis
             ? (dateMin - 0.5, dateMax + 0.5)
-            : isColumnFamily
-                ? (-0.5, Math.Max(0.5, categoryCount - 0.5))
-                : (0.0, (double)Math.Max(1, categoryCount - 1));
+            : betweenTicks
+                ? (-0.5, Math.Max(0.5, categoryCount - 0.5 + forecastSlots))
+                : (0.0, (double)Math.Max(1, categoryCount - 1 + forecastSlots));
         var categoryScale = AxisScale.CreateIndexAxis(catMin, catMax, plot, AxisSide.Bottom);
+
+        // Combo charts: a secondary value axis on the right carries the assigned series. Stacked
+        // charts do not split across axes (matching the source renderer). The primary axis then scales
+        // to the primary series only, exactly like Excel.
+        var useSecondary = !isStacked && WantsSecondaryAxis(request);
+        Func<ChartSeriesData, bool>? primarySeries = useSecondary
+            ? series => !ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex)
+            : null;
 
         var (dataMin, dataMax) = isStacked
             ? StackedValueRange(request, categoryCount, isPercent)
-            : PlainValueRange(request);
+            : PlainValueRange(request, primarySeries, categoryPositions: categoryPositions);
 
-        // Line/3-D Line have no zero-anchored geometry (unlike Column/Area, which draw bars/bands
-        // down to a zero baseline), so their value axis should auto-fit tight to the actual data
-        // extents instead of always widening out to include zero -- matching OxyPlot's own
-        // LineSeries auto-range used by the WPF renderer (ChartRenderer.cs "else // Line / 3D Line").
-        var isLineFamily = chart.Type is ChartType.Line or ChartType.ThreeDLine;
-        var valueScale = CreateYValueAxis(chart, dataMin, dataMax, plot, AxisSide.Left, includeZeroBaseline: !isLineFamily);
+        // Excel scales line and area value axes with the same rule as columns (see ExcelAxisAutoScale).
+        var valueScale = CreateYValueAxis(chart, dataMin, dataMax, plot, AxisSide.Left, exactDataRange: isPercent);
 
-        // Combo charts: a secondary value axis on the right carries the assigned series. Stacked
-        // charts do not split across axes (matching the source renderer).
-        var useSecondary = !isStacked && WantsSecondaryAxis(request);
+        var secondaryRange = useSecondary ? SecondaryValueRange(request, categoryPositions) : (Min: 0.0, Max: 1.0);
         var secondaryScale = useSecondary
-            ? CreateSecondaryValueAxis(chart, SecondaryValueRange(request).Min, SecondaryValueRange(request).Max, plot, AxisSide.Right)
+            ? CreateSecondaryValueAxis(chart, secondaryRange.Min, secondaryRange.Max, plot, AxisSide.Right)
             : null;
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
@@ -924,13 +930,15 @@ public static class ChartLayoutEngine
         var isStacked = chart.Type is ChartType.StackedBar or ChartType.PercentStackedBar;
         var isPercent = chart.Type == ChartType.PercentStackedBar;
 
-        // Category axis on the left; bars sit at integer indices.
-        var categoryScale = AxisScale.CreateIndexAxis(-0.5, Math.Max(0.5, categoryCount - 0.5), plot, AxisSide.Left);
+        // Category axis on the left; bars sit at integer indices. A trendline's Forward forecast appends
+        // extra category slots past the last bar, like Excel.
+        var forecastSlots = CategoryForecastSlots(request, betweenTicks: true);
+        var categoryScale = AxisScale.CreateIndexAxis(-0.5, Math.Max(0.5, categoryCount - 0.5 + forecastSlots), plot, AxisSide.Left);
 
         var (dataMin, dataMax) = isStacked
             ? StackedValueRange(request, categoryCount, isPercent)
-            : PlainValueRange(request);
-        var valueScale = CreateXValueAxis(chart, dataMin, dataMax, plot, AxisSide.Bottom);
+            : PlainValueRange(request, swapTrendAxes: true);
+        var valueScale = CreateXValueAxis(chart, dataMin, dataMax, plot, AxisSide.Bottom, exactDataRange: isPercent);
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
         var dataLabels = new List<DataLabelBox>();
@@ -1049,8 +1057,8 @@ public static class ChartLayoutEngine
         // Scatter has no zero-anchored geometry (just plotted points), so both axes auto-fit tight
         // to the actual data extents rather than being forced to include zero -- matching the WPF
         // renderer's plain LinearAxis (no Minimum/Maximum override) for ChartType.Scatter.
-        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom, includeZeroBaseline: false);
-        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left, includeZeroBaseline: false);
+        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom);
+        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left);
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
         var dataLabels = new List<DataLabelBox>();
@@ -1111,8 +1119,8 @@ public static class ChartLayoutEngine
 
         // Bubble has no zero-anchored geometry either (bubble radius encodes size, not a baseline
         // offset), so both axes auto-fit tight to the actual data extents, matching Scatter.
-        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom, includeZeroBaseline: false);
-        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left, includeZeroBaseline: false);
+        var xScale = CreateXValueAxis(chart, xMin, xMax, plot, AxisSide.Bottom);
+        var yScale = CreateYValueAxis(chart, yMin, yMax, plot, AxisSide.Left);
 
         var maxSize = MaxBubbleSize(request);
         var scale = Math.Max(0, chart.BubbleScale) / 100.0;
@@ -1485,12 +1493,18 @@ public static class ChartLayoutEngine
 
     // ---- Value-range helpers --------------------------------------------------------------
 
-    private static (double Min, double Max) PlainValueRange(ChartLayoutRequest request)
+    private static (double Min, double Max) PlainValueRange(
+        ChartLayoutRequest request,
+        Func<ChartSeriesData, bool>? include = null,
+        bool swapTrendAxes = false,
+        double[]? categoryPositions = null)
     {
         var min = double.PositiveInfinity;
         var max = double.NegativeInfinity;
         foreach (var series in request.Series)
         {
+            if (include is not null && !include(series))
+                continue;
             foreach (var value in series.Values)
             {
                 if (value is not { } v || double.IsNaN(v))
@@ -1503,31 +1517,60 @@ public static class ChartLayoutEngine
         if (double.IsInfinity(min) || double.IsInfinity(max))
             return (0, 1);
 
-        // Excel's automatic value axis also spans the whisker ends, so an error bar never pokes out of
-        // (or is clipped by) the plot area.
-        ExtendRangeForErrorBars(request, ref min, ref max);
+        // Excel's automatic value axis also spans the whisker ends and the trendline (forecast
+        // included), so neither pokes out of (or is clipped by) the plot area.
+        ExtendRangeForErrorBars(request, include, scatter: false, useX: false, ref min, ref max);
+        ExtendRangeForTrendlines(request, include, scatter: false, swapTrendAxes, useX: false, categoryPositions, ref min, ref max);
         return (min, max);
     }
 
-    private static void ExtendRangeForErrorBars(ChartLayoutRequest request, ref double min, ref double max)
+    /// <summary>
+    /// Widens <paramref name="min"/>/<paramref name="max"/> to cover the error-bar ends of every
+    /// included series. For scatter/bubble charts only whiskers running along the requested axis
+    /// (<paramref name="useX"/>) count; category charts always whisker along the value axis.
+    /// </summary>
+    private static void ExtendRangeForErrorBars(
+        ChartLayoutRequest request,
+        Func<ChartSeriesData, bool>? include,
+        bool scatter,
+        bool useX,
+        ref double min,
+        ref double max)
     {
         var chart = request.Chart;
-        if (!chart.HasAnyErrorBars() || chart.Type is ChartType.Scatter or ChartType.Bubble)
+        if (!chart.HasAnyErrorBars())
             return;
 
         foreach (var series in request.Series)
         {
+            if (include is not null && !include(series))
+                continue;
             if (chart.ResolveErrorBars(series.SeriesIndex) is not { } errorChart)
                 continue;
 
-            // Same blank handling as AttachErrorBars so amounts index the same point list.
+            if (scatter && (errorChart.ErrorBarAxisDirection == ChartErrorBarAxisDirection.X) != useX)
+                continue;
+            if (!scatter && useX)
+                continue;
+
+            // Same blank handling as the Attach*ErrorBars builders so amounts index the same point list.
             var values = new List<double>(series.Values.Count);
-            foreach (var value in series.Values)
+            for (var i = 0; i < series.Values.Count; i++)
             {
-                if (value is { } actual && !double.IsNaN(actual))
+                if (scatter)
+                {
+                    if (series.Values[i] is not { } y || double.IsNaN(y))
+                        continue;
+                    values.Add(useX ? (series.XValues is { } xs && i < xs.Count ? xs[i] : i) : y);
+                }
+                else if (series.Values[i] is { } actual && !double.IsNaN(actual))
+                {
                     values.Add(actual);
+                }
                 else if (chart.BlankDisplayMode == ChartBlankDisplayMode.Zero)
+                {
                     values.Add(0);
+                }
             }
 
             if (values.Count == 0)
@@ -1539,12 +1582,104 @@ public static class ChartLayoutEngine
             for (var i = 0; i < array.Length; i++)
             {
                 var amounts = ChartRenderPolicyPlanner.ResolveErrorBarAmounts(errorChart, array, i, customPlus, customMinus);
+                var center = ChartRenderPolicyPlanner.ResolveErrorBarCenter(errorChart, array, i);
                 if (amounts.Plus > 0 && double.IsFinite(amounts.Plus))
-                    max = Math.Max(max, array[i] + amounts.Plus);
+                    max = Math.Max(max, center + amounts.Plus);
                 if (amounts.Minus > 0 && double.IsFinite(amounts.Minus))
-                    min = Math.Min(min, array[i] - amounts.Minus);
+                    min = Math.Min(min, center - amounts.Minus);
             }
         }
+    }
+
+    /// <summary>
+    /// Widens <paramref name="min"/>/<paramref name="max"/> to cover each included series' trendline,
+    /// forecast and backcast included (Excel autoscales to the drawn trendline). For scatter charts
+    /// <paramref name="useX"/> picks the X or the Y extent; for category charts the trendline's value
+    /// extent is used (<paramref name="swapAxes"/> for horizontal bars, whose plan is value-first).
+    /// </summary>
+    private static void ExtendRangeForTrendlines(
+        ChartLayoutRequest request,
+        Func<ChartSeriesData, bool>? include,
+        bool scatter,
+        bool swapAxes,
+        bool useX,
+        double[]? categoryPositions,
+        ref double min,
+        ref double max)
+    {
+        foreach (var series in request.Series)
+        {
+            if (include is not null && !include(series))
+                continue;
+            if (PlanSeriesTrendline(request, series, scatter, swapAxes, categoryPositions) is not { } plan)
+                continue;
+
+            foreach (var point in plan.Points)
+            {
+                var value = scatter
+                    ? (useX ? point.X : point.Y)
+                    : (swapAxes ? point.X : point.Y);
+                if (!double.IsFinite(value))
+                    continue;
+                min = Math.Min(min, value);
+                max = Math.Max(max, value);
+            }
+        }
+    }
+
+    private static TrendlineProjectionPlan? PlanSeriesTrendline(
+        ChartLayoutRequest request,
+        ChartSeriesData series,
+        bool scatter,
+        bool swapAxes,
+        double[]? categoryPositions)
+    {
+        if (request.Chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart)
+            return null;
+
+        // Excel numbers plain (non-date) categories 1, 2, 3, ... when it fits a trendline; scatter and
+        // date axes keep their real X (see TrendlineProjectionPlanner.Plan).
+        var sourcePoints = new List<TrendPoint>(series.Values.Count);
+        for (var i = 0; i < series.Values.Count; i++)
+        {
+            if (series.Values[i] is not { } v || double.IsNaN(v))
+                continue;
+            var x = scatter
+                ? (series.XValues is { } xs && i < xs.Count ? xs[i] : i)
+                : CategoryX(categoryPositions, i);
+            sourcePoints.Add(new TrendPoint(x, v));
+        }
+
+        var origin = !scatter && categoryPositions is not { Length: > 0 } ? 1.0 : 0.0;
+        return TrendlineProjectionPlanner.Plan(trendChart, sourcePoints, swapAxes && !scatter, seriesName: SeriesDisplayName(series), categoryOrigin: origin);
+    }
+
+    /// <summary>
+    /// How many extra category slots Excel appends to a category axis for a trendline's Forward forecast.
+    /// Slots sit between tick marks (a point occupies +-0.5), so a forecast of 1.5 periods needs one extra
+    /// slot while 2 needs two; an axis whose points sit on the tick marks needs <c>ceil(forward)</c>.
+    /// Backward forecasts are limited to half a period on category charts and never add a slot.
+    /// </summary>
+    private static int CategoryForecastSlots(ChartLayoutRequest request, bool betweenTicks)
+    {
+        var chart = request.Chart;
+        var slots = 0;
+        foreach (var series in request.Series)
+        {
+            if (chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart ||
+                !trendChart.ShowLinearTrendline ||
+                trendChart.TrendlineType == ChartTrendlineType.MovingAverage ||
+                trendChart.TrendlineForward is not { } forward ||
+                !(forward > 0))
+            {
+                continue;
+            }
+
+            var extra = (int)Math.Ceiling((betweenTicks ? forward - 0.5 : forward) - 1e-9);
+            slots = Math.Max(slots, extra);
+        }
+
+        return slots;
     }
 
     private static (double Min, double Max) StackedValueRange(ChartLayoutRequest request, int categoryCount, bool isPercent)
@@ -1557,9 +1692,29 @@ public static class ChartLayoutEngine
             return (hasNeg ? -100 : 0, hasPos || !hasNeg ? 100 : 0);
         }
 
-        var (pos, neg) = StackedTotals(request, categoryCount);
-        var max = pos.Length > 0 ? pos.Max() : 0;
-        var min = neg.Length > 0 ? -neg.Max() : 0;
+        // Excel scales a stacked axis to every cumulative top (each layer's running total per
+        // category, positives and negatives stacked separately), not to the grand totals only: a stack
+        // of [100,102] with a thin layer on top gets a truncated axis around 100..103.
+        var posRun = new double[categoryCount];
+        var negRun = new double[categoryCount];
+        var min = double.PositiveInfinity;
+        var max = double.NegativeInfinity;
+        foreach (var series in request.Series)
+        {
+            for (var i = 0; i < series.Values.Count && i < categoryCount; i++)
+            {
+                if (series.Values[i] is not { } v || double.IsNaN(v))
+                    continue;
+                var top = v >= 0 ? (posRun[i] += v) : (negRun[i] += v);
+                min = Math.Min(min, top);
+                max = Math.Max(max, top);
+            }
+        }
+
+        if (double.IsInfinity(min) || double.IsInfinity(max))
+            return (0, 0);
+
+        ExtendRangeForErrorBars(request, null, scatter: false, useX: false, ref min, ref max);
         return (min, max);
     }
 
@@ -1611,6 +1766,10 @@ public static class ChartLayoutEngine
 
         if (double.IsInfinity(min) || double.IsInfinity(max))
             return (0, 1);
+
+        // Whisker ends and the (forecast) trendline widen the scatter axes like any plotted extent.
+        ExtendRangeForErrorBars(request, null, scatter: true, useX, ref min, ref max);
+        ExtendRangeForTrendlines(request, null, scatter: true, swapAxes: false, useX, null, ref min, ref max);
         return (min, max);
     }
 
@@ -1633,28 +1792,12 @@ public static class ChartLayoutEngine
     // helper series). An empty list means "no combo lines" so a plain chart is unaffected.
     // Mirrors the source renderer's IsComboScatterSeries: a series in ComboScatterSeriesIndexes is
     // drawn as a scatter overlay (markers only, no connecting line) instead of column/area.
-    private static (double Min, double Max) SecondaryValueRange(ChartLayoutRequest request)
-    {
-        var chart = request.Chart;
-        var min = double.PositiveInfinity;
-        var max = double.NegativeInfinity;
-        foreach (var series in request.Series)
-        {
-            if (!ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, series.SeriesIndex))
-                continue;
-            foreach (var value in series.Values)
-            {
-                if (value is not { } v || double.IsNaN(v))
-                    continue;
-                min = Math.Min(min, v);
-                max = Math.Max(max, v);
-            }
-        }
-
-        if (double.IsInfinity(min) || double.IsInfinity(max))
-            return (0, 1);
-        return (min, max);
-    }
+    private static (double Min, double Max) SecondaryValueRange(ChartLayoutRequest request, double[]? categoryPositions = null)
+        => PlainValueRange(
+            request,
+            series => ChartRenderPolicyPlanner.UsesSecondaryAxis(request.Chart, series.SeriesIndex),
+            swapTrendAxes: false,
+            categoryPositions);
 
     // ---- Trendline overlay ----------------------------------------------------------------
 
@@ -1678,18 +1821,11 @@ public static class ChartLayoutEngine
             if (chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart)
                 continue;
 
-            var sourcePoints = new List<TrendPoint>(series.Values.Count);
-            for (var i = 0; i < series.Values.Count; i++)
-            {
-                // R131-render-chart-date-category-axis: the trendline regression's X is the same
-                // date-proportional position the plotted points use when this is a date category axis,
-                // mirroring the WPF renderer's trendPoints (ChartRenderer.cs), so the fitted line stays
-                // consistent with the actual (unevenly spaced) plotted geometry instead of the plain index.
-                if (series.Values[i] is { } v && !double.IsNaN(v))
-                    sourcePoints.Add(new TrendPoint(CategoryX(categoryPositions, i), v));
-            }
-
-            var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints, seriesName: SeriesDisplayName(series));
+            // R131-render-chart-date-category-axis: the trendline regression's X is the same
+            // date-proportional position the plotted points use when this is a date category axis,
+            // so the fitted line stays consistent with the actual (unevenly spaced) plotted geometry
+            // instead of the plain index (see PlanSeriesTrendline).
+            var plan = PlanSeriesTrendline(request, series, scatter: false, swapAxes: false, categoryPositions);
             if (plan is null)
                 continue;
 
@@ -1726,14 +1862,7 @@ public static class ChartLayoutEngine
             if (chart.ResolveTrendline(series.SeriesIndex) is not { } trendChart)
                 continue;
 
-            var sourcePoints = new List<TrendPoint>(series.Values.Count);
-            for (var i = 0; i < series.Values.Count; i++)
-            {
-                if (series.Values[i] is { } v && !double.IsNaN(v))
-                    sourcePoints.Add(new TrendPoint(i, v));
-            }
-
-            var plan = TrendlineProjectionPlanner.Plan(trendChart, sourcePoints, swapAxes: true, seriesName: SeriesDisplayName(series));
+            var plan = PlanSeriesTrendline(request, series, scatter: false, swapAxes: true, categoryPositions: null);
             if (plan is null)
                 continue;
 
@@ -2106,7 +2235,15 @@ public static class ChartLayoutEngine
                 continue;
 
             any = true;
-            var (index, value, pixel) = anchors[i];
+            var (index, anchorValue, anchorPixel) = anchors[i];
+
+            // Standard Deviation whiskers hang off the series mean, not the point (Excel measured).
+            var value = ChartRenderPolicyPlanner.ResolveErrorBarCenter(chart, values, i);
+            var pixel = value == anchorValue
+                ? anchorPixel
+                : isHorizontal
+                    ? new LayoutPoint(amountScale.Transform(value), anchorPixel.Y)
+                    : new LayoutPoint(anchorPixel.X, amountScale.Transform(value));
 
             LayoutPoint PixelAt(double coordinate) =>
                 isHorizontal ? new LayoutPoint(coordinate, pixel.Y) : new LayoutPoint(pixel.X, coordinate);
@@ -2549,7 +2686,7 @@ public static class ChartLayoutEngine
             chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
 
         // Secondary axis: 0–100% for the cumulative line.
-        var pctScale = AxisScale.CreateValueAxis(0, 100, plot, AxisSide.Right);
+        var pctScale = AxisScale.CreateValueAxis(0, 100, plot, AxisSide.Right, explicitMin: 0, explicitMax: 100, explicitStep: 20);
 
         const double ParetoHalfWidth = 0.40;
         var bars = new List<SeriesBar>(n);
