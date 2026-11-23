@@ -7,6 +7,13 @@ on:
         description: Run the full test-gate matrix instead of letting impact selection reduce it.
         type: boolean
         default: true
+      runner_pool:
+        description: Use the FreeX I5 runners, or GitHub-hosted runners if local capacity is unavailable.
+        type: choice
+        options:
+          - self-hosted
+          - hosted
+        default: self-hosted
   # Manual-only by policy: no push, schedule or pull_request trigger. Start a run with
   # `gh workflow run ci.yml -f full=true` (see docs/testing/test-gates.md).
 
@@ -136,7 +143,9 @@ jobs:
   tests:
     name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: prepare
-    runs-on: ${{ matrix.runner }}
+    # Only FreeX's x64 Windows/Linux gates use the I5 pool. Other apps and platforms,
+    # including macOS, stay on the hosted runner recorded in the test-gate matrix.
+    runs-on: ${{ inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'windows' && fromJSON('["self-hosted","freex-i5-windows"]') || inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'linux' && fromJSON('["self-hosted","freex-i5-linux"]') || matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
