@@ -67,6 +67,7 @@ public sealed class TrendlineProjectionPlannerTests
     [Fact]
     public void Bar_projection_swaps_points_and_annotation_anchor()
     {
+        using var cultureScope = TestCultureScope.InvariantCurrentCulture();
         var chart = Chart(ChartTrendlineType.Linear, ChartType.Bar);
         chart.ShowTrendlineEquation = true;
         var source = Points((0, 10), (1, 30), (2, 30));
@@ -82,6 +83,7 @@ public sealed class TrendlineProjectionPlannerTests
     [Fact]
     public void Plan_preserves_equation_and_r_squared_order()
     {
+        using var cultureScope = TestCultureScope.InvariantCurrentCulture();
         var chart = Chart(ChartTrendlineType.Linear);
         chart.ShowTrendlineEquation = true;
         chart.ShowTrendlineRSquared = true;
