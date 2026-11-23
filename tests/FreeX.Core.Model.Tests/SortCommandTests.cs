@@ -771,9 +771,10 @@ public sealed class SortCommandTests
     }
 
     [Fact]
-    public void SortCommand_Descending_KeepsErrorsLast()
+    public void SortCommand_Descending_PutsErrorsFirst()
     {
-        // Errors (like blanks) must always sort to the bottom in both directions.
+        // Excel-parity round 6 (measured with Range.Sort): errors are the highest-ranked value type, so
+        // Descending puts them FIRST (only blanks are pinned last in both directions).
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new TestCommandContext(workbook);
@@ -788,9 +789,9 @@ public sealed class SortCommandTests
         var cmd = new SortCommand(sid, range, [new SortKey(0, false)]);
         cmd.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.GetValue(1, 1).Should().Be(new NumberValue(10));
-        sheet.GetValue(2, 1).Should().Be(new NumberValue(1));
-        sheet.GetValue(3, 1).Should().Be(ErrorValue.DivByZero, "error must stay last after descending sort");
+        sheet.GetValue(1, 1).Should().Be(ErrorValue.DivByZero, "errors rank above every number in a descending sort");
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(10));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(1));
     }
 
     private static void SetStyledRow(Sheet sheet, uint row, string label, StyleId styleId)

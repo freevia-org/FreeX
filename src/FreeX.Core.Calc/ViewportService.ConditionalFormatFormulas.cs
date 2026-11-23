@@ -60,7 +60,9 @@ public sealed partial class ViewportService
                 addr,
                 formulaCache.HasRelativeReferences);
 
-            var result = _cfEvaluator.Evaluate(ast, sheet, workbook, addr);
+            // isIterativeCalculationPass: a conditional-format formula is not stored in the cell it is evaluated
+            // for, so INDIRECT/OFFSET back to that same cell is an ordinary read rather than a circular reference.
+            var result = _cfEvaluator.Evaluate(ast, sheet, workbook, addr, isIterativeCalculationPass: true);
             return MatchesConditionalFormulaResult(result);
         }
         catch

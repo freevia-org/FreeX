@@ -228,7 +228,7 @@ public partial class DataValidationTests
     }
 
     [Fact]
-    public void Validate_Time_NotBetween_NormalizesFractionalDayAndPreservesCustomError()
+    public void Validate_Time_NotBetween_ComparesTheRawSerialAndPreservesCustomError()
     {
         var dv = new DataValidation
         {
@@ -239,10 +239,15 @@ public partial class DataValidationTests
             ErrorMessage = "Choose a time outside working hours.",
         };
 
+        // Excel-parity round 6 (measured with Range.Validation.Value): a Time rule compares the raw
+        // serial against the time bounds, the date part is NOT stripped -- day 2 at 10:30 is simply a
+        // value above 17:30, hence outside the excluded window.
+        DataValidationService.Validate(dv, new NumberValue(new TimeSpan(10, 30, 0).TotalDays))
+            .Should().Be("Choose a time outside working hours.");
         DataValidationService.Validate(dv, new NumberValue(2 + new TimeSpan(10, 30, 0).TotalDays))
-            .Should().Be("Choose a time outside working hours.", "the whole-day portion is ignored for time rules");
-        DataValidationService.Validate(dv, new NumberValue(2 + new TimeSpan(18, 0, 0).TotalDays))
-            .Should().BeNull("18:00 is outside the excluded window after fractional-day normalization");
+            .Should().BeNull("2.4375 is above the 17:30 bound");
+        DataValidationService.Validate(dv, new NumberValue(new TimeSpan(18, 0, 0).TotalDays))
+            .Should().BeNull("18:00 is outside the excluded window");
     }
 
     [Theory]

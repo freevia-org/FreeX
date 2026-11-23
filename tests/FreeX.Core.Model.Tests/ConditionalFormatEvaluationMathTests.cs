@@ -6,7 +6,7 @@ namespace FreeX.Core.Model.Tests;
 public sealed class ConditionalFormatEvaluationMathTests
 {
     [Fact]
-    public void CalculateStatistics_IgnoresNonFiniteValuesAndUsesSampleStandardDeviation()
+    public void CalculateStatistics_IgnoresNonFiniteValuesAndUsesPopulationStandardDeviation()
     {
         var statistics = ConditionalFormatEvaluationMath.CalculateStatistics(
             [1, 2, 3, double.NaN, double.PositiveInfinity]);
@@ -15,7 +15,7 @@ public sealed class ConditionalFormatEvaluationMathTests
         statistics.Min.Should().Be(1);
         statistics.Max.Should().Be(3);
         statistics.Average.Should().Be(2);
-        statistics.StdDev.Should().Be(1);
+        statistics.StdDev.Should().BeApproximately(Math.Sqrt(2d / 3d), 1e-12);
         statistics.SortedValues.Should().Equal(1, 2, 3);
     }
 
@@ -69,7 +69,9 @@ public sealed class ConditionalFormatEvaluationMathTests
     [InlineData(2, true, true, null, true)]
     [InlineData(1, false, false, null, true)]
     [InlineData(3, true, true, 1, true)]
-    [InlineData(2.9, true, true, 1, false)]
+    // Population standard deviation (Excel-parity round 6): sd([1,2,3]) = 0.8165, so the +1 sd band starts at 2.8165.
+    [InlineData(2.9, true, true, 1, true)]
+    [InlineData(2.7, true, true, 1, false)]
     public void MatchesAboveAverage_HonorsDirectionEqualityAndStandardDeviation(
         double value,
         bool above,

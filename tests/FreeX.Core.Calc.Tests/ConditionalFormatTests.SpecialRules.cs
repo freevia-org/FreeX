@@ -153,12 +153,11 @@ public partial class ConditionalFormatTests
     }
 
     [Fact]
-    public void DuplicateValues_DoesNotTreatNumberAndTextWithSameDisplayAsDuplicates()
+    public void DuplicateValues_TreatsNumberAndTextWithSameDisplayAsDuplicates()
     {
-        // Excel keys duplicate detection by (type, value): the number 1 and the text "1" are
-        // different values even though they render the same display string. Regression for a
-        // bug where occurrence counting keyed purely on the type-erased display string, so a
-        // numeric 1 and a text "1" collided as "the same value".
+        // Excel-parity round 6: measured against Range.DisplayFormat in real Excel -- Duplicate Values
+        // compares what the cells display, so the number 1 and the text "1" ARE duplicates of each other
+        // (an earlier round assumed Excel keyed by type and value; Excel does not).
         var (wb, sheet) = MakeWorkbook();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(1)));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new TextValue("1")));
@@ -174,10 +173,10 @@ public partial class ConditionalFormatTests
 
         var vp = GetViewport(wb, sheet);
 
-        GetCell(vp, 1, 1).Style!.FillColor.Should().NotBe(new CellColor(255, 235, 132),
-            "the numeric 1 has only one occurrence among same-typed values");
-        GetCell(vp, 2, 1).Style!.FillColor.Should().NotBe(new CellColor(255, 235, 132),
-            "the text \"1\" has only one occurrence among same-typed values");
+        GetCell(vp, 1, 1).Style!.FillColor.Should().Be(new CellColor(255, 235, 132),
+            "the numeric 1 displays the same as the text \"1\"");
+        GetCell(vp, 2, 1).Style!.FillColor.Should().Be(new CellColor(255, 235, 132),
+            "the text \"1\" displays the same as the numeric 1");
     }
 
     [Fact]

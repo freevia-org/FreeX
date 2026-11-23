@@ -98,13 +98,14 @@ public sealed class HighlightAndSelectionTests
     [Fact]
     public void R110_StdDevCount_ShiftsThresholdByNStandardDeviationsAboveMean()
     {
-        // [2, 4, 4, 4, 5, 5, 7, 9] has mean 5, sample stdDev 2.138 (STDEV semantics).
+        // [2, 4, 4, 4, 5, 5, 7, 9] has mean 5, population stdDev 2 (STDEV.P semantics -- Excel-parity
+        // round 6 measured Excel's "N standard deviations" rule against Range.DisplayFormat).
         var values = new double[] { 2, 4, 4, 4, 5, 5, 7, 9 };
         var stats = ConditionalFormatStatistics.FromValues(values);
-        stats.StdDev.Should().BeApproximately(2.13809, 0.0001);
+        stats.StdDev.Should().BeApproximately(2.0, 0.0001);
 
         var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = true, StdDevCount = 1 };
-        // threshold = 5 + 1*2.13809 = 7.138 -- 9 clears it, 7 does not (plain AboveAverage(>5)
+        // threshold = 5 + 1*2 = 7 -- 9 clears it, 7 does not (strictly above; plain AboveAverage(>5)
         // would wrongly select 7 too).
         ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 9, stats).Should().BeTrue();
         ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 7, stats).Should().BeFalse();
@@ -117,7 +118,7 @@ public sealed class HighlightAndSelectionTests
         var stats = ConditionalFormatStatistics.FromValues(values);
 
         var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = false, StdDevCount = 1 };
-        // threshold = 5 - 2.138 = 2.862 -- 2 clears it, 4 does not (plain BelowAverage(<5)
+        // threshold = 5 - 2 = 3 -- 2 clears it, 4 does not (plain BelowAverage(<5)
         // would wrongly select 4 too).
         ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 2, stats).Should().BeTrue();
         ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 4, stats).Should().BeFalse();

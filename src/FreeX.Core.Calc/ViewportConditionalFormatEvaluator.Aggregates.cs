@@ -23,10 +23,16 @@ internal static partial class ViewportConditionalFormatEvaluator
                 cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
                     ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
                     : null;
+            long populatedCells = 0;
+            var hasError = false;
             foreach (var (a, v) in EnumerateAllAggregateValues(sheet, cf, occupiedCells))
             {
-                if (valueCounts is not null && !IsBlankValue(v))
+                if (v is ErrorValue)
+                    hasError = true;
+
+                if (valueCounts is not null && v is not BlankValue)
                 {
+                    populatedCells++;
                     var key = GetDuplicateValueKey(v);
                     valueCounts[key] = valueCounts.GetValueOrDefault(key) + 1;
                 }
@@ -36,6 +42,20 @@ internal static partial class ViewportConditionalFormatEvaluator
                     rankedValues?.Add((a, x, statistics.Count));
                     statistics.Add(x);
                 }
+            }
+
+            if (valueCounts is not null)
+            {
+                // Excel-parity round 6: a text cell holding "" is an ordinary value for Duplicate/Unique
+                // Values (it is a duplicate of any other empty cell in the range, and unique when it is the
+                // only one), while a truly empty cell is never highlighted itself but still counts as an
+                // "empty" occurrence. Account for the empty cells that have no entry of their own.
+                long rangeCells = 0;
+                foreach (var range in cf.AllRanges)
+                    rangeCells += range.CellCount;
+                var emptyCells = rangeCells - populatedCells;
+                if (emptyCells > 0)
+                    valueCounts[GetDuplicateValueKey(new TextValue(string.Empty))] = valueCounts.GetValueOrDefault(GetDuplicateValueKey(new TextValue(string.Empty))) + (int)Math.Min(emptyCells, int.MaxValue / 2);
             }
 
             var topBottomMatches = ResolveTopBottomMatches(cf, rankedValues);
@@ -50,7 +70,8 @@ internal static partial class ViewportConditionalFormatEvaluator
                     aggregate.SortedValues,
                     topBottomMatches,
                     valueCounts?.Count > 0 ? valueCounts : null,
-                    aggregate.StdDev);
+                    aggregate.StdDev,
+                    hasError);
             }
         }
         return result ?? EmptyAggregates;
@@ -136,7 +157,8 @@ internal static partial class ViewportConditionalFormatEvaluator
 
         var take = Math.Clamp(
             cf.TopBottomPercent
-                ? (int)Math.Ceiling(rankedValues.Count * Math.Max(1, cf.TopBottomRank) / 100d)
+                // Excel-parity round 6: "Top N%" keeps floor(count * N / 100) cells (at least one), not the ceiling.
+                ? (int)Math.Floor(rankedValues.Count * Math.Max(1, cf.TopBottomRank) / 100d)
                 : cf.TopBottomRank,
             1,
             rankedValues.Count);
@@ -240,114 +262,115 @@ internal static partial class ViewportConditionalFormatEvaluator
         CellAddress addr,
         CfEvaluationContext cfContext)
     {
-        if (TryGetDouble(value, out double d))
-        {
-            if (!TryResolveCellValueNumericThreshold(
-                    cf,
-                    cf.Value1,
-                    CfThresholdFormulaSlot.CellValue1,
-                    sheet,
-                    workbook,
-                    addr,
-                    cfContext,
-                    out double v1))
-            {
-                return false;
-            }
-
-            return cf.Operator switch
-            {
-                CfOperator.Equal => d == v1,
-                CfOperator.NotEqual => d != v1,
-                CfOperator.GreaterThan => d > v1,
-                CfOperator.GreaterThanOrEqual => d >= v1,
-                CfOperator.LessThan => d < v1,
-                CfOperator.LessThanOrEqual => d <= v1,
-                CfOperator.Between => TryResolveCellValueNumericThreshold(
-                    cf,
-                    cf.Value2,
-                    CfThresholdFormulaSlot.CellValue2,
-                    sheet,
-                    workbook,
-                    addr,
-                    cfContext,
-                    out double v2) && d >= v1 && d <= v2,
-                CfOperator.NotBetween => TryResolveCellValueNumericThreshold(
-                    cf,
-                    cf.Value2,
-                    CfThresholdFormulaSlot.CellValue2,
-                    sheet,
-                    workbook,
-                    addr,
-                    cfContext,
-                    out double v2b) && !(d >= v1 && d <= v2b),
-                _ => false
-            };
-        }
-
-        var s = GetString(value);
-        if (cf.Operator is not (CfOperator.Equal or CfOperator.NotEqual))
+        // Excel-parity round 6 (measured against Range.DisplayFormat): a "Cell Value" rule is a plain
+        // worksheet comparison of the cell against its operand(s) -- numbers < text < logicals, a blank
+        // cell takes the type of the operand it is compared with (0, "" or FALSE), text compares
+        // case-insensitively, and an error cell never matches (not even "not equal to").
+        if (value is ErrorValue)
             return false;
 
-        // Excel never treats a text cell value as equal to a numeric CellIs comparand -- e.g.
-        // typing ="5"=5 evaluates to FALSE even though the text and the number "look the same".
-        // Only compare as strings when the comparand itself is genuinely textual (a quoted
-        // literal, or a formula/cell-reference that resolves to text); a numeric comparand always
-        // fails Equal and always satisfies NotEqual against a text cell.
-        if (IsNumericCellValueComparand(cf, sheet, workbook, addr, cfContext))
-            return cf.Operator == CfOperator.NotEqual;
+        if (!TryResolveCellValueOperand(cf, cf.Value1, CfThresholdFormulaSlot.CellValue1, sheet, workbook, addr, cfContext, out var operand1))
+            return false;
 
-        var threshold = ResolveCellValueTextThreshold(cf, sheet, workbook, addr, cfContext);
-        var isEqual = threshold is not null && string.Equals(s, threshold, StringComparison.OrdinalIgnoreCase);
-        return cf.Operator == CfOperator.Equal ? isEqual : !isEqual;
+        switch (cf.Operator)
+        {
+            case CfOperator.Equal:
+                return CompareCellValueOperands(value, operand1) == 0;
+            case CfOperator.NotEqual:
+                return CompareCellValueOperands(value, operand1) != 0;
+            case CfOperator.GreaterThan:
+                return CompareCellValueOperands(value, operand1) > 0;
+            case CfOperator.GreaterThanOrEqual:
+                return CompareCellValueOperands(value, operand1) >= 0;
+            case CfOperator.LessThan:
+                return CompareCellValueOperands(value, operand1) < 0;
+            case CfOperator.LessThanOrEqual:
+                return CompareCellValueOperands(value, operand1) <= 0;
+            case CfOperator.Between:
+            case CfOperator.NotBetween:
+            {
+                if (!TryResolveCellValueOperand(cf, cf.Value2, CfThresholdFormulaSlot.CellValue2, sheet, workbook, addr, cfContext, out var operand2))
+                    return false;
+
+                // Excel treats the two operands as an unordered pair: "between 10 and 8" matches 8..10.
+                var swap = CompareCellValueOperands(operand1, operand2) > 0;
+                var low = swap ? operand2 : operand1;
+                var high = swap ? operand1 : operand2;
+                var inside = CompareCellValueOperands(value, low) >= 0 && CompareCellValueOperands(value, high) <= 0;
+                return cf.Operator == CfOperator.Between ? inside : !inside;
+            }
+            default:
+                return false;
+        }
     }
 
-    /// <summary>
-    /// Determines whether a CellIs Equal/NotEqual rule's Value1 comparand resolves to a genuine
-    /// number rather than text, so <see cref="MatchesCellValue"/> can apply Excel's "text never
-    /// equals a number" rule instead of falling into a coincidental case-insensitive string match.
-    /// </summary>
-    private static bool IsNumericCellValueComparand(
+    private static bool TryResolveCellValueOperand(
         ConditionalFormat cf,
+        string? text,
+        CfThresholdFormulaSlot slot,
         Sheet sheet,
         Workbook workbook,
-        CellAddress addr,
-        CfEvaluationContext cfContext)
+        CellAddress currentCell,
+        CfEvaluationContext cfContext,
+        out ScalarValue operand)
     {
-        if (TryResolveCellValueScalarThreshold(cf, CfThresholdFormulaSlot.CellValue1, sheet, workbook, addr, cfContext, out var scalar))
-            return TryGetDouble(scalar, out _);
+        if (TryParseDouble(text, out var number))
+        {
+            operand = new NumberValue(number);
+            return true;
+        }
 
-        // No parsed formula cache entry: Value1 is either blank, or a bare (unquoted) literal that
-        // parsed directly as a double -- TryAddCellValueFormulaCache deliberately skips caching a
-        // formula in exactly that case, since a bare numeric literal is Excel's normal encoding for
-        // a numeric CellIs comparand (e.g. Value1="5" with no surrounding quotes).
-        return cf.Value1 is { } raw &&
-               !(raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"') &&
-               TryParseDouble(raw, out _);
+        if (TryResolveCellValueScalarThreshold(cf, slot, sheet, workbook, currentCell, cfContext, out var scalar))
+        {
+            operand = scalar;
+            return scalar is not RangeValue;
+        }
+
+        operand = BlankValue.Instance;
+        // A parsed formula that failed to evaluate (error result) never matches.
+        if (GetThresholdFormula(cfContext, cf, slot) is not null || text is null)
+            return false;
+
+        operand = new TextValue(UnquoteLiteral(text) ?? string.Empty);
+        return true;
     }
 
-    /// <summary>
-    /// Resolves the text comparison threshold for a CellIs "equal to"/"not equal to" rule. Excel
-    /// stores a literal text comparand as a quoted formula string (e.g. <c>"abc"</c>) and a cell
-    /// reference/formula comparand as bare formula text (e.g. <c>$B$1</c>); both are parsed into
-    /// the same threshold-formula cache used by the numeric branch above
-    /// (<see cref="TryResolveCellValueScalarThreshold"/>), so evaluate through that cache here too
-    /// instead of comparing the cell's display text against the raw, still-quoted formula source.
-    /// </summary>
-    private static string? ResolveCellValueTextThreshold(
-        ConditionalFormat cf,
-        Sheet sheet,
-        Workbook workbook,
-        CellAddress addr,
-        CfEvaluationContext cfContext)
+    private static int CompareCellValueOperands(ScalarValue left, ScalarValue right)
     {
-        if (TryResolveCellValueScalarThreshold(cf, CfThresholdFormulaSlot.CellValue1, sheet, workbook, addr, cfContext, out var scalar))
-            return GetString(scalar);
+        if (left is BlankValue && right is not BlankValue)
+            left = CoerceBlankLike(right);
+        else if (right is BlankValue && left is not BlankValue)
+            right = CoerceBlankLike(left);
 
-        // No parsed formula cache entry (e.g. Value1 is null/blank) — fall back to the raw text,
-        // unwrapping an Excel quoted-string literal like "abc" to its literal content.
-        return UnquoteLiteral(cf.Value1);
+        var leftIsNumber = TryGetDouble(left, out var leftNumber) && left is NumberValue or DateTimeValue;
+        var rightIsNumber = TryGetDouble(right, out var rightNumber) && right is NumberValue or DateTimeValue;
+        if (leftIsNumber && rightIsNumber)
+            return leftNumber.CompareTo(rightNumber);
+
+        if (left is TextValue leftText && right is TextValue rightText)
+            return string.Compare(leftText.Value, rightText.Value, StringComparison.OrdinalIgnoreCase);
+
+        if (left is BoolValue leftBool && right is BoolValue rightBool)
+            return leftBool.Value.CompareTo(rightBool.Value);
+
+        return CellValueTypeOrder(left).CompareTo(CellValueTypeOrder(right));
     }
+
+    private static ScalarValue CoerceBlankLike(ScalarValue other) => other switch
+    {
+        TextValue => new TextValue(string.Empty),
+        BoolValue => new BoolValue(false),
+        _ => new NumberValue(0)
+    };
+
+    // Excel's cross-type ordering for comparisons: numbers (and dates) < text < logicals.
+    private static int CellValueTypeOrder(ScalarValue value) => value switch
+    {
+        NumberValue or DateTimeValue => 0,
+        TextValue => 1,
+        BoolValue => 2,
+        _ => 3
+    };
 
     private static string? UnquoteLiteral(string? text)
     {
@@ -358,36 +381,6 @@ internal static partial class ViewportConditionalFormatEvaluator
             return text.Substring(1, text.Length - 2).Replace("\"\"", "\"");
 
         return text;
-    }
-
-    private static bool TryResolveCellValueNumericThreshold(
-        ConditionalFormat cf,
-        string? text,
-        CfThresholdFormulaSlot slot,
-        Sheet sheet,
-        Workbook workbook,
-        CellAddress currentCell,
-        CfEvaluationContext cfContext,
-        out double value)
-    {
-        if (TryParseDouble(text, out value))
-            return true;
-
-        if (GetStaticThresholdFormulaValue(cfContext, cf, slot) is { } staticValue && double.IsFinite(staticValue))
-        {
-            value = staticValue;
-            return true;
-        }
-
-        if (!TryResolveCellValueScalarThreshold(cf, slot, sheet, workbook, currentCell, cfContext, out var scalar) ||
-            !TryGetDouble(scalar, out value) ||
-            !double.IsFinite(value))
-        {
-            value = 0;
-            return false;
-        }
-
-        return true;
     }
 
     private static bool TryResolveCellValueScalarThreshold(
@@ -433,6 +426,11 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (!TryGetDouble(value, out double cellVal)) return false;
         if (!cfCache.TryGetValue(cf, out var cache)) return false;
 
+        // Excel-parity round 6: the plain average skips error cells, but the standard-deviation band of a
+        // range that contains an error value is itself an error, so a "N standard deviations" rule
+        // highlights nothing in that range.
+        if (cache.HasError && cf.StdDevCount.HasValue) return false;
+
         // "N standard deviations above/below average" band: threshold is mean ± N*stdDev
         // instead of the plain mean. Falls back to the plain average when stdDev is
         // unavailable (e.g. fewer than 2 numeric points in the range).
@@ -457,8 +455,9 @@ internal static partial class ViewportConditionalFormatEvaluator
         Dictionary<ConditionalFormat, CfAggregateCache> cfCache,
         bool duplicate)
     {
-        // Blanks are never considered duplicates or unique values (matches Excel behavior).
-        if (IsBlankValue(value))
+        // A truly empty cell is never highlighted as a duplicate or unique value (matches Excel behavior);
+        // a text "" cell is a normal value that shares its key with the empty cells.
+        if (value is BlankValue)
             return false;
 
         if (!cfCache.TryGetValue(cf, out var cache) || cache.ValueCounts is null)
@@ -472,26 +471,76 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static bool MatchesTextRule(ConditionalFormat cf, ScalarValue value, TextRuleMatchKind kind)
     {
-        if (string.IsNullOrEmpty(cf.TextRuleText))
-            return false;
-
-        // Excel's Contains/BeginsWith/EndsWith rules are effectively ISERROR-gated (e.g.
-        // Contains is NOT(ISERROR(SEARCH(...)))): an error value propagates through SEARCH so
-        // ISERROR is TRUE and the rule never fires. NotContains is the complement, so an error
-        // cell always satisfies it. Guard before GetString turns the error's code text (e.g.
-        // "#DIV/0!") into a spurious substring match target.
+        // Excel-parity round 6 (measured against Range.DisplayFormat): Excel builds these rules from
+        // formulas, and an empty or wildcard search text is legal in them --
+        //   Contains     NOT(ISERROR(SEARCH(text,cell)))   -- SEARCH is case-insensitive, supports ? * ~
+        //                wildcards, searches the cell's text (numbers/booleans included), and SEARCH("", x)
+        //                finds position 1 except in an empty cell (#VALUE!)
+        //   NotContains  ISERROR(SEARCH(text,cell))
+        //   BeginsWith   LEFT(cell,LEN(text))=text
+        //   EndsWith     RIGHT(cell,LEN(text))=text
+        // An error cell makes SEARCH/LEFT/RIGHT return an error: Contains/Begins/Ends never fire and
+        // NotContains always does.
+        var search = cf.TextRuleText ?? string.Empty;
         if (value is ErrorValue)
             return kind == TextRuleMatchKind.NotContains;
 
         var text = GetString(value);
-        return kind switch
+        switch (kind)
         {
-            TextRuleMatchKind.Contains => text.Contains(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
-            TextRuleMatchKind.NotContains => !text.Contains(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
-            TextRuleMatchKind.BeginsWith => text.StartsWith(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
-            TextRuleMatchKind.EndsWith => text.EndsWith(cf.TextRuleText, StringComparison.OrdinalIgnoreCase),
-            _ => false
-        };
+            case TextRuleMatchKind.Contains:
+                return SearchFindsText(search, text);
+            case TextRuleMatchKind.NotContains:
+                return !SearchFindsText(search, text);
+            case TextRuleMatchKind.BeginsWith:
+                return text.Length >= search.Length && text.StartsWith(search, StringComparison.OrdinalIgnoreCase);
+            case TextRuleMatchKind.EndsWith:
+                return text.Length >= search.Length && text.EndsWith(search, StringComparison.OrdinalIgnoreCase);
+            default:
+                return false;
+        }
+    }
+
+    // SEARCH(find, within) succeeds: case-insensitive, ? matches one character, * any run, ~ escapes.
+    private static bool SearchFindsText(string find, string within)
+    {
+        // SEARCH over an empty cell/string is #VALUE! whatever the pattern (even "" or "*").
+        if (within.Length == 0)
+            return false;
+
+        if (find.Length == 0)
+            return true;
+
+        if (find.IndexOfAny(['?', '*', '~']) < 0)
+            return within.Contains(find, StringComparison.OrdinalIgnoreCase);
+
+        var pattern = new System.Text.StringBuilder();
+        for (var i = 0; i < find.Length; i++)
+        {
+            var c = find[i];
+            if (c == '~' && i + 1 < find.Length && find[i + 1] is '?' or '*' or '~')
+            {
+                pattern.Append(System.Text.RegularExpressions.Regex.Escape(find[i + 1].ToString()));
+                i++;
+            }
+            else if (c == '?')
+            {
+                pattern.Append('.');
+            }
+            else if (c == '*')
+            {
+                pattern.Append(".*");
+            }
+            else
+            {
+                pattern.Append(System.Text.RegularExpressions.Regex.Escape(c.ToString()));
+            }
+        }
+
+        return System.Text.RegularExpressions.Regex.IsMatch(
+            within,
+            pattern.ToString(),
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
     }
 
     private static bool MatchesDateOccurring(ConditionalFormat cf, ScalarValue value, DateTime today)
@@ -578,6 +627,12 @@ internal static partial class ViewportConditionalFormatEvaluator
     /// </summary>
     private static double NormalizeZero(double value) => value == 0 ? 0.0 : value;
 
+    private static bool IsPlainNumberText(string text) =>
+        text.Length > 0 &&
+        text.Length == text.Trim().Length &&
+        double.TryParse(text, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed) &&
+        double.IsFinite(parsed);
+
     private static string GetDuplicateValueKey(ScalarValue value) => value switch
     {
         // Numbers and dates share the "N" bucket keyed by the raw serial value (Excel stores
@@ -590,7 +645,11 @@ internal static partial class ViewportConditionalFormatEvaluator
         NumberValue n => "N:" + NormalizeZero(n.Value).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         DateTimeValue d => "N:" + NormalizeZero(d.Value).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         BoolValue => "B:" + NormalizeDisplayValue(value),
-        TextValue => "T:" + NormalizeDisplayValue(value),
+        // Excel-parity round 6 (measured with Range.DisplayFormat): duplicate detection compares what the
+        // cells display, so the text "1" and the number 1 are the same value, while surrounding spaces
+        // are significant ("a " is not "a").
+        TextValue t when IsPlainNumberText(t.Value) => "N:" + NormalizeZero(double.Parse(t.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture)).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        TextValue t => "T:" + t.Value,
         ErrorValue => "E:" + NormalizeDisplayValue(value),
         _ => "?:" + NormalizeDisplayValue(value)
     };

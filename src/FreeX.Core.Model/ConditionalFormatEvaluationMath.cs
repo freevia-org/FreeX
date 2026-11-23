@@ -47,8 +47,11 @@ public static class ConditionalFormatEvaluationMath
         {
             _values?.Sort();
             var average = Count > 0 ? _sum / Count : 0;
+            // Excel-parity round 6: the "N standard deviations above/below average" rule measures against the
+            // POPULATION standard deviation (STDEV.P, divide by n), not the sample one -- a value just inside
+            // two deviations by the population measure is highlighted by Excel (verified via DisplayFormat).
             var stdDev = Count > 1
-                ? Math.Sqrt(Math.Max(0, (_sumSquares - Count * average * average) / (Count - 1)))
+                ? Math.Sqrt(Math.Max(0, (_sumSquares - Count * average * average) / Count))
                 : 0;
             return new ConditionalFormatEvaluationStatistics(
                 Count,

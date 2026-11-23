@@ -398,7 +398,10 @@ internal static partial class ViewportConditionalFormatEvaluator
                 : null;
         }
 
-        if (max <= min) return GetColorScaleStyle(cfContext, cf.MinColor.ToCellColor());
+        // Excel-parity round 6: a degenerate scale (every value equal, so min == max) paints the MAX color
+        // (verified via Range.DisplayFormat on all-equal data), not the min color; a cell below a
+        // collapsed/inverted range still takes the min color.
+        if (max <= min) return GetColorScaleStyle(cfContext, (cellVal >= max ? cf.MaxColor : cf.MinColor).ToCellColor());
 
         var interpolated = mid.HasValue
             ? cellVal <= mid.Value

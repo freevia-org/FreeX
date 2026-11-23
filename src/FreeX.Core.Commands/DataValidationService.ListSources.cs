@@ -20,7 +20,10 @@ public static partial class DataValidationService
 
         // Split once; build case-insensitive set for O(1) lookup.
         var trimmed = ParseInlineListItems(dv.Formula1);
-        return ValidateListAgainstValues(dv, value, trimmed);
+        // A comma-delimited list typed straight into the rule is matched case-SENSITIVELY and with the
+        // entry's surrounding spaces ignored, unlike a range-based source (Excel-parity round 6,
+        // measured with Range.Validation.Value).
+        return ValidateListAgainstValues(dv, value, trimmed, StringComparison.Ordinal, trimEntry: true);
     }
 
     private static string? ValidateList(DataValidation dv, ScalarValue value, Sheet sheet, CellAddress address, Workbook? workbook)
@@ -515,12 +518,19 @@ public static partial class DataValidationService
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
-    private static string? ValidateListAgainstValues(DataValidation dv, ScalarValue value, IReadOnlyCollection<string> allowedValues)
+    private static string? ValidateListAgainstValues(
+        DataValidation dv,
+        ScalarValue value,
+        IReadOnlyCollection<string> allowedValues,
+        StringComparison comparison = StringComparison.OrdinalIgnoreCase,
+        bool trimEntry = false)
     {
         var textValue = ToValidationText(value);
+        if (trimEntry && value is TextValue)
+            textValue = textValue.Trim();
         foreach (var allowedValue in allowedValues)
         {
-            if (string.Equals(allowedValue, textValue, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(allowedValue, textValue, comparison))
                 return null;
         }
 
