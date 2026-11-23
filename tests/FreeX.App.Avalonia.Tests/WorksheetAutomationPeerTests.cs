@@ -137,6 +137,86 @@ public sealed class WorksheetAutomationPeerTests
         editor.GetProvider<IValueProvider>()!.IsReadOnly.Should().BeFalse();
     });
 
+    [Theory]
+    [InlineData("normal")]
+    [InlineData("frozen")]
+    [InlineData("split")]
+    public Task MergedCellCornerCycling_PreservesFocusAndTheTrueActiveAddress(string panes) => Run(async window =>
+    {
+        var sheet = window.Session.ActiveSheet;
+        var anchor = Address(sheet, 2, 2);
+        var merge = new GridRange(anchor, Address(sheet, 3, 3));
+        sheet.SetCell(anchor, new NumberValue(42));
+        sheet.Hyperlinks[anchor] = "https://example.com/merged";
+        sheet.AddMergedRegion(merge);
+        if (panes == "frozen")
+        {
+            sheet.FrozenRows = 1;
+            sheet.FrozenCols = 1;
+        }
+        else if (panes == "split")
+        {
+            sheet.SplitRow = 2;
+            sheet.SplitColumn = 2;
+        }
+
+        window.Session.SelectRanges(merge, [merge], anchor);
+        Refresh(window);
+        window.ActiveCellBorderForTest!.Focus().Should().BeTrue();
+        var grid = GridPeer(window);
+        foreach (var corner in new[] { Address(sheet, 2, 3), Address(sheet, 3, 3), Address(sheet, 3, 2), anchor })
+        {
+            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.OemPeriod, KeyModifiers = KeyModifiers.Control });
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+
+            window.Session.ActiveCell.Should().Be(corner);
+            window.Session.SelectedRange.Should().Be(merge);
+            window.Session.SelectedRanges.Should().Equal(merge);
+            var focused = Cells(grid).Single(peer => peer.HasKeyboardFocus());
+            var address = $"{CellAddress.NumberToColumnName(corner.Col)}{corner.Row}";
+            focused.GetAutomationId().Should().Be($"Cell_{address}");
+            focused.GetName().Should().StartWith($"{address}: 42")
+                .And.Contain("is merged").And.Contain("has a hyperlink");
+            focused.GetProvider<IValueProvider>()!.Value.Should().Be("42");
+            focused.GetProvider<ISelectionItemProvider>()!.IsSelected.Should().BeTrue();
+            Cells(grid).Select(peer => peer.GetAutomationId()).Should().OnlyHaveUniqueItems();
+        }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task MergedCellWithHiddenOrScrolledAnchor_PreservesActiveIdentity(bool hideAnchor) => Run(window =>
+    {
+        var sheet = window.Session.ActiveSheet;
+        var anchor = Address(sheet, 2, 2);
+        var active = Address(sheet, 9, 4);
+        var merge = new GridRange(anchor, Address(sheet, 10, 4));
+        sheet.SetCell(anchor, new NumberValue(73));
+        sheet.AddMergedRegion(merge);
+        window.ActiveCellBorderForTest!.Focus().Should().BeTrue();
+        window.Session.SelectRanges(merge, [merge], active);
+        if (hideAnchor)
+        {
+            sheet.HiddenRows.Add(anchor.Row);
+            sheet.HiddenCols.Add(anchor.Col);
+        }
+        else
+        {
+            window.Session.SetViewportOrigin(7, 3);
+        }
+        Refresh(window);
+
+        window.Session.ActiveCell.Should().Be(active);
+        window.Session.SelectedRange.Should().Be(merge);
+        var focused = Cells(GridPeer(window)).Single(peer => peer.HasKeyboardFocus());
+        focused.GetAutomationId().Should().Be("Cell_D9");
+        focused.GetName().Should().StartWith("D9: 73").And.Contain("is merged");
+        focused.GetProvider<IValueProvider>()!.Value.Should().Be("73");
+        focused.GetProvider<ISelectionItemProvider>()!.IsSelected.Should().BeTrue();
+    });
+
     [Fact]
     public Task ExistingGridPeer_ObservesChangedValuesAndKeyboardNavigationAfterRebuild() => Run(async window =>
     {

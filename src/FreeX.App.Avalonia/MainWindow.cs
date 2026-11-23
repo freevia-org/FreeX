@@ -9542,13 +9542,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // comment (GridView.cs) explains neither is wired to a live signal on that shell either.
         // WorksheetCellBorder exposes these properties through a real DataItem peer. Decorative
         // text layers are kept out of that peer's children so the cell is announced once.
-        var columnName = CellAddress.NumberToColumnName(address.Col);
-        AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
-        var hasHyperlink = _session.Workbook.GetSheet(address.Sheet)?.Hyperlinks.ContainsKey(address) == true;
+        // A merge has one rendered Border, including when a scrolled-away anchor is replaced by a
+        // visible member. Ctrl+. can put the active cell on any covered corner, so that Border must
+        // represent the actual active coordinate without changing its painting or pointer target.
+        var representsActiveCell = address == _session.ActiveCell ||
+            mergeRegion?.Contains(_session.ActiveCell) == true;
+        var contentAddress = mergeRegion?.Start ?? address;
+        var automationAddress = representsActiveCell ? _session.ActiveCell : contentAddress;
+        var columnName = CellAddress.NumberToColumnName(automationAddress.Col);
+        AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{automationAddress.Row}");
+        var hasHyperlink = _session.Workbook.GetSheet(contentAddress.Sheet)?.Hyperlinks.ContainsKey(contentAddress) == true;
         AutomationProperties.SetName(
             border,
             CellAnnouncementPlanner.BuildName(
-                $"{columnName}{address.Row}",
+                $"{columnName}{automationAddress.Row}",
                 text,
                 new CellAnnouncementMetadata(
                     HasComment: commentDisplay is not null,
@@ -9566,7 +9573,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // moving actual keyboard focus here (see MoveFocusToActiveCellBorder, called after each
         // BuildSheetGrid/RefreshShell pass) is what makes a screen reader announce the new
         // cell's name/address on every navigation instead of staying silent on _sheetGridHost.
-        if (address == _session.ActiveCell)
+        if (representsActiveCell)
         {
             border.Focusable = true;
             _activeCellBorder = border;
