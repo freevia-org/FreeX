@@ -86,8 +86,10 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<HighLowSeries>().Subject;
-        series.Title.Should().Be("Stock");
+        var series = model.Series.OfType<HighLowSeries>().Should().ContainSingle().Subject;
+        // Excel's stock legend lists the columns by name; the price series itself stays out of it.
+        series.Title.Should().BeNull();
+        model.Series.Where(s => s is LineSeries).Select(s => s.Title).Should().Equal("Open", "High", "Low", "Close");
         series.Items.Should().HaveCount(2);
         series.Items[0].Open.Should().Be(10);
         series.Items[0].High.Should().Be(15);
@@ -130,9 +132,11 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        model.Series.Should().HaveCount(2);
         model.Series[0].Should().BeOfType<RectangleBarSeries>();
         var stockSeries = model.Series[1].Should().BeOfType<HighLowSeries>().Subject;
+        // Excel plots the prices on a secondary (right) axis next to the volume columns.
+        stockSeries.YAxisKey.Should().Be("SecondaryY");
+        model.Axes.Should().Contain(axis => axis.Key == "SecondaryY");
         stockSeries.Items[0].Open.Should().Be(10);
         stockSeries.Items[0].High.Should().Be(15);
         stockSeries.Items[0].Low.Should().Be(9);
@@ -275,7 +279,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<CandleStickSeries>().Subject;
+        var series = model.Series.OfType<CandleStickSeries>().Should().ContainSingle().Subject;
         series.IncreasingColor.Should().Be(OxyColors.White);
         series.DecreasingColor.Should().Be(OxyColors.Black);
         series.Items.Should().HaveCount(2);
@@ -325,7 +329,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<CandleStickSeries>().Subject;
+        var series = model.Series.OfType<CandleStickSeries>().Should().ContainSingle().Subject;
         series.IncreasingColor.Should().Be(OxyColor.FromRgb(226, 239, 218));
         series.DecreasingColor.Should().Be(OxyColor.FromRgb(248, 203, 173));
         series.Color.Should().Be(OxyColor.FromRgb(84, 130, 53));

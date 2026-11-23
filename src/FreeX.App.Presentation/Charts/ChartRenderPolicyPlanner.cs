@@ -18,9 +18,13 @@ public static class ChartRenderPolicyPlanner
     private const double MaximumBubbleRadius = 20.0;
     private const double MinimumBubbleRadius = 1.0;
 
-    public static CellColor WaterfallIncreaseColor { get; } = new(0x54, 0x82, 0x35);
-    public static CellColor WaterfallDecreaseColor { get; } = new(0xC0, 0x00, 0x00);
-    public static CellColor WaterfallTotalColor { get; } = new(0x44, 0x72, 0xC4);
+    private static readonly CellColor[] OfficeWaterfallPalette = ChartStylePlanner.BuildExcelSeriesPalette(WorkbookTheme.Office);
+
+    // Excel colours waterfall columns with the theme accents: Increase = accent 1, Decrease = accent 2,
+    // Total = accent 3 (measured against Excel 365 with the default Office theme: 156082 / E97132 / 196B24).
+    public static CellColor WaterfallIncreaseColor { get; } = OfficeWaterfallPalette[0];
+    public static CellColor WaterfallDecreaseColor { get; } = OfficeWaterfallPalette[1];
+    public static CellColor WaterfallTotalColor { get; } = OfficeWaterfallPalette[2];
 
     public sealed record BoxAndWhiskerStatistics(
         double LowerWhisker,
@@ -315,7 +319,7 @@ public static class ChartRenderPolicyPlanner
         var count = 0;
         foreach (var seriesIndex in seriesIndexes)
         {
-            if (!IsComboLineSeries(chart, seriesIndex) && !IsComboScatterSeries(chart, seriesIndex))
+            if (!IsComboLineSeries(chart, seriesIndex) && !IsComboScatterSeries(chart, seriesIndex) && !IsComboAreaSeries(chart, seriesIndex))
                 count++;
         }
 
@@ -335,7 +339,7 @@ public static class ChartRenderPolicyPlanner
                 continue;
 
             var seriesIndex = ResolveSeriesIndex(chart, column, dataStartColumn, endColumn);
-            if (!IsComboLineSeries(chart, seriesIndex) && !IsComboScatterSeries(chart, seriesIndex))
+            if (!IsComboLineSeries(chart, seriesIndex) && !IsComboScatterSeries(chart, seriesIndex) && !IsComboAreaSeries(chart, seriesIndex))
                 count++;
         }
 
@@ -381,6 +385,12 @@ public static class ChartRenderPolicyPlanner
         ChartTypeSupport.SupportsComboLineOverlay(chart.Type) &&
         seriesIndex >= 0 &&
         chart.ComboScatterSeriesIndexes.Contains(seriesIndex);
+
+    /// <summary>Returns whether the series is rendered as a filled area behind a column primary chart.</summary>
+    public static bool IsComboAreaSeries(ChartModel chart, int seriesIndex) =>
+        chart.Type == ChartType.Column &&
+        seriesIndex >= 0 &&
+        chart.ComboAreaSeriesIndexes.Contains(seriesIndex);
 
     /// <summary>Returns whether a series legend entry is deleted in declaration order.</summary>
     public static bool IsLegendEntryDeleted(ChartModel chart, int seriesIndex)
@@ -460,6 +470,17 @@ public static class ChartRenderPolicyPlanner
             (byte)Math.Round(114 + ((192 - 114) * t)),
             (byte)Math.Round(196 - (196 * t)));
     }
+
+    /// <summary>Resolves a waterfall column colour from a theme's series palette (accent 1/2/3).</summary>
+    public static CellColor ResolveWaterfallBarColor(WaterfallBarKind kind, IReadOnlyList<CellColor> palette) =>
+        palette.Count >= 3
+            ? kind switch
+            {
+                WaterfallBarKind.Total => palette[2],
+                WaterfallBarKind.Increase => palette[0],
+                _ => palette[1],
+            }
+            : ResolveWaterfallBarColor(kind);
 
     /// <summary>Resolves the shared color for one planned waterfall bar.</summary>
     public static CellColor ResolveWaterfallBarColor(WaterfallBarKind kind) =>

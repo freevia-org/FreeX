@@ -38,8 +38,9 @@ public sealed class ChartRendererWaterfallTests
             []),
             theme);
 
-        model.Series.Should().HaveCount(2);
-        var connectors = model.Series.ElementAt(1)
+        // One bar series per role (Increase / Decrease / Total) plus the connector line series.
+        model.Series.Should().HaveCount(4);
+        var connectors = model.Series.ElementAt(3)
             .Should().BeOfType<LineSeries>().Subject;
         connectors.Color.Should().Be(OxyColor.FromRgb(31, 78, 121));
         connectors.StrokeThickness.Should().Be(2.75);
@@ -76,7 +77,44 @@ public sealed class ChartRendererWaterfallTests
             [],
             []));
 
-        model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>();
+        model.Series.Should().HaveCount(3).And.AllBeOfType<RectangleBarSeries>();
+    }
+
+    [Fact]
+    public void WaterfallRenderer_SplitsColumnsByRoleWithExcelLegendNamesAndAccentColours()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Waterfall,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 6, 2)),
+            WaterfallTotalPointIndices = []
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Step"), Cell(1, 2, "Amount"),
+                Cell(2, 1, "Start"), Cell(2, 2, "100"),
+                Cell(3, 1, "Cost"), Cell(3, 2, "-30"),
+                Cell(4, 1, "Sales"), Cell(4, 2, "45"),
+                Cell(5, 1, "Fees"), Cell(5, 2, "-20"),
+                Cell(6, 1, "Total"), Cell(6, 2, "60")
+            ],
+            [],
+            []));
+
+        var roles = model.Series.OfType<RectangleBarSeries>().ToList();
+        roles.Select(r => r.Title).Should().Equal("Increase", "Decrease", "Total");
+        // Excel (default Office theme): accents 1-3.
+        roles[0].FillColor.Should().Be(OxyColor.FromRgb(0x15, 0x60, 0x82));
+        roles[1].FillColor.Should().Be(OxyColor.FromRgb(0xE9, 0x71, 0x32));
+        roles[2].FillColor.Should().Be(OxyColor.FromRgb(0x19, 0x6B, 0x24));
+        // Without authored totals the last column is a plain increase (Excel never invents a total).
+        roles[0].Items.Should().HaveCount(3);
+        roles[1].Items.Should().HaveCount(2);
+        roles[2].Items.Should().BeEmpty();
     }
 
     [Fact]
@@ -118,7 +156,8 @@ public sealed class ChartRendererWaterfallTests
             []));
 
         var bars = model.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
-        bars.Items.Select(item => item.Y1).Should().Equal(2, 2);
+        // Excel automatic binning (Scott, 2 significant digits): width 2.9 -> [1, 3.9] holds 1,2,3 and (3.9, 6.8] holds 4.
+        bars.Items.Select(item => item.Y1).Should().Equal(3, 1);
     }
 
     private static PlotModel BuildPlotModel(ChartModel chart, ViewportModel viewport) =>

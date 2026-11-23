@@ -133,7 +133,14 @@ public readonly record struct SeriesPoint(int PointIndex, double DataX, double D
 /// Optional per-bar fill override. When non-null the renderer uses this color instead of the
 /// series-level palette fill (used for waterfall increase/decrease/total coloring).
 /// </param>
-public readonly record struct SeriesBar(int PointIndex, double Value, LayoutRect Rect, CellColor? FillColorOverride = null);
+public readonly record struct SeriesBar(int PointIndex, double Value, LayoutRect Rect, CellColor? FillColorOverride = null)
+{
+    /// <summary>
+    /// For waterfall columns, which role the column plays. Hosts that know the workbook theme resolve the
+    /// colour from it (Excel: accent 1/2/3) instead of using the default-theme <see cref="FillColorOverride"/>.
+    /// </summary>
+    public WaterfallBarKind? WaterfallKind { get; init; }
+}
 
 /// <summary>A laid-out pie/doughnut slice: its arc geometry, value, and share of the total.</summary>
 public readonly record struct SeriesSlice(int PointIndex, double Value, double Fraction, string Label, LayoutArc Arc);
@@ -343,6 +350,12 @@ public readonly record struct LegendEntry(int SeriesIndex, string Label, LayoutR
     /// <see cref="TrendlineStyle"/>. Such rows are not individually selectable.
     /// </summary>
     public bool IsTrendline { get; init; }
+
+    /// <summary>For the waterfall legend (Increase / Decrease / Total) the role whose colour the swatch shows.</summary>
+    public WaterfallBarKind? WaterfallKind { get; init; }
+
+    /// <summary>True when the entry is a bare label with no colour swatch (Excel's stock-chart legend).</summary>
+    public bool HideSwatch { get; init; }
 
     /// <summary>The per-series trendline projection (line colour / dash / thickness) for a trendline row.</summary>
     public ChartModel? TrendlineStyle { get; init; }

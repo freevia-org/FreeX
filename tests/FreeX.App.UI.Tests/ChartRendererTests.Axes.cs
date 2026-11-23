@@ -283,8 +283,8 @@ public sealed partial class ChartRendererTests
             []));
 
         model.Axes.Should().Contain(axis => axis.Key == "SecondaryY");
-        var first = model.Series[0].Should().BeOfType<ScatterSeries>().Subject;
-        var second = model.Series[1].Should().BeOfType<ScatterSeries>().Subject;
+        var first = model.Series[0].Should().BeAssignableTo<ScatterSeries>().Subject;
+        var second = model.Series[1].Should().BeAssignableTo<ScatterSeries>().Subject;
         first.YAxisKey.Should().BeNull();
         second.YAxisKey.Should().Be("SecondaryY");
     }

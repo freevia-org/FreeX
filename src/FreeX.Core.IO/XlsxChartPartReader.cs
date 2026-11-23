@@ -55,6 +55,8 @@ public static partial class XlsxChartPartReader
             read = TryReadPieFamilyChart(chartXml, pieChart, sheetId, ChartType.Pie, sheetNameResolver, out chart);
         else if (bubbleChart is not null)
             read = TryReadBubbleChart(chartXml, bubbleChart, sheetId, sheetNameResolver, out chart);
+        else if (areaChart is not null && barChart is not null)
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, scatterCharts, areaCharts, sheetId, sheetNameResolver, out chart);
         else if (areaChart is not null && lineChart is not null)
             read = TryReadAreaLineComboChart(chartXml, plotArea, areaCharts, lineCharts, sheetId, sheetNameResolver, out chart);
         else if (areaCharts.Count > 0)
@@ -62,11 +64,11 @@ public static partial class XlsxChartPartReader
         else if (threeDAreaChart is not null)
             read = TryReadAreaChart(chartXml, plotArea, threeDAreaCharts, sheetId, ChartType.ThreeDArea, sheetNameResolver, out chart);
         else if (barChart is not null && lineChart is not null && scatterCharts.Count > 0)
-            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, scatterCharts, sheetId, sheetNameResolver, out chart);
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, scatterCharts, [], sheetId, sheetNameResolver, out chart);
         else if (scatterCharts.Count > 0)
             read = TryReadScatterChart(chartXml, plotArea, scatterCharts, sheetId, sheetNameResolver, out chart);
         else if (barChart is not null && lineChart is not null)
-            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, [], sheetId, sheetNameResolver, out chart);
+            read = TryReadBarLineComboChart(chartXml, plotArea, barCharts, lineCharts, [], [], sheetId, sheetNameResolver, out chart);
         else if (lineCharts.Count > 1)
             read = TryReadLineChart(chartXml, plotArea, lineCharts, sheetId, sheetNameResolver, out chart);
         else if (lineChart is not null)

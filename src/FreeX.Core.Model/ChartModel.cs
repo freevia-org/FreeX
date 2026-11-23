@@ -633,6 +633,14 @@ public sealed class ChartModel
     public List<int> SeriesPlotOrder { get; set; } = [];
     public List<int> ComboLineSeriesIndexes { get; set; } = [];
     public List<int> ComboScatterSeriesIndexes { get; set; } = [];
+
+    /// <summary>
+    /// Series (chart-XML idx) drawn as a filled area over a column/bar primary chart type — the
+    /// <c>&lt;c:areaChart&gt;</c> group of an Excel column + area combo. Area series are drawn behind
+    /// the columns (Excel's z-order: area, column, line, scatter) and excluded from the clustered
+    /// column slot count.
+    /// </summary>
+    public List<int> ComboAreaSeriesIndexes { get; set; } = [];
     public List<ChartSeriesFormat> SeriesFormats { get; set; } = [];
     public List<ChartSeriesDataLabelFormat> SeriesDataLabelFormats { get; set; } = [];
     public List<ChartPointDataLabelFormat> PointDataLabelFormats { get; set; } = [];

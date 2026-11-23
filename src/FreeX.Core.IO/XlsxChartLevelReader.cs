@@ -301,6 +301,14 @@ internal static class XlsxChartLevelReader
                 return value;
         }
 
+        // chartEx titles carry plain text in <cx:tx><cx:txData><cx:v>.
+        foreach (var text in element.Descendants(ChartExNs + "v"))
+        {
+            var value = text.Value;
+            if (!string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
         return null;
     }
 

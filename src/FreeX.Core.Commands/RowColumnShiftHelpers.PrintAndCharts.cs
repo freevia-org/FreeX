@@ -369,6 +369,7 @@ internal static partial class RowColumnShiftHelpers
         public required List<int> SecondaryAxisSeriesIndexes { get; init; }
         public required List<int> ComboLineSeriesIndexes { get; init; }
         public required List<int> ComboScatterSeriesIndexes { get; init; }
+        public required List<int> ComboAreaSeriesIndexes { get; init; }
         public required int TrendlineSeriesIndex { get; init; }
         public required int ErrorBarSeriesIndex { get; init; }
         public required bool ShowLinearTrendline { get; init; }
@@ -399,6 +400,7 @@ internal static partial class RowColumnShiftHelpers
         SecondaryAxisSeriesIndexes    = new List<int>(chart.SecondaryAxisSeriesIndexes),
         ComboLineSeriesIndexes        = new List<int>(chart.ComboLineSeriesIndexes),
         ComboScatterSeriesIndexes     = new List<int>(chart.ComboScatterSeriesIndexes),
+        ComboAreaSeriesIndexes        = new List<int>(chart.ComboAreaSeriesIndexes),
         TrendlineSeriesIndex          = chart.TrendlineSeriesIndex,
         ErrorBarSeriesIndex           = chart.ErrorBarSeriesIndex,
         ShowLinearTrendline           = chart.ShowLinearTrendline,
@@ -426,6 +428,7 @@ internal static partial class RowColumnShiftHelpers
         chart.SecondaryAxisSeriesIndexes    = snapshot.SecondaryAxisSeriesIndexes;
         chart.ComboLineSeriesIndexes        = snapshot.ComboLineSeriesIndexes;
         chart.ComboScatterSeriesIndexes     = snapshot.ComboScatterSeriesIndexes;
+        chart.ComboAreaSeriesIndexes        = snapshot.ComboAreaSeriesIndexes;
         chart.TrendlineSeriesIndex          = snapshot.TrendlineSeriesIndex;
         chart.ErrorBarSeriesIndex           = snapshot.ErrorBarSeriesIndex;
         chart.ShowLinearTrendline           = snapshot.ShowLinearTrendline;
@@ -536,6 +539,7 @@ internal static partial class RowColumnShiftHelpers
         chart.SecondaryAxisSeriesIndexes = RemapIndexListForInsert(chart.SecondaryAxisSeriesIndexes, boundary, delta);
         chart.ComboLineSeriesIndexes = RemapIndexListForInsert(chart.ComboLineSeriesIndexes, boundary, delta);
         chart.ComboScatterSeriesIndexes = RemapIndexListForInsert(chart.ComboScatterSeriesIndexes, boundary, delta);
+        chart.ComboAreaSeriesIndexes = RemapIndexListForInsert(chart.ComboAreaSeriesIndexes, boundary, delta);
         chart.MultiLevelCategoryXml = RemapIndexedItemsForInsert(chart.MultiLevelCategoryXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, boundary, delta);
         chart.ExplodedSlices = RemapIndexedItemsForInsert(chart.ExplodedSlices, s => s.SeriesIndex, (s, v) => s with { SeriesIndex = v }, boundary, delta);
         chart.RangeDataLabels = RemapIndexedItemsForInsert(chart.RangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, boundary, delta);
@@ -586,6 +590,7 @@ internal static partial class RowColumnShiftHelpers
         chart.SecondaryAxisSeriesIndexes = RemapIndexListForDelete(chart.SecondaryAxisSeriesIndexes, posLo, posHi, removedCount);
         chart.ComboLineSeriesIndexes = RemapIndexListForDelete(chart.ComboLineSeriesIndexes, posLo, posHi, removedCount);
         chart.ComboScatterSeriesIndexes = RemapIndexListForDelete(chart.ComboScatterSeriesIndexes, posLo, posHi, removedCount);
+        chart.ComboAreaSeriesIndexes = RemapIndexListForDelete(chart.ComboAreaSeriesIndexes, posLo, posHi, removedCount);
         chart.MultiLevelCategoryXml = RemapIndexedItemsForDelete(chart.MultiLevelCategoryXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
         chart.ExplodedSlices = RemapIndexedItemsForDelete(chart.ExplodedSlices, s => s.SeriesIndex, (s, v) => s with { SeriesIndex = v }, posLo, posHi, removedCount);
         chart.RangeDataLabels = RemapIndexedItemsForDelete(chart.RangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, posLo, posHi, removedCount);

@@ -115,7 +115,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model!.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Should().HaveCount(3, "3 cached (x,y) pairs must produce 3 scatter points, not a blank chart");
         series.Points[0].X.Should().BeApproximately(1.0, 0.001);
         series.Points[0].Y.Should().BeApproximately(5.0, 0.001);
@@ -140,7 +140,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var bars = model!.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        var bars = new { Items = model!.Series.OfType<RectangleBarSeries>().SelectMany(series => series.Items).ToList() };
         bars.Items.Should().HaveCount(4, "4 cached values must produce 4 waterfall bars, not a blank chart");
     }
 
@@ -297,7 +297,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, viewport);
 
         model.Should().NotBeNull();
-        var series = model!.Series.Should().ContainSingle().Which.Should().BeOfType<ScatterSeries>().Subject;
+        var series = model!.Series.Should().ContainSingle().Which.Should().BeAssignableTo<ScatterSeries>().Subject;
         series.Points.Should().HaveCount(2);
         series.Points[0].X.Should().BeApproximately(1.0, 0.001);
         series.Points[0].Y.Should().BeApproximately(5.0, 0.001);
@@ -323,7 +323,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, viewport);
 
         model.Should().NotBeNull();
-        var bars = model!.Series.Should().ContainSingle().Which.Should().BeOfType<RectangleBarSeries>().Subject;
+        var bars = new { Items = model!.Series.OfType<RectangleBarSeries>().SelectMany(series => series.Items).ToList() };
         bars.Items.Should().HaveCount(2);
     }
 }

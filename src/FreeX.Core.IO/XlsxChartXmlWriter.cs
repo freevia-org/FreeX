@@ -161,6 +161,9 @@ internal static partial class XlsxChartXmlWriter
         var seriesCount = ChartTypeSupport.GetDataSeriesCount(chart);
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, seriesCount);
         var comboLineIndexes = GetComboLineSeriesIndexes(chart, seriesCount);
+        var comboAreaIndexes = chart.Type == ChartType.Column
+            ? chart.ComboAreaSeriesIndexes.Where(index => index >= 0 && index < seriesCount && !comboLineIndexes.Contains(index)).ToHashSet()
+            : [];
         if (chart.Type == ChartType.Stock && IsVolumeStockSubtype(chart.StockSubtype))
         {
             yield return (CreateStockVolumeBarChart(chart, workbook, sheet, chartNs, drawingNs), false);
@@ -190,16 +193,18 @@ internal static partial class XlsxChartXmlWriter
             yield break;
         }
 
-        if ((secondaryIndexes.Count > 0 || comboLineIndexes.Count > 0) &&
+        if ((secondaryIndexes.Count > 0 || comboLineIndexes.Count > 0 || comboAreaIndexes.Count > 0) &&
             chart.Type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn
                 or ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea)
         {
             var primaryBase = Enumerable.Range(0, seriesCount)
-                .Where(index => !secondaryIndexes.Contains(index) && !comboLineIndexes.Contains(index))
+                .Where(index => !secondaryIndexes.Contains(index) && !comboLineIndexes.Contains(index) && !comboAreaIndexes.Contains(index))
                 .ToHashSet();
             var secondaryBase = secondaryIndexes
-                .Where(index => !comboLineIndexes.Contains(index))
+                .Where(index => !comboLineIndexes.Contains(index) && !comboAreaIndexes.Contains(index))
                 .ToHashSet();
+            var primaryArea = comboAreaIndexes.Where(index => !secondaryIndexes.Contains(index)).ToHashSet();
+            var secondaryArea = comboAreaIndexes.Where(secondaryIndexes.Contains).ToHashSet();
             var primaryLine = comboLineIndexes
                 .Where(index => !secondaryIndexes.Contains(index))
                 .ToHashSet();
@@ -207,6 +212,11 @@ internal static partial class XlsxChartXmlWriter
                 .Where(secondaryIndexes.Contains)
                 .ToHashSet();
 
+            // Excel writes the area group first (z-order: area, column, line).
+            if (primaryArea.Count > 0)
+                yield return (CreateAreaPlotChart(chart, workbook, sheet, chartNs, drawingNs, primaryArea.Contains), false);
+            if (secondaryArea.Count > 0)
+                yield return (CreateAreaPlotChart(chart, workbook, sheet, chartNs, drawingNs, secondaryArea.Contains), true);
             if (primaryBase.Count > 0)
                 yield return (CreateNativePlotChart(chart, workbook, sheet, chartNs, drawingNs, primaryBase.Contains), false);
             if (secondaryBase.Count > 0)
@@ -221,6 +231,17 @@ internal static partial class XlsxChartXmlWriter
 
         yield return (CreateNativePlotChart(chart, workbook, sheet, chartNs, drawingNs, _ => true), false);
     }
+
+    private static XElement CreateAreaPlotChart(
+        ChartModel chart,
+        Workbook workbook,
+        Sheet sheet,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        Func<int, bool> includeSeries) =>
+        new(chartNs + "areaChart",
+            new XElement(chartNs + "grouping", new XAttribute("val", "standard")),
+            BuildChartSeries(chart, workbook, sheet, chartNs, drawingNs, includeSeries));
 
     private static XElement CreateNativePlotChart(
         ChartModel chart,

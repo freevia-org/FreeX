@@ -273,6 +273,21 @@ public static partial class ChartRenderer
                     }
 
                     break;
+                case HighLowSeries stock:
+                    foreach (var item in stock.Items)
+                    {
+                        if (horizontal)
+                        {
+                            Add(item.X);
+                        }
+                        else
+                        {
+                            Add(item.High);
+                            Add(item.Low);
+                        }
+                    }
+
+                    break;
                 case AreaSeries area:
                     foreach (var point in area.Points)
                         Add(horizontal ? point.X : point.Y);

@@ -47,6 +47,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
     private List<int>? _previousSecondaryAxisSeriesIndexes;
     private List<int>? _previousComboLineSeriesIndexes;
     private List<int>? _previousComboScatterSeriesIndexes;
+    private List<int>? _previousComboAreaSeriesIndexes;
     private int _previousTrendlineSeriesIndex;
     private int _previousErrorBarSeriesIndex;
     private bool _previousShowLinearTrendline;
@@ -112,6 +113,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousSecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes;
         _previousComboLineSeriesIndexes = chart.ComboLineSeriesIndexes;
         _previousComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes;
+        _previousComboAreaSeriesIndexes = chart.ComboAreaSeriesIndexes;
         _previousTrendlineSeriesIndex = chart.TrendlineSeriesIndex;
         _previousErrorBarSeriesIndex = chart.ErrorBarSeriesIndex;
         _previousShowLinearTrendline = chart.ShowLinearTrendline;
@@ -173,6 +175,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         chart.SecondaryAxisSeriesIndexes = RemapIndexList(chart.SecondaryAxisSeriesIndexes, removedSeriesIndex);
         chart.ComboLineSeriesIndexes = RemapIndexList(chart.ComboLineSeriesIndexes, removedSeriesIndex);
         chart.ComboScatterSeriesIndexes = RemapIndexList(chart.ComboScatterSeriesIndexes, removedSeriesIndex);
+        chart.ComboAreaSeriesIndexes = RemapIndexList(chart.ComboAreaSeriesIndexes, removedSeriesIndex);
         chart.SeriesFormats = chart.SeriesFormats
             .Where(f => f.SeriesIndex != removedSeriesIndex)
             .Select(f => f.SeriesIndex > removedSeriesIndex ? f with { SeriesIndex = f.SeriesIndex - 1 } : f)
@@ -243,6 +246,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         chart.SecondaryAxisSeriesIndexes = _previousSecondaryAxisSeriesIndexes ?? [];
         chart.ComboLineSeriesIndexes = _previousComboLineSeriesIndexes ?? [];
         chart.ComboScatterSeriesIndexes = _previousComboScatterSeriesIndexes ?? [];
+        chart.ComboAreaSeriesIndexes = _previousComboAreaSeriesIndexes ?? [];
         chart.TrendlineSeriesIndex = _previousTrendlineSeriesIndex;
         chart.ErrorBarSeriesIndex = _previousErrorBarSeriesIndex;
         chart.ShowLinearTrendline = _previousShowLinearTrendline;
@@ -270,6 +274,7 @@ public sealed class RemoveChartSeriesCommand : IWorkbookCommand
         _previousSecondaryAxisSeriesIndexes = null;
         _previousComboLineSeriesIndexes = null;
         _previousComboScatterSeriesIndexes = null;
+        _previousComboAreaSeriesIndexes = null;
         _previousSeriesFormats = null;
         _previousPointFillColors = null;
         _previousSeriesDataLabelFormats = null;

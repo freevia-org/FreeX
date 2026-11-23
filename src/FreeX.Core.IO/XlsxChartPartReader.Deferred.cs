@@ -306,7 +306,20 @@ public static partial class XlsxChartPartReader
     /// </summary>
     private static void ReadChartExSeriesLayout(XElement series, ChartModel chart)
     {
+        // Excel writes <cx:subtotals> only for points the user set as total; a waterfall without it has
+        // no totals (every column is a plain increase/decrease). Record that as an authored empty list
+        // so the renderers do not fall back to "the last point is the total".
+        if (chart.Type == ChartType.Waterfall)
+            chart.WaterfallTotalPointIndices ??= [];
+
         var layoutPr = FirstChildElementByLocalName(series, "layoutPr");
+        if (chart.Type == ChartType.Waterfall)
+        {
+            // Excel draws the connector lines unless <cx:visibility connectorLines="0"/> turns them off.
+            var connectorLines = layoutPr is null ? null : FirstChildElementByLocalName(layoutPr, "visibility")?.Attribute("connectorLines")?.Value;
+            chart.ShowSeriesLines = !(connectorLines is "0" or "false");
+        }
+
         if (layoutPr is null)
             return;
 

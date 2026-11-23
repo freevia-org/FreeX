@@ -303,6 +303,7 @@ public sealed partial class NativeJsonAdapter
         /// <summary>See <see cref="ChartModel.SecondaryAxisMinorUnit"/>.</summary>
         public double? SecondaryAxisMinorUnit { get; set; }
         public List<int>? ComboLineSeriesIndexes { get; set; }
+        public List<int>? ComboAreaSeriesIndexes { get; set; }
         public List<ChartSeriesFormat>? SeriesFormats { get; set; }
         public List<ChartSeriesTrendline>? SeriesTrendlines { get; set; }
         public List<ChartSeriesErrorBars>? SeriesErrorBars { get; set; }

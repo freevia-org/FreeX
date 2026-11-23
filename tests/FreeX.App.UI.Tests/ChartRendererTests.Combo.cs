@@ -154,7 +154,7 @@ public sealed partial class ChartRendererTests
         model.Series.Should().HaveCount(3);
         model.Series[0].Should().BeOfType<RectangleBarSeries>();
         model.Series[1].Should().BeOfType<LineSeries>();
-        var scatter = model.Series[2].Should().BeOfType<ScatterSeries>().Subject;
+        var scatter = model.Series[2].Should().BeAssignableTo<ScatterSeries>().Subject;
         scatter.Title.Should().Be("Points");
         scatter.Points.Select(p => (p.X, p.Y)).Should().Equal((0.0, 5.0), (1.0, 8.0));
     }
@@ -191,7 +191,7 @@ public sealed partial class ChartRendererTests
 
         model.Series.Should().HaveCount(2);
         model.Series[0].Should().BeOfType<RectangleBarSeries>();
-        model.Series[1].Should().BeOfType<ScatterSeries>();
+        model.Series[1].Should().BeAssignableTo<ScatterSeries>();
     }
 
     [Fact]

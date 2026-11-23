@@ -550,6 +550,10 @@ public static class ChartLayoutEngine
                 {
                     laid = LayoutComboScatterSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions);
                 }
+                else if (ChartRenderPolicyPlanner.IsComboAreaSeries(chart, series.SeriesIndex))
+                {
+                    laid = LayoutAreaSeries(request, series, categoryScale, yScale, baseY, dataLabels, categoryPositions);
+                }
                 else if (ChartRenderPolicyPlanner.IsComboLineSeries(chart, series.SeriesIndex))
                 {
                     laid = LayoutLineSeries(request, series, categoryScale, yScale, dataLabels, categoryPositions: categoryPositions);
@@ -573,6 +577,17 @@ public static class ChartLayoutEngine
                     };
                 }
                 seriesLayouts.Add(laid with { UsesSecondaryAxis = onSecondary });
+            }
+
+            // Excel z-order for a column + area combo: the filled areas sit behind the columns/lines.
+            if (chart.ComboAreaSeriesIndexes.Count > 0)
+            {
+                var areas = seriesLayouts.Where(l => ChartRenderPolicyPlanner.IsComboAreaSeries(chart, l.SeriesIndex)).ToList();
+                if (areas.Count > 0)
+                {
+                    seriesLayouts.RemoveAll(l => ChartRenderPolicyPlanner.IsComboAreaSeries(chart, l.SeriesIndex));
+                    seriesLayouts.InsertRange(0, areas);
+                }
             }
         }
 
@@ -2562,7 +2577,7 @@ public static class ChartLayoutEngine
             var yLow = valueScale.Transform(bar.Bottom);
             var yHigh = valueScale.Transform(bar.Top);
             var rect = LayoutRect.FromCorners(x0, yHigh, x1, yLow);
-            bars.Add(new SeriesBar(i, rawValues.Count > i ? rawValues[i] : 0, rect, color));
+            bars.Add(new SeriesBar(i, rawValues.Count > i ? rawValues[i] : 0, rect, color) { WaterfallKind = bar.Kind });
 
             // Connector line: horizontal segment at the cumulative-after level, connecting right
             // edge of bar i to the left edge of bar i+1. Mirrors WPF AddWaterfallConnector.
@@ -2580,7 +2595,7 @@ public static class ChartLayoutEngine
         for (var i = 0; i < plan.Count; i++)
             catLabels.Add(i < request.Categories.Count ? request.Categories[i] : $"Point {i + 1}");
 
-        var catAxis = BuildWaterfallCategoryAxis(request, categoryScale, catLabels);
+        var catAxis = BuildWaterfallCategoryAxis(request, categoryScale, catLabels, valueScale.Transform(Clamp0(valueScale)));
         var valAxis = BuildValueAxisLayout(chart, valueScale, AxisSide.Left, plot.Left, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle);
 
         var seriesLayout = new SeriesLayout
@@ -2606,7 +2621,8 @@ public static class ChartLayoutEngine
     private static AxisLayout BuildWaterfallCategoryAxis(
         ChartLayoutRequest request,
         AxisScale scale,
-        List<string> labels)
+        List<string> labels,
+        double linePosition)
     {
         var ticks = new List<AxisTick>(labels.Count);
         for (var i = 0; i < labels.Count; i++)
@@ -2616,7 +2632,7 @@ public static class ChartLayoutEngine
         {
             Side = AxisSide.Bottom,
             Title = request.Chart.XAxisTitle,
-            LinePosition = scale.Transform(0),
+            LinePosition = linePosition,
             Ticks = ticks,
             Scale = scale,
         };
@@ -2672,7 +2688,7 @@ public static class ChartLayoutEngine
             0, Math.Max(1, maxCount), plot, AxisSide.Left,
             chart.YAxisMinimum, chart.YAxisMaximum, chart.YAxisMajorUnit);
 
-        const double HistogramHalfWidth = 0.45;
+        const double HistogramHalfWidth = 0.5; // Excel: gap width 0, columns touch
         var bars = new List<SeriesBar>(bins.Count);
         var baselineY = valueScale.Transform(0);
         for (var i = 0; i < bins.Count; i++)
@@ -2699,7 +2715,7 @@ public static class ChartLayoutEngine
             Scale = categoryScale,
         };
 
-        var freqTitle = !string.IsNullOrEmpty(chart.YAxisTitle) ? chart.YAxisTitle : "Frequency";
+        var freqTitle = chart.YAxisTitle; // Excel shows no default value-axis title on a histogram
         var valAxis = new AxisLayout
         {
             Side = AxisSide.Left,

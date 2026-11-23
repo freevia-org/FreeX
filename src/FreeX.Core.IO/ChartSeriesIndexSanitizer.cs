@@ -28,6 +28,9 @@ internal static class ChartSeriesIndexSanitizer
         }
 
         chart.ComboScatterSeriesIndexes = SanitizeComboIndexes(chart.ComboScatterSeriesIndexes, seriesCount);
+        chart.ComboAreaSeriesIndexes = chart.Type is ChartType.Column
+            ? SanitizeComboIndexes(chart.ComboAreaSeriesIndexes, seriesCount)
+            : [];
     }
 
     private static List<int> SanitizeSeriesIndexes(IEnumerable<int> indexes, int seriesCount) =>
