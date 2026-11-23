@@ -72,7 +72,9 @@ public sealed class R463_NoFunctionThrowsOnHostileArgumentsTests
                 var formula = $"={name}({arguments})";
 
                 var task = Task.Run(() => evaluator.Evaluate(formula, MakeSheet()));
-                var finished = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(5)));
+                // A true hang never returns, so a generous bound loses no detection; 5 s produced a
+                // false positive on a loaded CI runner (first ATAN call, thread-pool starvation).
+                var finished = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(30)));
 
                 if (finished != task)
                 {
