@@ -120,6 +120,8 @@ public sealed class ChartVisualDefectsLayoutTests
         points.Count.Should().BeGreaterThanOrEqualTo(2);
         points.Should().OnlyContain(p => p.X <= Inset.Right + 0.6 && p.X >= Inset.Left - 0.6
             && p.Y <= Inset.Bottom + 0.6 && p.Y >= Inset.Top - 0.6);
-        points[^1].X.Should().BeApproximately(Inset.Right, 0.6, "the forecast runs to, not past, the plot edge");
+        // Excel appends one category slot per forecast period (4 categories + 3 forward = 7 slots, points
+        // between tick marks), so the forecast ends in the middle of the last slot, inside the plot.
+        points[^1].X.Should().BeApproximately(Inset.Left + (Inset.Width * 6.5 / 7), 0.6, "the forecast ends in the last appended category slot");
     }
 }

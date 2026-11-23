@@ -1,5 +1,6 @@
 using OxyPlot;
 using OxyPlot.Axes;
+using OxyPlot.Series;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.Core.Formula;
@@ -140,9 +141,200 @@ public static partial class ChartRenderer
             }
         }
 
+        // Excel's automatic value-axis scale (5% headroom, zero baseline only for a wide spread, 1/2/5 major
+        // unit) and the category slots a trendline forecast appends: shared with the Avalonia layout engine
+        // through ExcelAxisAutoScale so both hosts agree with Excel instead of with OxyPlot's own auto range.
+        ApplyExcelAutoScale(model, chart);
+        ExtendCategoryAxisForTrendlineForecast(model, chart);
+
         // R90-render-chart-axis-titles-5-2: runs after the loop above so it sees the final axis set
         // (a category axis is never log-converted, but the value axis in the same model may be).
         ApplyCategoryAxisSkip(model, chart);
+    }
+
+    /// <summary>
+    /// The category axis of a line/area chart: points between tick marks (centered slots, Excel's default for
+    /// line charts) or on the tick marks (area default, or an authored <c>crossBetween="midCat"</c>).
+    /// </summary>
+    private static LinearAxis CreateLineAreaCategoryAxis(ChartModel chart, IReadOnlyList<string> labels) =>
+        ChartRenderPolicyPlanner.CategoryAxisIsBetweenTicks(chart)
+            ? CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, labels)
+            : CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, labels);
+
+    /// <summary>
+    /// Fills every still-automatic bound / major unit of the plain value axes with Excel's auto scale,
+    /// computed from the extents of the series plotted on each axis (whisker and trendline series included,
+    /// so error bars and forecasts widen the axis like Excel). Explicit chart bounds always win.
+    /// </summary>
+    private static void ApplyExcelAutoScale(PlotModel model, ChartModel chart)
+    {
+        foreach (var axis in model.Axes)
+        {
+            // Exact type: indexed category axes, date axes and log axes derive from LinearAxis/Axis and
+            // keep their own scaling.
+            if (axis.GetType() != typeof(LinearAxis))
+                continue;
+
+            var horizontal = axis.Position is AxisPosition.Bottom or AxisPosition.Top;
+            var needsMin = double.IsNaN(axis.Minimum);
+            var needsMax = double.IsNaN(axis.Maximum);
+            var needsStep = double.IsNaN(axis.MajorStep);
+            if (!needsMin && !needsMax && !needsStep)
+                continue;
+
+            var isFixedRange = !needsMin && !needsMax;
+            double low;
+            double high;
+            if (isFixedRange)
+            {
+                (low, high) = (axis.Minimum, axis.Maximum);
+            }
+            else if (!TryGetAxisDataExtent(model, axis, horizontal, out low, out high))
+            {
+                continue;
+            }
+
+            if (isFixedRange)
+            {
+                if (needsStep && high > low)
+                    axis.MajorStep = ExcelAxisAutoScale.ChooseMajorUnitForRange(low, high);
+                continue;
+            }
+
+            var auto = ExcelAxisAutoScale.Compute(low, high);
+            if (needsMin)
+                axis.Minimum = auto.Minimum;
+            if (needsMax)
+                axis.Maximum = auto.Maximum;
+            if (needsStep && needsMin && needsMax)
+                axis.MajorStep = auto.MajorUnit;
+        }
+    }
+
+    private static bool TryGetAxisDataExtent(PlotModel model, Axis axis, bool horizontal, out double low, out double high)
+    {
+        var lo = double.PositiveInfinity;
+        var hi = double.NegativeInfinity;
+
+        var isOnlyAxisOfOrientation = model.Axes.Count(other =>
+            (other.Position is AxisPosition.Bottom or AxisPosition.Top) == horizontal) == 1;
+        var firstOfOrientation = model.Axes.First(other =>
+            (other.Position is AxisPosition.Bottom or AxisPosition.Top) == horizontal);
+
+        void Add(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                return;
+            lo = Math.Min(lo, value);
+            hi = Math.Max(hi, value);
+        }
+
+        foreach (var series in model.Series)
+        {
+            if (series is not XYAxisSeries xy)
+                continue;
+
+            // OxyPlot plots a series with no axis key on the first axis of that orientation.
+            var key = horizontal ? xy.XAxisKey : xy.YAxisKey;
+            var plotsOnThisAxis = key is null
+                ? ReferenceEquals(axis, firstOfOrientation)
+                : axis.Key == key;
+            if (!plotsOnThisAxis && !isOnlyAxisOfOrientation)
+                continue;
+
+            switch (series)
+            {
+                case RectangleBarSeries bars:
+                    // The end of the bar farthest from zero is the plotted (or cumulative stacked) value.
+                    foreach (var item in bars.Items)
+                    {
+                        if (horizontal)
+                        {
+                            Add(Math.Abs(item.X1) >= Math.Abs(item.X0) ? item.X1 : item.X0);
+                        }
+                        else
+                        {
+                            Add(Math.Abs(item.Y1) >= Math.Abs(item.Y0) ? item.Y1 : item.Y0);
+                        }
+                    }
+
+                    break;
+                case BarSeries bars:
+                    if (horizontal)
+                    {
+                        foreach (var item in bars.Items)
+                            Add(item.Value);
+                    }
+
+                    break;
+                case AreaSeries area:
+                    foreach (var point in area.Points)
+                        Add(horizontal ? point.X : point.Y);
+                    break;
+                case LineSeries line:
+                    foreach (var point in line.Points)
+                        Add(horizontal ? point.X : point.Y);
+                    break;
+                case ScatterSeries scatter:
+                    foreach (var point in scatter.Points)
+                        Add(horizontal ? point.X : point.Y);
+                    break;
+            }
+        }
+
+        low = lo;
+        high = hi;
+        return !double.IsInfinity(lo) && !double.IsInfinity(hi);
+    }
+
+    /// <summary>
+    /// A trendline's Forward forecast appends category slots to the (indexed or labelled) category axis,
+    /// like Excel: slots between tick marks need <c>ceil(forward - 0.5)</c>, points on tick marks
+    /// <c>ceil(forward)</c>. Backward forecasts (limited to half a period) never add one.
+    /// </summary>
+    private static void ExtendCategoryAxisForTrendlineForecast(PlotModel model, ChartModel chart)
+    {
+        var forecastEnd = double.NegativeInfinity;
+        foreach (var series in model.Series)
+        {
+            if (series is LineSeries line && ReferenceEquals(line.Tag, TrendlineSeriesTag))
+            {
+                foreach (var point in line.Points)
+                {
+                    if (!double.IsNaN(point.X))
+                        forecastEnd = Math.Max(forecastEnd, chart.Type == ChartType.Bar ? point.Y : point.X);
+                }
+            }
+        }
+
+        if (double.IsInfinity(forecastEnd))
+            return;
+
+        foreach (var axis in model.Axes)
+        {
+            switch (axis)
+            {
+                case SkipAwareIndexedCategoryAxis indexed
+                    when indexed.Position is AxisPosition.Bottom && !double.IsNaN(indexed.Maximum):
+                {
+                    var betweenTicks = indexed.Minimum < 0;
+                    var wanted = betweenTicks
+                        ? Math.Ceiling(forecastEnd + 0.5 - 1e-9) - 0.5
+                        : Math.Ceiling(forecastEnd - 1e-9);
+                    if (wanted > indexed.Maximum)
+                        indexed.Maximum = wanted;
+                    break;
+                }
+
+                case CategoryAxis category when category.Position is AxisPosition.Left && chart.Type == ChartType.Bar:
+                {
+                    var wanted = (int)Math.Ceiling(forecastEnd + 0.5 - 1e-9);
+                    while (category.Labels.Count < wanted)
+                        category.Labels.Add(string.Empty);
+                    break;
+                }
+            }
+        }
     }
 
     private static LinearAxis CreateCenteredIndexedCategoryAxis(

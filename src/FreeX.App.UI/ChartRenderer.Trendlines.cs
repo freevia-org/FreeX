@@ -15,7 +15,8 @@ public static partial class ChartRenderer
         WorkbookTheme theme,
         IReadOnlyList<DataPoint>? points,
         bool swapTrendlineAxes = false,
-        int trendlineSeriesIndex = 0)
+        int trendlineSeriesIndex = 0,
+        double categoryOrigin = 0)
     {
         if (points is null || chart.ResolveTrendline(trendlineSeriesIndex) is not { } trendChart)
             return;
@@ -30,12 +31,15 @@ public static partial class ChartRenderer
             trendChart,
             sourcePoints,
             swapTrendlineAxes,
-            string.IsNullOrEmpty(seriesName) ? $"Series {trendlineSeriesIndex + 1}" : seriesName);
+            string.IsNullOrEmpty(seriesName) ? $"Series {trendlineSeriesIndex + 1}" : seriesName,
+            categoryOrigin);
         if (plan is null)
             return;
 
         var trendline = new LineSeries
         {
+            // Marks the series as a trendline so the category axis can grow to hold its forecast.
+            Tag = TrendlineSeriesTag,
             Title = plan.Title,
             LineStyle = ToOxyLineStyle(trendChart.TrendlineDashStyle),
             StrokeThickness = trendChart.TrendlineThickness,
@@ -49,6 +53,9 @@ public static partial class ChartRenderer
         model.Series.Add(trendline);
         AddTrendlineAnnotation(model, plan);
     }
+
+    /// <summary>Tag put on trendline <see cref="LineSeries"/> (series tags otherwise carry the chart series index).</summary>
+    private const string TrendlineSeriesTag = "freex-trendline";
 
     private static LineStyle ToOxyLineStyle(ChartLineDashStyle dashStyle) =>
         dashStyle switch

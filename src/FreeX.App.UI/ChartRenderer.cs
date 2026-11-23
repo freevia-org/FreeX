@@ -585,7 +585,7 @@ public static partial class ChartRenderer
                     }
                     else
                     {
-                        model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                        model.Axes.Add(CreateLineAreaCategoryAxis(chart, categories));
                     }
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
@@ -691,7 +691,7 @@ public static partial class ChartRenderer
                     }
                     else
                     {
-                        model.Axes.Add(CreateZeroBasedIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories));
+                        model.Axes.Add(CreateLineAreaCategoryAxis(chart, categories));
                     }
                     model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
                     AddSecondaryAxisIfRequested(model, chart);
@@ -718,7 +718,15 @@ public static partial class ChartRenderer
         AddDeviationOverlay(model, chart, theme, clusteredBarValues);
         AddRangeDataLabelAnnotations(model, chart, theme, clusteredBarValues, categories);
         foreach (var (trendSeriesIndex, trendSourcePoints) in trendlineSources)
-            AddTrendlineIfRequested(model, chart, theme, trendSourcePoints, swapTrendlineAxes: chart.Type == ChartType.Bar, trendlineSeriesIndex: trendSeriesIndex);
+            AddTrendlineIfRequested(
+                model,
+                chart,
+                theme,
+                trendSourcePoints,
+                swapTrendlineAxes: chart.Type == ChartType.Bar,
+                trendlineSeriesIndex: trendSeriesIndex,
+                // Excel fits a trendline over a plain category axis in 1-based category numbers.
+                categoryOrigin: chart.Type == ChartType.Scatter || hasDateCategoryAxis ? 0 : 1);
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme);
 

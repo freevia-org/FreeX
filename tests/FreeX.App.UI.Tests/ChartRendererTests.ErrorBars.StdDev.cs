@@ -51,11 +51,12 @@ public sealed partial class ChartRendererTests
         expectedAmount.Should().NotBeApproximately(wrongStandardErrorAmount, 1e-6,
             "the fixture must distinguish StdDev's amount from Standard Error's amount");
 
-        // First whisker's "plus" endpoint sits at the bar-top value (10) plus the resolved amount.
+        // Excel hangs Standard Deviation whiskers off the series MEAN (15), not the bar top: the "plus"
+        // endpoint is mean + the resolved amount.
         var firstWhiskerTop = whiskers.Points[0].Y;
-        firstWhiskerTop.Should().BeApproximately(10 + expectedAmount, 1e-6,
+        firstWhiskerTop.Should().BeApproximately(15 + expectedAmount, 1e-6,
             "StdDev amount must be ErrorBarValue * sample standard deviation, not Standard Error");
-        firstWhiskerTop.Should().NotBeApproximately(10 + wrongStandardErrorAmount, 1e-6,
+        firstWhiskerTop.Should().NotBeApproximately(15 + wrongStandardErrorAmount, 1e-6,
             "StdDev must no longer collapse into the Standard Error calculation");
     }
 

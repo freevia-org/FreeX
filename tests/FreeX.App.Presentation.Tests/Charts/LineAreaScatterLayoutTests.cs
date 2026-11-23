@@ -22,11 +22,23 @@ public sealed class LineAreaScatterLayoutTests
     }
 
     [Fact]
-    public void Line_uses_zero_based_index_axis_so_first_point_is_at_plot_left()
+    public void Line_points_sit_between_tick_marks_like_excel()
     {
+        // Excel's default line chart ("axis position: between tick marks") centres each point in its slot.
         var plot = new PlotRect(10, 5, 300, 200);
         var request = Request(Chart(ChartType.Line), ["A", "B", "C"], [Series(0, "S1", 1, 2, 3)], plot);
         var layout = ChartLayoutEngine.Layout(request);
+
+        layout.Series[0].Points[0].Position.X.Should().BeApproximately(plot.Left + 50, 1e-6);
+        layout.Series[0].Points[2].Position.X.Should().BeApproximately(plot.Right - 50, 1e-6);
+    }
+
+    [Fact]
+    public void Line_on_tick_marks_when_the_chart_authors_midCat_cross_between()
+    {
+        var plot = new PlotRect(10, 5, 300, 200);
+        var chart = Chart(ChartType.Line, c => c.YAxisCrossBetween = ChartAxisCrossBetween.MidCategory);
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B", "C"], [Series(0, "S1", 1, 2, 3)], plot));
 
         layout.Series[0].Points[0].Position.X.Should().BeApproximately(plot.Left, 1e-6);
         layout.Series[0].Points[2].Position.X.Should().BeApproximately(plot.Right, 1e-6);

@@ -84,22 +84,36 @@ public sealed class AxisScale
         double? explicitStep = null,
         int targetTickCount = 7,
         bool reverseOrder = false,
-        bool includeZeroBaseline = true)
+        bool includeZeroBaseline = true,
+        bool exactDataRange = false)
     {
-        var (min, max) = NormalizeRange(dataMin, dataMax, includeZeroBaseline);
+        var isVerticalAxis = side is AxisSide.Left or AxisSide.Right;
 
-        // Pad the range to a round boundary unless the caller pinned the bound, matching the
-        // source renderer's auto-fit behaviour (extend out to the next major step).
-        var step = explicitStep is { } s && s > 0
-            ? s
-            : CalculateNiceStep(max - min, targetTickCount);
+        // Excel's own automatic scaling (see ExcelAxisAutoScale): 5% headroom, a zero baseline only when
+        // the data spread is wide, a 1/2/5 major unit chosen for the plot size, bounds rounded out to
+        // whole units. The legacy includeZeroBaseline switch no longer applies: Excel line and scatter
+        // charts use the same rule as columns (a 3..8 line axis starts at 0, a 95..105 line axis does not).
+        var maxIntervals = isVerticalAxis
+            ? ExcelAxisAutoScale.MaxIntervalsForVerticalExtent(plot.Height)
+            : ExcelAxisAutoScale.MaxIntervalsForHorizontalExtent(plot.Width);
+        var (dataLow, dataHigh) = SanitizeRange(dataMin, dataMax);
+        // exactDataRange: the chart type fixes the bounds itself (100% stacked: exactly 0..100), so only the
+        // major unit is chosen, never the 5% headroom or whole-unit rounding of the automatic scale.
+        var auto = exactDataRange && dataHigh > dataLow
+            ? new AutoAxisRange(dataLow, dataHigh, ExcelAxisAutoScale.ChooseMajorUnitForRange(dataLow, dataHigh, maxIntervals), dataLow, dataHigh)
+            : ExcelAxisAutoScale.Compute(dataLow, dataHigh, maxIntervals);
 
-        var actualMin = explicitMin ?? FloorToStep(min, step);
-        var actualMax = explicitMax ?? CeilingToStep(max, step);
+        var hasExplicitStep = explicitStep is { } s && s > 0;
+        var step = hasExplicitStep ? explicitStep!.Value : auto.MajorUnit;
+
+        // An authored major unit re-rounds the automatic bounds onto its grid; otherwise the bounds are
+        // exactly Excel's.
+        var actualMin = explicitMin ?? (hasExplicitStep ? FloorToStep(auto.RawMinimum, step) : auto.Minimum);
+        var actualMax = explicitMax ?? (hasExplicitStep ? CeilingToStep(auto.RawMaximum, step) : auto.Maximum);
         if (actualMax <= actualMin)
             actualMax = actualMin + step;
 
-        var isVertical = side is AxisSide.Left or AxisSide.Right;
+        var isVertical = isVerticalAxis;
         double screenMin;
         double screenMax;
         if (isVertical)
@@ -314,7 +328,7 @@ public sealed class AxisScale
         return ticks;
     }
 
-    private static (double Min, double Max) NormalizeRange(double dataMin, double dataMax, bool includeZeroBaseline)
+    private static (double Min, double Max) SanitizeRange(double dataMin, double dataMax)
     {
         if (double.IsNaN(dataMin) || double.IsInfinity(dataMin))
             dataMin = 0;
@@ -323,23 +337,6 @@ public sealed class AxisScale
 
         if (dataMin > dataMax)
             (dataMin, dataMax) = (dataMax, dataMin);
-
-        // The source renderer baselines value axes at zero unless the data goes negative, so bars
-        // (and filled areas, which shade down to the zero baseline) grow from the zero line. Include
-        // zero in the range when all data is on one side of it. Series with no zero-anchored geometry
-        // (Line/Scatter/Bubble) pass includeZeroBaseline: false so they instead auto-fit tight to the
-        // actual data extents, matching OxyPlot's own LineSeries/ScatterSeries auto-range (no baseline)
-        // used by the WPF renderer for those chart types.
-        if (includeZeroBaseline)
-        {
-            if (dataMin > 0)
-                dataMin = 0;
-            if (dataMax < 0)
-                dataMax = 0;
-        }
-
-        if (Math.Abs(dataMax - dataMin) < double.Epsilon)
-            dataMax = dataMin + 1;
 
         return (dataMin, dataMax);
     }

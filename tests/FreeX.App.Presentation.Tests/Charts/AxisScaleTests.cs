@@ -46,10 +46,15 @@ public sealed class AxisScaleTests
     [Fact]
     public void ValueAxis_rounds_bounds_out_to_the_major_step()
     {
-        var scale = AxisScale.CreateValueAxis(0, 95, Plot, AxisSide.Left);
-        // range 95 / 7 ≈ 13.6 -> step 10; max rounds up to 100.
+        // Excel (measured): 0..95 on a tall plot pads 5% to 99.75 and rounds out to 100 in steps of 10.
+        var scale = AxisScale.CreateValueAxis(0, 95, new PlotRect(0, 0, 200, 300), AxisSide.Left);
         scale.MajorStep.Should().Be(10);
         scale.Maximum.Should().Be(100);
+
+        // A short plot affords fewer intervals: the same data gets steps of 20.
+        var short_ = AxisScale.CreateValueAxis(0, 95, Plot, AxisSide.Left);
+        short_.MajorStep.Should().Be(20);
+        short_.Maximum.Should().Be(100);
     }
 
     [Fact]

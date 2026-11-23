@@ -46,7 +46,7 @@ public sealed partial class ChartRendererTests
 
         var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
         trendline.Points.Select(point => (point.X, point.Y))
-            .Should().Equal((0, 5), (1, 9), (3, 17), (5, 25));
+            .Should().Equal((0, 5), (5, 25));
     }
 
     [Fact]
@@ -167,7 +167,8 @@ public sealed partial class ChartRendererTests
             []));
 
         var annotation = model.Annotations.Should().ContainSingle().Which.Should().BeOfType<TextAnnotation>().Subject;
-        annotation.Text.Should().Contain("y = 10x + 13.333");
+        // Excel numbers the categories 1, 2, 3 when it fits (and prints) a category-axis trendline.
+        annotation.Text.Should().Contain("y = 10x + 3.333");
         annotation.Text.Should().Contain("R² = ");
         annotation.TextPosition.Should().Be(new DataPoint(10, 2));
     }

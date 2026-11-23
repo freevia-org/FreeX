@@ -23,15 +23,34 @@ public static class TrendlineCalculator
         IReadOnlyList<TrendPoint> points,
         int period,
         int order) =>
-        type switch
+        Calculate(type, points, period, order, backward: 0, forward: 0);
+
+    /// <summary>
+    /// As the four-argument overload, but the fitted curve itself is evaluated over
+    /// <c>[minX - backward, maxX + forward]</c> (the Forecast Forward/Backward periods) instead of the
+    /// data range, so a polynomial/exponential/log/power forecast follows the real fit rather than a
+    /// straight extrapolation. A moving average has no forecast.
+    /// </summary>
+    public static IReadOnlyList<TrendPoint> Calculate(
+        ChartTrendlineType type,
+        IReadOnlyList<TrendPoint> points,
+        int period,
+        int order,
+        double backward,
+        double forward)
+    {
+        backward = backward > 0 && double.IsFinite(backward) ? backward : 0;
+        forward = forward > 0 && double.IsFinite(forward) ? forward : 0;
+        return type switch
         {
-            ChartTrendlineType.Exponential => CalculateExponential(points),
-            ChartTrendlineType.Logarithmic => CalculateLogarithmic(points),
-            ChartTrendlineType.Power => CalculatePower(points),
+            ChartTrendlineType.Exponential => CalculateExponential(points, backward, forward),
+            ChartTrendlineType.Logarithmic => CalculateLogarithmic(points, backward, forward),
+            ChartTrendlineType.Power => CalculatePower(points, backward, forward),
             ChartTrendlineType.MovingAverage => CalculateMovingAverage(points, period),
-            ChartTrendlineType.Polynomial => CalculatePolynomial(points, order),
-            _ => CalculateLinear(points),
+            ChartTrendlineType.Polynomial => CalculatePolynomial(points, order, backward, forward),
+            _ => CalculateLinear(points, backward, forward),
         };
+    }
 
     public static bool TryCalculateRSquared(
         IReadOnlyList<TrendPoint> sourcePoints,
@@ -105,7 +124,7 @@ public static class TrendlineCalculator
         return false;
     }
 
-    private static IReadOnlyList<TrendPoint> CalculateLinear(IReadOnlyList<TrendPoint> points)
+    private static IReadOnlyList<TrendPoint> CalculateLinear(IReadOnlyList<TrendPoint> points, double backward = 0, double forward = 0)
     {
         var n = points.Count;
         var sumX = 0.0;
@@ -131,10 +150,12 @@ public static class TrendlineCalculator
 
         var slope = ((n * sumXY) - (sumX * sumY)) / denominator;
         var intercept = (sumY - (slope * sumX)) / n;
+        minX -= backward;
+        maxX += forward;
         return [new TrendPoint(minX, intercept + slope * minX), new TrendPoint(maxX, intercept + slope * maxX)];
     }
 
-    private static IReadOnlyList<TrendPoint> CalculateExponential(IReadOnlyList<TrendPoint> points)
+    private static IReadOnlyList<TrendPoint> CalculateExponential(IReadOnlyList<TrendPoint> points, double backward = 0, double forward = 0)
     {
         var n = 0;
         var sumX = 0.0;
@@ -171,10 +192,10 @@ public static class TrendlineCalculator
         var a = Math.Exp(logA);
         // Sample the fitted curve across the range (not just the two endpoints) so it
         // renders as a smooth curve instead of a straight chord, matching the source renderer.
-        return SampleCurve(minX, maxX, points.Count, x => a * Math.Exp(b * x));
+        return SampleCurve(minX - backward, maxX + forward, points.Count, x => a * Math.Exp(b * x));
     }
 
-    private static IReadOnlyList<TrendPoint> CalculateLogarithmic(IReadOnlyList<TrendPoint> points)
+    private static IReadOnlyList<TrendPoint> CalculateLogarithmic(IReadOnlyList<TrendPoint> points, double backward = 0, double forward = 0)
     {
         var n = 0;
         var sumLogX = 0.0;
@@ -208,10 +229,11 @@ public static class TrendlineCalculator
 
         var slope = ((n * sumLogXY) - (sumLogX * sumY)) / denominator;
         var intercept = (sumY - (slope * sumLogX)) / n;
-        return SampleCurve(minX, maxX, points.Count, x => intercept + slope * Math.Log(x));
+        // ln(x) is only defined for x > 0, so a backcast stops short of the y axis.
+        return SampleCurve(PositiveLow(minX, backward), maxX + forward, points.Count, x => intercept + slope * Math.Log(x));
     }
 
-    private static IReadOnlyList<TrendPoint> CalculatePower(IReadOnlyList<TrendPoint> points)
+    private static IReadOnlyList<TrendPoint> CalculatePower(IReadOnlyList<TrendPoint> points, double backward = 0, double forward = 0)
     {
         var n = 0;
         var sumLogX = 0.0;
@@ -247,7 +269,7 @@ public static class TrendlineCalculator
         var b = ((n * sumLogXLogY) - (sumLogX * sumLogY)) / denominator;
         var logA = (sumLogY - (b * sumLogX)) / n;
         var a = Math.Exp(logA);
-        return SampleCurve(minX, maxX, points.Count, x => a * Math.Pow(x, b));
+        return SampleCurve(PositiveLow(minX, backward), maxX + forward, points.Count, x => a * Math.Pow(x, b));
     }
 
     private static IReadOnlyList<TrendPoint> CalculateMovingAverage(IReadOnlyList<TrendPoint> points, int period)
@@ -277,7 +299,7 @@ public static class TrendlineCalculator
         return trendPoints;
     }
 
-    private static IReadOnlyList<TrendPoint> CalculatePolynomial(IReadOnlyList<TrendPoint> points, int order)
+    private static IReadOnlyList<TrendPoint> CalculatePolynomial(IReadOnlyList<TrendPoint> points, int order, double backward = 0, double forward = 0)
     {
         var degree = Math.Clamp(order, 2, 6);
         if (points.Count <= degree)
@@ -296,6 +318,8 @@ public static class TrendlineCalculator
             maxX = Math.Max(maxX, x);
         }
 
+        minX -= backward;
+        maxX += forward;
         var samples = Math.Max(16, points.Count * 4);
         var trendPoints = new List<TrendPoint>(samples);
         for (var i = 0; i < samples; i++)
@@ -350,6 +374,13 @@ public static class TrendlineCalculator
         }
 
         return y;
+    }
+
+    // Lower end of a backcast for a fit that needs x > 0: the requested range, clamped just above zero.
+    private static double PositiveLow(double minX, double backward)
+    {
+        var low = minX - backward;
+        return low > 0 ? low : minX;
     }
 
     // Samples a fitted curve uniformly across [minX, maxX] so curved trendlines

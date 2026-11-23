@@ -50,23 +50,33 @@ public sealed class R87_LineValueAxisTightRangeTests
     // ---- No-regression siblings: bar-geometry chart types keep the zero-forced baseline ----
 
     [Fact]
-    public void Column_chart_value_axis_still_baselines_at_zero_for_all_positive_data()
+    public void Column_chart_value_axis_baselines_at_zero_for_wide_spread_positive_data()
     {
-        var request = Request(Chart(ChartType.Column), ["A", "B", "C", "D"], [Series(0, "S1", TightClusterValues)]);
+        var request = Request(Chart(ChartType.Column), ["A", "B", "C", "D"], [Series(0, "S1", 200, 500, 800, 1000)]);
         var layout = ChartLayoutEngine.Layout(request);
 
-        layout.ValueAxis!.Scale.Minimum.Should().Be(0, "Column bars grow from a zero baseline, so the axis must still include zero");
+        layout.ValueAxis!.Scale.Minimum.Should().Be(0, "Column bars grow from a zero baseline when the data spread is wide");
     }
 
     [Fact]
-    public void Area_chart_value_axis_still_baselines_at_zero_for_all_positive_data()
+    public void Column_chart_with_a_tight_cluster_truncates_the_axis_like_excel()
     {
-        // Area fills each band down to the flat zero baseline (LayoutColumnLineArea's own doc
-        // comment), matching OxyPlot's AreaSeries auto-range (ConstantY2 = 0) in the WPF renderer --
-        // unlike Line, Area must NOT be pulled into the tight-fit behavior above.
-        var request = Request(Chart(ChartType.Area), ["A", "B", "C", "D"], [Series(0, "S1", TightClusterValues)]);
+        // Excel (measured): the 998..1010 cluster is 1.2% of its magnitude, below the 1/6 threshold, so even a
+        // column chart gets a non-zero baseline (992..1012 by 2).
+        var request = Request(Chart(ChartType.Column), ["A", "B", "C", "D"], [Series(0, "S1", TightClusterValues)]);
+        var scale = ChartLayoutEngine.Layout(request).ValueAxis!.Scale;
+
+        scale.Minimum.Should().Be(992);
+        scale.Maximum.Should().Be(1012);
+        scale.MajorStep.Should().Be(2);
+    }
+
+    [Fact]
+    public void Area_chart_value_axis_baselines_at_zero_for_wide_spread_positive_data()
+    {
+        var request = Request(Chart(ChartType.Area), ["A", "B", "C", "D"], [Series(0, "S1", 200, 500, 800, 1000)]);
         var layout = ChartLayoutEngine.Layout(request);
 
-        layout.ValueAxis!.Scale.Minimum.Should().Be(0, "Area bands fill down to a zero baseline, so the axis must still include zero");
+        layout.ValueAxis!.Scale.Minimum.Should().Be(0, "Area bands fill down to a zero baseline when the data spread is wide");
     }
 }
