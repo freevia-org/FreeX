@@ -1230,18 +1230,19 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
-    public void QuickAnalysisMenu_UsesKeyboardSelectionAnchorAndInitialMenuFocus()
+    public void QuickAnalysisMenu_UsesKeyboardSelectionAnchorAndInitialOptionFocus()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
         source.Should().NotContain("PlacementMode.MousePoint");
         source.Should().Contain("Placement = PlacementMode.RelativePoint");
         source.Should().Contain("QuickAnalysisMenuPlacementPlanner.BuildAnchor");
-        source.Should().Contain("menu.HorizontalOffset = anchor.X;");
-        source.Should().Contain("menu.VerticalOffset = anchor.Y;");
-        source.Should().Contain("menu.Opened += QuickAnalysisMenu_Opened;");
-        source.Should().Contain("private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)");
-        source.Should().Contain("Keyboard.Focus(firstEnabledItem);");
+        source.Should().Contain("popup.HorizontalOffset = anchor.X;");
+        source.Should().Contain("popup.VerticalOffset = anchor.Y;");
+        source.Should().Contain("popup.Opened += (_, _) =>");
+        source.Should().Contain("FirstOrDefault(button => button.IsEnabled)");
+        source.Should().Contain("Keyboard.Focus(firstOption);");
+        source.Should().Contain("new TabControl");
     }
 
     [Fact]

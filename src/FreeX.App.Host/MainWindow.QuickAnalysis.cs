@@ -1,8 +1,10 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Model;
 using FreeX.App.UI;
@@ -11,7 +13,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private ContextMenu? _quickAnalysisMenu;
+    private Popup? _quickAnalysisPopup;
     private readonly QuickAnalysisShellSession _quickAnalysisSession = new();
 
     internal void ShowQuickAnalysisMenu()
@@ -29,12 +31,14 @@ public partial class MainWindow
         }
 
         var shellPlan = openPlan.ShellPlan;
-        var menu = new ContextMenu
+        var popup = new Popup
         {
             PlacementTarget = SheetGrid,
-            Placement = PlacementMode.RelativePoint
+            Placement = PlacementMode.RelativePoint,
+            StaysOpen = false,
+            AllowsTransparency = true,
         };
-        _quickAnalysisMenu = menu;
+        _quickAnalysisPopup = popup;
         if (SheetGrid.Viewport is { } viewport)
         {
             var anchor = QuickAnalysisMenuPlacementPlanner.BuildAnchor(
@@ -42,57 +46,107 @@ public partial class MainWindow
                 viewport,
                 SheetGrid.ActualRowHeaderWidth,
                 SheetGrid.EffectiveColHeaderHeight);
-            menu.HorizontalOffset = anchor.X;
-            menu.VerticalOffset = anchor.Y;
+            popup.HorizontalOffset = anchor.X;
+            popup.VerticalOffset = anchor.Y;
         }
 
-        menu.Opened += QuickAnalysisMenu_Opened;
-        menu.Closed += (_, _) =>
+        var tabs = new TabControl
         {
-            if (ReferenceEquals(_quickAnalysisMenu, menu))
-                _quickAnalysisMenu = null;
-            ClearQuickAnalysisPreview();
+            Width = 380,
+            MaxHeight = 420,
+            Background = SystemColors.WindowBrush,
+            BorderBrush = SystemColors.ActiveBorderBrush,
+            BorderThickness = new Thickness(1),
         };
-
+        AutomationProperties.SetAutomationId(tabs, "QuickAnalysisTabs");
         foreach (var group in shellPlan.Groups)
         {
-            if (menu.Items.Count > 0)
-                menu.Items.Add(new Separator());
-
-            menu.Items.Add(new MenuItem
+            var optionPanel = new WrapPanel
             {
-                Header = UiText.Get(group.TitleResourceKey),
-                IsEnabled = false
-            });
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(8),
+            };
 
             foreach (var item in group.Items)
             {
-                var menuItem = new MenuItem
+                var option = new Button
                 {
-                    Header = item.Label,
+                    Width = 112,
+                    Height = 72,
+                    Margin = new Thickness(3),
+                    Padding = new Thickness(6),
                     Tag = item,
-                    ToolTip = item.ToolTip,
                     IsEnabled = item.IsEnabled,
-                    Icon = QuickAnalysisPreviewIconFactory.Create(item.PreviewIcon)
+                    ToolTip = item.ToolTip,
+                    Content = CreateQuickAnalysisOptionContent(item),
                 };
-                menuItem.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
-                menuItem.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
-                menuItem.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
-                menuItem.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
-                menuItem.Click += QuickAnalysisMenuItem_Click;
-                menu.Items.Add(menuItem);
+                AutomationProperties.SetName(option, item.Label);
+                AutomationProperties.SetAutomationId(option, item.AutomationId);
+                option.MouseEnter += QuickAnalysisMenuItem_MouseEnter;
+                option.MouseLeave += QuickAnalysisMenuItem_MouseLeave;
+                option.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;
+                option.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;
+                option.Click += QuickAnalysisMenuItem_Click;
+                optionPanel.Children.Add(option);
             }
+
+            tabs.Items.Add(new TabItem
+            {
+                Header = UiText.Get(group.TitleResourceKey),
+                Content = new ScrollViewer
+                {
+                    MaxHeight = 350,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = optionPanel,
+                },
+            });
         }
 
-        MenuKeyTipAssigner.AssignUniqueKeyTips(menu.Items.OfType<MenuItem>().Where(item => item.IsEnabled));
-        menu.IsOpen = true;
+        tabs.SelectionChanged += (_, _) => ClearQuickAnalysisPreview(resetStatus: false);
+        var palette = new Border
+        {
+            Background = SystemColors.WindowBrush,
+            BorderBrush = SystemColors.ActiveBorderBrush,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(4),
+            Child = tabs,
+        };
+        palette.KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Escape)
+                return;
+            args.Handled = true;
+            popup.IsOpen = false;
+            SheetGrid.Focus();
+        };
+        popup.Child = palette;
+        popup.Opened += (_, _) =>
+        {
+            var firstOption = tabs.Items.OfType<TabItem>()
+                .Select(tab => (tab.Content as ScrollViewer)?.Content as WrapPanel)
+                .Where(panel => panel is not null)
+                .SelectMany(panel => panel!.Children.OfType<Button>())
+                .FirstOrDefault(button => button.IsEnabled);
+            if (firstOption is not null)
+            {
+                firstOption.Focus();
+                Keyboard.Focus(firstOption);
+            }
+        };
+        popup.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_quickAnalysisPopup, popup))
+                _quickAnalysisPopup = null;
+            ClearQuickAnalysisPreview();
+        };
+        popup.IsOpen = true;
     }
 
     private void CloseQuickAnalysisMenu()
     {
-        if (_quickAnalysisMenu is { IsOpen: true } menu)
-            menu.IsOpen = false;
-        _quickAnalysisMenu = null;
+        if (_quickAnalysisPopup is { IsOpen: true } popup)
+            popup.IsOpen = false;
+        _quickAnalysisPopup = null;
     }
 
     private void ShowQuickAnalysisUnavailableStatus(QuickAnalysisShellOpenPlan openPlan)
@@ -106,26 +160,23 @@ public partial class MainWindow
             range => FormatRangeReference(range.Start, range.End));
     }
 
-    private static void QuickAnalysisMenu_Opened(object sender, RoutedEventArgs e)
+    private static FrameworkElement CreateQuickAnalysisOptionContent(QuickAnalysisShellItemPlan item)
     {
-        if (sender is not ContextMenu menu)
-            return;
-
-        MenuItem? firstEnabledItem = null;
-        foreach (var item in menu.Items)
+        var content = new StackPanel
         {
-            if (item is not MenuItem menuItem || !menuItem.IsEnabled)
-                continue;
-
-            firstEnabledItem = menuItem;
-            break;
-        }
-
-        if (firstEnabledItem is null)
-            return;
-
-        firstEnabledItem.Focus();
-        Keyboard.Focus(firstEnabledItem);
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+        };
+        content.Children.Add(QuickAnalysisPreviewIconFactory.Create(item.PreviewIcon));
+        content.Children.Add(new TextBlock
+        {
+            Text = item.Label,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            Margin = new Thickness(0, 3, 0, 0),
+        });
+        return content;
     }
 
     private void QuickAnalysisMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -133,9 +184,10 @@ public partial class MainWindow
 
     private async Task ExecuteQuickAnalysisAsync(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
+        if (sender is not Button { Tag: QuickAnalysisShellItemPlan item })
             return;
 
+        CloseQuickAnalysisMenu();
         await _quickAnalysisSession.ExecuteSelectionAsync(
             item,
             CreateQuickAnalysisOperationHandlers(sender, e));
@@ -220,7 +272,7 @@ public partial class MainWindow
 
     internal void ShowQuickAnalysisPreview(object sender)
     {
-        if (sender is not MenuItem { Tag: QuickAnalysisShellItemPlan item })
+        if (sender is not Button { Tag: QuickAnalysisShellItemPlan item })
             return;
 
         var preview = _quickAnalysisSession.PlanPreview(item);

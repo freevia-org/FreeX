@@ -9,8 +9,8 @@ public sealed class QuickAnalysisHoverPreviewTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAnalysis.cs");
 
-        source.Should().Contain("menuItem.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;");
-        source.Should().Contain("menuItem.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;");
+        source.Should().Contain("option.GotKeyboardFocus += QuickAnalysisMenuItem_GotKeyboardFocus;");
+        source.Should().Contain("option.LostKeyboardFocus += QuickAnalysisMenuItem_LostKeyboardFocus;");
         source.Should().Contain("private void QuickAnalysisMenuItem_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
         source.Should().Contain("private void QuickAnalysisMenuItem_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)");
         source.Should().Contain("ShowQuickAnalysisPreview(sender);");
