@@ -395,7 +395,10 @@ internal static class XlsxChartAxisReader
         var fontSize = int.TryParse(runProperties?.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var size)
             ? Math.Clamp(size / 100.0, 6, 72)
             : (double?)null;
-        var angle = int.TryParse(textProperties.Element(DrawingNs + "bodyPr")?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation)
+        // ST_Angle spans -5400000..5400000 for tick labels. Excel writes rot="-60000000" (-1000 degrees)
+        // as the "automatic rotation" sentinel; clamping it to -90 turned every default axis label vertical.
+        var angle = int.TryParse(textProperties.Element(DrawingNs + "bodyPr")?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation) &&
+                    Math.Abs(rotation) <= 5400000
             ? Math.Clamp(rotation / 60000.0, -90, 90)
             : (double?)null;
 

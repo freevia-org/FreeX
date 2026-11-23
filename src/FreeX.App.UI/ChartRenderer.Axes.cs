@@ -76,7 +76,10 @@ public static partial class ChartRenderer
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type) &&
                     HasExplicitAxisNumberFormat(chart.XAxisNumberFormat, chart.XAxisNumberFormatCode) &&
                     axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => FormatValueAxisLabel(chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, value);
+                    axis.LabelFormatter = value => FormatValueAxisLabel(
+                        chart.XAxisNumberFormat,
+                        chart.XAxisNumberFormatCode,
+                        ChartRenderPolicyPlanner.ScalePercentStackedAxisLabelValue(chart, true, chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, value));
                 ApplyAxisDisplayUnit(axis, xDisplayUnitDivisor, chart.XAxisDisplayUnit, chart.XAxisCustomDisplayUnit);
                 ApplyGridlineStyle(
                     axis,
@@ -126,7 +129,10 @@ public static partial class ChartRenderer
                 if (boundsSupported &&
                     HasExplicitAxisNumberFormat(boundsNumberFormat, boundsNumberFormatCode) &&
                     axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => FormatValueAxisLabel(boundsNumberFormat, boundsNumberFormatCode, value);
+                    axis.LabelFormatter = value => FormatValueAxisLabel(
+                        boundsNumberFormat,
+                        boundsNumberFormatCode,
+                        ChartRenderPolicyPlanner.ScalePercentStackedAxisLabelValue(chart, false, boundsNumberFormat, boundsNumberFormatCode, value));
                 ApplyAxisDisplayUnit(axis, yDisplayUnitDivisor, chart.YAxisDisplayUnit, chart.YAxisCustomDisplayUnit);
                 ApplyGridlineStyle(
                     axis,
@@ -535,6 +541,7 @@ public static partial class ChartRenderer
     private static void ApplyTitleStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
         model.TitleFontSize = chart.ChartTitleFontSize;
+        model.TitleFontWeight = chart.ChartTitleBold == false ? OxyPlot.FontWeights.Normal : OxyPlot.FontWeights.Bold;
         if (chart.ResolveChartTitleTextColor(theme) is { } titleColor)
             model.TitleColor = OxyColor.FromRgb(titleColor.R, titleColor.G, titleColor.B);
     }

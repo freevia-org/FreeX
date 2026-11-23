@@ -664,7 +664,7 @@ public static class ChartLayoutEngine
             var rect = LayoutRect.FromCorners(x0, yLow, x1, yHigh);
             bars.Add(new SeriesBar(i, v, rect));
 
-            AddCartesianDataLabel(request, dataLabels, series, i, v, new LayoutPoint(rect.Center.X, valueScale.Transform(v)));
+            AddCartesianDataLabel(request, dataLabels, series, i, v, new LayoutPoint(rect.Center.X, valueScale.Transform(v)), outsideDirection: v >= 0 ? -1 : 1);
         }
 
         return new SeriesLayout
@@ -1380,6 +1380,7 @@ public static class ChartLayoutEngine
         foreach (var value in scale.GetMajorTickValues())
         {
             var scaledValue = divisor is { } d && d > 0 && double.IsFinite(d) ? value / d : value;
+            scaledValue = ChartRenderPolicyPlanner.ScalePercentStackedAxisLabelValue(chart, isXAxis, numberFormat, numberFormatCode, scaledValue);
             var label = !string.IsNullOrEmpty(numberFormatCode)
                 ? NumberFormatter.Format(new NumberValue(scaledValue), numberFormatCode)
                 : ChartDataLabelTextPlanner.FormatAxisValue(numberFormat, scaledValue);
@@ -2283,7 +2284,8 @@ public static class ChartLayoutEngine
         ChartSeriesData series,
         int pointIndex,
         double value,
-        LayoutPoint anchor)
+        LayoutPoint anchor,
+        double outsideDirection = 0)
     {
         var chart = request.Chart;
         if (!chart.ShowDataLabels)
@@ -2295,6 +2297,14 @@ public static class ChartLayoutEngine
             return;
 
         var size = request.TextMeasurer.Measure(text, null, chart.DataLabelFontSize, false, false);
+        if (outsideDirection != 0 && chart.DataLabelPosition is ChartDataLabelPosition.BestFit or ChartDataLabelPosition.OutsideEnd or ChartDataLabelPosition.InsideEnd)
+        {
+            // Excel parks an end label beside the bar end (outside by default, inside for InsideEnd)
+            // instead of centring it on the bar's edge.
+            var inward = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd ? -1 : 1;
+            anchor = new LayoutPoint(anchor.X, anchor.Y + (outsideDirection * inward * ((size.Height / 2.0) + 2.0)));
+        }
+
         dataLabels.Add(new DataLabelBox(series.SeriesIndex, pointIndex, text, anchor, CenteredRect(anchor, size)));
     }
 

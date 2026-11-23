@@ -125,9 +125,9 @@ public sealed class LegendAndDataLabelLayoutTests
 
         layout.DataLabels.Should().HaveCount(2);
         layout.DataLabels[0].Text.Should().Be("10");
-        // Anchor Y is the value position; label box is centered on the anchor.
+        // Excel parks the default (outside end) label just above the bar end; the box is centred on the anchor.
         var valueY = layout.ValueAxis!.Scale.Transform(10);
-        layout.DataLabels[0].Anchor.Y.Should().BeApproximately(valueY, 1e-6);
+        layout.DataLabels[0].Anchor.Y.Should().BeApproximately(valueY - ((layout.DataLabels[0].Bounds.Height / 2.0) + 2.0), 1e-6);
         layout.DataLabels[0].Bounds.Center.Y.Should().BeApproximately(layout.DataLabels[0].Anchor.Y, 1e-6);
     }
 

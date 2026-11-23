@@ -72,6 +72,7 @@ public sealed partial class NativeJsonAdapter
                 ChartTitleTextColor = chartDto.ChartTitleTextColor,
                 ChartTitleTextThemeColor = ToThemeColorReference(chartDto.ChartTitleTextThemeColor),
                 ChartTitleFontSize = chartDto.ChartTitleFontSize,
+                ChartTitleBold = chartDto.ChartTitleBold,
                 AxisTitleTextColor = chartDto.AxisTitleTextColor,
                 AxisTitleTextThemeColor = ToThemeColorReference(chartDto.AxisTitleTextThemeColor),
                 AxisTitleFontSize = chartDto.AxisTitleFontSize,

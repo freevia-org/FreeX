@@ -48,24 +48,22 @@ public static partial class ChartRenderer
             var model = BuildPlotModel(chart, viewport, theme ?? WorkbookTheme.Office);
             if (model is not null)
             {
-                ApplyManualLayouts(model, chart, scale);
+                ApplyManualLayouts(model, chart, 1.0);
 
                 // Exporting runs OxyPlot's layout pass, which fills PlotArea/TitleArea/LegendArea.
                 using var stream = new MemoryStream();
-                new PngExporter
-                {
-                    Width = Math.Max(1, (int)Math.Ceiling(chart.Width * scale)),
-                    Height = Math.Max(1, (int)Math.Ceiling(chart.Height * scale)),
-                }.Export(model, stream);
+                CreateExporter(chart, scale).Export(model, stream);
 
-                plot = ToRect(model.PlotArea, scale);
+                // OxyPlot lays out in device-independent (chart) pixels, independent of the bitmap scale.
+                const double scaleToChartPixels = 1.0;
+                plot = ToRect(model.PlotArea, scaleToChartPixels);
                 frame = new ChartElementFrame
                 {
-                    TitleBounds = string.IsNullOrWhiteSpace(model.Title) ? null : ToRectOrNull(model.TitleArea, scale),
+                    TitleBounds = string.IsNullOrWhiteSpace(model.Title) ? null : ToRectOrNull(model.TitleArea, scaleToChartPixels),
                     LegendBounds = model.IsLegendVisible
-                        ? ToRectOrNull(model.Legends.OfType<LegendBase>().FirstOrDefault()?.LegendArea, scale)
+                        ? ToRectOrNull(model.Legends.OfType<LegendBase>().FirstOrDefault()?.LegendArea, scaleToChartPixels)
                         : null,
-                    PlotAndAxisBounds = ToRect(model.PlotAndAxisArea, scale),
+                    PlotAndAxisBounds = ToRect(model.PlotAndAxisArea, scaleToChartPixels),
                 };
             }
         }

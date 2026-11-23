@@ -36,9 +36,9 @@ public static class ChartDataLabelFormatter
         // rather than the percentage silently displacing the value.
         var valuePart = (chart.ShowDataLabelValue, chart.ShowDataLabelPercentage) switch
         {
-            (true, true) => $"{GetPieValueFormat(chart.DataLabelNumberFormat)}{separator}{{2:0%}}",
+            (true, true) => $"{GetPieValueFormat(chart.DataLabelNumberFormat)}{separator}{{2:0}}%",
             (true, false) => GetPieValueFormat(chart.DataLabelNumberFormat),
-            (false, true) => "{2:0%}",
+            (false, true) => "{2:0}%",
             _ => ""
         };
 

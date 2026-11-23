@@ -210,7 +210,7 @@ public sealed class AvaloniaChartRenderer
         {
             Text = title,
             FontSize = fontSize,
-            FontWeight = FontWeight.Bold,
+            FontWeight = _chart.ChartTitleBold == false ? FontWeight.Normal : FontWeight.Bold,
             Foreground = foreground,
             TextAlignment = TextAlignment.Center,
             HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center,

@@ -113,7 +113,7 @@ public sealed class ChartDataLabelFormatterTests
         };
 
         ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share")
-            .Should().Be($"{{1}}{Environment.NewLine}{{2:0%}}");
+            .Should().Be($"{{1}}{Environment.NewLine}{{2:0}}%");
     }
 
     [Fact]
@@ -171,6 +171,6 @@ public sealed class ChartDataLabelFormatterTests
         };
 
         ChartDataLabelFormatter.GetPieLabelFormat(chart, "Share")
-            .Should().Be($"Share{Environment.NewLine}{{1}}{Environment.NewLine}{{0}}{Environment.NewLine}{{2:0%}}");
+            .Should().Be($"Share{Environment.NewLine}{{1}}{Environment.NewLine}{{0}}{Environment.NewLine}{{2:0}}%");
     }
 }

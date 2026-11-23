@@ -569,7 +569,8 @@ public static partial class ChartRenderer
             Text = ChartDataLabelTextPlanner.FormatDataLabel(chart, seriesName, categoryName, value),
             TextPosition = new DataPoint(x, y),
             TextHorizontalAlignment = OxyPlot.HorizontalAlignment.Center,
-            TextVerticalAlignment = chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd
+            // Outside/above labels sit beyond the end of the value: above a positive point, below a negative one.
+            TextVerticalAlignment = (chart.DataLabelPosition == ChartDataLabelPosition.InsideEnd) == (value >= 0 || chart.Type != ChartType.Column)
                 ? OxyPlot.VerticalAlignment.Top
                 : OxyPlot.VerticalAlignment.Bottom,
             TextColor = ToOxyColor(textColor) ?? OxyColors.Automatic,
@@ -774,7 +775,16 @@ public static partial class ChartRenderer
             LegendBackground = ToOxyColor(chart.ResolveLegendFillColor(theme)) ?? OxyColors.Undefined,
             LegendBorder = ToOxyColor(chart.ResolveLegendBorderColor(theme)) ?? OxyColors.Undefined,
             LegendBorderThickness = chart.LegendBorderThickness,
-            LegendPosition = GetLegendPosition(chart.LegendPosition, chart.LegendOverlay)
+            LegendPosition = GetLegendPosition(chart.LegendPosition, chart.LegendOverlay),
+            // Excel lays a top/bottom legend out as one horizontal row.
+            LegendOrientation = chart.LegendPosition is ChartLegendPosition.Top or ChartLegendPosition.Bottom
+                ? LegendOrientation.Horizontal
+                : LegendOrientation.Vertical,
+            // A stacked column/area stack reads bottom-up, so Excel lists a side legend last series first.
+            LegendItemOrder = chart.LegendPosition is ChartLegendPosition.Left or ChartLegendPosition.Right or ChartLegendPosition.TopRight &&
+                chart.Type is ChartType.StackedColumn or ChartType.PercentStackedColumn or ChartType.StackedArea or ChartType.PercentStackedArea
+                    ? LegendItemOrder.Reverse
+                    : LegendItemOrder.Normal,
         };
         model.Legends.Add(legend);
     }

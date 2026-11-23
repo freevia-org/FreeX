@@ -125,6 +125,8 @@ internal static class XlsxChartDataLabelReader
             ApplyDataLabelLeaderLineProperties(dataLabels.Element(ChartNs + "leaderLines")?.Element(ChartNs + "spPr"), chart);
         }
 
+        PromoteSeriesOnlyDataLabels(groups, chart);
+
         // Combo charts (bar+line, etc.) write one native plot-chart-type group per series subset.
         // Only the first group's <c:dLbls> is modeled above as chart-wide scalars; a later group
         // (e.g. a secondary-axis line series with its own data labels) would otherwise be silently
@@ -138,6 +140,49 @@ internal static class XlsxChartDataLabelReader
 
             chart.AdditionalPlotGroupDataLabels.Add(
                 new ChartPlotGroupDataLabelsXml(groupIndex, groupDataLabels.ToString(SaveOptions.DisableFormatting)));
+        }
+    }
+
+    /// <summary>
+    /// Excel's "Add Data Labels" writes each series' own <c>&lt;c:dLbls&gt;</c> (showVal=1) while the
+    /// group-level <c>&lt;c:dLbls&gt;</c> stays all-zero. The renderers gate on the chart-wide switch, so
+    /// without promotion every such chart lost its labels. Promote the first visible series' flags to the
+    /// chart-wide settings and suppress the series that declared no visible labels.
+    /// </summary>
+    private static void PromoteSeriesOnlyDataLabels(List<XElement> groups, ChartModel chart)
+    {
+        if (chart.ShowDataLabels || chart.SeriesDataLabelFormats.Count == 0)
+            return;
+
+        static bool IsVisible(ChartSeriesDataLabelFormat f) =>
+            f.IsDeleted != true &&
+            (f.ShowValue == true || f.ShowCategoryName == true || f.ShowSeriesName == true ||
+             f.ShowPercentage == true || f.ShowBubbleSize == true || f.ShowLegendKey == true);
+
+        var first = chart.SeriesDataLabelFormats.OrderBy(f => f.SeriesIndex).FirstOrDefault(IsVisible);
+        if (first is null)
+            return;
+
+        chart.ShowDataLabels = true;
+        chart.ShowDataLabelValue = first.ShowValue == true;
+        chart.ShowDataLabelCategoryName = first.ShowCategoryName == true;
+        chart.ShowDataLabelSeriesName = first.ShowSeriesName == true;
+        chart.ShowDataLabelLegendKey = first.ShowLegendKey == true;
+        chart.ShowDataLabelBubbleSize = first.ShowBubbleSize == true;
+        chart.ShowDataLabelPercentage = first.ShowPercentage == true &&
+            ChartTypeSupport.SupportsPercentageDataLabels(chart.Type);
+        if (first.Position is { } position)
+            chart.DataLabelPosition = position;
+
+        var seriesCount = groups.Sum(group => group.Elements(ChartNs + "ser").Count());
+        for (var index = 0; index < seriesCount; index++)
+        {
+            var existing = chart.SeriesDataLabelFormats.FirstOrDefault(f => f.SeriesIndex == index);
+            if (existing is not null && IsVisible(existing))
+                continue;
+
+            chart.SeriesDataLabelFormats.RemoveAll(f => f.SeriesIndex == index);
+            chart.SeriesDataLabelFormats.Add((existing ?? new ChartSeriesDataLabelFormat(index)) with { IsDeleted = true });
         }
     }
 
