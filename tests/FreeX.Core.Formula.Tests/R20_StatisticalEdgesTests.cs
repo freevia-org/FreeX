@@ -54,7 +54,8 @@ public class R20_statistical_Tests
         // sample_size=9, population_successes=2, population_size=10 -> population has only
         // 8 non-successes, so drawing 9 items with 0 successes is impossible.
         // sample_s must be >= max(0, sample_size - population_size + population_successes) = 1.
-        _eval.Evaluate("=HYPGEOM.DIST(0,9,2,10,FALSE)", MakeSheet()).Should().Be(ErrorValue.Num);
+        // Measured against Excel 16.0 (en-US): such an impossible count has probability 0, not #NUM!.
+        _eval.Evaluate("=HYPGEOM.DIST(0,9,2,10,FALSE)", MakeSheet()).Should().Be(new NumberValue(0));
     }
 
     [Fact]

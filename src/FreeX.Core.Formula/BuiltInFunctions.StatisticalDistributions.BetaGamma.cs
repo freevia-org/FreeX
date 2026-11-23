@@ -26,9 +26,10 @@ public static partial class BuiltInFunctions
         // Excel: beta is scale (theta), so mean = alpha*beta
         if (x < 0 || alpha <= 0 || beta <= 0) return ErrorValue.Num;
         if (cum) return NumberResult(GammaInc(alpha, x / beta));
-        // x==0 with alpha==1 is the exponential-density special case: x^(alpha-1) == 0^0 == 1,
-        // not the 0 * Math.Log(0) == 0 * -Infinity == NaN that a literal log-term evaluation produces.
-        double logXTerm = x == 0 && alpha == 1 ? 0.0 : (alpha - 1) * Math.Log(x);
+        // Measured against Excel: the density at x = 0 is #NUM! whenever alpha <= 1 (GAMMA.DIST(0,1,2,FALSE)
+        // is #NUM!, not the exponential density 1/beta).
+        if (x == 0 && alpha <= 1) return ErrorValue.Num;
+        double logXTerm = (alpha - 1) * Math.Log(x);
         double pdf = Math.Exp(logXTerm - x / beta - alpha * Math.Log(beta) - LogGamma(alpha));
         return NumberResult(pdf);
     }
@@ -115,11 +116,14 @@ public static partial class BuiltInFunctions
         if (x < A || x > B) return ErrorValue.Num;
         double t = (x - A) / (B - A);
         if (cum) return NumberResult(BetaInc(alpha, beta, t));
+        // Measured against Excel: the density is #NUM! at an end point whose exponent is <= 0
+        // (BETA.DIST(0,1,1,FALSE) and BETA.DIST(1,1,1,FALSE) are #NUM!).
+        if ((t == 0 && alpha <= 1) || (t == 1 && beta <= 1)) return ErrorValue.Num;
         double lbeta = LogGamma(alpha) + LogGamma(beta) - LogGamma(alpha + beta);
         // t==0 with alpha==1 (t^0==1) and t==1 with beta==1 ((1-t)^0==1) are the Uniform(0,1)-style
         // boundary special cases: a literal log-term evaluation hits 0 * Math.Log(0) == NaN instead.
-        double logTTerm = t == 0 && alpha == 1 ? 0.0 : (alpha - 1) * Math.Log(t);
-        double log1MinusTTerm = t == 1 && beta == 1 ? 0.0 : (beta - 1) * Math.Log(1 - t);
+        double logTTerm = (alpha - 1) * Math.Log(t);
+        double log1MinusTTerm = (beta - 1) * Math.Log(1 - t);
         double pdf = Math.Exp(logTTerm + log1MinusTTerm - lbeta) / (B - A);
         return NumberResult(pdf);
     }
@@ -143,7 +147,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue BetaInvScalar(ScalarValue probabilityValue, double alpha, double beta, double A, double B)
     {
         double prob = ToNumber(probabilityValue);
-        if (prob < 0 || prob > 1 || alpha <= 0 || beta <= 0 || A >= B) return ErrorValue.Num;
+        if (prob <= 0 || prob >= 1 || alpha <= 0 || beta <= 0 || A >= B) return ErrorValue.Num; // measured: 0 and 1 are #NUM!
         return NumberResult(BetaInv(prob, alpha, beta) * (B - A) + A);
     }
 }

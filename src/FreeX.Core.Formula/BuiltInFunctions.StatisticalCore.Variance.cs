@@ -139,7 +139,7 @@ public static partial class BuiltInFunctions
                 nums.Add(value);
             }
         }
-        if (nums.Count == 0) return ErrorValue.DivByZero;
+        if (nums.Count == 0) return ErrorValue.Num; // measured: DEVSQ of no numbers is #NUM!
         double mean = RoundedMean(nums);
         return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(nums.Sum(x => (x - mean) * (x - mean))));
     }

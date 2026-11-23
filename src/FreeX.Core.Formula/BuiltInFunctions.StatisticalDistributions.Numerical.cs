@@ -59,7 +59,11 @@ public static partial class BuiltInFunctions
     private static double Erf(double x)
         => x >= 0.0 ? 1.0 - Erfc(x) : Erfc(-x) - 1.0;
 
-    private static double NormSCdf(double z) => 0.5 * (1.0 + Erf(z / Math.Sqrt(2.0)));
+    // The lower tail is computed from erfc directly: 0.5 * (1 + erf(z/sqrt2)) cancels to nothing for very
+    // negative z (the tail of 1E-300 would come out as 0), which made the inverse lose its precision there.
+    private static double NormSCdf(double z) => z < 0
+        ? 0.5 * Erfc(-z / Math.Sqrt(2.0))
+        : 1.0 - 0.5 * Erfc(z / Math.Sqrt(2.0));
     private static double NormSPdf(double z) => Math.Exp(-0.5 * z * z) / Math.Sqrt(2.0 * Math.PI);
 
     /// <summary>Inverse standard-normal CDF (Acklam rational approximation with CDF refinement).</summary>
@@ -92,11 +96,15 @@ public static partial class BuiltInFunctions
                 ((((0.007784695709041462 * q + 0.3224671290700398) * q + 2.445134137142996) * q + 3.754408661907416) * q + 1.0);
         }
 
-        for (int i = 0; i < 2; i++)
+        // Halley refinement (cubic convergence) against the tail-accurate CDF; for the upper tail the
+        // complement 1 - p is used so the residual keeps its relative precision.
+        for (int i = 0; i < 4; i++)
         {
             double pdf = NormSPdf(x);
             if (pdf == 0 || !double.IsFinite(pdf)) break;
-            x -= (NormSCdf(x) - p) / pdf;
+            double e = x < 0 ? NormSCdf(x) - p : (1.0 - p) - NormSCdf(-x);
+            double u = e / pdf;
+            x -= u / (1.0 + x * u / 2.0);
         }
 
         return x;
@@ -137,10 +145,12 @@ public static partial class BuiltInFunctions
     private static double GammaIncSeries(double a, double x)
     {
         double ap = a, del = 1.0 / a, sum = del;
-        for (int n = 1; n <= 300; n++)
+        // The series needs on the order of sqrt(a) * a^0 terms near x = a, so a fixed cap of 300 left
+        // GAMMA.INV(0.5, 1E5, 1) off in the fourth digit.
+        for (int n = 1; n <= 1_000_000; n++)
         {
             ap++; del *= x / ap; sum += del;
-            if (Math.Abs(del) < Math.Abs(sum) * 1e-12) break;
+            if (Math.Abs(del) < Math.Abs(sum) * 1e-15) break;
         }
         return sum * Math.Exp(-x + a * Math.Log(x) - LogGamma(a));
     }
@@ -149,36 +159,61 @@ public static partial class BuiltInFunctions
     {
         double b = x + 1.0 - a, c = 1.0 / 1e-30, d = 1.0 / b, h = d;
         if (Math.Abs(d) < 1e-30) d = 1e-30;
-        for (int i = 1; i <= 300; i++)
+        for (int i = 1; i <= 100_000; i++)
         {
             double an = -i * (i - a);
             b += 2.0;
             d = an * d + b; if (Math.Abs(d) < 1e-30) d = 1e-30;
             c = b + an / c; if (Math.Abs(c) < 1e-30) c = 1e-30;
             d = 1.0 / d; double del2 = d * c; h *= del2;
-            if (Math.Abs(del2 - 1.0) < 1e-12) break;
+            if (Math.Abs(del2 - 1.0) < 1e-15) break;
         }
         return Math.Exp(-x + a * Math.Log(x) - LogGamma(a)) * h;
     }
 
-    /// <summary>Inverse of GammaInc(a, x) = p via Newton refinement.</summary>
+    /// <summary>
+    /// Inverse of GammaInc(a, x) = p: a bracketed Newton iteration (bisection takes over whenever a Newton step
+    /// would leave the bracket), seeded with the small-p power law or the Wilson-Hilferty approximation.
+    /// </summary>
     private static double GammaInv(double p, double a)
     {
         if (p <= 0) return 0;
         if (p >= 1) return double.PositiveInfinity;
-        // Initial guess via normal approximation
-        double x = a * Math.Pow(NormSInv(p) / Math.Sqrt(9 * a) + 1 - 1.0 / (9 * a), 3);
-        if (x <= 0) x = 0.01;
-        for (int i = 0; i < 200; i++)
+        if (a > 1e7)
+        {
+            // Wilson-Hilferty is accurate to O(a^-1.5) here and the incomplete gamma cannot be iterated.
+            double z = NormSInv(p);
+            double w = 1.0 - 1.0 / (9.0 * a) + z / (3.0 * Math.Sqrt(a));
+            return a * w * w * w;
+        }
+
+        double x;
+        if (p < 0.1)
+        {
+            // P(a, x) ~ x^a / Gamma(a + 1) for small x.
+            x = Math.Exp((Math.Log(p) + LogGamma(a + 1)) / a);
+        }
+        else
+        {
+            x = a * Math.Pow(NormSInv(p) / Math.Sqrt(9 * a) + 1 - 1.0 / (9 * a), 3);
+        }
+
+        if (!(x > 0) || !double.IsFinite(x)) x = a;
+
+        double lo = 0, hi = Math.Max(2 * a, 1.0);
+        for (int i = 0; i < 2000 && GammaInc(a, hi) < p; i++) hi *= 2;
+        if (x >= hi) x = hi / 2;
+        for (int i = 0; i < 300; i++)
         {
             double f = GammaInc(a, x) - p;
+            if (f > 0) hi = x; else lo = x;
             double df = Math.Exp((a - 1) * Math.Log(x) - x - LogGamma(a));
-            if (df == 0) break;
-            double dx = f / df;
-            x -= dx;
-            if (x <= 0) x = 1e-10;
-            if (Math.Abs(dx) < x * 1e-10) break;
+            double next = df > 0 ? x - f / df : double.NaN;
+            if (!(next > lo && next < hi)) next = (lo + hi) / 2;
+            if (Math.Abs(next - x) <= 1e-14 * next) { x = next; break; }
+            x = next;
         }
+
         return x;
     }
 
@@ -198,7 +233,7 @@ public static partial class BuiltInFunctions
 
     private static double BetaCf(double a, double b, double x)
     {
-        const int maxIter = 300; const double eps = 3e-12;
+        const int maxIter = 5000; const double eps = 1e-15;
         double qab = a + b, qap = a + 1, qam = a - 1;
         double c = 1, d = 1 - qab * x / qap;
         if (Math.Abs(d) < 1e-30) d = 1e-30;
@@ -242,12 +277,25 @@ public static partial class BuiltInFunctions
     /// <summary>Student-t CDF using regularised incomplete beta.</summary>
     private static double TCdf(double t, double df)
     {
+        if (df > 1e6)
+        {
+            // For huge df the beta-based form degenerates (x -> 1); use the normal approximation
+            // with the standard 1/(4 df) correction, whose error is far below a double at these sizes.
+            double z = t * (1.0 - 1.0 / (4.0 * df)) / Math.Sqrt(1.0 + t * t / (2.0 * df));
+            return NormSCdf(z);
+        }
+
         double x = df / (df + t * t);
         double tail = 0.5 * BetaInc(df / 2.0, 0.5, x);
         return t >= 0 ? 1.0 - tail : tail;
     }
 
     private static double TPdf(double t, double df)
+        => df > 1e6
+            ? NormSPdf(t) * (1.0 + (t * t * t * t - 2.0 * t * t - 1.0) / (4.0 * df))
+            : TPdfExact(t, df);
+
+    private static double TPdfExact(double t, double df)
         => Math.Exp(LogGamma((df + 1) / 2.0) - LogGamma(df / 2.0))
            / (Math.Sqrt(df * Math.PI) * Math.Pow(1 + t * t / df, (df + 1) / 2.0));
 
@@ -275,15 +323,38 @@ public static partial class BuiltInFunctions
         {
             double mid = (lo + hi) / 2.0;
             if (TCdf(mid, df) < p) lo = mid; else hi = mid;
-            if (hi - lo < 1e-10) break;
+            if (hi - lo < 1e-10 * Math.Max(1.0, Math.Abs(lo))) break;
         }
-        return (lo + hi) / 2.0;
+
+        double t = (lo + hi) / 2.0;
+        if (p == 0.5) return 0.0;
+        // Newton polish on the tail that is the smaller probability (keeps relative precision for tiny p):
+        // solve lowerTail(-|t|) = q where q = min(p, 1 - p).
+        double q = p < 0.5 ? p : 1.0 - p;
+        double a = Math.Abs(t);
+        for (int i = 0; i < 30; i++)
+        {
+            double f = TCdf(-a, df) - q;
+            double pdf = TPdf(a, df);
+            if (!(pdf > 0) || !double.IsFinite(pdf)) break;
+            double next = a + f / pdf;
+            if (!(next > 0) || !double.IsFinite(next)) break;
+            if (Math.Abs(next - a) <= 1e-15 * next) { a = next; break; }
+            a = next;
+        }
+
+        return t < 0 ? -a : a;
     }
 
     /// <summary>F-distribution CDF.</summary>
     private static double FCdf(double x, double d1, double d2)
     {
         if (x <= 0) return 0;
+        // With one degree of freedom effectively infinite F reduces to a scaled chi-square:
+        // F(d1, inf) = chi2(d1)/d1 and F(inf, d2) = d2/chi2(d2). The beta form cannot represent
+        // parameters in the billions, and Excel accepts degrees of freedom up to 1E+10.
+        if (d2 >= 1e8 && d1 < 1e8) return GammaInc(d1 / 2.0, d1 * x / 2.0);
+        if (d1 >= 1e8 && d2 < 1e8) return 1.0 - GammaInc(d2 / 2.0, d2 / (2.0 * x));
         double t = d1 * x / (d1 * x + d2);
         return BetaInc(d1 / 2.0, d2 / 2.0, t);
     }

@@ -49,10 +49,12 @@ public sealed class R27_CombinatoricsOverflowGuardTests
     [Fact]
     public void Combin_HugeN_TrivialK_ReturnsExcelResultInsteadOfNumError()
     {
-        // Bug case (R27-math-trig-remaining-3): n far above int.MaxValue with trivial k=0/1 is
-        // mathematically trivial (C(n,0)=1, PERMUT(n,1)=n) and within Excel's numeric range.
-        _eval.Evaluate("=COMBIN(3000000000,0)", MakeSheet()).Should().Be(new NumberValue(1));
-        _eval.Evaluate("=PERMUT(3000000000,1)", MakeSheet()).Should().Be(new NumberValue(3000000000));
+        // Measured against Excel 16.0 (en-US): n of 2147483647 or more is #NUM! for every k (COMBIN and
+        // PERMUT), including the trivial k = 0 / 1 cases; just below that limit the trivial cases work.
+        _eval.Evaluate("=COMBIN(3000000000,0)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PERMUT(3000000000,1)", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=COMBIN(2147483646,0)", MakeSheet()).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=PERMUT(2147483646,1)", MakeSheet()).Should().Be(new NumberValue(2147483646));
     }
 
     [Fact]

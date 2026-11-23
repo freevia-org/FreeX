@@ -52,12 +52,12 @@ public sealed class Round71FmlStatDistributionTests
     }
 
     [Fact]
-    public void BinomInv_AlphaZero_ReturnsZero()
-        => Calc("BINOM.INV(20,0.5,0)").Should().Be(0.0);
+    public void BinomInv_AlphaZero_IsNumError()
+        => _eval.Evaluate("=BINOM.INV(20,0.5,0)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num); // measured against Excel 16.0 (en-US)
 
     [Fact]
-    public void BinomInv_AlphaOne_ReturnsN()
-        => Calc("BINOM.INV(20,0.5,1)").Should().Be(20.0);
+    public void BinomInv_AlphaOne_IsNumError()
+        => _eval.Evaluate("=BINOM.INV(20,0.5,1)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num); // measured against Excel 16.0 (en-US)
 
     [Fact]
     public void BinomInv_HugeN_ReturnsPromptlyWithCorrectQuantile()

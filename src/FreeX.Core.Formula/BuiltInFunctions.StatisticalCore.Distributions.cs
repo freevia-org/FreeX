@@ -30,8 +30,7 @@ public static partial class BuiltInFunctions
     {
         double y = ToNumber(value);
         if (!double.IsFinite(y)) return ErrorValue.Num;
-        double exp = Math.Exp(2 * y);
-        return NumberResult((exp - 1) / (exp + 1));
+        return NumberResult(Math.Tanh(y)); // exp(2y) overflows long before the result stops being 1
     }
 
     private static ScalarValue Prob(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -43,13 +42,17 @@ public static partial class BuiltInFunctions
 
         var xRange = args[0] is RangeValue xr ? xr : SingleCellArray(args[0]);
         var probRange = args[1] is RangeValue pr ? pr : SingleCellArray(args[1]);
-        var upperArg = args.Count > 3 ? args[3] : args[2];
+        // An omitted or empty upper limit means "exactly the lower limit".
+        var upperArg = args.Count > 3 && args[3] is not BlankValue ? args[3] : args[2];
         return MapBinaryMathArgs(args[2], upperArg, (lowerValue, upperValue) => ProbScalar(xRange, probRange, lowerValue, upperValue));
     }
 
     private static ScalarValue ProbScalar(RangeValue xRange, RangeValue probRange, ScalarValue lowerValue, ScalarValue upperValue)
     {
-        if (xRange.RowCount != probRange.RowCount || xRange.ColCount != probRange.ColCount) return ErrorValue.NA;
+        // Measured against Excel: only the number of values has to agree (a 1x4 against a 4x1 is fine).
+        if (xRange.RowCount * xRange.ColCount != probRange.RowCount * probRange.ColCount) return ErrorValue.NA;
+        var xFlat = xRange.Flatten().ToArray();
+        var probFlat = probRange.Flatten().ToArray();
 
         double lower = ToNumber(lowerValue);
         double upper = ToNumber(upperValue);
@@ -57,22 +60,21 @@ public static partial class BuiltInFunctions
 
         double probabilitySum = 0;
         double result = 0;
-        for (int r = 0; r < xRange.RowCount; r++)
+        for (int i = 0; i < xFlat.Length; i++)
         {
-            for (int c = 0; c < xRange.ColCount; c++)
-            {
-                var xCell = xRange.Cells[r, c];
-                var probCell = probRange.Cells[r, c];
-                if (xCell is ErrorValue xError) return xError;
-                if (probCell is ErrorValue pError) return pError;
-                if (!TryCellNumber(xCell, out double x) || !TryCellNumber(probCell, out double p)) return ErrorValue.Value;
-                if (!double.IsFinite(x) || !double.IsFinite(p) || p <= 0 || p > 1) return ErrorValue.Num;
+            var xCell = xFlat[i];
+            var probCell = probFlat[i];
+            if (xCell is ErrorValue xError) return xError;
+            if (probCell is ErrorValue pError) return pError;
+            // Measured against Excel: a non-numeric cell is #NUM! (not #VALUE!), zero and even negative
+            // probabilities are accepted as long as every one is <= 1 and the total is exactly 1.
+            if (!TryCellNumber(xCell, out double x) || !TryCellNumber(probCell, out double p)) return ErrorValue.Num;
+            if (!double.IsFinite(x) || !double.IsFinite(p) || p > 1) return ErrorValue.Num;
 
-                probabilitySum += p;
-                if (x >= lower && x <= upper) result += p;
-            }
+            probabilitySum += p;
+            if (x >= lower && x <= upper) result += p;
         }
 
-        return Math.Abs(probabilitySum - 1.0) <= 1e-12 ? NumberResult(result) : ErrorValue.Num;
+        return Math.Abs(probabilitySum - 1.0) <= 5e-14 ? NumberResult(result) : ErrorValue.Num;
     }
 }

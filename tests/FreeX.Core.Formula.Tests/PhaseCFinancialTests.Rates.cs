@@ -175,14 +175,14 @@ public partial class PhaseCFinancialTests
     }
 
     [Fact]
-    public void Xnpv_RateZero_ReturnsSumOfCashflows()
+    public void Xnpv_RateZero_IsNumError()
     {
-        // At rate=0, XNPV = sum of all cashflows
-        double result = CalcWithData(
+        // Measured against Excel 16.0 (en-US): XNPV(0, ...) is #NUM! (the rate must be positive),
+        // not the sum of the cash flows.
+        EvalWithData(
             "XNPV(0,A1:A3,B1:B3)",
             (1, 1, -100), (2, 1, 60), (3, 1, 60),
-            (1, 2, 43831), (2, 2, 44016), (3, 2, 44197));
-        result.Should().BeApproximately(20.0, 0.01);
+            (1, 2, 43831), (2, 2, 44016), (3, 2, 44197)).Should().Be(ErrorValue.Num);
     }
 
     // ── RRI ───────────────────────────────────────────────────────────────

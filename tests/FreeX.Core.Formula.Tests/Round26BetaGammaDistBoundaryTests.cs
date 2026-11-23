@@ -35,17 +35,17 @@ public sealed class Round26BetaGammaDistBoundaryTests
     // ── GAMMA.DIST ──────────────────────────────────────────────────────────
 
     [Fact]
-    public void GammaDist_Pdf_AtZero_WithAlphaOne_ReturnsExponentialDensity()
+    public void GammaDist_Pdf_AtZero_WithAlphaOne_IsNumError()
     {
-        // Bug case: GAMMA.DIST(0,1,1,FALSE) is Exponential(rate=1) at 0, density = 1/beta = 1.
-        Calc("GAMMA.DIST(0,1,1,FALSE)").Should().BeApproximately(1.0, 1e-12);
+        // Measured against Excel 16.0 (en-US): the density at 0 is #NUM! for alpha <= 1, even for the
+        // exponential case alpha = 1 (it is NOT 1/beta).
+        _eval.Evaluate("=GAMMA.DIST(0,1,1,FALSE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
-    public void GammaDist_Pdf_AtZero_WithAlphaOneAndOtherBeta_ReturnsOneOverBeta()
+    public void GammaDist_Pdf_AtZero_WithAlphaOneAndOtherBeta_IsNumError()
     {
-        // Same bug, non-trivial beta: density at 0 is 1/beta = 0.2.
-        Calc("GAMMA.DIST(0,1,5,FALSE)").Should().BeApproximately(0.2, 1e-12);
+        _eval.Evaluate("=GAMMA.DIST(0,1,5,FALSE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num); // measured against Excel 16.0 (en-US)
     }
 
     [Fact]
@@ -67,19 +67,17 @@ public sealed class Round26BetaGammaDistBoundaryTests
     // ── BETA.DIST ───────────────────────────────────────────────────────────
 
     [Fact]
-    public void BetaDist_Pdf_AtLowerBound_WithAlphaOne_ReturnsUniformDensity()
+    public void BetaDist_Pdf_AtLowerBound_WithAlphaOne_IsNumError()
     {
-        // Bug case: BETA.DIST(0,1,1,FALSE) is Beta(1,1) = Uniform(0,1), density is 1 everywhere,
-        // including the left endpoint.
-        Calc("BETA.DIST(0,1,1,FALSE)").Should().BeApproximately(1.0, 1e-12);
+        // Measured against Excel 16.0 (en-US): the density at an end point whose exponent is <= 0 is #NUM!.
+        _eval.Evaluate("=BETA.DIST(0,1,1,FALSE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num);
     }
 
     [Fact]
-    public void BetaDist_Pdf_AtUpperBound_WithBetaOne_ReturnsMirroredDensity_NoRegression()
+    public void BetaDist_Pdf_AtUpperBound_WithBetaOne_IsNumError()
     {
-        // Mirrored bug case called out in the evidence: x=B with beta=1 hits the same
-        // 0*Math.Log(0) pattern in the (1-t) term. Beta(2,1) density at t=1 is 2.
-        Calc("BETA.DIST(1,2,1,FALSE)").Should().BeApproximately(2.0, 1e-8);
+        // Measured against Excel 16.0 (en-US): mirrored case, x = B with beta <= 1 is #NUM!.
+        _eval.Evaluate("=BETA.DIST(1,2,1,FALSE)", new Sheet(SheetId.New(), "S")).Should().Be(ErrorValue.Num);
     }
 
     [Fact]

@@ -7,9 +7,10 @@ public static partial class BuiltInFunctions
     private static ScalarValue PercentileInc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args[0] is ErrorValue e0) return e0;
+        // An omitted (empty) first argument counts as the number 0.
         var rv = args[0] is RangeValue range
             ? range
-            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] is BlankValue ? new NumberValue(0) : args[0] } });
         if (args[1] is ErrorValue e) return e;
         if (args[1] is RangeValue kRange) return MapUnaryTextRange(kRange, kValue => PercentileIncScalar(rv, kValue));
         return PercentileIncScalar(rv, args[1]);
@@ -164,7 +165,7 @@ public static partial class BuiltInFunctions
     {
         var (nums, err) = CollectNumbers(args);
         if (err is not null) return err;
-        if (nums!.Count == 0) return ErrorValue.Num;
+        if (nums!.Count == 0) return ErrorValue.NA; // measured: no numbers at all is #N/A
 
         double recSum = 0;
         foreach (var value in nums)
@@ -179,7 +180,7 @@ public static partial class BuiltInFunctions
     {
         var (nums, err) = CollectNumbers(args);
         if (err is not null) return err;
-        if (nums!.Count == 0) return ErrorValue.DivByZero;
+        if (nums!.Count == 0) return ErrorValue.Num; // measured: AVEDEV of no numbers is #NUM!
         double mean = nums.Average();
         return NumberResult(nums.Average(x => Math.Abs(x - mean)));
     }

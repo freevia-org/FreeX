@@ -70,6 +70,9 @@ public static partial class BuiltInFunctions
     {
         int k = (int)Math.Truncate(ToNumber(kValue));
         if (k < 0 || n < 0 || k > n || p < 0 || p > 1) return ErrorValue.Num;
+        // Measured against Excel: BINOM.DIST(0,n,1,FALSE) is #NUM! (n > 0) although every other degenerate
+        // mass (BINOM.DIST(3,5,1,FALSE), BINOM.DIST(5,5,0,FALSE)) is a plain 0.
+        if (!cum && p == 1 && k == 0 && n > 0) return ErrorValue.Num;
         return cum ? NumberResult(BinomCdf(k, n, p)) : NumberResult(BinomPmf(k, n, p));
     }
 
@@ -111,7 +114,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue BinomInvScalar(int n, double p, ScalarValue alphaValue)
     {
         double alpha = ToNumber(alphaValue);
-        if (n < 0 || p < 0 || p > 1 || alpha < 0 || alpha > 1) return ErrorValue.Num;
+        if (n < 0 || p <= 0 || p >= 1 || alpha <= 0 || alpha >= 1) return ErrorValue.Num; // measured: the end points are #NUM!
         // Find the smallest k in [0,n] with BinomCdf(k,n,p) >= alpha via binary search.
         // BinomCdf is monotone non-decreasing in k (it's a cumulative distribution), so this
         // lands on exactly the same k the old term-by-term accumulation would have stopped
@@ -155,7 +158,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue NegbinomDistScalar(ScalarValue failuresValue, int r, double p, bool cum)
     {
         if (!TryTruncateToInt32(ToNumber(failuresValue), out int f)) return ErrorValue.Num;
-        if (f < 0 || r < 1 || p <= 0 || p > 1) return ErrorValue.Num;
+        if (f < 0 || r < 1 || p <= 0 || p >= 1) return ErrorValue.Num; // measured: p = 1 is #NUM!
 
         if (!cum)
         {
@@ -236,7 +239,10 @@ public static partial class BuiltInFunctions
     {
         int s = (int)Math.Truncate(ToNumber(sampleSuccessesValue));
         int sMin = Math.Max(0, n + M - N);
-        if (s < 0 || n < 0 || M < 0 || N <= 0 || s > n || s > M || n > N || M > N || s < sMin) return ErrorValue.Num;
+        if (s < 0 || n < 0 || M < 0 || N <= 0 || n > N || M > N) return ErrorValue.Num;
+        // Measured against Excel: a sample count that cannot occur (more successes than the sample or the
+        // population holds, or fewer than the sample forces) has probability 0, not #NUM!.
+        if (s > n || s > M || s < sMin) return new NumberValue(0);
 
         if (!cum)
         {

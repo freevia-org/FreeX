@@ -32,8 +32,13 @@ public static partial class BuiltInFunctions
     private static ScalarValue FactDoubleScalar(ScalarValue value)
     {
         var raw = ToNumber(value);
-        if (!double.IsFinite(raw) || raw < 0 || raw > int.MaxValue) return ErrorValue.Num;
-        var n = (int)Math.Truncate(raw);
+        if (!double.IsFinite(raw) || raw > int.MaxValue) return ErrorValue.Num;
+        // Measured against Excel: FACTDOUBLE(-1) and FACTDOUBLE(-0.5) are 1 (the argument is floored, and -1 is
+        // the lowest accepted value); FACTDOUBLE(-1.5) and below are #NUM!.
+        var floored = Math.Floor(raw);
+        if (floored < -1) return ErrorValue.Num;
+        if (floored < 0) return new NumberValue(1);
+        var n = (int)floored;
         double result = 1;
         for (var i = n; i > 1; i -= 2)
         {
@@ -58,6 +63,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dk < 0) return ErrorValue.Num;
         dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dn >= int.MaxValue) return ErrorValue.Num; // measured: COMBIN(2147483647,1) is #NUM!
         if (dk > dn) return ErrorValue.Num;
         if (dk == 0) return new NumberValue(1);
         if (dk == 1) return new NumberValue(dn);
@@ -78,6 +84,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dk < 0) return ErrorValue.Num;
         dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dn >= int.MaxValue) return ErrorValue.Num; // measured: COMBINA(1E+10,1) is #NUM!
         if (dn == 0 && dk > 0) return ErrorValue.Num;
         if (dk == 0) return new NumberValue(1);
         if (dk == 1) return new NumberValue(dn);
@@ -104,6 +111,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dk < 0) return ErrorValue.Num;
         dn = Math.Truncate(dn); dk = Math.Truncate(dk);
+        if (dn >= int.MaxValue) return ErrorValue.Num; // measured: PERMUT(2147483647,k) and above is #NUM! for every k
         if (dk > dn) return ErrorValue.Num;
         if (dk == 0) return new NumberValue(1);
         if (dk == 1) return new NumberValue(dn);
@@ -128,7 +136,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(dn) || !double.IsFinite(dk)) return ErrorValue.Num;
         if (dn < 0 || dk < 0) return ErrorValue.Num;
         dn = Math.Truncate(dn); dk = Math.Truncate(dk);
-        if (dn == 0 && dk > 0) return ErrorValue.Num;
+        if (dn == 0 && dk > 0) return new NumberValue(0); // measured: PERMUTATIONA(0,3) is 0
         if (dk == 0) return new NumberValue(1);
         if (dk == 1) return new NumberValue(dn);
         if (dn > int.MaxValue || dk > int.MaxValue) return ErrorValue.Num;
