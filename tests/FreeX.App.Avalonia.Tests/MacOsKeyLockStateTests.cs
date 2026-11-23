@@ -78,5 +78,6 @@ public sealed class MacOsKeyLockStateTests
 
                 MainWindow.KeyLockOsToggleStateOverrideForTest = null;
             }
+            return true;
         }, CancellationToken.None);
 }

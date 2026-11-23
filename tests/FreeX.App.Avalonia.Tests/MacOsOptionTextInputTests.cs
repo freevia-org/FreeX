@@ -227,6 +227,7 @@ public sealed class MacOsOptionTextInputTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
     }
 }

@@ -181,5 +181,6 @@ public sealed class WorksheetReadyTextInputTests
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
                 window.Close();
             }
+            return true;
         }, CancellationToken.None);
 }
