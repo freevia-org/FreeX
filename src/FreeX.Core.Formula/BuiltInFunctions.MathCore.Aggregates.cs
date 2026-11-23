@@ -152,7 +152,6 @@ public static partial class BuiltInFunctions
             return ErrorValue.NA;
 
         double total = 0;
-        int pairs = 0;
         for (var row = 0; row < firstRange.RowCount; row++)
             for (var col = 0; col < firstRange.ColCount; col++)
             {
@@ -173,13 +172,10 @@ public static partial class BuiltInFunctions
                 }
 
                 total += map(x, y);
-                pairs++;
                 if (!double.IsFinite(total)) return ErrorValue.Num;
             }
 
-        // Measured against Excel: pairs with a non-numeric member are skipped, and when no pair is left (for example
-        // SUMX2MY2("x",1), whose text argument is skipped, or all-text ranges) the result is #DIV/0!.
-        return pairs == 0 ? ErrorValue.DivByZero : NumberResult(total);
+        return NumberResult(total);
     }
 
     private static bool TrySumXPairNumber(ScalarValue value, bool isReferenceArray, out double number, out ErrorValue? error)
@@ -199,10 +195,16 @@ public static partial class BuiltInFunctions
             return false;
         }
 
+        if (IsNonFiniteDirectTextNumber(value))
+        {
+            error = ErrorValue.Num;
+            return false;
+        }
+
         if (TryMathAggregateNumber(value, out number))
             return true;
 
-        // A non-numeric direct argument is skipped like any non-numeric array member.
+        error = ErrorValue.Value;
         return false;
     }
 
@@ -232,6 +234,11 @@ public static partial class BuiltInFunctions
             return double.IsFinite(number);
         return false;
     }
+
+    private static bool IsNonFiniteDirectTextNumber(ScalarValue value) =>
+        value is DirectTextLiteralValue direct &&
+        TryDirectTextNumber(direct, out var number) &&
+        !double.IsFinite(number);
 
     private static ScalarValue Gcd(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
