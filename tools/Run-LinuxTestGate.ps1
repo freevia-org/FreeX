@@ -62,8 +62,8 @@ if ([string]::IsNullOrWhiteSpace($ResultsDirectory) -or (Test-ToolPathRooted -Pa
     throw "ResultsDirectory must name a directory relative to the repository root."
 }
 $resultsFullPath = Resolve-ToolFullPath -Path $ResultsDirectory -BasePath $repoRoot
-$resultsRelativePath = [System.IO.Path]::GetRelativePath($repoRoot, $resultsFullPath).Replace('\', '/')
-if ($resultsRelativePath -eq '.' -or $resultsRelativePath -eq '..' -or $resultsRelativePath.StartsWith('../')) {
+$resultsRelativePath = ConvertTo-ToolRepoRelativePath -Path $resultsFullPath -RepoRoot $repoRoot
+if ([string]::IsNullOrWhiteSpace($resultsRelativePath)) {
     throw "ResultsDirectory must remain inside the repository and cannot be the repository root."
 }
 # A bash single-quoted literal also handles spaces and literal quote characters in the path.

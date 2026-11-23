@@ -262,9 +262,9 @@ FreeX preserves the original XLSX package parts that it does not model, which ca
 
 ### FreeX crashed - how do I recover my work?
 
-FreeX does not currently have auto-save or crash recovery. Save frequently (Ctrl+S) to protect your work.
+Restart FreeX. When a recovery snapshot is available, startup offers to restore the workbook. Accept the recovery offer, review the recovered content, and save the workbook. Declining an offer discards that recovery snapshot.
 
-If the crash left a temporary file open, check for `.tmp` files in the same folder as your workbook.
+FreeX periodically takes recovery snapshots of workbooks with unsaved changes and attempts an emergency snapshot after an unexpected error. Recovery is best effort and may not include the latest edits, so continue saving frequently (Ctrl+S).
 
 ### Reporting a crash or bug
 
