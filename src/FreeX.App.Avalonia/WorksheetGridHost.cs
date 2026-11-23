@@ -235,8 +235,8 @@ internal sealed class WorksheetGridHost : ContentControl
         }
 
         protected override IReadOnlyList<AutomationPeer> GetOrCreateChildrenCore() =>
-            Border?.GetVisualDescendants().OfType<TextBox>()
-                .Where(editor => editor.IsEffectivelyVisible)
+            Border?.GetVisualDescendants().OfType<Control>()
+                .Where(control => (control is WorksheetInlineCellEditor or WorksheetAutoFilterButton) && control.IsEffectivelyVisible)
                 .Select(ControlAutomationPeer.CreatePeerForElement).ToArray() ?? [];
 
         internal void PublishChanges()
@@ -306,6 +306,22 @@ internal sealed class WorksheetInlineCellEditor : TextBox
 
     private sealed class WorksheetInlineCellEditorAutomationPeer(WorksheetInlineCellEditor owner)
         : TextBoxAutomationPeer(owner)
+    {
+        protected override AutomationPeer? GetParentCore() =>
+            owner.GetVisualAncestors().OfType<WorksheetCellBorder>().FirstOrDefault() is { } border
+                ? CreatePeerForElement(border)
+                : base.GetParentCore();
+    }
+}
+
+/// <summary>A cell action remains discoverable beneath its logical coordinate peer.</summary>
+internal sealed class WorksheetAutoFilterButton : Button
+{
+    protected override Type StyleKeyOverride => typeof(Button);
+    protected override AutomationPeer OnCreateAutomationPeer() => new WorksheetAutoFilterButtonAutomationPeer(this);
+
+    private sealed class WorksheetAutoFilterButtonAutomationPeer(WorksheetAutoFilterButton owner)
+        : ButtonAutomationPeer(owner)
     {
         protected override AutomationPeer? GetParentCore() =>
             owner.GetVisualAncestors().OfType<WorksheetCellBorder>().FirstOrDefault() is { } border

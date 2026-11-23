@@ -131,6 +131,106 @@ public sealed class WorksheetOverlayAutomationTests
         Drain(window);
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AutoFilterButtons_AreDiscoveredAndInvokedThroughTheirLogicalCellPeers(bool useTable) => Run(window =>
+    {
+        var sheet = window.Session.ActiveSheet;
+        AddChart(sheet, "Filter accessibility chart");
+        if (useTable)
+        {
+            sheet.StructuredTables.Add(new StructuredTableModel
+            {
+                Id = 1,
+                Name = "AccessibleFilterTable",
+                Range = Range(sheet, 1, 1, 3, 2),
+                HasAutoFilter = true,
+            });
+        }
+        else
+        {
+            sheet.AutoFilter = new WorksheetAutoFilterModel("A1:B3", null);
+        }
+        Refresh(window);
+
+        var grid = GridPeer(window);
+        var windowPeer = ControlAutomationPeer.CreatePeerForElement(window);
+        var firstCell = Descendants(grid).Single(peer => peer.GetAutomationId() == "Cell_A1");
+        foreach (var (cellId, buttonId) in new[]
+        {
+            ("Cell_A1", "AutoFilterButton_1_1"), ("Cell_B1", "AutoFilterButton_1_2"),
+        })
+        {
+            var cell = Descendants(grid).Single(peer => peer.GetAutomationId() == cellId);
+            var button = cell.GetChildren().Single(peer => peer.GetAutomationId() == buttonId);
+            button.GetAutomationControlType().Should().Be(AutomationControlType.Button);
+            button.GetName().Should().NotBeNullOrWhiteSpace();
+            button.GetParent().Should().BeSameAs(cell);
+            Descendants(windowPeer).Single(peer => peer.GetAutomationId() == buttonId).Should().BeSameAs(button);
+            AssertReachesRoot(button, grid);
+            AssertReachesRoot(button, windowPeer);
+            AssertUniqueLogicalCells(window, grid);
+            var invoke = button.GetProvider<IInvokeProvider>();
+            invoke.Should().NotBeNull();
+
+            invoke!.Invoke();
+            Drain(window);
+
+            window.AutoFilterFlyoutOpenForTest.Should().BeTrue();
+            window.AutoFilterFlyoutPlacementTargetAutomationIdForTest.Should().Be(buttonId);
+            CloseFilterThroughAutomation(window);
+            window.AutoFilterFlyoutOpenForTest.Should().BeFalse();
+        }
+
+        var originalButton = firstCell.GetChildren().Single(peer => peer.GetAutomationId() == "AutoFilterButton_1_1");
+        var childChanges = 0;
+        firstCell.ChildrenChanged += (_, _) => childChanges++;
+        Refresh(window);
+        Descendants(grid).Single(peer => peer.GetAutomationId() == "Cell_A1").Should().BeSameAs(firstCell);
+        var currentButton = firstCell.GetChildren().Single(peer => peer.GetAutomationId() == "AutoFilterButton_1_1");
+        currentButton.Should().NotBeSameAs(originalButton);
+        currentButton.GetParent().Should().BeSameAs(firstCell);
+        Descendants(grid).Count(peer => peer.GetAutomationId() == "AutoFilterButton_1_1").Should().Be(1);
+        childChanges.Should().BeGreaterThan(0);
+        currentButton.GetProvider<IInvokeProvider>()!.Invoke();
+        Drain(window);
+        window.AutoFilterFlyoutOpenForTest.Should().BeTrue();
+        CloseFilterThroughAutomation(window);
+
+        window.Session.SetViewportOrigin(1000, 100);
+        Refresh(window);
+        firstCell.GetChildren().Should().BeEmpty();
+        Descendants(grid).Should().NotContain(peer => peer.GetAutomationId() != null &&
+            peer.GetAutomationId()!.StartsWith("AutoFilterButton_", StringComparison.Ordinal));
+        window.Session.SetViewportOrigin(1, 1);
+        Refresh(window);
+        Descendants(grid).Single(peer => peer.GetAutomationId() == "Cell_A1").Should().BeSameAs(firstCell);
+        var restoredButton = firstCell.GetChildren().Single(peer => peer.GetAutomationId() == "AutoFilterButton_1_1");
+        restoredButton.GetParent().Should().BeSameAs(firstCell);
+        Descendants(grid).Count(peer => peer.GetAutomationId() == "AutoFilterButton_1_1").Should().Be(1);
+        AssertUniqueLogicalCells(window, grid);
+    });
+
+    private static void CloseFilterThroughAutomation(MainWindow window)
+    {
+        var focused = window.FocusManager!.GetFocusedElement();
+        focused.Should().BeAssignableTo<Control>();
+        var focusPeer = ControlAutomationPeer.CreatePeerForElement((Control)focused!);
+        var seen = new HashSet<AutomationPeer>();
+        for (AutomationPeer? current = focusPeer; current is not null && seen.Add(current); current = current.GetParent())
+        {
+            var cancel = Descendants(current).FirstOrDefault(peer => peer.GetAutomationId() == "AutoFilterCancelButton");
+            if (cancel is null)
+                continue;
+            cancel.GetProvider<IInvokeProvider>().Should().NotBeNull();
+            cancel.GetProvider<IInvokeProvider>()!.Invoke();
+            Drain(window);
+            return;
+        }
+        throw new InvalidOperationException("The opened filter's focused accessibility tree did not expose its Cancel action.");
+    }
+
     private static ChartModel AddChart(Sheet sheet, string title)
     {
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Region"));

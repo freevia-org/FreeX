@@ -105,7 +105,7 @@ public sealed partial class MainWindow
         };
 
         // Wrap in a Button for click handling and accessibility.
-        var button = new Button
+        var button = new WorksheetAutoFilterButton
         {
             Content = buttonBorder,
             Padding = new Thickness(0),
