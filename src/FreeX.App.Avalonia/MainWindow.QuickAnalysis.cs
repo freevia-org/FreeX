@@ -51,23 +51,25 @@ public sealed partial class MainWindow
         };
         _quickAnalysisFlyout = flyout;
 
-        var groupsPanel = new StackPanel { Spacing = 14 };
+        var tabs = new TabControl
+        {
+            MinHeight = 230,
+            MaxHeight = 340,
+        };
+        AutomationProperties.SetAutomationId(tabs, "QuickAnalysisTabs");
         foreach (var group in shellPlan.Groups)
         {
-            groupsPanel.Children.Add(new TextBlock
-            {
-                Text = UiText.Get(group.TitleResourceKey),
-                Foreground = HeaderForeground,
-                FontWeight = FontWeight.SemiBold,
-            });
-
             var buttonRow = new WrapPanel { Orientation = Orientation.Horizontal };
             foreach (var item in group.Items)
             {
                 buttonRow.Children.Add(CreateQuickAnalysisItemButton(flyout, item));
             }
 
-            groupsPanel.Children.Add(buttonRow);
+            tabs.Items.Add(new TabItem
+            {
+                Header = UiText.Get(group.TitleResourceKey),
+                Content = new ScrollViewer { Content = buttonRow },
+            });
         }
 
         var closeButton = new Button { Content = UiText.Get("TableLoc_Close") };
@@ -80,9 +82,9 @@ public sealed partial class MainWindow
 
         var content = new Border
         {
-            Width = 500,
-            MaxHeight = 460,
-            Padding = new Thickness(16),
+            Width = 390,
+            MaxHeight = 420,
+            Padding = new Thickness(10),
             Child = new DockPanel
             {
                 Children =
@@ -90,7 +92,7 @@ public sealed partial class MainWindow
                     buttonBar,
                     new StackPanel
                     {
-                        Spacing = 10,
+                        Spacing = 6,
                         Children =
                         {
                             new TextBlock
@@ -99,7 +101,7 @@ public sealed partial class MainWindow
                                 Foreground = HeaderForeground,
                                 TextWrapping = TextWrapping.Wrap,
                             },
-                            new ScrollViewer { Content = groupsPanel },
+                            tabs,
                         },
                     },
                 },
@@ -122,7 +124,8 @@ public sealed partial class MainWindow
         var button = new Button
         {
             Content = CreateQuickAnalysisItemButtonContent(item),
-            MinWidth = 150,
+            Width = 112,
+            Height = 72,
             Margin = new Thickness(0, 0, 8, 8),
             Padding = new Thickness(8, 5),
             IsEnabled = item.IsEnabled,
