@@ -11,6 +11,8 @@ public sealed class FreeWMacOsInstallerDocumentAssociationTests
     {
         using var temporary = new TestTemporaryDirectory("freew-macos-installer-");
         var plist = GenerateInstaller(temporary.Path, "FreeW");
+        plist.DocumentType.Should().BeNull(
+            "the optional DTD must be omitted rather than saved with an empty internal subset that macOS rejects");
         var dictionary = plist.Root!.Element("dict")!;
 
         Value(dictionary, "CFBundleExecutable").Value.Should().Be("FreeW");
@@ -76,8 +78,14 @@ public sealed class FreeWMacOsInstallerDocumentAssociationTests
         using var archive = ZipFile.OpenRead(Path.Combine(output, $"{app}-v4.5.6-osx-arm64-apps.zip"));
         var plistEntry = archive.Entries.Single(entry =>
             entry.FullName.Replace('\\', '/').EndsWith($"{app}.app/Contents/Info.plist", StringComparison.Ordinal));
-        using var stream = plistEntry.Open();
-        return XDocument.Load(stream);
+        var packagedPlistPath = Path.Combine(directory, "packaged-Info.plist");
+        plistEntry.ExtractToFile(packagedPlistPath);
+        if (OperatingSystem.IsMacOS())
+        {
+            var validation = TestProcessRunner.Run("/usr/bin/plutil", $"-lint \"{packagedPlistPath}\"", directory);
+            validation.ExitCode.Should().Be(0, validation.CombinedOutput);
+        }
+        return XDocument.Load(packagedPlistPath);
     }
 
     private static void AssertAssociations(XElement type, string[] extensions, string[] contentTypes)

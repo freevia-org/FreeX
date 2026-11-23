@@ -356,6 +356,11 @@ function New-MacInstaller {
                 }
                 $value.InnerText = [string]$entry.Value
             }
+            # The external DTD is optional. XmlDocument.Save serializes its empty internal
+            # subset as "[]", which Apple's property-list parser rejects.
+            if ($null -ne $productPlist.DocumentType) {
+                [void]$productPlist.RemoveChild($productPlist.DocumentType)
+            }
             $productPlist.Save($infoPlistPath)
         } else {
             $plist.TrimStart() | Set-Content -LiteralPath $infoPlistPath -Encoding utf8NoBOM
