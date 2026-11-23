@@ -185,11 +185,13 @@ public static partial class BuiltInFunctions
     {
         hour = minute = second = 0;
         var num = ToNumber(v);
-        if (!double.IsFinite(num) || num < 0 || num > 2958465.0)
+        if (!double.IsFinite(num) || num < 0 || num >= 2958466.0)
             return false;
 
+        // Excel rounds the time of day to the nearest whole second before splitting it
+        // (SECOND(0.999999) is 0 of the next day, MINUTE(0.0006944444) is 1).
         var fraction = num - Math.Floor(num);
-        var totalSeconds = (int)Math.Floor(fraction * 86400.0 + 1e-9) % 86400;
+        var totalSeconds = (int)Math.Floor(fraction * 86400.0 + 0.5 - 1e-6) % 86400;
         hour = totalSeconds / 3600;
         minute = totalSeconds % 3600 / 60;
         second = totalSeconds % 60;
@@ -317,11 +319,17 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue EdateScalar(ScalarValue value, int months, bool uses1904DateSystem)
     {
+        if (value is BoolValue) return ErrorValue.Value;
+        // Serial 0 ("January 0, 1900") with no month offset is itself; serial 60 (the phantom 1900-02-29)
+        // with no offset lands on 59 like Excel (an offset month keeps the 29th, see below).
+        if (!uses1904DateSystem && months == 0 && IsExcelZeroDate(value)) return new NumberValue(0);
+        if (!uses1904DateSystem && months == 0 && IsExcelFakeLeapDay(value)) return new NumberValue(59);
         if (!uses1904DateSystem && IsExcelFakeLeapDay(value)) return EdateFromExcelFakeLeapDay(months);
         if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
         try
         {
-            var result = dt.AddMonths(months);
+            // EDATE returns a whole date: the time of day of start_date is dropped.
+            var result = dt.Date.AddMonths(months);
             var serial = DateToSerial(result, uses1904DateSystem);
             return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
         }
@@ -457,10 +465,13 @@ public static partial class BuiltInFunctions
     {
         double rawH = ToNumber(hourValue);
         if (!double.IsFinite(rawH) || !double.IsFinite(rawM) || !double.IsFinite(rawS)) return ErrorValue.Num;
-        int h = (int)rawH, m = (int)rawM, s = (int)rawS;
-        if (h < 0 || m < 0 || s < 0) return ErrorValue.Num;
-        if (h > 32767 || m > 32767 || s > 32767) return ErrorValue.Num;
-        double frac = (h * 3600 + m * 60 + s) / 86400.0;
+        // Excel floors each component (TIME(0,0,-0.5) is #NUM!) and lets them offset one another:
+        // TIME(12,-30,0) is 11:30 and TIME(-1,90,0) is 00:30; only a negative total is #NUM!.
+        double fh = Math.Floor(rawH), fm = Math.Floor(rawM), fs = Math.Floor(rawS);
+        if (fh > 32767 || fm > 32767 || fs > 32767 || fh < -32768 || fm < -32768 || fs < -32768) return ErrorValue.Num;
+        long total = (long)fh * 3600 + (long)fm * 60 + (long)fs;
+        if (total < 0) return ErrorValue.Num;
+        double frac = total / 86400.0;
         return new NumberValue(frac - Math.Floor(frac));
     }
 
@@ -633,12 +644,19 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue EomonthScalar(ScalarValue value, int months, bool uses1904DateSystem)
     {
+        if (value is BoolValue) return ErrorValue.Value;
+        if (!uses1904DateSystem && months == 0 && IsExcelFakeLeapDay(value)) return new NumberValue(59);
         if (!uses1904DateSystem && IsExcelFakeLeapDay(value)) return EomonthFromExcelFakeLeapDay(months);
-        if (!TrySerialToDateTime(value, uses1904DateSystem, out var dt)) return ErrorValue.Num;
+        int baseYear, baseMonth;
+        if (!uses1904DateSystem && IsExcelZeroDate(value)) { baseYear = 1900; baseMonth = 1; }
+        else if (TrySerialToDateTime(value, uses1904DateSystem, out var dt)) { baseYear = dt.Year; baseMonth = dt.Month; }
+        else return ErrorValue.Num;
+        if (!TryAddMonthsToExcelYearMonth(baseYear, baseMonth, months, out var year, out var month)) return ErrorValue.Num;
         try
         {
-            var target = dt.AddMonths(months + 1);
-            var eomonth = new DateTime(target.Year, target.Month, 1).AddDays(-1);
+            // The calendar's real month length is used (1900 counts 28 days in February here, so
+            // EOMONTH(0,1) is 59 as in Excel); month arithmetic avoids overflowing DateTime at Dec 9999.
+            var eomonth = new DateTime(year, month, DateTime.DaysInMonth(year, month));
             var serial = DateToSerial(eomonth, uses1904DateSystem);
             return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
         }
@@ -689,6 +707,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue WeeknumScalar(ScalarValue value, ScalarValue returnTypeValue, bool uses1904DateSystem)
     {
+        if (returnTypeValue is BoolValue) return ErrorValue.Value;
         double rawReturnType = returnTypeValue is not BlankValue ? ToNumber(returnTypeValue) : 1;
         if (!double.IsFinite(rawReturnType)) return ErrorValue.Num;
         int returnType = (int)rawReturnType;
@@ -757,7 +776,7 @@ public static partial class BuiltInFunctions
         double rawDays = ToNumber(daysValue);
         if (!double.IsFinite(rawDays)) return ErrorValue.Num;
         if (rawDays < int.MinValue + 1 || rawDays > int.MaxValue) return ErrorValue.Num;
-        return WorkdayScalar(startDate, (int)rawDays, holidays, uses1904DateSystem);
+        return WorkdayScalar(startDate, (int)Math.Floor(rawDays), holidays, uses1904DateSystem);
     }
 
     private static ScalarValue WorkdayScalar(ScalarValue startDate, int days, HashSet<double> holidays, bool uses1904DateSystem)
@@ -874,7 +893,8 @@ public static partial class BuiltInFunctions
         // collapses that boundary (e.g. DAYS(60,59) would come out 0 instead of 1).
         if (!TrySerialToDateTime(endDate, uses1904DateSystem, out _))   return ErrorValue.Num;
         if (!TrySerialToDateTime(startDate, uses1904DateSystem, out _)) return ErrorValue.Num;
-        return new NumberValue(ExcelDateSystem.SerialDayDifference(ToNumber(startDate), ToNumber(endDate)));
+        // DAYS truncates both serials to whole days first (DAYS(44000.9,44000.1) is 0).
+        return new NumberValue(ExcelDateSystem.SerialDayDifference(Math.Floor(ToNumber(startDate)), Math.Floor(ToNumber(endDate))));
     }
 
     private static ScalarValue Days360(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -1011,32 +1031,38 @@ public static partial class BuiltInFunctions
         return total / (end.Year - start.Year + 1);
     }
 
-    // DAYS360 US method: applies ONLY the day-31 reductions; does NOT fold in the
-    // IsExcelNasdLastDayOfFebruary adjustment.  Excel's DAYS360(start,end,FALSE)
-    // leaves February end-of-month dates alone — only the day-31 rule applies.
-    // YEARFRAC basis-0 uses the full Days30US360 (with Feb-end adjustment) below.
+    // DAYS360 US (NASD) method as Excel actually computes it (measured through COM): a start date on the last
+    // day of February counts as the 30th (DAYS360(2/28/2019,3/31/2019) is 30, DAYS360(2/28/2019,2/28/2019) is -2
+    // because an end date in February is left alone), then the usual day-31 reductions apply.
     private static double Days30US360Days360(DateTime d1, DateTime d2, bool d1IsFakeLeapDay = false, bool d2IsFakeLeapDay = false)
     {
         int y1 = d1.Year, m1 = d1.Month, dd1 = d1IsFakeLeapDay ? 29 : d1.Day;
         int y2 = d2.Year, m2 = d2.Month, dd2 = d2IsFakeLeapDay ? 29 : d2.Day;
+        // (In 1900 the 28th is not promoted here - DAYS360(59,61) is 3 - although YEARFRAC basis 0 does promote it.)
+        if ((d1IsFakeLeapDay || IsExcelNasdLastDayOfFebruary(d1)) && d1.Year != 1900) dd1 = 30;
         if (dd1 == 31) dd1 = 30;
         if (dd2 == 31 && dd1 == 30) dd2 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
 
+    // YEARFRAC basis 0. Unlike DAYS360 the "end date is 31 and the start is the 30th/31st" test looks at the
+    // ORIGINAL start day, before a last-of-February start is promoted to the 30th (so 2/28/2001 -> 3/31/2001 is 31
+    // days here but 30 for DAYS360).
     private static double Days30US360(DateTime d1, DateTime d2, bool d1IsFakeLeapDay = false, bool d2IsFakeLeapDay = false)
     {
         int y1 = d1.Year, m1 = d1.Month, dd1 = d1IsFakeLeapDay ? 29 : d1.Day;
         int y2 = d2.Year, m2 = d2.Month, dd2 = d2IsFakeLeapDay ? 29 : d2.Day;
-        if (IsExcelNasdLastDayOfFebruary(d1)) dd1 = 30;
-        if (IsExcelNasdLastDayOfFebruary(d2) && dd1 == 30) dd2 = 30;
-        if (dd1 == 31) dd1 = 30;
-        if (dd2 == 31 && dd1 == 30) dd2 = 30;
+        // The phantom 1900-02-29 (serial 60) is not promoted (YEARFRAC(60,61,0) is 2/360) while the real
+        // 1900-02-28 is (YEARFRAC(59,61,0) is 1/360).
+        bool d1LastFeb = !d1IsFakeLeapDay && IsExcelNasdLastDayOfFebruary(d1);
+        bool d2LastFeb = !d2IsFakeLeapDay && IsExcelNasdLastDayOfFebruary(d2);
+        if (d1LastFeb && d2LastFeb) dd2 = 30;
+        if (dd2 == 31 && dd1 >= 30) dd2 = 30;
+        if (d1LastFeb || dd1 == 31) dd1 = 30;
         return 360.0 * (y2 - y1) + 30.0 * (m2 - m1) + (dd2 - dd1);
     }
 
     private static bool IsExcelNasdLastDayOfFebruary(DateTime date) =>
-        date.Year != 1900 &&
         date.Month == 2 &&
         date.Day == DateTime.DaysInMonth(date.Year, 2);
 
@@ -1124,6 +1150,12 @@ public static partial class BuiltInFunctions
                     }
                     holidays.Add(Math.Floor(serial));
                 }
+                else if (v is TextValue)
+                {
+                    // Excel: a text cell in the holidays list is #VALUE! (verified through COM).
+                    error = ErrorValue.Value;
+                    return false;
+                }
             }
         }
         else if (arg is not null && TryHolidayScalarNumber(arg, out double s))
@@ -1134,6 +1166,11 @@ public static partial class BuiltInFunctions
                 return false;
             }
             holidays.Add(Math.Floor(s));
+        }
+        else if (arg is TextValue or DirectTextLiteralValue)
+        {
+            error = ErrorValue.Value;
+            return false;
         }
         return true;
     }

@@ -906,35 +906,32 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Days360_UsMethod_DoesNotApplyFebEndRule()
+    public void Days360_UsMethod_PromotesLastDayOfFebruaryStartToThirtieth()
     {
         var sheet = MakeSheet();
 
-        // Q14 regression: DAYS360 US method must NOT apply the last-day-of-February → day-30
-        // adjustment.  Only YEARFRAC basis-0 (Days30US360) uses that rule.
+        // Measured against Excel 16.0 (build 20625) through COM: a start date on the last day of February
+        // counts as the 30th in the US method, so DAYS360(2/29/2024, 3/31/2024) is 30 and
+        // DAYS360(2/28/2023, 3/31/2023) is 30 (an END date in February is left alone: DAYS360(2/28/2023, 2/28/2023) is -2).
         //
         // DAYS360(DATE(2024,2,29),DATE(2024,3,31),FALSE):
-        //   d1=29 (Feb-29 is last day of Feb in 2024; no adjustment), d2=31.
-        //   Day-31 rule: d2==31 AND d1==29 (<30) → d2 stays 31.
-        //   Result = 360*0 + 30*(3-2) + (31-29) = 30 + 2 = 32.
+        //   d1=29 is the last day of February -> 30; d2=31 with d1=30 -> 30. Result = 30*(3-2) + (30-30) = 30.
         double feb29_2024 = new DateTime(2024, 2, 29).ToOADate();
         double mar31_2024 = new DateTime(2024, 3, 31).ToOADate();
         var sheet2 = MakeSheet(
             (1, 1, new NumberValue(feb29_2024)),
             (1, 2, new NumberValue(mar31_2024)));
-        _eval.Evaluate("=DAYS360(A1,B1)", sheet2).Should().Be(new NumberValue(32));
-        _eval.Evaluate("=DAYS360(A1,B1,FALSE)", sheet2).Should().Be(new NumberValue(32));
+        _eval.Evaluate("=DAYS360(A1,B1)", sheet2).Should().Be(new NumberValue(30));
+        _eval.Evaluate("=DAYS360(A1,B1,FALSE)", sheet2).Should().Be(new NumberValue(30));
 
-        // DAYS360(DATE(2023,2,28),DATE(2023,3,31)):
-        //   d1=28 (last day of Feb 2023; no adjustment), d2=31.
-        //   Day-31 rule: d2==31 AND d1==28 (<30) → d2 stays 31.
-        //   Result = 30*(3-2) + (31-28) = 30 + 3 = 33.
+        // DAYS360(DATE(2023,2,28),DATE(2023,3,31)): d1=28 is the last day of Feb 2023 -> 30, d2 -> 30. Result 30.
         double feb28_2023 = new DateTime(2023, 2, 28).ToOADate();
         double mar31_2023 = new DateTime(2023, 3, 31).ToOADate();
         var sheet3 = MakeSheet(
             (1, 1, new NumberValue(feb28_2023)),
             (1, 2, new NumberValue(mar31_2023)));
-        _eval.Evaluate("=DAYS360(A1,B1)", sheet3).Should().Be(new NumberValue(33));
+        _eval.Evaluate("=DAYS360(A1,B1)", sheet3).Should().Be(new NumberValue(30));
+        _eval.Evaluate("=DAYS360(DATE(2023,2,28),DATE(2023,2,28))", sheet3).Should().Be(new NumberValue(-2));
 
         // Normal span (no 31s, no Feb-end): unchanged.
         // DAYS360(DATE(2024,1,15),DATE(2024,4,15)): result = 30*3 + (15-15) = 90.
@@ -965,13 +962,13 @@ public partial class FunctionLibraryTests
     [Fact]
     public void Yearfrac_Basis0_StillAppliesFebEndRule()
     {
-        // Q14 regression: YEARFRAC basis-0 must continue to use the Feb-end rule
-        // (Days30US360, unchanged).  Only DAYS360 US gets the new method.
+        // YEARFRAC basis-0 applies the Feb-end rule too, but (measured against Excel through COM) it tests the
+        // "end date is the 31st" condition against the ORIGINAL start day, before a last-of-February start is
+        // promoted to the 30th -- so the end date stays 31 here, unlike DAYS360 where it becomes 30.
         var sheet = MakeSheet();
 
         // YEARFRAC(DATE(2024,2,29),DATE(2024,3,31),0):
-        //   Days30US360 applies Feb-end: d1=30, d2=31+d1=30 → d2=30.
-        //   Days = 360*0 + 30*(3-2) + (30-30) = 30. YEARFRAC = 30/360 ≈ 0.0833...
+        //   d2=31 stays (original d1=29 < 30), then d1 -> 30: Days = 30*(3-2) + (31-30) = 31. YEARFRAC = 31/360.
         double feb29 = new DateTime(2024, 2, 29).ToOADate();
         double mar31 = new DateTime(2024, 3, 31).ToOADate();
         var sheet2 = MakeSheet(
@@ -979,7 +976,7 @@ public partial class FunctionLibraryTests
             (1, 2, new NumberValue(mar31)));
         var result = _eval.Evaluate("=YEARFRAC(A1,B1,0)", sheet2)
             .Should().BeOfType<NumberValue>().Subject;
-        result.Value.Should().BeApproximately(30.0 / 360.0, 1e-12);
+        result.Value.Should().BeApproximately(31.0 / 360.0, 1e-12);
     }
 
     [Fact] public void Yearfrac_HalfYear_ReturnsApprox05()

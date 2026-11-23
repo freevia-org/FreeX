@@ -188,9 +188,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Pmt_InvalidType_ReturnsNumError()
+    public void Pmt_AnyNonZeroType_IsStartOfPeriod()
     {
-        _eval.Evaluate("=PMT(0.05/12,60,10000,0,2)", MakeSheet()).Should().Be(ErrorValue.Num);
+        // Excel treats ANY non-zero type as 1 (measured through COM): the type-2 payment equals the type-1 payment.
+        var type1 = (NumberValue)_eval.Evaluate("=PMT(0.05/12,60,10000,0,1)", MakeSheet());
+        _eval.Evaluate("=PMT(0.05/12,60,10000,0,2)", MakeSheet()).Should().Be(type1);
     }
 
     [Fact] public void Pv_FutureValue_ReturnsPresent()
@@ -214,9 +216,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Pv_InvalidType_ReturnsNumError()
+    public void Pv_AnyNonZeroType_IsStartOfPeriod()
     {
-        _eval.Evaluate("=PV(0.05/12,60,188.71,0,2)", MakeSheet()).Should().Be(ErrorValue.Num);
+        var type1 = (NumberValue)_eval.Evaluate("=PV(0.05/12,60,188.71,0,1)", MakeSheet());
+        _eval.Evaluate("=PV(0.05/12,60,188.71,0,2)", MakeSheet()).Should().Be(type1);
     }
 
     [Fact] public void Fv_Savings_ReturnsAccumulated()
@@ -240,9 +243,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Fv_InvalidType_ReturnsNumError()
+    public void Fv_AnyNonZeroType_IsStartOfPeriod()
     {
-        _eval.Evaluate("=FV(0.05/12,12,-100,0,2)", MakeSheet()).Should().Be(ErrorValue.Num);
+        var type1 = (NumberValue)_eval.Evaluate("=FV(0.05/12,12,-100,0,1)", MakeSheet());
+        _eval.Evaluate("=FV(0.05/12,12,-100,0,2)", MakeSheet()).Should().Be(type1);
     }
 
     [Fact] public void Nper_CountPeriods_Returns60()
@@ -265,9 +269,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Nper_InvalidType_ReturnsNumError()
+    public void Nper_AnyNonZeroType_IsStartOfPeriod()
     {
-        _eval.Evaluate("=NPER(0.05/12,-188.71,10000,0,2)", MakeSheet()).Should().Be(ErrorValue.Num);
+        var type1 = (NumberValue)_eval.Evaluate("=NPER(0.05/12,-188.71,10000,0,1)", MakeSheet());
+        _eval.Evaluate("=NPER(0.05/12,-188.71,10000,0,2)", MakeSheet()).Should().Be(type1);
     }
 
     [Fact] public void Rate_FindsInterestRate()
@@ -301,9 +306,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Rate_InvalidType_ReturnsNumError()
+    public void Rate_AnyNonZeroType_IsStartOfPeriod()
     {
-        _eval.Evaluate("=RATE(60,-188.71,10000,0,2)", MakeSheet()).Should().Be(ErrorValue.Num);
+        var type1 = (NumberValue)_eval.Evaluate("=RATE(60,-188.71,10000,0,1)", MakeSheet());
+        ((NumberValue)_eval.Evaluate("=RATE(60,-188.71,10000,0,2)", MakeSheet())).Value
+            .Should().BeApproximately(type1.Value, 1e-12);
     }
 
     [Fact] public void Npv_BasicCashflow_ReturnsNpv()
@@ -458,14 +465,14 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Irr_GuessAtOrBelowMinusOne_ReturnsNumError()
+    public void Irr_GuessAtOrBelowMinusOne_ReturnsValueError()
     {
-        // 1 + guess must be > 0 for the IRR Newton iteration to make sense.
+        // 1 + guess must be > 0; Excel reports #VALUE! (measured through COM) rather than #NUM!.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(-1000)),
             (2, 1, new NumberValue(1100)));
-        _eval.Evaluate("=IRR(A1:A2,-1)", sheet).Should().Be(ErrorValue.Num);
-        _eval.Evaluate("=IRR(A1:A2,-2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=IRR(A1:A2,-1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=IRR(A1:A2,-2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Sln_StraightLine_ReturnsAnnualDep()

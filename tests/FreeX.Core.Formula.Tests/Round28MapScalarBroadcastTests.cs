@@ -59,17 +59,19 @@ public sealed class Round28MapScalarBroadcastTests
     }
 
     [Fact]
-    public void Map_GenuinelyMismatchedNonScalarShapes_StillReturnsValueError()
+    public void Map_GenuinelyMismatchedNonScalarShapes_PadWithNaToTheLargerShape()
     {
-        // Must NOT swing to the opposite extreme: two non-1x1 arrays with different shapes
-        // still have no defined broadcast rule and must still error.
+        // Two non-1x1 arrays with different shapes extend to the largest rows x cols with #N/A in every cell
+        // missing from either array (measured against Excel through COM).
         Set(1, 1, new NumberValue(1));
         Set(1, 2, new NumberValue(2));
         Set(2, 1, new NumberValue(1));
         Set(2, 2, new NumberValue(2));
         Set(3, 1, new NumberValue(3));
 
-        var result = Eval("=MAP(A1:B1, A2:A3, LAMBDA(a, b, a+b))");
-        Assert.Equal(ErrorValue.Value, result);
+        var result = Assert.IsType<RangeValue>(Eval("=MAP(A1:B1, A2:A3, LAMBDA(a, b, a+b))"));
+        Assert.Equal(2, result.RowCount);
+        Assert.Equal(2, result.ColCount);
+        Assert.Equal(ErrorValue.NA, result.Cells[1, 1]);
     }
 }

@@ -60,6 +60,12 @@ public static partial class BuiltInFunctions
 
         foreach (var arg in args)
         {
+            // A scalar error argument (VSTACK(A1:A2,#N/A)) is the whole result; errors INSIDE a range are data.
+            if (arg is ErrorValue scalarError)
+            {
+                error = scalarError;
+                return false;
+            }
             arrays.Add(arg is RangeValue arr
                 ? arr
                 : new RangeValue(new[,] { { arg } }));
@@ -239,6 +245,9 @@ public static partial class BuiltInFunctions
         {
             if (!TryGetScalarFillArgument(args[2], out padWith, out error)) return false;
         }
+
+        // A wrap_count beyond the element count is one full row/column of exactly the elements (no padding).
+        if (wrapCount > values.Count) wrapCount = values.Count;
 
         return values.Count > 0;
     }

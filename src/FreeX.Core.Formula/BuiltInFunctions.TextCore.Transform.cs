@@ -46,16 +46,41 @@ public static partial class BuiltInFunctions
     private static ScalarValue UpperText(ScalarValue value) =>
         TextResult(ApplyExcelUpperCase(ToText(value)));
 
-    // .NET's ToUpperInvariant maps German ß 1:1 (it stays ß, since there is no single
-    // uppercase codepoint for it), but Excel/Windows casing expands it to "SS" the same
-    // way Word and the Windows API's CharUpper do. Apply that expansion after the
-    // invariant uppercase pass so all other characters keep their normal ASCII/Unicode
-    // casing behavior.
-    private static string ApplyExcelUpperCase(string text) =>
-        text.ToUpperInvariant().Replace("ß", "SS", StringComparison.Ordinal);
+    // Excel's casing is a simple 1:1 per-character mapping (verified through COM): UPPER("ß") stays ß (no "SS"
+    // expansion), ſ and µ are left alone, dotless ı becomes I; LOWER maps İ to i and gives a Greek capital sigma that
+    // ends a word its final form ς.
+    private static string ApplyExcelUpperCase(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            sb.Append(ch switch
+            {
+                'ſ' or 'µ' => ch,
+                'ı' => 'I',
+                _ => char.ToUpperInvariant(ch)
+            });
+        }
+
+        return sb.ToString();
+    }
+
+    private static string ApplyExcelLowerCase(string text)
+    {
+        var sb = new System.Text.StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            if (ch == 'İ') sb.Append('i');
+            else if (ch == 'Σ') sb.Append(i + 1 < text.Length && char.IsLetter(text[i + 1]) ? 'σ' : 'ς');
+            else sb.Append(char.ToLowerInvariant(ch));
+        }
+
+        return sb.ToString();
+    }
 
     private static ScalarValue LowerText(ScalarValue value) =>
-        TextResult(ToText(value).ToLowerInvariant());
+        TextResult(ApplyExcelLowerCase(ToText(value)));
 
     private static ScalarValue ProperText(ScalarValue value)
     {
@@ -63,10 +88,12 @@ public static partial class BuiltInFunctions
         if (text.Length == 0) return new TextValue("");
         var sb = new System.Text.StringBuilder(text.Length);
         bool capitaliseNext = true;
-        foreach (var ch in text)
+        for (int i = 0; i < text.Length; i++)
         {
+            var ch = text[i];
             if (char.IsWhiteSpace(ch) || !char.IsLetter(ch)) { capitaliseNext = true; sb.Append(ch); }
-            else if (capitaliseNext) { sb.Append(char.ToUpperInvariant(ch)); capitaliseNext = false; }
+            else if (capitaliseNext) { sb.Append(ch == 'İ' ? 'I' : ApplyExcelUpperCase(ch.ToString())[0]); capitaliseNext = false; }
+            else if (ch == 'Σ') sb.Append(i + 1 < text.Length && char.IsLetter(text[i + 1]) ? 'σ' : 'ς');
             else sb.Append(char.ToLowerInvariant(ch));
         }
         return TextResult(sb.ToString());

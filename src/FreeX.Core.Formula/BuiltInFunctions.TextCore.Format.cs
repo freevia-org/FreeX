@@ -49,6 +49,11 @@ public static partial class BuiltInFunctions
             (val is NumberValue or DateTimeValue ||
              (val is TextValue numericText && ExcelTextNumberParser.TryParse(numericText.Value, out _, uses1904DateSystem))))
             return TextResult("");
+        // Numeric-looking text is formatted as the number it reads as (TEXT("5","0.00") is "5.00",
+        // TEXT("2020-01-15","mmm d") is "Jan 15") unless the format only talks about text (an '@' section).
+        if (val is TextValue numericLooking && fmt.Length > 0 && !fmt.Contains('@') &&
+            ExcelTextNumberParser.TryParse(numericLooking.Value, out var parsedNumber, uses1904DateSystem))
+            return TextResult(NumberFormatter.Format(new NumberValue(parsedNumber), fmt, uses1904DateSystem));
         if (val is NumberValue or DateTimeValue or TextValue)
             return TextResult(NumberFormatter.Format(val, fmt, uses1904DateSystem));
         return TextResult(ToText(val));
@@ -95,6 +100,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue FixedScalar(ScalarValue value, int dec, bool noCommas)
     {
         double n = ToNumber(value);
+        if (dec > 127) return ErrorValue.Value; // Excel caps FIXED at 127 decimals
+        if (n == 0d) n = 0d; // never -0.00
         return TextResult(FormatRoundedNumber(n, dec, useCommas: !noCommas));
     }
 

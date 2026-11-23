@@ -63,7 +63,8 @@ public static partial class BuiltInFunctions
                 count++;
                 if (count == instance)
                     return TextResult(text[..idx] + newText + text[(idx + oldText.Length)..]);
-                pos = idx + oldText.Length;
+                // Occurrences may overlap when counting instance_num (SUBSTITUTE("aaa","aa","b",2) is "ab").
+                pos = idx + 1;
             }
             return TextResult(text);
         }
@@ -155,10 +156,12 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue ReplaceText(string text, int startNum, int numChars, string newText)
     {
-        if (startNum > text.Length + 1) return ErrorValue.Value;
-
-        int start = Math.Min(startNum - 1, text.Length);
-        int end = start + Math.Min(numChars, text.Length - start);
+        // A start_num past the end appends (Excel: REPLACE("abcdef",8,1,"X") is "abcdefX"), it is not an error.
+        int total = CodePointLength(text);
+        int startCp = Math.Min(startNum - 1, total);
+        int endCp = startCp + Math.Min(numChars, total - startCp);
+        int start = CodePointToUtf16Index(text, startCp);
+        int end = CodePointToUtf16Index(text, endCp);
         return TextResult(text[..start] + newText + text[end..]);
     }
 

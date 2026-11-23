@@ -77,7 +77,7 @@ public sealed class R25_FinancialIterationConvergenceTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void Irr_MultiRootCashFlow_GuessOvershootsPastMinusOne_ReturnsNumNotUnrelatedRoot()
+    public void Irr_MultiRootCashFlow_GuessOvershootsPastMinusOne_FallsBackToLowestRoot()
     {
         // {-1000,3900,-5030,2145} has exact roots at 10%, 30%, and 50%. With guess=0.172, the
         // very first Newton step overshoots to r<=-1. Before the fix, the code fell back to an
@@ -90,11 +90,12 @@ public sealed class R25_FinancialIterationConvergenceTests
             (3, 1, new NumberValue(-5030)),
             (4, 1, new NumberValue(2145)));
 
-        _eval.Evaluate("=IRR(A1:A4,0.172)", sheet).Should().Be(ErrorValue.Num);
+        // Excel (measured through COM) still answers 0.1 for these guesses instead of giving up with #NUM!.
+        ((NumberValue)_eval.Evaluate("=IRR(A1:A4,0.172)", sheet)).Value.Should().BeApproximately(0.10, 0.0001);
     }
 
     [Fact]
-    public void Irr_MultiRootCashFlow_SecondOvershootGuess_AlsoReturnsNum_NoRegressionToOldBisectionRoot()
+    public void Irr_MultiRootCashFlow_SecondOvershootGuess_AlsoFallsBackToLowestRoot()
     {
         // Same cash flow, guess=0.405 (aimed near the 30%-40% region): the old bisection
         // fallback silently jumped to the unrelated 50% root here too. Must now be #NUM!.
@@ -104,7 +105,7 @@ public sealed class R25_FinancialIterationConvergenceTests
             (3, 1, new NumberValue(-5030)),
             (4, 1, new NumberValue(2145)));
 
-        _eval.Evaluate("=IRR(A1:A4,0.405)", sheet).Should().Be(ErrorValue.Num);
+        ((NumberValue)_eval.Evaluate("=IRR(A1:A4,0.405)", sheet)).Value.Should().BeApproximately(0.10, 0.0001);
     }
 
     [Fact]

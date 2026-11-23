@@ -76,14 +76,26 @@ public class PhaseDLambdaTests
         Assert.Equal(ErrorValue.Value, Eval("=LET(x, 5, y, 3)"));
     }
 
+    // Excel 16.0 (build 20625, measured through COM) rejects a LET name only when it is exactly R<n>, C<n> or RC<n>
+    // with n >= 1; the bare letters r and c, rc, r1c1, R2C3 and r0 are fine.
     [Theory]
-    [InlineData("=LET(c, 5, c)")]
-    [InlineData("=LET(r, 5, r)")]
     [InlineData("=LET(c1, 5, c1)")]
-    [InlineData("=LET(r1c1, 5, r1c1)")]
+    [InlineData("=LET(r10, 5, r10)")]
+    [InlineData("=LET(rc2, 5, rc2)")]
     public void Let_R1C1ReferenceStyleNames_ReturnValueError(string formula)
     {
         Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
+    [Theory]
+    [InlineData("=LET(c, 5, c)")]
+    [InlineData("=LET(r, 5, r+0)")]
+    [InlineData("=LET(rc, 5, rc)")]
+    [InlineData("=LET(r1c1, 5, r1c1)")]
+    [InlineData("=LET(r0, 5, r0)")]
+    public void Let_LettersThatMerelyLookLikeR1C1_AreValidNames(string formula)
+    {
+        Assert.Equal(5.0, Num(Eval(formula)));
     }
 
     [Fact]
@@ -98,18 +110,26 @@ public class PhaseDLambdaTests
         Assert.Equal(8.0, Num(Eval("=LET(_total.1, 5, _total.1+3)")));
     }
 
+    // An error value is just a binding: Excel only surfaces it when the calc expression uses it.
     [Theory]
-    [InlineData("=LET(unused, 1/0, 42)", "#DIV/0!")]
-    [InlineData("=LET(unused, NA(), 42)", "#N/A")]
-    [InlineData("=LET(unused, MissingFunction(), 42)", "#NAME?")]
-    public void Let_UnusedBindingErrors_PropagateBeforeCalculation(string formula, string expectedError)
+    [InlineData("=LET(unused, 1/0, 42)")]
+    [InlineData("=LET(unused, NA(), 42)")]
+    [InlineData("=LET(unused, MissingFunction(), 42)")]
+    public void Let_UnusedBindingErrors_DoNotPropagate(string formula)
     {
-        Assert.Equal(new ErrorValue(expectedError), Eval(formula));
+        Assert.Equal(42.0, Num(Eval(formula)));
+    }
+
+    [Fact]
+    public void Let_UsedBindingError_CanBeCaughtByIferror()
+    {
+        Assert.Equal(new TextValue("e"), Eval("=LET(x, 1/0, IFERROR(x, \"e\"))"));
+        Assert.Equal(ErrorValue.DivByZero, Eval("=LET(x, 1/0, x+1)"));
     }
 
     [Theory]
-    [InlineData("=LET(c, 1/0, 42)")]
-    [InlineData("=LET(r1c1, NA(), 42)")]
+    [InlineData("=LET(c1, 1/0, 42)")]
+    [InlineData("=LET(r10, NA(), 42)")]
     public void Let_InvalidName_ReturnsValueBeforeEvaluatingBinding(string formula)
     {
         Assert.Equal(ErrorValue.Value, Eval(formula));
@@ -165,12 +185,27 @@ public class PhaseDLambdaTests
     }
 
     [Theory]
-    [InlineData("=LET(f, LAMBDA(c, c), f(1))")]
-    [InlineData("=LET(f, LAMBDA(r, r), f(1))")]
-    [InlineData("=LET(f, LAMBDA(r1c1, r1c1), f(1))")]
+    [InlineData("=LET(f, LAMBDA(c1, c1), f(1))")]
+    [InlineData("=LET(f, LAMBDA(r2, r2), f(1))")]
     public void Lambda_R1C1ReferenceStyleParameterNames_ReturnValueError(string formula)
     {
         Assert.Equal(ErrorValue.Value, Eval(formula));
+    }
+
+    [Theory]
+    [InlineData("=LET(f, LAMBDA(c, c), f(1))")]
+    [InlineData("=LET(f, LAMBDA(r, r), f(1))")]
+    [InlineData("=LET(f, LAMBDA(r1c1, r1c1), f(1))")]
+    public void Lambda_BareLetterParameterNames_AreAccepted(string formula)
+    {
+        Assert.Equal(1.0, Num(Eval(formula)));
+    }
+
+    [Fact]
+    public void Lambda_BracketedOptionalParameter_CanBeOmitted()
+    {
+        Assert.Equal(1.0, Num(Eval("=LAMBDA(x,[y],x+IF(ISOMITTED(y),0,y))(1)")));
+        Assert.Equal(3.0, Num(Eval("=LAMBDA(x,[y],x+IF(ISOMITTED(y),0,y))(1,2)")));
     }
 
     [Fact]
@@ -188,7 +223,6 @@ public class PhaseDLambdaTests
     }
 
     [Theory]
-    [InlineData("=LET(f, LAMBDA(c, c), 42)")]
     [InlineData("=LET(f, LAMBDA(x, x, x), 42)")]
     public void Let_UnusedInvalidLambdaBinding_ReturnsValueError(string formula)
     {
@@ -265,7 +299,7 @@ public class PhaseDLambdaTests
     }
 
     [Fact]
-    public void Map_MismatchedArraySizes_ReturnsValueError()
+    public void Map_MismatchedArraySizes_PadsWithNa()
     {
         Set(1, 1, new NumberValue(1));
         Set(1, 2, new NumberValue(2));
@@ -273,10 +307,15 @@ public class PhaseDLambdaTests
         Set(2, 2, new NumberValue(2));
         Set(3, 1, new NumberValue(3));
 
-        // A1:B1 is 1x2, A2:A3 is 2x1 → neither is a 1x1 scalar, so shapes genuinely
-        // conflict and must still error (real Excel: #VALUE!).
-        var result = Eval("=MAP(A1:B1, A2:A3, LAMBDA(a, b, a+b))");
-        Assert.Equal(ErrorValue.Value, result);
+        // A1:B1 is 1x2, A2:A3 is 2x1: Excel (measured through COM) extends to the largest rows x cols (2x2); a
+        // cell missing from either array is #N/A without calling the lambda, so only the shared top-left cell is computed.
+        var result = Assert.IsType<RangeValue>(Eval("=MAP(A1:B1, A2:A3, LAMBDA(a, b, a+b))"));
+        Assert.Equal(2, result.RowCount);
+        Assert.Equal(2, result.ColCount);
+        Assert.Equal(2.0, Num(result.Cells[0, 0]));
+        Assert.Equal(ErrorValue.NA, result.Cells[0, 1]);
+        Assert.Equal(ErrorValue.NA, result.Cells[1, 0]);
+        Assert.Equal(ErrorValue.NA, result.Cells[1, 1]);
     }
 
     [Fact]

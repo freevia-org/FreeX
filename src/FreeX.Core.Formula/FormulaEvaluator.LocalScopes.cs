@@ -30,7 +30,12 @@ public sealed partial class FormulaEvaluator
             // own binding of the same name is a separate call/dictionary and is unaffected.
             if (bindings.ContainsKey(localName)) return ErrorValue.Value;
             var value = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
-            if (value is ErrorValue error) return error;
+            // A malformed LAMBDA definition (duplicate/invalid parameter names) is refused outright; Excel rejects the whole
+            // formula at entry.
+            if (value is ErrorValue lambdaDefinitionError && node.Arguments[i * 2 + 1] is FunctionCallNode { FunctionName: "LAMBDA" })
+                return lambdaDefinitionError;
+            // An error value is just a binding: Excel only surfaces it when the calc expression uses it
+            // (LET(x,1/0,IFERROR(x,"e")) is "e", LET(x,1/0,5) is 5).
             bindings[localName] = value;
         }
 
@@ -51,11 +56,18 @@ public sealed partial class FormulaEvaluator
         var seenParamNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < node.Arguments.Count - 1; i++)
         {
-            if (node.Arguments[i] is NamedRangeNode nm)
+            // An optional parameter is written [name]; the lexer reads it as a one-part structured reference.
+            var declared = node.Arguments[i] switch
             {
-                if (!IsValidLambdaParameterName(nm.Name)) return ErrorValue.Value;
-                if (!seenParamNames.Add(nm.Name)) return ErrorValue.Value;
-                paramNames.Add(nm.Name);
+                NamedRangeNode nm => nm.Name,
+                StructuredReferenceNode { TableName: "" } optional => optional.ColumnName,
+                _ => null
+            };
+            if (declared is not null)
+            {
+                if (!IsValidLambdaParameterName(declared)) return ErrorValue.Value;
+                if (!seenParamNames.Add(declared)) return ErrorValue.Value;
+                paramNames.Add(declared);
             }
             else
                 return ErrorValue.Value;
@@ -99,27 +111,18 @@ public sealed partial class FormulaEvaluator
         return true;
     }
 
+    // Excel (verified against Excel 16 through COM, en-US) rejects a LET/LAMBDA name only when it is
+    // exactly R<n>, C<n> or RC<n> with n >= 1 (r1, c1, r10, rc2 ...). The bare letters r and c, rc,
+    // r1c1, R2C3, r0 and every A1-looking name such as x1 or a1 are accepted.
     private static bool ConflictsWithR1C1Reference(string name)
     {
         var upper = name.ToUpperInvariant();
-        if (upper is "R" or "C") return true;
+        int start;
+        if (upper.StartsWith("RC", StringComparison.Ordinal)) start = 2;
+        else if (upper[0] is 'R' or 'C') start = 1;
+        else return false;
 
-        if (upper[0] == 'C')
-            return upper.Length > 1 && AllDigits(upper, 1, upper.Length);
-
-        if (upper[0] != 'R') return false;
-
-        int index = 1;
-        while (index < upper.Length && char.IsDigit(upper[index]))
-            index++;
-
-        if (index == upper.Length)
-            return index > 1;
-
-        if (upper[index] != 'C') return false;
-        index++;
-
-        return index == upper.Length || AllDigits(upper, index, upper.Length);
+        return start < upper.Length && upper[start] != '0' && AllDigits(upper, start, upper.Length);
     }
 
     private static bool AllDigits(string text, int start, int end)

@@ -190,7 +190,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(n)) return ErrorValue.Value;
         int codePoint = (int)Math.Truncate(n);
         if (codePoint <= 0 || codePoint > 0x10FFFF) return ErrorValue.Value;
-        if (codePoint >= 0xD800 && codePoint <= 0xDFFF) return ErrorValue.Value; // surrogate halves
+        // Surrogate halves and the U+xxFFFE/U+xxFFFF noncharacters are #N/A in Excel (not #VALUE!).
+        if ((codePoint >= 0xD800 && codePoint <= 0xDFFF) || (codePoint & 0xFFFE) == 0xFFFE) return ErrorValue.NA;
         return new TextValue(char.ConvertFromUtf32(codePoint));
     }
 

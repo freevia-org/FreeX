@@ -289,6 +289,10 @@ public static partial class BuiltInFunctions
         ["PEARSON"]          = (Pearson, 2, 2),
         ["RSQ"]              = (Rsq, 2, 2),
         ["SLOPE"]            = (Slope, 2, 2),
+        ["LINEST"]           = (Linest, 1, 4),
+        ["LOGEST"]           = (Logest, 1, 4),
+        ["TREND"]            = (Trend, 1, 4),
+        ["GROWTH"]           = (Growth, 1, 4),
         ["STEYX"]            = (Steyx, 2, 2),
 
         // ── Phase 4a: Financial ──────────────────────────────────────────────
@@ -688,11 +692,8 @@ public static partial class BuiltInFunctions
     // MODE.MULT (array of every most-frequent value, in first-appearance order) was
     // entirely unregistered, so calling it evaluated to #NAME? instead of a computed
     // result.
-    // NOTE: the TREND / GROWTH / LINEST / LOGEST regression-array family was also
-    // implemented alongside MODE.MULT in this fix wave, but was deliberately reverted
-    // before merge -- the OLS regression support (~400 lines) and its known-incomplete
-    // "stats array" sub-feature could not be verified against real Excel in this
-    // environment, so it was judged too risky to ship. Only MODE.MULT is kept here.
+    // TREND / GROWTH / LINEST / LOGEST live in BuiltInFunctions.StatisticalCore.MultiRegression.cs
+    // (verified cell-by-cell against Excel through COM).
 
     private static ScalarValue ModeMult(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {

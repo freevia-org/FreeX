@@ -119,7 +119,7 @@ public static partial class BuiltInFunctions
         // month-end maturities whose backward schedule crosses February (see CouponDateBefore).
         int count = 0;
         DateTime d = md;
-        while (d > sd) { count++; d = md.AddMonths(-count * months); }
+        while (d > sd) { count++; d = CouponScheduleDate(md, count * months); }
         return NumberResult((double)count);
     }
 

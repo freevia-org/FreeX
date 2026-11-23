@@ -10,6 +10,16 @@ public static partial class BuiltInFunctions
     private static RangeValue SingleCellArray(ScalarValue value) =>
         new(new[,] { { value } });
 
+    // A lambda result that is a 1x1 array (BYROW(A1:A3,LAMBDA(r,r*2)) - r is a 1x1 range) counts as its single
+    // value; anything bigger cannot fill one result cell (#CALC!).
+    private static bool TryUnwrapLambdaCell(ref ScalarValue value)
+    {
+        if (value is not RangeValue range) return true;
+        if (range.RowCount != 1 || range.ColCount != 1) return false;
+        value = range.Cells[0, 0];
+        return true;
+    }
+
     private static ScalarValue MapFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count < 2) return ErrorValue.Value;
@@ -27,16 +37,16 @@ public static partial class BuiltInFunctions
         // wrapping a plain scalar argument via SingleCellArray (e.g. a bare cell ref like
         // B1) — broadcasts against every other array's shape, matching real Excel's MAP
         // scalar-broadcast rule. Arrays that are NOT 1x1 must still all share one shape.
+        // Differently-shaped arrays extend to the largest rows x cols; a cell missing from any
+        // non-1x1 array is #N/A without calling the lambda (Excel: MAP(A1:A3,B1:B2,f) is 3x1 with a
+        // trailing #N/A, and a 3x1 against a 1x3 is 3x3 with only the shared top-left cell computed).
         int rows = 1, cols = 1;
         foreach (var a in arrays)
         {
             if (a.RowCount == 1 && a.ColCount == 1) continue;
-            rows = a.RowCount;
-            cols = a.ColCount;
-            break;
+            rows = Math.Max(rows, a.RowCount);
+            cols = Math.Max(cols, a.ColCount);
         }
-        if (arrays.Any(a => !(a.RowCount == 1 && a.ColCount == 1) && (a.RowCount != rows || a.ColCount != cols)))
-            return ErrorValue.Value;
         if (lambda.Parameters.Count != arrays.Count) return ErrorValue.Value;
 
         var result = new ScalarValue[rows, cols];
@@ -44,13 +54,17 @@ public static partial class BuiltInFunctions
         for (int r = 0; r < rows; r++)
             for (int c = 0; c < cols; c++)
             {
+                var missing = false;
                 for (int k = 0; k < arrays.Count; k++)
                 {
                     var a = arrays[k];
-                    invokeArgs[k] = a.RowCount == 1 && a.ColCount == 1 ? a.At(1, 1) : a.At(r + 1, c + 1);
+                    if (a.RowCount == 1 && a.ColCount == 1) invokeArgs[k] = a.At(1, 1);
+                    else if (r < a.RowCount && c < a.ColCount) invokeArgs[k] = a.At(r + 1, c + 1);
+                    else { missing = true; break; }
                 }
+                if (missing) { result[r, c] = ErrorValue.NA; continue; }
                 var value = ctx.InvokeLambda(lambda, invokeArgs);
-                if (value is RangeValue) return ErrorValue.Calc;
+                if (!TryUnwrapLambdaCell(ref value)) return ErrorValue.Calc;
                 result[r, c] = value;
             }
         return new RangeValue(result);
@@ -126,7 +140,7 @@ public static partial class BuiltInFunctions
                 else
                 {
                     acc = ctx.InvokeLambda(lambda, [acc, flat[flatIndex]]);
-                    if (acc is RangeValue) return ErrorValue.Calc;
+                    if (!TryUnwrapLambdaCell(ref acc)) return ErrorValue.Calc;
                     result[r, c] = acc;
                 }
                 flatIndex++;
@@ -151,7 +165,7 @@ public static partial class BuiltInFunctions
             var rowCells = new ScalarValue[1, cols];
             for (int c = 0; c < cols; c++) rowCells[0, c] = rv.At(r + 1, c + 1);
             var value = ctx.InvokeLambda(lambda, [new RangeValue(rowCells)]);
-            if (value is RangeValue) return ErrorValue.Calc;
+            if (!TryUnwrapLambdaCell(ref value)) return ErrorValue.Calc;
             result[r, 0] = value;
         }
         return new RangeValue(result);
@@ -174,7 +188,7 @@ public static partial class BuiltInFunctions
             var colCells = new ScalarValue[rows, 1];
             for (int r = 0; r < rows; r++) colCells[r, 0] = rv.At(r + 1, c + 1);
             var value = ctx.InvokeLambda(lambda, [new RangeValue(colCells)]);
-            if (value is RangeValue) return ErrorValue.Calc;
+            if (!TryUnwrapLambdaCell(ref value)) return ErrorValue.Calc;
             result[0, c] = value;
         }
         return new RangeValue(result);
@@ -210,7 +224,7 @@ public static partial class BuiltInFunctions
             for (int c = 0; c < cols; c++)
             {
                 var value = ctx.InvokeLambda(lambda, [new NumberValue(r + 1), new NumberValue(c + 1)]);
-                if (value is RangeValue) return ErrorValue.Calc;
+                if (!TryUnwrapLambdaCell(ref value)) return ErrorValue.Calc;
                 result[r, c] = value;
             }
         return new RangeValue(result);

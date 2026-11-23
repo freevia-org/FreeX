@@ -45,25 +45,29 @@ public partial class FunctionLibraryTests
     {
         var rowSheet = MakeSheet(
             (1, 1, new NumberValue(1)),
-            (1, 2, new NumberValue(9)));
-        var rows = _eval.Evaluate("=WRAPROWS(A1:A1,2,B1:B1)", rowSheet)
+            (1, 2, new NumberValue(2)),
+            (1, 3, new NumberValue(3)),
+            (1, 4, new NumberValue(9)));
+        var rows = _eval.Evaluate("=WRAPROWS(A1:C1,2,D1:D1)", rowSheet)
             .Should().BeOfType<RangeValue>().Subject;
 
-        rows.RowCount.Should().Be(1);
+        rows.RowCount.Should().Be(2);
         rows.ColCount.Should().Be(2);
-        rows.Cells[0, 0].Should().Be(new NumberValue(1));
-        rows.Cells[0, 1].Should().Be(new NumberValue(9));
+        rows.Cells[1, 0].Should().Be(new NumberValue(3));
+        rows.Cells[1, 1].Should().Be(new NumberValue(9));
 
         var colSheet = MakeSheet(
             (1, 1, new TextValue("a")),
-            (1, 2, new TextValue("z")));
-        var cols = _eval.Evaluate("=WRAPCOLS(A1:A1,2,B1:B1)", colSheet)
+            (1, 2, new TextValue("b")),
+            (1, 3, new TextValue("c")),
+            (1, 4, new TextValue("z")));
+        var cols = _eval.Evaluate("=WRAPCOLS(A1:C1,2,D1:D1)", colSheet)
             .Should().BeOfType<RangeValue>().Subject;
 
         cols.RowCount.Should().Be(2);
-        cols.ColCount.Should().Be(1);
-        cols.Cells[0, 0].Should().Be(new TextValue("a"));
-        cols.Cells[1, 0].Should().Be(new TextValue("z"));
+        cols.ColCount.Should().Be(2);
+        cols.Cells[0, 1].Should().Be(new TextValue("c"));
+        cols.Cells[1, 1].Should().Be(new TextValue("z"));
     }
 
     [Fact]
@@ -109,17 +113,19 @@ public partial class FunctionLibraryTests
     [Fact]
     public void WraprowsAndWrapcols_TreatScalarArgumentAsOneItemVector()
     {
-        var rows = _eval.Evaluate("=WRAPROWS(1,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
-        rows.RowCount.Should().Be(1);
-        rows.ColCount.Should().Be(2);
-        rows.Cells[0, 0].Should().Be(new NumberValue(1));
-        rows.Cells[0, 1].Should().Be(ErrorValue.NA);
+        // A wrap_count larger than the item count is one full row/column of exactly the items - no padding
+        // (WRAPROWS(5,2) is just 5 in Excel, measured through COM).
+        var one = _eval.Evaluate("=WRAPROWS(1,2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        (one.RowCount, one.ColCount).Should().Be((1, 1));
+        one.Cells[0, 0].Should().Be(new NumberValue(1));
+        var text = _eval.Evaluate("=WRAPCOLS(\"x\",2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        (text.RowCount, text.ColCount).Should().Be((1, 1));
+        text.Cells[0, 0].Should().Be(new TextValue("x"));
 
-        var cols = _eval.Evaluate("=WRAPCOLS(\"x\",2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
-        cols.RowCount.Should().Be(2);
-        cols.ColCount.Should().Be(1);
-        cols.Cells[0, 0].Should().Be(new TextValue("x"));
-        cols.Cells[1, 0].Should().Be(ErrorValue.NA);
+        var padded = _eval.Evaluate("=WRAPROWS({1,2,3},2)", MakeSheet()).Should().BeOfType<RangeValue>().Subject;
+        padded.RowCount.Should().Be(2);
+        padded.ColCount.Should().Be(2);
+        padded.Cells[1, 1].Should().Be(ErrorValue.NA);
     }
 
     [Fact]

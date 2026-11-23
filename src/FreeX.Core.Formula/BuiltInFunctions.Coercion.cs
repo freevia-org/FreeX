@@ -66,8 +66,42 @@ public static partial class BuiltInFunctions
     /// (matching Excel's &amp; concatenation and CONCATENATE/TEXTJOIN text coercion), with
     /// integers serialized without a decimal point and trailing zeros stripped.
     /// </summary>
-    internal static string NumberToExcelText(double value) =>
-        value.ToString("G15", System.Globalization.CultureInfo.InvariantCulture);
+    internal static string NumberToExcelText(double value)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        if (value == 0d || !double.IsFinite(value))
+            return value == 0d ? "0" : value.ToString("G15", inv);
+
+        // Excel (verified through COM) writes the 15 significant digits in full instead of scientific notation
+        // while the integer part has at most 20 digits (1E+19 -> 10000000000000000000, 1E+20 -> 1E+20) and the
+        // decimal part at most 18 digits (1E-18 -> 0.000000000000000001, 1E-19 -> 1E-19).
+        var e14 = Math.Abs(value).ToString("E14", inv); // d.ddddddddddddddE+xxx
+        int ePos = e14.IndexOf('E');
+        int exponent = int.Parse(e14.AsSpan(ePos + 1), System.Globalization.NumberStyles.AllowLeadingSign, inv);
+        var digits = (e14[0].ToString() + e14.Substring(2, ePos - 2)).TrimEnd('0');
+        if (digits.Length == 0) digits = "0";
+        string sign = value < 0 ? "-" : "";
+
+        bool fixedNotation = exponent >= 0
+            ? exponent <= 19
+            : (digits.Length - 1) - exponent <= 18;
+        if (fixedNotation)
+        {
+            if (exponent >= 0)
+            {
+                string integerDigits = digits.Length <= exponent + 1
+                    ? digits + new string('0', exponent + 1 - digits.Length)
+                    : digits.Substring(0, exponent + 1);
+                string fraction = digits.Length > exponent + 1 ? digits.Substring(exponent + 1) : "";
+                return sign + integerDigits + (fraction.Length > 0 ? "." + fraction : "");
+            }
+
+            return sign + "0." + new string('0', -exponent - 1) + digits;
+        }
+
+        string mantissa = digits.Length > 1 ? digits[0] + "." + digits.Substring(1) : digits;
+        return sign + mantissa + "E" + (exponent < 0 ? "-" : "+") + Math.Abs(exponent).ToString("00", inv);
+    }
 
     private static bool TryDirectTextNumber(DirectTextLiteralValue value, out double number) =>
         ExcelTextNumberParser.TryParse(value.Value, out number);

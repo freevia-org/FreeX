@@ -28,7 +28,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue LenScalar(ScalarValue value)
     {
         var text = ToText(value);
-        return new NumberValue(text.Length);
+        return new NumberValue(CodePointLength(text));
     }
 
     private static ScalarValue LenB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -79,8 +79,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue LeftScalar(ScalarValue value, int count)
     {
         var text = ToText(value);
-        count = Math.Min(count, text.Length);
-        return TextResult(text[..count]);
+        count = Math.Min(count, CodePointLength(text));
+        return TextResult(text[..CodePointToUtf16Index(text, count)]);
     }
 
     private static ScalarValue Right(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -116,8 +116,9 @@ public static partial class BuiltInFunctions
     private static ScalarValue RightScalar(ScalarValue value, int count)
     {
         var text = ToText(value);
-        count = Math.Min(count, text.Length);
-        return TextResult(text[(text.Length - count)..]);
+        int codePoints = CodePointLength(text);
+        count = Math.Min(count, codePoints);
+        return TextResult(text[CodePointToUtf16Index(text, codePoints - count)..]);
     }
 
     private static ScalarValue LeftBScalarWithCount(ScalarValue value, ScalarValue countValue) =>
@@ -170,9 +171,7 @@ public static partial class BuiltInFunctions
         var text    = ToText(args[0]);
         int start   = (int)rawStart - 1; // 1-based → 0-based
         int numChars = (int)rawLen;
-        if (start >= text.Length) return new TextValue("");
-        int actualLen = Math.Min(numChars, text.Length - start);
-        return TextResult(text.Substring(start, actualLen));
+        return MidText(text, start + 1, numChars);
     }
 
     private static ScalarValue MidB(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -222,10 +221,13 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue MidText(string text, int startNum, int numChars)
     {
+        int total = CodePointLength(text);
         int start = startNum - 1;
-        if (start >= text.Length) return new TextValue("");
-        int actualLen = Math.Min(numChars, text.Length - start);
-        return TextResult(text.Substring(start, actualLen));
+        if (start >= total) return new TextValue("");
+        int actualLen = Math.Min(numChars, total - start);
+        int from = CodePointToUtf16Index(text, start);
+        int to = CodePointToUtf16Index(text, start + actualLen);
+        return TextResult(text.Substring(from, to - from));
     }
 
 }

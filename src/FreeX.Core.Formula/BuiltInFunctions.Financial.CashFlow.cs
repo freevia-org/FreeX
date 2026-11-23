@@ -250,7 +250,8 @@ public static partial class BuiltInFunctions
         // 0.0 (ToNumber), matching Excel's blank-cell-as-0 rule and mirroring RATE's guessArg
         // handling in BuiltInFunctions.Financial.LoanValues.cs.
         double guess = args.Count > 1 ? ToNumber(args[1]) : 0.1;
-        if (!double.IsFinite(guess) || guess <= -1) return ErrorValue.Num;
+        if (!double.IsFinite(guess)) return ErrorValue.Num;
+        if (guess <= -1) return ErrorValue.Value; // Excel reports #VALUE! (not #NUM!) for a guess at or below -100%
         var (values, err) = CollectRangeNumbers(valRange);
         if (err is not null) return err;
         return IrrCashFlows(values!, guess);
@@ -295,7 +296,53 @@ public static partial class BuiltInFunctions
         // a vanishing derivative, is not a verified root and must return #NUM! — it must
         // never be silently replaced by an unrelated root from an unbounded, guess-blind
         // global bisection over the whole domain.
-        if (!converged || !double.IsFinite(r)) return ErrorValue.Num;
+        if (!converged || !double.IsFinite(r))
+        {
+            // Excel keeps going where a plain Newton walk from the guess diverges (IRR({-100,10,10,10}) is
+            // -0.4244, IRR(E1:E5,10) is 0.1532): scan the log-rate axis for sign changes of the NPV, bisect the
+            // brackets and answer with the lowest root (IRR({-1000,3900,-5030,2145},0.405) is 0.1 in Excel).
+            var scanned = FindIrrRootByScan(cashflows, guess);
+            return scanned is { } root ? new NumberValue(root) : ErrorValue.Num;
+        }
+
         return new NumberValue(r);
+    }
+
+    private static double? FindIrrRootByScan(IReadOnlyList<double> cashflows, double guess)
+    {
+        static double Npv(IReadOnlyList<double> flows, double rate)
+        {
+            double sum = 0;
+            for (int i = 0; i < flows.Count; i++) sum += flows[i] / Math.Pow(1 + rate, i);
+            return sum;
+        }
+
+        double? best = null;
+        double previousRate = Math.Exp(-25d) - 1d;
+        double previousValue = Npv(cashflows, previousRate);
+        for (double s = -24.95; s <= 12d; s += 0.05)
+        {
+            double rate = Math.Exp(s) - 1d;
+            double value = Npv(cashflows, rate);
+            if (double.IsFinite(previousValue) && double.IsFinite(value) &&
+                (previousValue == 0d || (previousValue < 0d) != (value < 0d)))
+            {
+                double lo = previousRate, hi = rate, fLo = previousValue;
+                for (int i = 0; i < 200; i++)
+                {
+                    double mid = (lo + hi) / 2d;
+                    double fMid = Npv(cashflows, mid);
+                    if ((fMid < 0d) == (fLo < 0d)) { lo = mid; fLo = fMid; } else hi = mid;
+                }
+
+                double root = (lo + hi) / 2d;
+                if (best is null) best = root; // the lowest root (the scan climbs the rate axis)
+            }
+
+            previousRate = rate;
+            previousValue = value;
+        }
+
+        return best;
     }
 }

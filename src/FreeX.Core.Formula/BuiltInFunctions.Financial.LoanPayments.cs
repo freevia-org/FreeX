@@ -89,11 +89,9 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
             !double.IsFinite(pv)   || !double.IsFinite(fv)  || !double.IsFinite(type))
             return ErrorValue.Num;
-        // Excel requires type to be exactly 0 or 1 and rejects any other numeric value with
-        // #NUM! — validate the RAW value before truncating (R50-formula-financial-loan-3-1),
-        // matching IsValidPaymentType's non-truncating check used by PMT/PV/FV/NPER/RATE.
-        if (type != 0 && type != 1) return ErrorValue.Num;
-        int itype = (int)type;
+        // IPMT/PPMT (like PMT/PV/FV/NPER/RATE) treat ANY non-zero type as 1 in Excel (verified through COM);
+        // only CUMIPMT/CUMPRINC insist on exactly 0 or 1.
+        int itype = type != 0 ? 1 : 0; // any non-zero type means start-of-period (Excel)
         if (nper <= 0) return ErrorValue.Num;
         int iper = (int)Math.Truncate(per);
         if (iper < 1 || iper > (int)Math.Truncate(nper)) return ErrorValue.Num;
@@ -125,9 +123,8 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(per) || !double.IsFinite(nper) ||
             !double.IsFinite(pv)   || !double.IsFinite(fv)  || !double.IsFinite(type))
             return ErrorValue.Num;
-        // Validate the RAW type value before truncating — see IpmtScalar (R50-formula-financial-loan-3-1).
-        if (type != 0 && type != 1) return ErrorValue.Num;
-        int itype = (int)type;
+        // See IpmtScalar: any non-zero type means start-of-period.
+        int itype = type != 0 ? 1 : 0;
         if (nper <= 0) return ErrorValue.Num;
         int iper = (int)Math.Truncate(per);
         if (iper < 1 || iper > (int)Math.Truncate(nper)) return ErrorValue.Num;
@@ -226,7 +223,7 @@ public static partial class BuiltInFunctions
         if (!double.IsFinite(rate) || !double.IsFinite(nper) || !double.IsFinite(pv) ||
             !double.IsFinite(start) || !double.IsFinite(end) || !double.IsFinite(type))
             return ErrorValue.Num;
-        // Validate the RAW type value before truncating — see IpmtScalar (R50-formula-financial-loan-3-1).
+        // CUMPRINC (like CUMIPMT) stays strict: Excel returns #NUM! for any type other than exactly 0 or 1.
         if (type != 0 && type != 1) return ErrorValue.Num;
         int itype = (int)type;
         if (rate <= 0 || nper <= 0 || pv <= 0) return ErrorValue.Num;

@@ -139,14 +139,7 @@ public static partial class BuiltInFunctions
             keys[k] = (idx, order);
         }
 
-        // Excel's SORT is all-or-nothing: an error anywhere in a sort key column/row makes the
-        // whole result that error, mirroring FILTER's `if (v is ErrorValue e) return e;` guard
-        // on its deciding array above.
-        foreach (var (idx, _) in keys)
-        {
-            var keyError = FindErrorInSortKey(arr, idx, byCol);
-            if (keyError is not null) return keyError;
-        }
+        // Errors inside a sort key are ordinary (largest) values, see CompareSortKey.
 
         if (!byCol)
         {
@@ -225,27 +218,29 @@ public static partial class BuiltInFunctions
         if (aBlank && bBlank) return 0;
         if (aBlank) return 1;
         if (bBlank) return -1;
+        // Errors are the largest values (numbers < text < booleans < errors) and order among themselves by
+        // error type (#NULL! < #DIV/0! < #VALUE! < #REF! < #NAME? < #NUM! < #N/A); descending reverses all.
+        bool aErr = va is ErrorValue;
+        bool bErr = vb is ErrorValue;
+        if (aErr || bErr)
+        {
+            if (aErr && bErr) return sortOrder * SortErrorRank(((ErrorValue)va).Code).CompareTo(SortErrorRank(((ErrorValue)vb).Code));
+            return sortOrder * (aErr ? 1 : -1);
+        }
         return sortOrder * CompareScalar(va, vb);
     }
 
-    // Scans every value along the sort key at `idx` (a column when sorting rows, a row when sorting
-    // columns) for an ErrorValue. Returns the first one found so SORT/SORTBY can propagate it as the
-    // whole function result instead of letting CompareScalar's cross-type fallback silently place it.
-    private static ErrorValue? FindErrorInSortKey(RangeValue arr, int idx, bool byCol)
+    private static int SortErrorRank(string code) => code switch
     {
-        if (byCol)
-        {
-            for (int c = 0; c < arr.ColCount; c++)
-                if (arr.Cells[idx, c] is ErrorValue e) return e;
-        }
-        else
-        {
-            for (int r = 0; r < arr.RowCount; r++)
-                if (arr.Cells[r, idx] is ErrorValue e) return e;
-        }
-
-        return null;
-    }
+        "#NULL!" => 0,
+        "#DIV/0!" => 1,
+        "#VALUE!" => 2,
+        "#REF!" => 3,
+        "#NAME?" => 4,
+        "#NUM!" => 5,
+        "#N/A" => 6,
+        _ => 7
+    };
 
     private static ScalarValue SortBy(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
@@ -287,12 +282,6 @@ public static partial class BuiltInFunctions
         }
 
         if (keys.Count == 0) return ErrorValue.Value;
-
-        // Same all-or-nothing propagation as SORT: an error anywhere in a by_array key means the
-        // whole SORTBY result is that error.
-        foreach (var key in keys)
-            foreach (var cell in key.Range.Cells)
-                if (cell is ErrorValue e) return e;
 
         return sortRows.GetValueOrDefault(true)
             ? SortByRows(arr, keys)

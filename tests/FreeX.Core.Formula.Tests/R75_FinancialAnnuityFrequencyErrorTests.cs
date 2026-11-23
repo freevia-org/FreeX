@@ -61,10 +61,10 @@ public class R75_FinancialAnnuityFrequencyErrorTests
     }
 
     [Fact]
-    public void Pmt_ZeroNper_StillReturnsDivByZero()
+    public void Pmt_ZeroNper_ReturnsNum()
     {
-        // No-regression: PMT's own nper==0 guard is a genuine divide-by-zero and must remain.
-        CalcError("PMT(0.05,0,1000)").Should().Be("#DIV/0!");
+        // Excel (measured through COM): PMT with nper 0 is #NUM!, not #DIV/0!.
+        CalcError("PMT(0.05,0,1000)").Should().Be("#NUM!");
     }
 
     [Fact]

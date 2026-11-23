@@ -63,24 +63,25 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void LenLeftAndRight_CountSurrogatePairsAsUtf16CodeUnits()
+    public void LenLeftAndRight_CountSurrogatePairsAsOneCharacter()
     {
         var sheet = MakeSheet();
 
-        // Excel counts UTF-16 code units: 😀 is a surrogate pair (2 code units).
-        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(3));
-        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀"));
-        _eval.Evaluate("=RIGHT(\"x😀\",2)", sheet).Should().Be(new TextValue("😀"));
+        // Excel 16.0 (build 20625, measured through COM) counts Unicode code points: one emoji is one character.
+        _eval.Evaluate("=LEN(\"😀x\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=LEFT(\"😀x\",1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=LEFT(\"😀x\",2)", sheet).Should().Be(new TextValue("😀x"));
+        _eval.Evaluate("=RIGHT(\"x😀\",1)", sheet).Should().Be(new TextValue("😀"));
     }
 
     [Fact]
-    public void Len_SurrogatePairCountsAsTwoCodeUnits()
+    public void Len_SurrogatePairCountsAsOneCharacter()
     {
         var sheet = MakeSheet();
 
-        // Q12 regression: LEN must return UTF-16 code-unit count, not grapheme count.
-        _eval.Evaluate("=LEN(\"😀\")", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=LEN(\"A😀B\")", sheet).Should().Be(new NumberValue(4));
+        // LEN counts code points (measured against Excel through COM), not UTF-16 code units.
+        _eval.Evaluate("=LEN(\"😀\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=LEN(\"A😀B\")", sheet).Should().Be(new NumberValue(3));
         // BMP-only text is unchanged.
         _eval.Evaluate("=LEN(\"abc\")", sheet).Should().Be(new NumberValue(3));
         _eval.Evaluate("=LEN(\"\")", sheet).Should().Be(new NumberValue(0));
@@ -214,12 +215,11 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void LeftAndRight_SplitSurrogatePairAtCodeUnitBoundary()
+    public void LeftAndRight_NeverSplitASurrogatePair()
     {
-        // Excel slices on UTF-16 code-unit boundaries, splitting surrogate pairs.
-        // LEFT("😀x",1) returns just the high surrogate; RIGHT("x😀",1) just the low surrogate.
-        _eval.Evaluate("=LEFT(\"😀x\",1)", MakeSheet()).Should().Be(new TextValue("\uD83D"));
-        _eval.Evaluate("=RIGHT(\"x😀\",1)", MakeSheet()).Should().Be(new TextValue("\uDE00"));
+        // Slicing is by code point: LEFT/RIGHT return the whole emoji, never a lone surrogate (measured through COM).
+        _eval.Evaluate("=LEFT(\"😀x\",1)", MakeSheet()).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=RIGHT(\"x😀\",1)", MakeSheet()).Should().Be(new TextValue("😀"));
     }
 
     [Fact]
@@ -620,25 +620,25 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        // 😀 is 2 UTF-16 code units; empty-string match is valid up to length+1 = 3.
+        // 😀 is ONE character; an empty-string FIND match is valid up to length+1 = 2, SEARCH up to the length.
+        _eval.Evaluate("=FIND(\"\",\"😀\",1)", sheet).Should().Be(new NumberValue(1));
         _eval.Evaluate("=FIND(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(new NumberValue(3));
-        _eval.Evaluate("=FIND(\"\",\"😀\",4)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=SEARCH(\"\",\"😀\",2)", sheet).Should().Be(new NumberValue(2));
-        _eval.Evaluate("=SEARCH(\"\",\"😀\",3)", sheet).Should().Be(new NumberValue(3));
-        _eval.Evaluate("=SEARCH(\"\",\"😀\",4)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=FIND(\"\",\"😀\",3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",1)", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"\",\"😀\",2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void FindAndSearch_ReturnUtf16CodeUnitPositionsAfterSurrogatePairs()
+    public void FindAndSearch_ReturnCodePointPositionsAfterSurrogatePairs()
     {
         var sheet = MakeSheet();
 
-        // 😀 is a surrogate pair (2 UTF-16 code units); positions are code-unit based.
-        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(3));
-        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(4));
-        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(3));
-        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(4));
+        // 😀 is one character: positions are code-point based (measured against Excel through COM).
+        _eval.Evaluate("=FIND(\"y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=FIND(\"y\",\"x😀y\",4)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=SEARCH(\"Y\",\"😀y\")", sheet).Should().Be(new NumberValue(2));
+        _eval.Evaluate("=SEARCH(\"Y\",\"x😀y\",3)", sheet).Should().Be(new NumberValue(3));
     }
 
     [Fact]
@@ -646,10 +646,9 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        // Q12 regression: FIND positions count UTF-16 code units.
-        // FIND("X","A😀X"): "A😀X" = A+\uD83D+\uDE00+X → "X" at index 3 (0-based) = position 4.
-        _eval.Evaluate("=FIND(\"X\",\"A😀X\")", sheet).Should().Be(new NumberValue(4));
-        // FIND("😀","A😀B"): "😀" at index 1 (0-based) = position 2.
+        // FIND positions count code points: FIND("X","A😀X") is 3.
+        _eval.Evaluate("=FIND(\"X\",\"A😀X\")", sheet).Should().Be(new NumberValue(3));
+        // FIND("😀","A😀B"): the emoji is the 2nd character.
         _eval.Evaluate("=FIND(\"😀\",\"A😀B\")", sheet).Should().Be(new NumberValue(2));
         // BMP-only text unchanged.
         _eval.Evaluate("=FIND(\"c\",\"abcd\")", sheet).Should().Be(new NumberValue(3));
@@ -862,7 +861,9 @@ public partial class FunctionLibraryTests
     public void Search_EmptyFindTextAtEndBoundary_ReturnsStartNum()
     {
         var sheet = MakeSheet();
-        _eval.Evaluate("=SEARCH(\"\",\"abc\",4)", sheet).Should().Be(new NumberValue(4));
+        // SEARCH("", text, length+1) is #VALUE! in Excel (FIND allows it); length itself is fine.
+        _eval.Evaluate("=SEARCH(\"\",\"abc\",3)", sheet).Should().Be(new NumberValue(3));
+        _eval.Evaluate("=SEARCH(\"\",\"abc\",4)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -946,17 +947,16 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Mid_SlicesOnUtf16CodeUnitBoundaries()
+    public void Mid_SlicesOnCodePointBoundaries()
     {
         var sheet = MakeSheet();
 
-        // Excel MID counts UTF-16 code units; 😀 is a surrogate pair at indices 0+1.
-        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("\uD83D"));
-        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("\uDE00"));
-        _eval.Evaluate("=MID(\"😀x\",3,1)", sheet).Should().Be(new TextValue("x"));
-        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("\uD83D"));
-        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("\uDE00"));
-        _eval.Evaluate("=MID(\"x😀y\",4,1)", sheet).Should().Be(new TextValue("y"));
+        // MID counts code points (measured against Excel through COM): the emoji is one character.
+        _eval.Evaluate("=MID(\"😀x\",1,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"😀x\",2,1)", sheet).Should().Be(new TextValue("x"));
+        _eval.Evaluate("=MID(\"x😀y\",2,1)", sheet).Should().Be(new TextValue("😀"));
+        _eval.Evaluate("=MID(\"x😀y\",3,1)", sheet).Should().Be(new TextValue("y"));
+        _eval.Evaluate("=MID(\"x😀y\",4,1)", sheet).Should().Be(new TextValue(""));
     }
 
     [Fact]
@@ -964,9 +964,9 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        // Q12 regression: MID("😀",1,1) returns the lone high surrogate (Excel behavior).
-        _eval.Evaluate("=MID(\"😀\",1,1)", sheet).Should().Be(new TextValue("\uD83D"));
-        // MID("😀",1,2) returns the whole emoji.
+        // MID("😀",1,1) returns the whole emoji (code-point semantics, measured through COM).
+        _eval.Evaluate("=MID(\"😀\",1,1)", sheet).Should().Be(new TextValue("😀"));
+        // MID("😀",1,2) as well.
         _eval.Evaluate("=MID(\"😀\",1,2)", sheet).Should().Be(new TextValue("😀"));
         // BMP-only text unchanged.
         _eval.Evaluate("=MID(\"abcd\",2,2)", sheet).Should().Be(new TextValue("bc"));
@@ -1029,9 +1029,9 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        // 😀 is 2 UTF-16 code units; cell limit is 32767 code units.
-        // 16383 * 2 = 32766 ≤ 32767 → valid; 16384 * 2 = 32768 > 32767 → error.
-        _eval.Evaluate("=LEN(REPT(\"😀\",16383))", sheet).Should().Be(new NumberValue(32766));
+        // The cell limit is 32767 UTF-16 code units even though LEN counts characters: 16383 emoji (32766 units) fit,
+        // 16384 emoji (32768 units) do not.
+        _eval.Evaluate("=LEN(REPT(\"😀\",16383))", sheet).Should().Be(new NumberValue(16383));
         _eval.Evaluate("=REPT(\"😀\",16384)", sheet).Should().Be(ErrorValue.Value);
         // The old 32767-repetition limit no longer applies to emoji.
         _eval.Evaluate("=REPT(\"😀\",32767)", sheet).Should().Be(ErrorValue.Value);

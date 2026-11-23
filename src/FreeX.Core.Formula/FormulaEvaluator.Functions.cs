@@ -45,6 +45,33 @@ public sealed partial class FormulaEvaluator
         if (functionName is "ISREF" or "ISFORMULA" or "FORMULATEXT" or "OFFSET" or "CELL")
             return EvaluateAstAware(node, context);
 
+        // Eta-reduced function argument: BYROW(rng,SUM) / REDUCE(0,rng,MAX) pass a bare built-in function
+        // name where a LAMBDA is expected. Wrap it as LAMBDA(_p1,..,NAME(_p1,..)) before evaluation.
+        if (functionName is "MAP" or "REDUCE" or "SCAN" or "BYROW" or "BYCOL" or "MAKEARRAY" &&
+            node.Arguments.Count > 0 &&
+            node.Arguments[^1] is NamedRangeNode { SheetQualifier: null } etaName &&
+            BuiltInFunctions.TryGet(etaName.Name.ToUpperInvariant(), out _) &&
+            context.TryResolveLambdaBinding(etaName.Name) is null)
+        {
+            var paramCount = functionName switch
+            {
+                "BYROW" or "BYCOL" => 1,
+                "MAP" => Math.Max(1, node.Arguments.Count - 1),
+                _ => 2
+            };
+            var lambdaArgs = new List<FormulaNode>(paramCount + 1);
+            var callArgs = new List<FormulaNode>(paramCount);
+            for (var p = 1; p <= paramCount; p++)
+            {
+                lambdaArgs.Add(new NamedRangeNode("_p" + p));
+                callArgs.Add(new NamedRangeNode("_p" + p));
+            }
+            lambdaArgs.Add(new FunctionCallNode(etaName.Name.ToUpperInvariant(), callArgs));
+            var rewrittenArgs = node.Arguments.ToList();
+            rewrittenArgs[^1] = new FunctionCallNode("LAMBDA", lambdaArgs);
+            return EvaluateFunction(new FunctionCallNode(functionName, rewrittenArgs), context);
+        }
+
         var (func, minArgs, maxArgs) = entry;
 
         bool isStructured = IsStructuredRangeFunction(functionName);
