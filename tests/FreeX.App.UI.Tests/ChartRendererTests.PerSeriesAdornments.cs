@@ -51,9 +51,9 @@ public sealed partial class ChartRendererTests
 
         var model = BuildPlotModel(chart, ThreeSeriesViewport());
 
-        var trendlines = model.Series.OfType<LineSeries>().Where(s => s.Title is not null && s.Title.Contains("Trendline")).ToList();
+        var trendlines = model.Series.OfType<LineSeries>().Where(s => s.Title is not null && s.Title.EndsWith(")")).ToList();
         trendlines.Should().ContainSingle("only series index 1 carries a trendline");
-        trendlines[0].Title.Should().Contain("Polynomial");
+        trendlines[0].Title.Should().Be("Poly. (S2)");
         trendlines[0].StrokeThickness.Should().Be(4);
     }
 
@@ -64,7 +64,7 @@ public sealed partial class ChartRendererTests
 
         var model = BuildPlotModel(chart, ThreeSeriesViewport());
 
-        model.Series.OfType<LineSeries>().Count(s => s.Title is not null && s.Title.Contains("Trendline")).Should().Be(3);
+        model.Series.OfType<LineSeries>().Count(s => s.Title is not null && s.Title.EndsWith(")")).Should().Be(3);
     }
 
     [Fact]

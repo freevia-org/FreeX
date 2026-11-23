@@ -44,7 +44,7 @@ internal static class LegendLayoutBuilder
             var dx = moved.Left - legend.Bounds.Left;
             var dy = moved.Top - legend.Bounds.Top;
             var entries = legend.Entries
-                .Select(e => new LegendEntry(e.SeriesIndex, e.Label, Shift(e.SwatchRect, dx, dy), Shift(e.LabelRect, dx, dy)))
+                .Select(e => e with { SwatchRect = Shift(e.SwatchRect, dx, dy), LabelRect = Shift(e.LabelRect, dx, dy) })
                 .ToList();
             legend = new LegendLayout { Position = legend.Position, Bounds = moved, Entries = entries };
             plot = request.PlotArea;
@@ -76,14 +76,14 @@ internal static class LegendLayoutBuilder
             return LegendLayout.None;
 
         // Measure each label to size the legend.
-        var measured = new (int SeriesIndex, string Label, double Width, double Height)[labels.Count];
+        var measured = new (int SeriesIndex, string Label, double Width, double Height, ChartModel? Trend)[labels.Count];
         var maxLabelWidth = 0.0;
         var maxLabelHeight = 0.0;
         var totalLabelWidth = 0.0;
         for (var i = 0; i < labels.Count; i++)
         {
             var size = request.TextMeasurer.Measure(labels[i].Label, null, chart.LegendFontSize, false, false);
-            measured[i] = (labels[i].SeriesIndex, labels[i].Label, size.Width, size.Height);
+            measured[i] = (labels[i].SeriesIndex, labels[i].Label, size.Width, size.Height, labels[i].Trend);
             maxLabelWidth = Math.Max(maxLabelWidth, size.Width);
             maxLabelHeight = Math.Max(maxLabelHeight, size.Height);
             totalLabelWidth += size.Width;
@@ -145,7 +145,7 @@ internal static class LegendLayoutBuilder
     }
 
     private static IReadOnlyList<LegendEntry> BuildEntries(
-        (int SeriesIndex, string Label, double Width, double Height)[] measured,
+        (int SeriesIndex, string Label, double Width, double Height, ChartModel? Trend)[] measured,
         LayoutRect bounds,
         bool isVertical,
         double entryHeight)
@@ -158,7 +158,7 @@ internal static class LegendLayoutBuilder
             {
                 var swatch = new LayoutRect(bounds.X + LegendPadding, y + (entryHeight - SwatchSize) / 2, SwatchSize, SwatchSize);
                 var label = new LayoutRect(swatch.Right + SwatchLabelGap, y + (entryHeight - m.Height) / 2, m.Width, m.Height);
-                entries.Add(new LegendEntry(m.SeriesIndex, m.Label, swatch, label));
+                entries.Add(new LegendEntry(m.SeriesIndex, m.Label, swatch, label) { IsTrendline = m.Trend is not null, TrendlineStyle = m.Trend });
                 y += entryHeight + EntrySpacing;
             }
         }
@@ -170,7 +170,7 @@ internal static class LegendLayoutBuilder
             {
                 var swatch = new LayoutRect(x, y + (entryHeight - SwatchSize) / 2, SwatchSize, SwatchSize);
                 var label = new LayoutRect(swatch.Right + SwatchLabelGap, y + (entryHeight - m.Height) / 2, m.Width, m.Height);
-                entries.Add(new LegendEntry(m.SeriesIndex, m.Label, swatch, label));
+                entries.Add(new LegendEntry(m.SeriesIndex, m.Label, swatch, label) { IsTrendline = m.Trend is not null, TrendlineStyle = m.Trend });
                 x = label.Right + EntrySpacing;
             }
         }
@@ -178,30 +178,56 @@ internal static class LegendLayoutBuilder
         return entries;
     }
 
-    private static IReadOnlyList<(int SeriesIndex, string Label)> CollectLabels(ChartLayoutRequest request)
+    private static IReadOnlyList<(int SeriesIndex, string Label, ChartModel? Trend)> CollectLabels(ChartLayoutRequest request)
     {
         var chart = request.Chart;
         // Pie/doughnut legends list categories, not series.
         if (chart.Type is ChartType.Pie or ChartType.ThreeDPie or ChartType.Doughnut)
         {
-            var labels = new List<(int, string)>();
+            var labels = new List<(int, string, ChartModel?)>();
             for (var i = 0; i < request.Categories.Count; i++)
             {
                 if (ChartRenderPolicyPlanner.IsPieLegendEntryDeleted(chart, i))
                     continue;
-                labels.Add((i, request.Categories[i]));
+                labels.Add((i, request.Categories[i], null));
             }
             return labels;
         }
 
-        var entries = new List<(int, string)>(request.Series.Count);
+        var entries = new List<(int, string, ChartModel?)>(request.Series.Count);
         foreach (var series in request.Series)
         {
             if (ChartRenderPolicyPlanner.IsLegendEntryDeleted(chart, series.SeriesIndex))
                 continue;
-            entries.Add((series.SeriesIndex, series.Name ?? $"Series {series.SeriesIndex + 1}"));
+            entries.Add((series.SeriesIndex, series.Name ?? $"Series {series.SeriesIndex + 1}", null));
         }
+
+        // Excel lists every trendline after the series ("Linear (Sales)", "Expon. (Sales)", ...).
+        if (ChartTypeSupport.SupportsTrendlines(chart.Type))
+        {
+            foreach (var series in request.Series)
+            {
+                if (chart.ResolveTrendline(series.SeriesIndex) is not { } trend || CountPlottedValues(series) < 2)
+                    continue;
+                entries.Add((
+                    series.SeriesIndex,
+                    TrendlineAnnotationFormatter.GetLegendName(trend, series.Name ?? $"Series {series.SeriesIndex + 1}"),
+                    trend));
+            }
+        }
+
         return entries;
     }
 
+    private static int CountPlottedValues(ChartSeriesData series)
+    {
+        var count = 0;
+        foreach (var value in series.Values)
+        {
+            if (value is { } v && !double.IsNaN(v))
+                count++;
+        }
+
+        return count;
+    }
 }

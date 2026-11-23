@@ -1,5 +1,6 @@
 using System.Globalization;
 using Free.Shared.Localization;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -80,6 +81,12 @@ public static class ChartFormatPanePlanner
     public const string RowTrendlineRSquared = "trendlineRSquared";
     public const string RowShowErrorBars = "showErrorBars";
     public const string RowErrorBarCaps = "errorBarCaps";
+    public const string RowSeriesFillColor = "seriesFillColor";
+    public const string RowSeriesLineColor = "seriesLineColor";
+    public const string RowSeriesLineWidth = "seriesLineWidth";
+    public const string RowSeriesDashStyle = "seriesDashStyle";
+    public const string RowSeriesMarkerStyle = "seriesMarkerStyle";
+    public const string RowSeriesMarkerSize = "seriesMarkerSize";
 
     /// <summary>The pane's content for <paramref name="element"/> of <paramref name="chart"/>.</summary>
     public static ChartFormatPaneModel Build(ChartModel chart, ChartElementRef element, string? seriesName = null)
@@ -137,6 +144,9 @@ public static class ChartFormatPanePlanner
                 break;
             case ChartElementKind.DataLabels:
                 AddDataLabelRows(rows, chart);
+                break;
+            case ChartElementKind.Series:
+                AddSeriesRows(rows, chart, element);
                 break;
             case ChartElementKind.Trendline:
             {
@@ -266,6 +276,13 @@ public static class ChartFormatPanePlanner
                 return new ChartLayoutOptions(ShowTrendlineEquation: on) { TrendlineTargetSeriesIndex = TargetSeries(element) };
             case RowTrendlineRSquared:
                 return new ChartLayoutOptions(ShowTrendlineRSquared: on) { TrendlineTargetSeriesIndex = TargetSeries(element) };
+            case RowSeriesFillColor:
+            case RowSeriesLineColor:
+            case RowSeriesLineWidth:
+            case RowSeriesDashStyle:
+            case RowSeriesMarkerStyle:
+            case RowSeriesMarkerSize:
+                return PlanSeriesFormat(chart, element, rowId, value);
             case RowShowErrorBars:
                 return new ChartLayoutOptions(ShowErrorBars: on) { ErrorBarTargetSeriesIndex = TargetSeries(element) };
             case RowErrorBarCaps:
@@ -274,6 +291,132 @@ public static class ChartFormatPanePlanner
                 return null;
         }
     }
+
+    // Excel's Format Data Series pane: fill and line colour, line width, dash, marker and the
+    // trendline / error-bar toggles of the series. Edits reuse the Format Series dialog's planner so one
+    // pane edit and one dialog edit produce the same SeriesFormats change.
+    private static void AddSeriesRows(List<ChartFormatPaneRow> rows, ChartModel chart, ChartElementRef element)
+    {
+        if (element.SeriesIndex < 0)
+            return;
+
+        var input = ChartSeriesFormatPlanner.Read(chart, element.SeriesIndex);
+        rows.Add(Text(RowSeriesFillColor, "ChartFormatPane_SeriesFillColor", FormatHex(input.FillColor)));
+        rows.Add(Text(RowSeriesLineColor, "ChartFormatPane_SeriesLineColor", FormatHex(input.StrokeColor)));
+        rows.Add(Number(RowSeriesLineWidth, "ChartFormatPane_SeriesLineWidth", input.StrokeThickness));
+        rows.Add(new ChartFormatPaneRow(
+            RowSeriesDashStyle,
+            "ChartFormatPane_SeriesDashStyle",
+            ChartFormatRowKind.Choice,
+            input.DashStyle?.ToString() ?? string.Empty,
+            DashChoices));
+        if (ChartTypeSupport.SupportsSeriesMarkers(chart.Type))
+        {
+            rows.Add(new ChartFormatPaneRow(
+                RowSeriesMarkerStyle,
+                "ChartFormatPane_SeriesMarkerStyle",
+                ChartFormatRowKind.Choice,
+                input.MarkerStyle is { } marker && marker != ChartMarkerStyle.Auto ? marker.ToString() : string.Empty,
+                MarkerChoices));
+            rows.Add(Number(RowSeriesMarkerSize, "ChartFormatPane_SeriesMarkerSize", input.MarkerSize));
+        }
+
+        if (ChartTypeSupport.SupportsTrendlines(chart.Type))
+            rows.Add(Toggle(RowShowTrendline, "ChartFormatPane_ShowTrendline", chart.ResolveTrendline(element.SeriesIndex) is not null));
+        rows.Add(Toggle(RowShowErrorBars, "ChartFormatPane_ShowErrorBars", chart.ResolveErrorBars(element.SeriesIndex) is not null));
+    }
+
+    private static ChartLayoutOptions? PlanSeriesFormat(ChartModel chart, ChartElementRef element, string rowId, string value)
+    {
+        if (element.Kind != ChartElementKind.Series || element.SeriesIndex < 0)
+            return null;
+
+        var input = ChartSeriesFormatPlanner.Read(chart, element.SeriesIndex);
+        value = value.Trim();
+        switch (rowId)
+        {
+            case RowSeriesFillColor:
+                CellColor? fill = null;
+                if (value.Length > 0 && !ColorInputParser.TryParseOptionalHexColor(value, out fill))
+                    return null;
+                input = input with { FillColor = fill };
+                break;
+            case RowSeriesLineColor:
+                CellColor? stroke = null;
+                if (value.Length > 0 && !ColorInputParser.TryParseOptionalHexColor(value, out stroke))
+                    return null;
+                input = input with { StrokeColor = stroke };
+                break;
+            case RowSeriesLineWidth:
+                if (value.Length == 0)
+                {
+                    input = input with { StrokeThickness = null };
+                    break;
+                }
+
+                if (!TryNumber(value, 0.5, 10, out var width))
+                    return null;
+                input = input with { StrokeThickness = width };
+                break;
+            case RowSeriesDashStyle:
+                if (value.Length == 0)
+                    input = input with { DashStyle = null };
+                else if (Enum.TryParse<ChartLineDashStyle>(value, out var dash) && Enum.IsDefined(dash))
+                    input = input with { DashStyle = dash };
+                else
+                    return null;
+                break;
+            case RowSeriesMarkerStyle:
+                if (value.Length == 0)
+                    input = input with { MarkerStyle = null };
+                else if (Enum.TryParse<ChartMarkerStyle>(value, out var marker) && Enum.IsDefined(marker))
+                    input = input with { MarkerStyle = marker };
+                else
+                    return null;
+                break;
+            case RowSeriesMarkerSize:
+                if (value.Length == 0)
+                {
+                    input = input with { MarkerSize = null };
+                    break;
+                }
+
+                if (!TryNumber(value, 1, 30, out var markerSize))
+                    return null;
+                input = input with { MarkerSize = markerSize };
+                break;
+            default:
+                return null;
+        }
+
+        return ChartSeriesFormatPlanner.Plan(chart, input);
+    }
+
+    private static string FormatHex(CellColor? color) =>
+        color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : string.Empty;
+
+    private static readonly IReadOnlyList<ChartFormatPaneChoice> DashChoices =
+    [
+        new(string.Empty, "ChartFormatPane_StyleAutomatic"),
+        new(nameof(ChartLineDashStyle.Solid), "ChartFormatPane_DashSolid"),
+        new(nameof(ChartLineDashStyle.Dash), "ChartFormatPane_DashDash"),
+        new(nameof(ChartLineDashStyle.Dot), "ChartFormatPane_DashDot"),
+    ];
+
+    private static readonly IReadOnlyList<ChartFormatPaneChoice> MarkerChoices =
+    [
+        new(string.Empty, "ChartFormatPane_StyleAutomatic"),
+        new(nameof(ChartMarkerStyle.None), "ChartFormatPane_MarkerNone"),
+        new(nameof(ChartMarkerStyle.Circle), "ChartFormatPane_MarkerCircle"),
+        new(nameof(ChartMarkerStyle.Square), "ChartFormatPane_MarkerSquare"),
+        new(nameof(ChartMarkerStyle.Diamond), "ChartFormatPane_MarkerDiamond"),
+        new(nameof(ChartMarkerStyle.Triangle), "ChartFormatPane_MarkerTriangle"),
+        new(nameof(ChartMarkerStyle.X), "ChartFormatPane_MarkerX"),
+        new(nameof(ChartMarkerStyle.Star), "ChartFormatPane_MarkerStar"),
+        new(nameof(ChartMarkerStyle.Plus), "ChartFormatPane_MarkerPlus"),
+        new(nameof(ChartMarkerStyle.Dot), "ChartFormatPane_MarkerDot"),
+        new(nameof(ChartMarkerStyle.Dash), "ChartFormatPane_MarkerDash"),
+    ];
 
     /// <summary>The series a trendline / error-bar pane row edits (null = the chart-wide "every series" meaning).</summary>
     private static int? TargetSeries(ChartElementRef element) =>

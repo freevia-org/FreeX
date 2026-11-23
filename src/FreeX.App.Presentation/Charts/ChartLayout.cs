@@ -182,6 +182,9 @@ public sealed class TrendlineLayout
     public required TrendlineFitKind Fit { get; init; }
     public required IReadOnlyList<LayoutPoint> Points { get; init; }
 
+    /// <summary>The legend text Excel shows for this trendline, e.g. "Linear (Sales)".</summary>
+    public string Label { get; init; } = "";
+
     /// <summary>
     /// The equation and/or R-squared annotation text lines, when
     /// <see cref="ChartModel.ShowTrendlineEquation"/> or <see cref="ChartModel.ShowTrendlineRSquared"/>
@@ -318,7 +321,18 @@ public sealed class ErrorBarLayout
 }
 
 /// <summary>A single laid-out legend entry: its swatch rectangle and its label box.</summary>
-public readonly record struct LegendEntry(int SeriesIndex, string Label, LayoutRect SwatchRect, LayoutRect LabelRect);
+public readonly record struct LegendEntry(int SeriesIndex, string Label, LayoutRect SwatchRect, LayoutRect LabelRect)
+{
+    /// <summary>
+    /// True for the legend row Excel adds for a series' trendline (e.g. "Linear (Sales)"); the entry
+    /// then shares the owning <see cref="SeriesIndex"/> and carries the trendline's line style in
+    /// <see cref="TrendlineStyle"/>. Such rows are not individually selectable.
+    /// </summary>
+    public bool IsTrendline { get; init; }
+
+    /// <summary>The per-series trendline projection (line colour / dash / thickness) for a trendline row.</summary>
+    public ChartModel? TrendlineStyle { get; init; }
+}
 
 /// <summary>The laid-out legend: its bounding box and per-series entries (empty when no legend).</summary>
 public sealed class LegendLayout

@@ -96,4 +96,25 @@ public sealed class AvaloniaChartPerSeriesAdornmentTests
             lines.Should().HaveCount(4);
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task Legend_listsTrendlineRowsWithExcelNamesAndALineSwatch()
+    {
+        await Session.Dispatch(() =>
+        {
+            var chart = new ChartModel
+            {
+                Type = ChartType.Column,
+                ShowLegend = true,
+                LegendPosition = ChartLegendPosition.Right,
+                ShowLinearTrendline = true,
+                SeriesTrendlines = [new ChartSeriesTrendline { SeriesIndex = 1 }],
+            };
+
+            var canvas = new AvaloniaChartRenderer(chart, WorkbookTheme.Office)
+                .Render(ChartLayoutEngine.Layout(BuildRequest(chart)), 300, 200);
+
+            canvas.Children.OfType<TextBlock>().Select(t => t.Text).Should().Contain("Linear (S1)");
+        }, CancellationToken.None);
+    }
 }

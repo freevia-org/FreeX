@@ -105,6 +105,29 @@ public static class TrendlineAnnotationFormatter
     private static string FormatSigned(double value) =>
         value < 0 ? $"- {Math.Abs(value):0.###}" : $"+ {value:0.###}";
 
+    /// <summary>
+    /// The legend text Excel shows for a series' trendline: the user-given name when set, otherwise
+    /// "Linear (Series)", "Expon. (Series)", "Log. (Series)", "Poly. (Series)", "Power (Series)" or
+    /// "N per. Mov. Avg. (Series)" (verified against Excel's <c>Trendline.Name</c>).
+    /// </summary>
+    public static string GetLegendName(ChartModel trendlineStyle, string seriesName)
+    {
+        ArgumentNullException.ThrowIfNull(trendlineStyle);
+        if (!string.IsNullOrWhiteSpace(trendlineStyle.TrendlineName))
+            return trendlineStyle.TrendlineName!;
+
+        var prefix = trendlineStyle.TrendlineType switch
+        {
+            ChartTrendlineType.Exponential => "Expon.",
+            ChartTrendlineType.Logarithmic => "Log.",
+            ChartTrendlineType.Polynomial => "Poly.",
+            ChartTrendlineType.Power => "Power",
+            ChartTrendlineType.MovingAverage => $"{Math.Max(2, trendlineStyle.TrendlinePeriod)} per. Mov. Avg.",
+            _ => "Linear",
+        };
+        return $"{prefix} ({seriesName})";
+    }
+
     public static string GetTitle(ChartTrendlineType type) =>
         type switch
         {

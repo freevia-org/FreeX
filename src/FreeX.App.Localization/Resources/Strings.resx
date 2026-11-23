@@ -3245,6 +3245,66 @@
   <data name="ChartFormatPane_ShowErrorBars" xml:space="preserve">
     <value>Show error bars</value>
   </data>
+  <data name="ChartFormatPane_SeriesFillColor" xml:space="preserve">
+    <value>Fill color (#RRGGBB)</value>
+  </data>
+  <data name="ChartFormatPane_SeriesLineColor" xml:space="preserve">
+    <value>Line color (#RRGGBB)</value>
+  </data>
+  <data name="ChartFormatPane_SeriesLineWidth" xml:space="preserve">
+    <value>Line width</value>
+  </data>
+  <data name="ChartFormatPane_SeriesDashStyle" xml:space="preserve">
+    <value>Dash type</value>
+  </data>
+  <data name="ChartFormatPane_SeriesMarkerStyle" xml:space="preserve">
+    <value>Marker type</value>
+  </data>
+  <data name="ChartFormatPane_SeriesMarkerSize" xml:space="preserve">
+    <value>Marker size</value>
+  </data>
+  <data name="ChartFormatPane_StyleAutomatic" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="ChartFormatPane_DashSolid" xml:space="preserve">
+    <value>Solid</value>
+  </data>
+  <data name="ChartFormatPane_DashDash" xml:space="preserve">
+    <value>Dash</value>
+  </data>
+  <data name="ChartFormatPane_DashDot" xml:space="preserve">
+    <value>Round dot</value>
+  </data>
+  <data name="ChartFormatPane_MarkerNone" xml:space="preserve">
+    <value>None</value>
+  </data>
+  <data name="ChartFormatPane_MarkerCircle" xml:space="preserve">
+    <value>Circle</value>
+  </data>
+  <data name="ChartFormatPane_MarkerSquare" xml:space="preserve">
+    <value>Square</value>
+  </data>
+  <data name="ChartFormatPane_MarkerDiamond" xml:space="preserve">
+    <value>Diamond</value>
+  </data>
+  <data name="ChartFormatPane_MarkerTriangle" xml:space="preserve">
+    <value>Triangle</value>
+  </data>
+  <data name="ChartFormatPane_MarkerX" xml:space="preserve">
+    <value>X</value>
+  </data>
+  <data name="ChartFormatPane_MarkerStar" xml:space="preserve">
+    <value>Star</value>
+  </data>
+  <data name="ChartFormatPane_MarkerPlus" xml:space="preserve">
+    <value>Plus</value>
+  </data>
+  <data name="ChartFormatPane_MarkerDot" xml:space="preserve">
+    <value>Dot</value>
+  </data>
+  <data name="ChartFormatPane_MarkerDash" xml:space="preserve">
+    <value>Dash</value>
+  </data>
   <data name="ChartFormatPane_ErrorBarCaps" xml:space="preserve">
     <value>End caps</value>
   </data>

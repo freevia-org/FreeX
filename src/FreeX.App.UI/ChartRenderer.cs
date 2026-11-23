@@ -37,19 +37,10 @@ public static partial class ChartRenderer
             Height = Math.Max(1, (int)Math.Ceiling(chart.Height * renderScale)),
         };
 
-        BitmapImage bitmap;
+        BitmapSource bitmap;
         try
         {
-            using var stream = new System.IO.MemoryStream();
-            exporter.Export(model, stream);
-            stream.Position = 0;
-
-            bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.StreamSource = stream;
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.EndInit();
-            bitmap.Freeze();
+            bitmap = ExportPlotModelBitmap(model, exporter);
         }
         catch (Exception ex)
         {
@@ -67,6 +58,52 @@ public static partial class ChartRenderer
         }
 
         return bitmap;
+    }
+
+    /// <summary>
+    /// Exports the plot through OxyPlot's <see cref="PngExporter"/> on a short-lived STA worker thread.
+    /// <see cref="PngExporter"/> lays out and rasterizes a throw-away WPF <c>Canvas</c>; when it runs
+    /// re-entrantly inside the UI thread's own render pass (the grid draws charts from
+    /// <c>OnRender</c>) the nested layout/render is a no-op and the export comes back blank, which
+    /// used to push every grid chart onto the simplified direct fallback (no trendlines, error
+    /// bars or bubbles). A thread with its own dispatcher is never inside a render pass. The returned
+    /// bitmap is frozen, so it is safe to hand back to the caller's thread.
+    /// </summary>
+    internal static BitmapSource ExportPlotModelBitmap(PlotModel model, PngExporter exporter)
+    {
+        BitmapSource? result = null;
+        Exception? failure = null;
+        var worker = new System.Threading.Thread(() =>
+        {
+            try
+            {
+                using var stream = new System.IO.MemoryStream();
+                exporter.Export(model, stream);
+                stream.Position = 0;
+
+                var decoded = new BitmapImage();
+                decoded.BeginInit();
+                decoded.StreamSource = stream;
+                decoded.CacheOption = BitmapCacheOption.OnLoad;
+                decoded.EndInit();
+                decoded.Freeze();
+                result = decoded;
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "FreeX chart export",
+        };
+        worker.SetApartmentState(System.Threading.ApartmentState.STA);
+        worker.Start();
+        worker.Join();
+        if (failure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+        return result!;
     }
 
     private static double NormalizeRenderScale(double renderScale)

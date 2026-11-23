@@ -7,7 +7,18 @@ namespace FreeX.App.Presentation.Tests.Charts;
 
 public sealed class ChartFormatPanePlannerTests
 {
-    private static ChartModel Column() => new() { Type = ChartType.Column, Title = "Sales", XAxisTitle = "Quarter", YAxisTitle = "Revenue" };
+    private static ChartModel Column()
+    {
+        var sheet = SheetId.New();
+        return new()
+        {
+            Type = ChartType.Column,
+            Title = "Sales",
+            XAxisTitle = "Quarter",
+            YAxisTitle = "Revenue",
+            DataRange = new GridRange(new CellAddress(sheet, 1, 1), new CellAddress(sheet, 5, 4)),
+        };
+    }
 
     [Fact]
     public void Title_pane_offers_text_font_size_and_reset_position()
@@ -103,5 +114,66 @@ public sealed class ChartFormatPanePlannerTests
                     .Should().NotBeNull($"{kind}/{row.Id}");
             }
         }
+    }
+
+    [Fact]
+    public void Series_pane_lists_the_format_data_series_rows_beyond_more_options()
+    {
+        var chart = Column();
+        chart.SeriesFormats = [new ChartSeriesFormat(1, FillColor: new CellColor(0x12, 0x34, 0x56), StrokeThickness: 2)];
+
+        var pane = ChartFormatPanePlanner.Build(chart, ChartElementRef.ForSeries(1));
+
+        pane.Rows.Select(r => r.Id).Should().Equal(
+            ChartFormatPanePlanner.RowSeriesFillColor,
+            ChartFormatPanePlanner.RowSeriesLineColor,
+            ChartFormatPanePlanner.RowSeriesLineWidth,
+            ChartFormatPanePlanner.RowSeriesDashStyle,
+            ChartFormatPanePlanner.RowShowTrendline,
+            ChartFormatPanePlanner.RowShowErrorBars);
+        pane.Rows[0].Value.Should().Be("#123456");
+        pane.Rows[2].Value.Should().Be("2");
+        pane.MoreOptionsTarget.Should().Be(ChartElementFormatTarget.DataSeries);
+    }
+
+    [Fact]
+    public void Series_pane_on_a_line_chart_adds_marker_rows()
+    {
+        var chart = Column();
+        chart.Type = ChartType.Line;
+
+        var pane = ChartFormatPanePlanner.Build(chart, ChartElementRef.ForSeries(0));
+
+        pane.Rows.Select(r => r.Id).Should().Contain(
+            [ChartFormatPanePlanner.RowSeriesMarkerStyle, ChartFormatPanePlanner.RowSeriesMarkerSize]);
+    }
+
+    [Fact]
+    public void Editing_series_rows_merges_into_that_series_format_only()
+    {
+        var chart = Column();
+        chart.SeriesFormats = [new ChartSeriesFormat(0, StrokeThickness: 3)];
+        var element = ChartElementRef.ForSeries(1);
+
+        var fill = ChartFormatPanePlanner.Plan(chart, element, ChartFormatPanePlanner.RowSeriesFillColor, "#FF8000");
+        var dash = ChartFormatPanePlanner.Plan(chart, element, ChartFormatPanePlanner.RowSeriesDashStyle, "Dot");
+
+        var fillFormats = fill!.SeriesFormats!;
+        fillFormats.Single(f => f.SeriesIndex == 0).StrokeThickness.Should().Be(3);
+        fillFormats.Single(f => f.SeriesIndex == 1).FillColor.Should().Be(new CellColor(0xFF, 0x80, 0x00));
+        dash!.SeriesFormats!.Single(f => f.SeriesIndex == 1).DashStyle.Should().Be(ChartLineDashStyle.Dot);
+        ChartFormatPanePlanner.Plan(chart, element, ChartFormatPanePlanner.RowSeriesFillColor, "not a color").Should().BeNull();
+        ChartFormatPanePlanner.Plan(chart, element, ChartFormatPanePlanner.RowSeriesLineWidth, "-4").Should().BeNull();
+    }
+
+    [Fact]
+    public void Series_pane_trendline_and_error_bar_toggles_target_the_series()
+    {
+        var element = ChartElementRef.ForSeries(2);
+
+        ChartFormatPanePlanner.Plan(Column(), element, ChartFormatPanePlanner.RowShowTrendline, "true")!
+            .TrendlineTargetSeriesIndex.Should().Be(2);
+        ChartFormatPanePlanner.Plan(Column(), element, ChartFormatPanePlanner.RowShowErrorBars, "true")!
+            .ErrorBarTargetSeriesIndex.Should().Be(2);
     }
 }
