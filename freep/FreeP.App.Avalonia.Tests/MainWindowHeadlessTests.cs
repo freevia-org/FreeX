@@ -890,7 +890,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_session()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs")) +
+            File.ReadAllText(FindRepoFile("freep", "RendererShared", "MainWindow.ReviewFacade.cs"));
 
         source.Should().Contain("_reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex)");
         source.Should().Contain("_reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex)");
