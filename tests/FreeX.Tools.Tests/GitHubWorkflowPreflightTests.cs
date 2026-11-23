@@ -7,16 +7,15 @@ namespace FreeX.App.Host.Tests;
 public sealed class GitHubWorkflowPreflightTests
 {
     [Fact]
-    public void CiWorkflow_AutomaticallyRunsTheManifestDefinedSuiteAcrossAllPlatforms()
+    public void CiWorkflow_RunsTheManifestDefinedSuiteAcrossAllPlatformsOnManualDispatchOnly()
     {
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "ci.yml");
 
         workflow.Should().Contain("workflow_dispatch:");
-        workflow.Should().Contain("push:");
+        workflow.Should().NotMatchRegex(@"(?m)^\s{2}push:");
         workflow.Should().NotContain("pull_request:");
-        // Daily FULL-matrix drift run: impact selection may reduce a push, so a scheduled run
-        // guarantees a full-coverage attestation exists near every commit.
-        workflow.Should().Contain("schedule:");
+        workflow.Should().NotContain("schedule:");
+        workflow.Should().NotContain("cron:");
         workflow.Should().Contain("tools/Select-CiCoverage.ps1");
         workflow.Should().Contain("-Coverage ${{ steps.coverage.outputs.mode || 'full' }}");
         workflow.Should().Contain("name: \"CI coverage: ${{ needs.prepare.outputs.coverage }}\"");
@@ -61,9 +60,10 @@ public sealed class GitHubWorkflowPreflightTests
         var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "codeql.yml");
         var solution = WorkspaceFileLocator.ReadAllText("FreeSuite.CodeQL.slnx");
 
-        workflow.Should().Contain("push:");
+        workflow.Should().NotContain("push:");
         workflow.Should().NotContain("pull_request:");
-        workflow.Should().Contain("schedule:");
+        workflow.Should().NotContain("schedule:");
+        workflow.Should().NotContain("cron:");
         workflow.Should().Contain("group: codeql-${{ github.ref }}");
         workflow.Should().Contain("cancel-in-progress: true");
         workflow.Should().Contain("build-mode: none");
@@ -147,11 +147,42 @@ public sealed class GitHubWorkflowPreflightTests
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_ReservesAutomaticTriggersForCanonicalQualityWorkflows()
+    public void GitHubWorkflowPreflight_EnforcesTheManualOnlyTriggerContract()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-GitHubWorkflows.ps1");
 
-        script.Should().Contain("automatic triggers are reserved for CI and CodeQL");
+        script.Should().Contain("automatic triggers are not allowed (manual-only policy)");
+    }
+
+    [Fact]
+    public void AllWorkflows_AreManualOnlyExceptTheAutoRetryWorkflowRun()
+    {
+        var workflowDirectory = Path.GetDirectoryName(WorkspaceFileLocator.Find(".github", "workflows", "ci.yml"))!;
+
+        foreach (var path in Directory.GetFiles(workflowDirectory, "*.yml"))
+        {
+            var text = File.ReadAllText(path);
+            var name = Path.GetFileName(path);
+
+            text.Should().Contain("workflow_dispatch:", name);
+            text.Should().NotMatchRegex(@"(?m)^\s{2}(push|schedule|pull_request|pull_request_target|release|create|issues):", name);
+            text.Should().NotContain("cron:", name);
+            if (name != "release-auto-retry.yml")
+            {
+                text.Should().NotMatchRegex(@"(?m)^\s{2}workflow_run:", name);
+            }
+        }
+    }
+
+    [Fact]
+    public void IntegrationGate_AllowsACommitWithNoCiRunButRefusesARunThatIsNotGreen()
+    {
+        var script = WorkspaceFileLocator.ReadAllText("tools", "Test-BranchForIntegration.ps1");
+
+        script.Should().Contain("$noExactCiRun = $latestRun.Count -eq 0");
+        script.Should().Contain("CI is manual-only");
+        script.Should().Contain("Refusing ordinary integration because $BaseRef ($baseSha) has $state.");
+        script.Should().NotContain("'no exact-SHA CI run'");
     }
 
     [Fact]
@@ -183,7 +214,7 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.NormalizedCombinedOutput.Should().Contain("non-canonical workflow must use workflow_dispatch only; automatic triggers are reserved for CI and CodeQL.");
+        result.NormalizedCombinedOutput.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are not allowed (manual-only policy): push.");
         result.CombinedOutput.Should().Contain("automatic.yml");
     }
 

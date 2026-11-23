@@ -378,56 +378,17 @@ foreach ($workflow in $workflows) {
     $triggerNames = @($inlineTriggerNames + $blockTriggerNames)
     $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
-    # release-readiness.yml is scheduled on purpose. The 13 release-only gates in eng/test-gates.json
-    # never run on push, so between releases they rot invisibly on a green main and the next release
-    # pays the accumulated debt (releasing 0.8.187 surfaced four such regressions). They cannot join
-    # the commit gate -- runner concurrency is capped and the commit matrix already saturates it --
-    # so they run on a schedule instead. It reports; it is not a merge gate.
-    # release-packaging-rehearsal.yml is scheduled for the same reason one level further out:
-    # release-readiness covers the release-only TEST gates, but packaging is where the last several
-    # releases actually broke, and no test gate reaches it. It dispatches the real release workflow
-    # in dry-run mode weekly.
-    # release-auto-retry.yml reacts to the end of a manually dispatched Full Signed Release run
-    # (workflow_run), re-running its failed jobs once when -- and only when -- every failure is
-    # infrastructure. It never starts anything on a push or a schedule, so it adds no automatic
-    # runner demand beyond about a minute per failed release.
-    $automaticQualityWorkflows = @("ci.yml", "codeql.yml", "release-readiness.yml", "release-packaging-rehearsal.yml", "release-auto-retry.yml")
-    if ($automaticQualityWorkflows -contains $workflow.Name) {
-        # Each canonical workflow has its own trigger contract. ci.yml and codeql.yml gate every
-        # push; release-readiness.yml deliberately does NOT run per push (it would double the
-        # already-saturated runner demand) and is scheduled instead, so requiring 'push' of it would
-        # force exactly the design this workflow exists to avoid.
-        $scheduledOnlyWorkflows = @("release-readiness.yml", "release-packaging-rehearsal.yml")
-        $requiredTriggers = if ($scheduledOnlyWorkflows -contains $workflow.Name) {
-            @("workflow_dispatch", "schedule")
-        }
-        elseif ($workflow.Name -eq "release-auto-retry.yml") {
-            @("workflow_dispatch", "workflow_run")
-        }
-        else {
-            @("workflow_dispatch", "push")
-        }
-        foreach ($requiredTrigger in $requiredTriggers) {
-            if ($triggerNames -notcontains $requiredTrigger) {
-                $errors.Add("$($workflow.Name): canonical quality workflow must declare '$requiredTrigger'.")
-            }
-        }
-        $allowedAutomaticTriggers = switch ($workflow.Name) {
-            "codeql.yml" { @("push", "schedule") }
-            # ci.yml also runs a daily FULL-matrix drift run (impact selection may reduce pushes).
-            "ci.yml" { @("push", "schedule") }
-            "release-readiness.yml" { @("schedule") }
-            "release-packaging-rehearsal.yml" { @("schedule") }
-            "release-auto-retry.yml" { @("workflow_run") }
-            default { @("push") }
-        }
-        $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })
-        if ($unexpectedTriggers.Count -gt 0) {
-            $errors.Add("$($workflow.Name): canonical quality workflow has unsupported triggers: $($unexpectedTriggers -join ', ').")
-        }
+    # Manual-only policy: every workflow is started by hand (workflow_dispatch). push, schedule and
+    # pull_request triggers are forbidden everywhere. The single exception is release-auto-retry.yml,
+    # which also reacts (workflow_run) to the end of a manually dispatched Full Signed Release run to
+    # re-run its infrastructure-failed jobs once; it never starts anything by itself.
+    $allowedAutomaticTriggers = if ($workflow.Name -eq "release-auto-retry.yml") { @("workflow_run") } else { @() }
+    if (-not $hasWorkflowDispatch) {
+        $errors.Add("$($workflow.Name): workflow must declare workflow_dispatch (GitHub Actions are manual-only).")
     }
-    elseif (-not $hasWorkflowDispatch -or $nonManualTriggerNames.Count -gt 0) {
-        $errors.Add("$($workflow.Name): non-canonical workflow must use workflow_dispatch only; automatic triggers are reserved for CI and CodeQL.")
+    $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })
+    if ($unexpectedTriggers.Count -gt 0) {
+        $errors.Add("$($workflow.Name): workflow must use workflow_dispatch only; automatic triggers are not allowed (manual-only policy): $($unexpectedTriggers -join ', ').")
     }
 
     # The commit gate runs `dotnet test` once per project, so MSBuild starts many times inside one

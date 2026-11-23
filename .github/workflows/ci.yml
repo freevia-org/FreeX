@@ -7,15 +7,8 @@ on:
         description: Run the full test-gate matrix instead of letting impact selection reduce it.
         type: boolean
         default: true
-  # Daily drift run. Impact selection may reduce a push to the repository preflight when only
-  # documentation that nothing reads changed, so a scheduled FULL run guarantees that a full
-  # attestation exists near every commit and that drift (runner images, packages, time-dependent
-  # tests) cannot hide behind a run of reduced pushes.
-  schedule:
-    - cron: "37 3 * * *"
-  push:
-    branches:
-      - main
+  # Manual-only by policy: no push, schedule or pull_request trigger. Start a run with
+  # `gh workflow run ci.yml -f full=true` (see docs/testing/test-gates.md).
 
 concurrency:
   # A scheduled or manual FULL run must not cancel (or be cancelled by) the push run in flight,

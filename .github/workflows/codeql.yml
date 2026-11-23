@@ -1,12 +1,8 @@
 name: CodeQL
 
 on:
+  # Manual-only by policy: no push or schedule trigger.
   workflow_dispatch:
-  push:
-    branches:
-      - main
-  schedule:
-    - cron: "19 3 * * 1"
 
 concurrency:
   group: codeql-${{ github.ref }}
