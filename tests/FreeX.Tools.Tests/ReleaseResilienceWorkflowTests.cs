@@ -95,19 +95,17 @@ public sealed class ReleaseResilienceWorkflowTests
     {
         var retry = WorkspaceFileLocator.ReadAllText(".github", "workflows", "release-auto-retry.yml");
 
-        // Triggered only by the end of a dispatched Full Signed Release run, never by a push or schedule.
-        retry.Should().Contain("workflow_run:");
-        retry.Should().Contain("workflows: [\"Full Signed Release\"]");
+        // Started only by an operator's workflow_dispatch with a run_id, never by an event.
+        retry.Should().Contain("workflow_dispatch:");
+        retry.Should().Contain("run_id:");
+        retry.Should().NotContain("workflow_run");
         retry.Should().NotContain("push:");
         retry.Should().NotContain("schedule:");
         retry.Should().NotContain("pull_request");
 
-        // The pre-filter and the authoritative API re-check both pin 'failure' and the first attempt,
+        // The authoritative API re-check pins the workflow, 'failure' and the first attempt,
         // so a re-run is never retried and a cancelled run (the early-abort case) is never retried.
-        retry.Should().Contain("github.event.workflow_run.conclusion == 'failure'");
-        retry.Should().Contain("github.event.workflow_run.run_attempt == 1");
-        retry.Should().Contain("github.event.workflow_run.path == '.github/workflows/full-release.yml'");
-        retry.Should().Contain("github.event.workflow_run.repository.full_name == github.repository");
+        retry.Should().Contain("[string]$run.path -ne \".github/workflows/full-release.yml\"");
         retry.Should().Contain("[string]$run.conclusion -ne \"failure\"");
         retry.Should().Contain("[int]$run.run_attempt -ne 1");
 

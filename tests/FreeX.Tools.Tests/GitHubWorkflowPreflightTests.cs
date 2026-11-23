@@ -167,10 +167,7 @@ public sealed class GitHubWorkflowPreflightTests
             text.Should().Contain("workflow_dispatch:", name);
             text.Should().NotMatchRegex(@"(?m)^\s{2}(push|schedule|pull_request|pull_request_target|release|create|issues):", name);
             text.Should().NotContain("cron:", name);
-            if (name != "release-auto-retry.yml")
-            {
-                text.Should().NotMatchRegex(@"(?m)^\s{2}workflow_run:", name);
-            }
+            text.Should().NotMatchRegex(@"(?m)^\s{2}workflow_run:", name);
         }
     }
 

@@ -379,14 +379,11 @@ foreach ($workflow in $workflows) {
     $hasWorkflowDispatch = $triggerNames -contains "workflow_dispatch"
     $nonManualTriggerNames = @($triggerNames | Where-Object { $_ -ne "workflow_dispatch" })
     # Manual-only policy: every workflow is started by hand (workflow_dispatch). push, schedule and
-    # pull_request triggers are forbidden everywhere. The single exception is release-auto-retry.yml,
-    # which also reacts (workflow_run) to the end of a manually dispatched Full Signed Release run to
-    # re-run its infrastructure-failed jobs once; it never starts anything by itself.
-    $allowedAutomaticTriggers = if ($workflow.Name -eq "release-auto-retry.yml") { @("workflow_run") } else { @() }
+    # pull_request and workflow_run triggers are forbidden everywhere, with no exceptions.
     if (-not $hasWorkflowDispatch) {
         $errors.Add("$($workflow.Name): workflow must declare workflow_dispatch (GitHub Actions are manual-only).")
     }
-    $unexpectedTriggers = @($nonManualTriggerNames | Where-Object { $allowedAutomaticTriggers -notcontains $_ })
+    $unexpectedTriggers = @($nonManualTriggerNames)
     if ($unexpectedTriggers.Count -gt 0) {
         $errors.Add("$($workflow.Name): workflow must use workflow_dispatch only; automatic triggers are not allowed (manual-only policy): $($unexpectedTriggers -join ', ').")
     }
