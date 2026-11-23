@@ -31,6 +31,14 @@ namespace FreeX.App.Avalonia.Charts;
 public sealed class AvaloniaChartRenderer
 {
     private const double MarkerRadius = 3.5;
+
+    /// <summary>
+    /// Radius (DIP) of a marker whose Excel size (<c>&lt;c:marker&gt;&lt;c:size&gt;</c>, points) is
+    /// <paramref name="markerSizePoints"/>: Excel's size is the marker's diameter in points and a point is
+    /// 4/3 DIP, so size 5 (the default) is a 6.67 DIP wide marker. Unset keeps the default radius.
+    /// </summary>
+    internal static double MarkerRadiusFor(double? markerSizePoints) =>
+        markerSizePoints is { } size and > 0 ? size * 2.0 / 3.0 : MarkerRadius;
     private const double AxisLabelFontSize = 10;
     private const double DefaultLegendFontSize = 11;
     private const double DefaultDataLabelFontSize = 10;
@@ -43,6 +51,7 @@ public sealed class AvaloniaChartRenderer
     private const double TrendlineAnnotationFontSize = 10;
 
     private static readonly IBrush AxisBrush = SolidBrush(0x59, 0x59, 0x59);
+    private static readonly IBrush DefaultAxisLineBrush = SolidBrush(0xD9, 0xD9, 0xD9);
     private static readonly IBrush AxisLabelBrush = SolidBrush(0x40, 0x40, 0x40);
     private static readonly IBrush DefaultPlotBackground = SolidBrush(0xFF, 0xFF, 0xFF);
     private static readonly IBrush DefaultPlotBorderBrush = SolidBrush(0xD9, 0xD9, 0xD9);
@@ -139,6 +148,8 @@ public sealed class AvaloniaChartRenderer
         // the actual bar/column series in this layout (combo line/scatter overlays are laid out
         // with a different Kind and so are correctly excluded).
         var barSeriesCount = layout.Series.Count(s => s.Kind is SeriesGeometryKind.Columns or SeriesGeometryKind.Bars);
+        if (layout.Radar is { } radar)
+            RenderRadarGrid(canvas, radar);
         foreach (var series in layout.Series)
             RenderSeries(canvas, series, isTreemap ? layout.DataLabels : [], barSeriesCount);
 
@@ -473,8 +484,33 @@ public sealed class AvaloniaChartRenderer
         var markerStyle = format?.MarkerStyle ?? ChartMarkerStyle.None;
         // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
         var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
-        AddPolyline(canvas, series.Points, stroke, dashStyle, strokeThickness);
+        // An explicit <a:ln><a:noFill/> (Excel "markers only") draws no connecting line at all.
+        if (format?.NoLine != true)
+            AddSeriesLine(canvas, series, stroke, dashStyle, strokeThickness);
         AddMarkers(canvas, series.Points, series.SeriesIndex, SeriesFill(series.SeriesIndex), stroke, markerStyle);
+    }
+
+    // The connecting stroke of a line/scatter series: the smoothed curve when the layout sampled one
+    // (<c:smooth val="1"/>), otherwise the straight polyline through the data points.
+    private static void AddSeriesLine(
+        Canvas canvas,
+        SeriesLayout series,
+        IBrush stroke,
+        ChartLineDashStyle? dashStyle,
+        double strokeThickness)
+    {
+        if (series.CurvePoints.Count < 2)
+        {
+            AddPolyline(canvas, series.Points, stroke, dashStyle, strokeThickness);
+            return;
+        }
+
+        AddPolyline(
+            canvas,
+            series.CurvePoints.Select((p, i) => new SeriesPoint(i, i, p.Y, p)).ToList(),
+            stroke,
+            dashStyle,
+            strokeThickness);
     }
 
     private void RenderArea(Canvas canvas, SeriesLayout series)
@@ -505,12 +541,23 @@ public sealed class AvaloniaChartRenderer
     private void RenderScatter(Canvas canvas, SeriesLayout series)
     {
         var format = FindSeriesFormat(series.SeriesIndex);
+        var stroke = SeriesStroke(series.SeriesIndex);
+        if (series.ConnectPoints)
+        {
+            AddSeriesLine(
+                canvas,
+                series,
+                stroke,
+                format?.DashStyle,
+                format?.StrokeThickness ?? DefaultSeriesStrokeThickness);
+        }
+
         AddMarkers(
             canvas,
             series.Points,
             series.SeriesIndex,
             SeriesFill(series.SeriesIndex),
-            SeriesStroke(series.SeriesIndex),
+            stroke,
             format?.MarkerStyle ?? ChartMarkerStyle.Circle);
     }
 
@@ -563,13 +610,73 @@ public sealed class AvaloniaChartRenderer
         }
     }
 
+    // Excel's radar grid: one polygon per major unit, a spoke per category, the category names just outside the
+    // outer ring and the axis values down the first spoke (to its left).
+    private void RenderRadarGrid(Canvas canvas, RadarLayout radar)
+    {
+        var count = radar.Spokes.Count;
+        if (count < 3)
+            return;
+
+        foreach (var ring in radar.Rings)
+        {
+            var points = new Points();
+            foreach (var spoke in radar.Spokes)
+            {
+                points.Add(Polar(radar.Center, spoke.AngleDegrees, ring.Radius));
+            }
+
+            canvas.Children.Add(new AvaloniaPolygon { Stroke = DefaultAxisLineBrush, StrokeThickness = 1, Points = points });
+        }
+
+        foreach (var spoke in radar.Spokes)
+        {
+            AddLine(canvas, radar.Center.X, radar.Center.Y, spoke.Outer.X, spoke.Outer.Y, DefaultAxisLineBrush, 1);
+
+            var label = spoke.CategoryIndex < radar.CategoryLabels.Count ? radar.CategoryLabels[spoke.CategoryIndex] : "";
+            if (string.IsNullOrEmpty(label))
+                continue;
+
+            var anchor = Polar(radar.Center, spoke.AngleDegrees, radar.OuterRadius + 10);
+            var text = new TextBlock { Text = label, FontSize = AxisLabelFontSize, Foreground = AxisLabelBrush };
+            text.Measure(Size.Infinity);
+            var width = text.DesiredSize.Width;
+            var height = text.DesiredSize.Height;
+            // Centre the name on its spoke direction: push it sideways by half its width on the left/right.
+            var sin = Math.Sin(spoke.AngleDegrees * Math.PI / 180);
+            var cos = Math.Cos(spoke.AngleDegrees * Math.PI / 180);
+            Canvas.SetLeft(text, anchor.X - (width / 2) + (sin * width / 2));
+            Canvas.SetTop(text, anchor.Y - (height / 2) - (cos * height / 2));
+            canvas.Children.Add(text);
+        }
+
+        AddRadarAxisLabel(canvas, radar, 0, 0);
+        foreach (var ring in radar.Rings)
+            AddRadarAxisLabel(canvas, radar, ring.Radius, ring.Value);
+    }
+
+    private static void AddRadarAxisLabel(Canvas canvas, RadarLayout radar, double radius, double value)
+    {
+        var text = new TextBlock
+        {
+            Text = value.ToString("0.##", System.Globalization.CultureInfo.CurrentCulture),
+            FontSize = AxisLabelFontSize,
+            Foreground = AxisLabelBrush,
+        };
+        text.Measure(Size.Infinity);
+        Canvas.SetLeft(text, radar.Center.X - text.DesiredSize.Width - 3);
+        Canvas.SetTop(text, radar.Center.Y - radius - (text.DesiredSize.Height / 2));
+        canvas.Children.Add(text);
+    }
+
     private void RenderRadar(Canvas canvas, SeriesLayout series)
     {
         if (series.Points.Count == 0)
             return;
 
         var format = FindSeriesFormat(series.SeriesIndex);
-        var fill = SeriesFill(series.SeriesIndex, alpha: 0x40);
+        // Only Excel's "Filled Radar" fills the polygons; the default radar is an outline per series.
+        var fill = _chart.RadarFilled == true ? SeriesFill(series.SeriesIndex, alpha: 0xB0) : Brushes.Transparent;
         var stroke = SeriesStroke(series.SeriesIndex);
         // F19: honor the series' persisted StrokeThickness, falling back to 2 only when unset.
         var strokeThickness = format?.StrokeThickness ?? DefaultSeriesStrokeThickness;
@@ -963,6 +1070,7 @@ public sealed class AvaloniaChartRenderer
         IBrush stroke,
         ChartMarkerStyle markerStyle = ChartMarkerStyle.Circle)
     {
+        var seriesMarkerSize = FindSeriesFormat(seriesIndex)?.MarkerSize;
         foreach (var p in seriesPoints)
         {
             var pointFormat = FindPointMarkerFormat(seriesIndex, p.PointIndex);
@@ -976,7 +1084,7 @@ public sealed class AvaloniaChartRenderer
             var pointStroke = pointFormat?.ResolveBorderColor(_theme) is { } borderOverride
                 ? SolidBrush(borderOverride)
                 : stroke;
-            var radius = pointFormat?.MarkerSize ?? MarkerRadius;
+            var radius = MarkerRadiusFor(pointFormat?.MarkerSize ?? seriesMarkerSize);
 
             var cx = p.Position.X;
             var cy = p.Position.Y;
@@ -1329,9 +1437,11 @@ public sealed class AvaloniaChartRenderer
             return;
 
         var horizontal = axis.Side is AxisSide.Bottom or AxisSide.Top;
-        var axisLineBrush = horizontal
-            ? _chart.XAxisLineColor is { } xLineColor ? SolidBrush(xLineColor) : AxisBrush
-            : _chart.YAxisLineColor is { } yLineColor ? SolidBrush(yLineColor) : AxisBrush;
+        // Excel's default axis lines: the category axis a light grey rule, the value axis none (XY charts have
+        // two value axes). Ticks keep the grey so a chart that asks for tick marks still gets them.
+        var authoredLine = horizontal ? _chart.XAxisLineColor : _chart.YAxisLineColor;
+        var drawsAxisLine = authoredLine is not null || (!isValueAxis && _chart.Type is not (ChartType.Scatter or ChartType.Bubble));
+        var axisLineBrush = authoredLine is { } lineColor ? SolidBrush(lineColor) : DefaultAxisLineBrush;
         var axisLineThickness = horizontal
             ? PositiveOrDefault(_chart.XAxisLineThickness, 1)
             : PositiveOrDefault(_chart.YAxisLineThickness, 1);
@@ -1343,7 +1453,11 @@ public sealed class AvaloniaChartRenderer
             : PositiveOrDefault(_chart.YAxisLabelFontSize, AxisLabelFontSize);
         var showLabels = horizontal ? _chart.ShowXAxisLabels : _chart.ShowYAxisLabels;
 
-        if (horizontal)
+        if (!drawsAxisLine)
+        {
+            // No axis rule to draw.
+        }
+        else if (horizontal)
             AddLine(canvas, FirstTickPos(axis), axis.LinePosition, LastTickPos(axis), axis.LinePosition,
                 axisLineBrush, axisLineThickness);
         else
@@ -1503,7 +1617,9 @@ public sealed class AvaloniaChartRenderer
             {
                 // Right axis title: rotated 90° clockwise, to the right of the right axis.
                 tb.RenderTransform = new RotateTransform(90);
-                Canvas.SetLeft(tb, axis.LinePosition + TickLength + 18);
+                // A 90 degree clockwise turn about the top-left corner extends the text box to the LEFT of its anchor
+                // by the text height, so the anchor sits a text height beyond the labels (else it overprints them).
+                Canvas.SetLeft(tb, axis.LinePosition + TickLength + 18 + textH);
                 Canvas.SetTop(tb, centerY - textW / 2);
             }
             else

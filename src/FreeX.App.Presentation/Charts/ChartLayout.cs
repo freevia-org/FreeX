@@ -223,6 +223,20 @@ public sealed record SeriesLayout
     public IReadOnlyList<SeriesPoint> Points { get; init; } = [];
     public IReadOnlyList<SeriesSlice> Slices { get; init; } = [];
 
+    /// <summary>
+    /// For a scatter series drawn with connecting lines (Excel "Scatter with Straight Lines" /
+    /// "Smooth Lines"), true: the host strokes <see cref="CurvePoints"/> when present, otherwise the
+    /// polyline through <see cref="Points"/>, underneath the markers.
+    /// </summary>
+    public bool ConnectPoints { get; init; }
+
+    /// <summary>
+    /// The densely sampled smoothed curve of a smooth line/scatter series (<c>&lt;c:smooth val="1"/&gt;</c>),
+    /// in plot space. A point with a NaN Y breaks the stroke (a gap in the data). Empty means "draw the
+    /// straight polyline through <see cref="Points"/>".
+    /// </summary>
+    public IReadOnlyList<LayoutPoint> CurvePoints { get; init; } = [];
+
     /// <summary>For bubble series, the laid-out bubbles (center + pixel radius). Empty otherwise.</summary>
     public IReadOnlyList<SeriesBubble> Bubbles { get; init; } = [];
 
@@ -394,4 +408,19 @@ public sealed class RadarLayout
     public required LayoutPoint Center { get; init; }
     public required double OuterRadius { get; init; }
     public required IReadOnlyList<RadarSpoke> Spokes { get; init; }
+
+    /// <summary>The value at the outer ring (Excel's automatic radar axis maximum, e.g. 25 for data up to 22).</summary>
+    public double ValueMaximum { get; init; }
+
+    /// <summary>The concentric polygon grid, innermost first: each ring's value and its pixel radius.</summary>
+    public IReadOnlyList<RadarRing> Rings { get; init; } = [];
+
+    /// <summary>The category name of every spoke, in spoke order (empty when the chart has no categories).</summary>
+    public IReadOnlyList<string> CategoryLabels { get; init; } = [];
+
+    /// <summary>True for Excel's "Filled Radar": the series polygons are filled instead of outlined.</summary>
+    public bool Filled { get; init; }
 }
+
+/// <summary>One concentric polygon of the radar grid: the axis value it marks and its pixel radius.</summary>
+public readonly record struct RadarRing(double Value, double Radius);

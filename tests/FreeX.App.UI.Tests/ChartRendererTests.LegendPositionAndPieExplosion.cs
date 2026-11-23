@@ -104,7 +104,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Slices.Should().HaveCount(4);
         series.Slices[0].IsExploded.Should().BeFalse();
         series.Slices[1].IsExploded.Should().BeTrue();
@@ -134,7 +134,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Slices.Should().OnlyContain(slice => !slice.IsExploded);
     }
 
@@ -164,7 +164,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Slices.Should().HaveCount(3);
         series.Slices[0].IsExploded.Should().BeFalse();
         series.Slices[1].IsExploded.Should().BeFalse();

@@ -134,7 +134,7 @@ public sealed partial class ChartRendererTests
             []),
             WorkbookTheme.Office);
 
-        var pieSeries = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pieSeries = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pieSeries.Slices.Should().HaveCount(3);
 
         // First three slices should use Accent1, Accent2, Accent3
@@ -174,7 +174,7 @@ public sealed partial class ChartRendererTests
             []),
             WorkbookTheme.Office);
 
-        var pieSeries = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pieSeries = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pieSeries.Slices.Should().HaveCount(8);
         pieSeries.Slices.Should().OnlyContain(s => !s.Fill.IsInvisible(), "all slices must have a visible color");
         // Slice 6 (index 6) wraps to the lightened Accent1 (tint +0.4)
@@ -205,7 +205,7 @@ public sealed partial class ChartRendererTests
             []),
             WorkbookTheme.Office);
 
-        var pieSeries = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pieSeries = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pieSeries.Slices.Should().HaveCount(2);
         pieSeries.Slices[0].Fill.Should().Be(OxyColor.FromRgb(21, 96, 130),  "slice 0 = Accent1");
         pieSeries.Slices[1].Fill.Should().Be(OxyColor.FromRgb(233, 113, 50), "slice 1 = Accent2");
@@ -304,7 +304,7 @@ public sealed partial class ChartRendererTests
             []),
             WorkbookTheme.Office);
 
-        var pieSeries = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pieSeries = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pieSeries.Slices.Should().OnlyContain(s => s.Fill == OxyColor.FromRgb(91, 155, 213),
             "explicit SeriesFormat fill color must override the Excel palette");
     }

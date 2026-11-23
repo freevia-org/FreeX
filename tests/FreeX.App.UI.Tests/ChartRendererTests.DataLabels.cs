@@ -318,7 +318,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.OutsideLabelFormat.Should().Be(
             "{1}" + Environment.NewLine + "{0}" + Environment.NewLine + "{2:0}%");
     }
@@ -393,7 +393,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.AreInsideLabelsAngled.Should().BeFalse();
         series.InsideLabelFormat.Should().BeEmpty();
         model.Annotations.OfType<TextAnnotation>().Should().ContainSingle().Which.TextRotation.Should().Be(45);
@@ -429,7 +429,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.InsideLabelFormat.Should().BeEmpty();
         series.OutsideLabelFormat.Should().BeEmpty();
 
@@ -462,7 +462,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.InsideLabelFormat.Should().BeEmpty();
         series.OutsideLabelFormat.Should().BeEmpty();
     }
@@ -550,7 +550,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.InsideLabelColor.Should().Be(OxyColor.FromRgb(112, 48, 160));
         series.TextColor.Should().Be(OxyColor.FromRgb(112, 48, 160));
         series.FontSize.Should().Be(14);

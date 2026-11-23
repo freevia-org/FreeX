@@ -40,7 +40,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>()
+        model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>()
             .Subject.StartAngle.Should().Be(expectedOxyPlotAngle);
     }
 
@@ -107,7 +107,7 @@ public sealed partial class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
         series.MarkerType.Should().Be(MarkerType.Diamond);
-        series.MarkerSize.Should().Be(8);
+        series.MarkerSize.Should().BeApproximately(8 * 2.0 / 3.0, 1e-9, "Excel's marker size is a diameter in points; OxyPlot sizes by radius in DIP");
         series.MarkerFill.Should().Be(OxyColor.FromRgb(255, 192, 0));
         series.MarkerStroke.Should().Be(OxyColor.FromRgb(68, 114, 196));
         series.MarkerStrokeThickness.Should().Be(2);
@@ -180,8 +180,8 @@ public sealed partial class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
         series.MarkerType.Should().Be(MarkerType.Circle);
-        series.MarkerSize.Should().BeLessThan(10);
-        series.MarkerSize.Should().Be(4.5); // 10 * 0.45
+        series.MarkerSize.Should().BeLessThan(10 * 2.0 / 3.0);
+        series.MarkerSize.Should().BeApproximately(10 * 2.0 / 3.0 * 0.45, 1e-9);
     }
 
     // Sibling no-regression test: Auto and Circle keep rendering at the full requested marker
@@ -213,7 +213,7 @@ public sealed partial class ChartRendererTests
 
         var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<LineSeries>().Subject;
         series.MarkerType.Should().Be(MarkerType.Circle);
-        series.MarkerSize.Should().Be(10);
+        series.MarkerSize.Should().BeApproximately(10 * 2.0 / 3.0, 1e-9);
     }
 
     // Sibling no-regression test: the five pre-existing marker styles must keep mapping to their
@@ -393,7 +393,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Slices.Select(slice => slice.Fill).Should().OnlyHaveUniqueItems();
         series.Slices.Should().OnlyContain(slice => !slice.Fill.IsInvisible());
     }
@@ -428,7 +428,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Stroke.Should().Be(OxyColor.FromRgb(31, 78, 121));
         series.StrokeThickness.Should().Be(2.5);
         series.Slices.Should().HaveCount(2);
@@ -468,7 +468,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Slices.Should().HaveCount(3);
 
         // Slice 0 -> per-point green
@@ -510,7 +510,7 @@ public sealed partial class ChartRendererTests
             []),
             theme);
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         series.Slices[0].Fill.Should().Be(OxyColor.FromRgb(255, 0, 0));
     }
 
@@ -675,7 +675,7 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        var series = model.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var series = model.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         // Native OxyPlot pie labels should be empty strings when ShowDataLabels=false
         series.InsideLabelFormat.Should().BeEmpty();
         series.OutsideLabelFormat.Should().BeEmpty();

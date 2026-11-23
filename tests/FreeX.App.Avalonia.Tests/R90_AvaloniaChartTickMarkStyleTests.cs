@@ -63,8 +63,9 @@ public sealed class R90_AvaloniaChartTickMarkStyleTests
             // XAxisMajorTickStyle/YAxisMajorTickStyle, so this would be 2 baselines + N category ticks
             // + M value ticks. After the fix, None means zero tick-mark lines are drawn at all --
             // exactly the two axis baselines (category + value) remain.
-            canvas.Children.OfType<Line>().Should().HaveCount(2,
-                "R90: XAxisMajorTickStyle=None and YAxisMajorTickStyle=None must suppress every tick mark, leaving only the category and value axis baselines");
+            // Excel's default value axis has no line, so only the category baseline remains.
+            canvas.Children.OfType<Line>().Should().HaveCount(1,
+                "R90: XAxisMajorTickStyle=None and YAxisMajorTickStyle=None must suppress every tick mark, leaving only the category axis baseline (Excel draws no default value-axis line)");
         }, CancellationToken.None);
     }
 
@@ -91,7 +92,8 @@ public sealed class R90_AvaloniaChartTickMarkStyleTests
             var renderer = new AvaloniaChartRenderer(chart, WorkbookTheme.Office);
             var canvas = renderer.Render(layout, 300, 200);
 
-            canvas.Children.OfType<Line>().Should().HaveCount(2 + expectedTickLines,
+            // 1 baseline: the category axis rule (Excel's default value axis has no line).
+            canvas.Children.OfType<Line>().Should().HaveCount(1 + expectedTickLines,
                 "the default Outside tick style must keep drawing a tick mark at every category and value axis position (no regression from the R90 fix)");
         }, CancellationToken.None);
     }

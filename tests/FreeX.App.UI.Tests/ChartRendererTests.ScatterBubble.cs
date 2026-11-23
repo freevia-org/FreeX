@@ -103,7 +103,7 @@ public sealed partial class ChartRendererTests
         first.MarkerFill.Should().Be(OxyColor.FromRgb(255, 192, 0));
         first.MarkerStroke.Should().Be(OxyColor.FromRgb(68, 114, 196));
         first.MarkerStrokeThickness.Should().Be(2);
-        first.MarkerSize.Should().Be(7);
+        first.MarkerSize.Should().BeApproximately(7 * 2.0 / 3.0, 1e-9);
         first.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 10), (2, 20));
 
         second.Title.Should().Be("Cost");
@@ -111,7 +111,7 @@ public sealed partial class ChartRendererTests
         second.MarkerFill.Should().Be(OxyColor.FromRgb(112, 173, 71));
         second.MarkerStroke.Should().Be(OxyColor.FromRgb(55, 86, 35));
         second.MarkerStrokeThickness.Should().Be(3);
-        second.MarkerSize.Should().Be(9);
+        second.MarkerSize.Should().BeApproximately(9 * 2.0 / 3.0, 1e-9);
         second.Points.Select(point => (point.X, point.Y)).Should().Equal((1, 6), (2, 11));
     }
 

@@ -78,6 +78,7 @@ public sealed partial class NativeJsonAdapter
         public ThemeColorReferenceDto? ChartTitleTextThemeColor { get; set; }
         public double ChartTitleFontSize { get; set; } = 16;
         public bool? ChartTitleBold { get; set; }
+        public bool? RadarFilled { get; set; }
         public CellColor? AxisTitleTextColor { get; set; }
         public ThemeColorReferenceDto? AxisTitleTextThemeColor { get; set; }
         public double AxisTitleFontSize { get; set; } = 12;

@@ -123,7 +123,51 @@ public static class ChartLayoutEngine
     public static ChartLayout Layout(ChartLayoutRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return ChartManualLayoutApplier.ApplyDataLabelOffsets(request, LayoutCore(request));
+        var layout = LayoutCore(request);
+        if (ResolveAxisTitleGutters(request, layout) is { } gutters)
+            layout = LayoutCore(request.WithAxisTitleGutters(gutters.Left, gutters.Right, gutters.Bottom));
+
+        return ChartManualLayoutApplier.ApplyDataLabelOffsets(request, layout);
+    }
+
+    private const double AxisTitleGutterPadding = 10;
+
+    /// <summary>
+    /// A titled axis needs room for its title outside the tick labels. The host's plot rectangle only leaves a
+    /// fixed margin around the plot, so once the axes (and with them their sides) are known a second layout pass
+    /// shrinks the plot by one title line on each titled edge. Null when no gutter is needed or one was already
+    /// reserved (a manual plot-area layout owns the plot rectangle and is never shrunk further).
+    /// </summary>
+    private static (double Left, double Right, double Bottom)? ResolveAxisTitleGutters(ChartLayoutRequest request, ChartLayout layout)
+    {
+        if (!request.ReserveLegendGutter || request.AxisTitleGutterLeft > 0 || request.AxisTitleGutterRight > 0 || request.AxisTitleGutterBottom > 0)
+            return null;
+        if (request.Chart.PlotAreaLayout is not null)
+            return null;
+
+        double left = 0, right = 0, bottom = 0;
+        foreach (var axis in new[] { layout.CategoryAxis, layout.ValueAxis, layout.SecondaryValueAxis })
+        {
+            if (axis is null || string.IsNullOrWhiteSpace(axis.Title))
+                continue;
+
+            var fontSize = request.Chart.AxisTitleFontSize > 0 ? request.Chart.AxisTitleFontSize : 12;
+            var band = request.TextMeasurer.Measure(axis.Title, null, fontSize, false, false).Height + AxisTitleGutterPadding;
+            switch (axis.Side)
+            {
+                case AxisSide.Left:
+                    left = Math.Max(left, band);
+                    break;
+                case AxisSide.Right:
+                    right = Math.Max(right, band);
+                    break;
+                case AxisSide.Bottom:
+                    bottom = Math.Max(bottom, band);
+                    break;
+            }
+        }
+
+        return left > 0 || right > 0 || bottom > 0 ? (left, right, bottom) : null;
     }
 
     private static ChartLayout LayoutCore(ChartLayoutRequest request)
@@ -723,7 +767,11 @@ public static class ChartLayoutEngine
                 var x1 = categoryScale.Transform(x + half);
                 var yStart = valueScale.Transform(start);
                 var yEnd = valueScale.Transform(end);
-                bars.Add(new SeriesBar(i, raw, LayoutRect.FromCorners(x0, yStart, x1, yEnd)));
+                var segment = LayoutRect.FromCorners(x0, yStart, x1, yEnd);
+                bars.Add(new SeriesBar(i, raw, segment));
+                // Excel labels a stacked segment at its centre (the default, and the only position besides
+                // inside end/base) -- the segment, not the running total, owns the label.
+                AddCartesianDataLabel(request, dataLabels, series, i, raw, segment.Center);
 
                 if (v >= 0) posBases[i] = end; else negBases[i] = end;
             }
@@ -873,6 +921,9 @@ public static class ChartLayoutEngine
             Name = series.Name,
             Kind = SeriesGeometryKind.Line,
             Points = points,
+            CurvePoints = emitGapBreakPoint && ChartStylePlanner.IsSeriesSmooth(chart, series.SeriesIndex)
+                ? ChartCurveSmoother.Smooth(points)
+                : [],
         };
     }
 
@@ -1005,8 +1056,13 @@ public static class ChartLayoutEngine
                 var rect = LayoutRect.FromCorners(x0, y0, x1, y1);
                 bars.Add(new SeriesBar(i, raw, rect));
 
-                if (!isStacked)
-                    AddCartesianDataLabel(request, dataLabels, series, i, raw, new LayoutPoint(valueScale.Transform(raw), rect.Center.Y));
+                AddCartesianDataLabel(
+                    request,
+                    dataLabels,
+                    series,
+                    i,
+                    raw,
+                    isStacked ? rect.Center : new LayoutPoint(valueScale.Transform(raw), rect.Center.Y));
             }
 
             seriesLayouts.Add(new SeriesLayout
@@ -1075,12 +1131,17 @@ public static class ChartLayoutEngine
                 AddCartesianDataLabel(request, dataLabels, series, i, y, pos);
             }
 
+            var connect = ChartStylePlanner.ScatterConnectsPoints(chart, series.SeriesIndex);
             seriesLayouts.Add(new SeriesLayout
             {
                 SeriesIndex = series.SeriesIndex,
                 Name = series.Name,
                 Kind = SeriesGeometryKind.ScatterPoints,
                 Points = points,
+                ConnectPoints = connect,
+                CurvePoints = connect && ChartStylePlanner.IsSeriesSmooth(chart, series.SeriesIndex)
+                    ? ChartCurveSmoother.Smooth(points)
+                    : [],
             });
         }
 
@@ -1199,6 +1260,9 @@ public static class ChartLayoutEngine
 
     // ---- Radar ----------------------------------------------------------------------------
 
+    private const int RadarMaxIntervals = 5;
+    private const double RadarLabelMargin = 24;
+
     private static ChartLayout LayoutRadar(ChartLayoutRequest request)
     {
         var chart = request.Chart;
@@ -1209,12 +1273,21 @@ public static class ChartLayoutEngine
         // Radius axis runs from zero (center) out to the data maximum. Mirrors the source renderer's
         // MagnitudeAxis (minimum pinned at zero).
         var (_, dataMax) = PlainValueRange(request);
-        var valueMax = chart.YAxisMaximum ?? Math.Max(dataMax, 0);
+        var auto = ExcelAxisAutoScale.Compute(0, Math.Max(dataMax, 0), RadarMaxIntervals);
+        var valueMax = chart.YAxisMaximum ?? Math.Max(auto.Maximum, 0);
         if (valueMax <= 0)
             valueMax = 1;
+        var majorUnit = chart.YAxisMajorUnit ?? auto.MajorUnit;
 
         var center = plot.ToRect().Center;
-        var outerRadius = Math.Max(0, Math.Min(plot.Width, plot.Height) / 2);
+        // The category names sit just outside the outer ring, so the ring gives up a label-sized margin.
+        var outerRadius = Math.Max(0, (Math.Min(plot.Width, plot.Height) / 2) - RadarLabelMargin);
+        var rings = new List<RadarRing>();
+        if (majorUnit > 0)
+        {
+            for (var value = majorUnit; value < valueMax + (majorUnit * 1e-9); value += majorUnit)
+                rings.Add(new RadarRing(value, outerRadius * Math.Clamp(value / valueMax, 0, 1)));
+        }
 
         // Angle per category, clockwise from 12 o'clock (the source renderer starts the angle axis at
         // the top and steps a full turn across the categories).
@@ -1255,7 +1328,16 @@ public static class ChartLayoutEngine
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            Radar = new RadarLayout { Center = center, OuterRadius = outerRadius, Spokes = spokes },
+            Radar = new RadarLayout
+            {
+                Center = center,
+                OuterRadius = outerRadius,
+                Spokes = spokes,
+                ValueMaximum = valueMax,
+                Rings = rings,
+                CategoryLabels = request.Categories,
+                Filled = chart.RadarFilled == true,
+            },
             Series = seriesLayouts,
             Legend = legend,
         };

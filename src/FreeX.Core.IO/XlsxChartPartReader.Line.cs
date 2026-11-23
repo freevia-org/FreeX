@@ -63,6 +63,15 @@ public static partial class XlsxChartPartReader
             Type = chartType,
             Title = XlsxChartLevelReader.ReadTitle(chartXml)
         };
+        if (chartType == ChartType.Radar)
+        {
+            result.RadarFilled = string.Equals(
+                plotCharts.Select(plotChart => plotChart.Element(ChartNs + "radarStyle")?.Attribute("val")?.Value).FirstOrDefault(value => value is not null),
+                "filled",
+                StringComparison.OrdinalIgnoreCase)
+                ? true
+                : null;
+        }
 
         foreach (var plotChart in plotCharts)
         {

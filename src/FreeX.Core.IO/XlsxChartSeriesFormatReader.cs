@@ -125,6 +125,9 @@ internal static class XlsxChartSeriesFormatReader
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
             : null;
+        // An explicit <a:ln><a:noFill/> is how Excel stores "markers only" (a scatter without lines, a line
+        // series with the line switched off); it must reach the renderers as NoLine, not as an absent line.
+        var hasNoLine = line?.Element(DrawingNs + "noFill") is not null;
         var smooth = XlsxChartScalarReader.ReadOptionalBool(series.Element(ChartNs + "smooth")?.Attribute("val")?.Value);
 
         var marker = series.Element(ChartNs + "marker");
@@ -170,7 +173,8 @@ internal static class XlsxChartSeriesFormatReader
             markerBorderColor is null &&
             markerBorderThemeColor is null &&
             markerBorderThickness is null &&
-            smooth is null)
+            smooth is null &&
+            !hasNoLine)
         {
             return false;
         }
@@ -188,7 +192,8 @@ internal static class XlsxChartSeriesFormatReader
             Smooth: smooth,
             MarkerBorderColor: markerBorderColor,
             MarkerBorderThemeColor: markerBorderThemeColor,
-            MarkerBorderThickness: markerBorderThickness);
+            MarkerBorderThickness: markerBorderThickness,
+            NoLine: hasNoLine);
         return true;
     }
 

@@ -90,7 +90,7 @@ public static partial class ChartRenderer
                     chart.XAxisGridlineThickness);
                 ApplyTickAndLabelStyle(axis, chart.XAxisMajorTickStyle, chart.XAxisMinorTickStyle, chart.ShowXAxisLabels);
                 ApplyAxisLabelStyle(axis, chart.ResolveXAxisLabelTextColor(theme), chart.XAxisLabelFontSize, chart.XAxisLabelAngle);
-                ApplyAxisLineStyle(axis, chart.XAxisLineColor, chart.XAxisLineThickness);
+                ApplyAxisLineStyle(axis, chart.XAxisLineColor, chart.XAxisLineThickness, IsCategoryAxis(chart, axis));
             }
             else if (axis.Position is AxisPosition.Left or AxisPosition.Right)
             {
@@ -143,7 +143,7 @@ public static partial class ChartRenderer
                     chart.YAxisGridlineThickness);
                 ApplyTickAndLabelStyle(axis, chart.YAxisMajorTickStyle, chart.YAxisMinorTickStyle, chart.ShowYAxisLabels);
                 ApplyAxisLabelStyle(axis, chart.ResolveYAxisLabelTextColor(theme), chart.YAxisLabelFontSize, chart.YAxisLabelAngle);
-                ApplyAxisLineStyle(axis, chart.YAxisLineColor, chart.YAxisLineThickness);
+                ApplyAxisLineStyle(axis, chart.YAxisLineColor, chart.YAxisLineThickness, IsCategoryAxis(chart, axis));
             }
         }
 
@@ -590,12 +590,39 @@ public static partial class ChartRenderer
             axis.TextColor = OxyColor.FromRgb(color.R, color.G, color.B);
     }
 
-    private static void ApplyAxisLineStyle(Axis axis, CellColor? color, double thickness)
+    /// <summary>
+    /// Excel's default axis lines: the category axis gets a light grey line (D9D9D9, 0.75 pt) and the value axis
+    /// none at all, so a chart whose axis line was never formatted shows no dark value-axis rule. An authored
+    /// colour (Format Axis > Line) always draws the line, on either kind of axis.
+    /// </summary>
+    private static void ApplyAxisLineStyle(Axis axis, CellColor? color, double thickness, bool isCategoryAxis)
     {
+        if (color is null && !isCategoryAxis)
+        {
+            axis.AxislineStyle = LineStyle.None;
+            return;
+        }
+
         axis.AxislineStyle = LineStyle.Solid;
         axis.AxislineThickness = thickness;
-        if (color is { } lineColor)
-            axis.AxislineColor = OxyColor.FromRgb(lineColor.R, lineColor.G, lineColor.B);
+        axis.AxislineColor = color is { } lineColor
+            ? OxyColor.FromRgb(lineColor.R, lineColor.G, lineColor.B)
+            : ExcelDefaultAxisLineColor;
+    }
+
+    private static readonly OxyColor ExcelDefaultAxisLineColor = OxyColor.FromRgb(0xD9, 0xD9, 0xD9);
+
+    /// <summary>
+    /// True when <paramref name="axis"/> is the category axis of the chart: the bottom axis of a column/line/area
+    /// style chart, the left axis of a bar chart. XY charts (scatter, bubble) have two value axes and no category axis.
+    /// </summary>
+    private static bool IsCategoryAxis(ChartModel chart, Axis axis)
+    {
+        if (chart.Type is ChartType.Scatter or ChartType.Bubble || axis.Key == SecondaryYAxisKey)
+            return false;
+
+        var barFamily = chart.Type is ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar or ChartType.ThreeDBar;
+        return axis.Position is AxisPosition.Bottom or AxisPosition.Top ? !barFamily : barFamily;
     }
 
     private static double GetTickSize(ChartAxisTickStyle tickStyle) =>

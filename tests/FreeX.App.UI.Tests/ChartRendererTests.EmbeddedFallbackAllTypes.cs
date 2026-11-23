@@ -88,7 +88,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var pie = model!.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pie = model!.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pie.Slices.Should().HaveCount(3, "3 cached values must produce 3 pie slices, not a blank chart");
         pie.Slices[0].Value.Should().BeApproximately(40.0, 0.001);
         pie.Slices[0].Label.Should().Be("North");
@@ -188,7 +188,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, new ViewportModel([], [], []));
 
         model.Should().NotBeNull();
-        var pie = model!.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pie = model!.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pie.Slices.Should().HaveCount(2);
     }
 
@@ -269,7 +269,7 @@ public sealed partial class ChartRendererTests
         var model = BuildPlotModel(chart, viewport);
 
         model.Should().NotBeNull();
-        var pie = model!.Series.Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
+        var pie = model!.Series.OfType<OxyPlot.Series.PieSeries>().Should().ContainSingle().Which.Should().BeOfType<PieSeries>().Subject;
         pie.Slices.Should().HaveCount(2);
         pie.Slices[0].Value.Should().BeApproximately(60.0, 0.001);
     }

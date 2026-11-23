@@ -211,8 +211,8 @@ public sealed class AvaloniaChartTrendlineAndStrokeTests
             var renderer = new AvaloniaChartRenderer(chart, WorkbookTheme.Office);
             var canvas = renderer.Render(layout, 300, 200);
 
-            var polygon = canvas.Children.OfType<Polygon>().Should().ContainSingle(
-                "F19: the radar series must draw exactly one closed polygon").Subject;
+            // The grid rings are polygons too; the series polygon is drawn last, on top of them.
+            var polygon = canvas.Children.OfType<Polygon>().Last();
             polygon.StrokeThickness.Should().Be(4.5,
                 "F19: the radar series' persisted StrokeThickness must be honored instead of the hardcoded 2px default");
         }, CancellationToken.None);

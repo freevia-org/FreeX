@@ -175,11 +175,13 @@ public sealed partial class ChartRendererTests
             [],
             []));
 
-        // A swatch + label annotation per slice; labels carry the category names.
-        var legendTexts = model.Annotations.OfType<TextAnnotation>().Select(a => a.Text).ToList();
-        legendTexts.Should().Contain("Completed");
-        legendTexts.Should().Contain("Remaining");
-        model.Annotations.OfType<RectangleAnnotation>().Should().HaveCountGreaterThanOrEqualTo(2);
+        // One legend entry per slice, carried by a marker-only helper series (so the real legend lays the entries
+        // out in a gutter beside the pie, not over it); the entry text is the category name and the swatch the slice fill.
+        var entries = model.Series.OfType<ScatterSeries>().ToList();
+        entries.Select(e => e.Title).Should().Equal("Completed", "Remaining");
+        var slices = model.Series.OfType<PieSeries>().Single().Slices;
+        entries.Select(e => e.MarkerFill).Should().Equal(slices.Select(slice => slice.Fill));
+        model.Legends.Should().ContainSingle();
     }
 
     [Fact]
