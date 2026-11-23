@@ -324,8 +324,52 @@ public sealed partial class FormulaEvaluator
         private Dictionary<string, FreeX.Core.Model.Sheet?>? _sheetNameCache;
         private Dictionary<string, ExternalSheetCacheEntry?>? _externalSheetCache;
 
-        private readonly record struct ExternalSheetCacheEntry(
-            Dictionary<(uint Row, uint Col), ScalarValue>? CachedValues);
+        /// <summary>
+        /// One external sheet's cached cells. Excel's link cache only stores the NON-blank cells of the
+        /// ranges the workbook's formulas referenced at last refresh (a blank cell inside a referenced
+        /// range, e.g. G16396 below a populated column, is simply omitted), so a miss inside a column the
+        /// cache already covers is a genuine blank, while a miss in a column the cache never mentions is
+        /// "never refreshed" and must keep preserving the loaded value. <see cref="MaxRow"/>/<see cref="MaxCol"/>
+        /// give the cached extent, which stands in for the used range of the closed source sheet when a
+        /// full-column/row reference is clamped.
+        /// </summary>
+        private sealed class ExternalSheetCacheEntry
+        {
+            private bool _statsComputed;
+            private uint _maxRow;
+            private uint _maxCol;
+            private HashSet<uint>? _columns;
+
+            public ExternalSheetCacheEntry(Dictionary<(uint Row, uint Col), ScalarValue>? cachedValues) =>
+                CachedValues = cachedValues;
+
+            public Dictionary<(uint Row, uint Col), ScalarValue>? CachedValues { get; }
+
+            public uint MaxRow { get { EnsureStats(); return _maxRow; } }
+
+            public uint MaxCol { get { EnsureStats(); return _maxCol; } }
+
+            public bool CoversColumn(uint col) { EnsureStats(); return _columns!.Contains(col); }
+
+            private void EnsureStats()
+            {
+                if (_statsComputed)
+                    return;
+
+                _columns = [];
+                if (CachedValues is not null)
+                {
+                    foreach (var (row, col) in CachedValues.Keys)
+                    {
+                        _columns.Add(col);
+                        if (row > _maxRow) _maxRow = row;
+                        if (col > _maxCol) _maxCol = col;
+                    }
+                }
+
+                _statsComputed = true;
+            }
+        }
 
         public readonly Sheet SourceSheet;
 
@@ -372,6 +416,11 @@ public sealed partial class FormulaEvaluator
                 {
                     return cachedValue ?? BlankValue.Instance;
                 }
+
+                // Excel omits blank cells from the link cache, so a miss inside a column the cache
+                // already covers is a genuine blank (same rule as GetRangeValues below).
+                if (resolved.CachedValues is not null && resolved.CoversColumn(col))
+                    return BlankValue.Instance;
 
                 throw new FormulaParseException(
                     $"External reference '{sheetName}' has no cached value for this cell; " +
@@ -456,6 +505,16 @@ public sealed partial class FormulaEvaluator
                         // external-workbook-reference guard) instead of silently substituting Blank,
                         // or a range-shaped external reference (e.g. inside MEDIAN/PRODUCT/VLOOKUP/
                         // LARGE) would overwrite a correct loaded value with a wrong recomputed one.
+                        if (resolved.CachedValues is { } rangeCache &&
+                            !rangeCache.ContainsKey((r, c)) &&
+                            resolved.CoversColumn(c))
+                        {
+                            // Excel omits blank cells from the link cache: a miss inside a column the cache
+                            // already covers (including rows past the cached extent) is a real blank.
+                            externalValues.Add(BlankValue.Instance);
+                            continue;
+                        }
+
                         if (resolved.CachedValues is not { } cachedValues ||
                             !cachedValues.TryGetValue((r, c), out var cachedValue))
                         {
@@ -542,6 +601,26 @@ public sealed partial class FormulaEvaluator
             => ResolveSheet(sheetName)?.GetCell(row, col);
 
         public ScalarValue? TryResolveLambdaBinding(string name) => null;
+
+        /// <summary>
+        /// Cached extent (max row/col) of the external sheet <paramref name="sheetName"/>, used to clamp
+        /// full-column/row references the same way a local sheet's used range does. False when the sheet
+        /// is not an external link or its cache holds no cells.
+        /// </summary>
+        public bool TryGetExternalCachedExtent(string? sheetName, out uint maxRow, out uint maxCol)
+        {
+            maxRow = 0;
+            maxCol = 0;
+            if (sheetName is null || ResolveSheet(sheetName) is not null)
+                return false;
+
+            if (ResolveExternalSheet(sheetName) is not { CachedValues: { Count: > 0 } } entry)
+                return false;
+
+            maxRow = entry.MaxRow;
+            maxCol = entry.MaxCol;
+            return true;
+        }
 
         public FreeX.Core.Model.Sheet? ResolveSheetForFastRange(string? sheetName)
             => sheetName is null ? _sheet : ResolveSheet(sheetName);

@@ -51,8 +51,10 @@ public sealed class R24_ExternalLinkRangeCacheMissTests
 
         // MEDIAN is not one of the "fast aggregate" kinds (Sum/Average/Min/Max/Count/Stdev/Var), so it
         // evaluates through the generic GetRangeValues(sheetName, ...) path that had the bug.
+        // Column B was never referenced by any formula at last refresh (the cache only holds column A),
+        // so a miss there is "never refreshed", not a blank Excel omitted from the cache.
         var rangeResult = _evaluator.Evaluate(
-            "=MEDIAN('[Data File.xlsx]Sheet1'!A1:A2)", sheet, workbook);
+            "=MEDIAN('[Data File.xlsx]Sheet1'!B1:B2)", sheet, workbook);
 
         // The scalar reference to the very same uncached cell (A2) already throws
         // FormulaParseException, which FormulaEvaluator.Evaluate converts to #VALUE! for a direct
@@ -60,13 +62,27 @@ public sealed class R24_ExternalLinkRangeCacheMissTests
         // value"). The range case must behave identically instead of silently computing MEDIAN(10,
         // blank) = 10 as if A2 were a genuine blank.
         var scalarResult = _evaluator.Evaluate(
-            "='[Data File.xlsx]Sheet1'!A2", sheet, workbook);
+            "='[Data File.xlsx]Sheet1'!B2", sheet, workbook);
 
         scalarResult.Should().Be(ErrorValue.Value,
             "the scalar sibling already treats an uncached external cell as unresolvable, not blank");
         rangeResult.Should().Be(ErrorValue.Value,
             "a range-shaped external reference with an uncached cell must be treated exactly like " +
             "the scalar case (unresolvable), not silently substitute Blank and compute over it");
+    }
+
+    [Fact]
+    public void RangeFunction_UncachedCellInsideACachedColumn_IsABlankExcelOmittedFromTheCache()
+    {
+        // Excel writes only the NON-blank cells of the ranges a formula referenced into the link cache,
+        // so A2 missing from a cache that holds A1 means A2 is blank (verified against real Excel: a
+        // closed-source recalculation of MEDIAN/COUNTBLANK over such a range treats the gap as blank).
+        var (workbook, sheet) = MakeWorkbookWithPartiallyCachedExternalLink();
+
+        _evaluator.Evaluate("=MEDIAN('[Data File.xlsx]Sheet1'!A1:A2)", sheet, workbook)
+            .Should().Be(new NumberValue(10));
+        _evaluator.Evaluate("=COUNTBLANK('[Data File.xlsx]Sheet1'!A1:A5)", sheet, workbook)
+            .Should().Be(new NumberValue(4));
     }
 
     [Fact]

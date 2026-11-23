@@ -481,8 +481,8 @@ public sealed partial class FormulaEvaluator
         for (var index = 0; index < lookupReader.Count; index++)
         {
             var candidate = lookupReader.GetValue(index);
-            if (candidate is ErrorValue error)
-                return error;
+            if (candidate is ErrorValue)
+                continue;
 
             if (BuiltInFunctions.MatchExactLegacyLookup(candidate, lookupValue))
                 return resultReader.GetValue(index);
@@ -501,8 +501,8 @@ public sealed partial class FormulaEvaluator
             for (var index = 0; index < reader.Count; index++)
             {
                 var candidate = reader.GetValue(index);
-                if (candidate is ErrorValue error)
-                    return error;
+                if (candidate is ErrorValue)
+                    continue;
 
                 if (BuiltInFunctions.MatchExactLegacyLookup(candidate, lookupValue))
                     return new NumberValue(index + 1);
@@ -761,8 +761,8 @@ public sealed partial class FormulaEvaluator
         for (var index = start; index != end; index += step)
         {
             var candidate = reader.GetValue(index);
-            if (candidate is ErrorValue error)
-                return error;
+            if (candidate is ErrorValue)
+                continue;
 
             if (BuiltInFunctions.ScalarEqualsExactLookup(candidate, lookupValue))
             {
@@ -786,8 +786,8 @@ public sealed partial class FormulaEvaluator
         for (var index = start; index != end; index += step)
         {
             var candidate = reader.GetValue(index);
-            if (candidate is ErrorValue error)
-                return error;
+            if (candidate is ErrorValue)
+                continue;
 
             if (BuiltInFunctions.MatchExactValue(candidate, lookupValue))
             {

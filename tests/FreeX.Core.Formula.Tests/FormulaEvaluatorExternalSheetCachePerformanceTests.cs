@@ -48,10 +48,10 @@ public sealed class FormulaEvaluatorExternalSheetCachePerformanceTests
             .Should().Be(new NumberValue(0),
                 "a present cached cell with a null value retains the existing blank semantics");
         evaluator.Evaluate("=SUM('[Book.xlsx]Data'!A2:A2)", host, workbook)
-            .Should().Be(ErrorValue.Value,
-                "the first duplicate sheet-data entry owns misses as well as hits");
-        evaluator.Evaluate("=MEDIAN('[Book.xlsx]Data'!A2:A2)", host, workbook)
-            .Should().Be(ErrorValue.Value,
+            .Should().Be(new NumberValue(0),
+                "the first duplicate sheet-data entry owns misses as well as hits (a miss in a cached column is blank, never the later duplicate's 20)");
+        evaluator.Evaluate("=PRODUCT('[Book.xlsx]Data'!A2:A2)", host, workbook)
+            .Should().Be(new NumberValue(0),
                 "materialized ranges must not fall through to a later duplicate sheet-data entry");
     }
 

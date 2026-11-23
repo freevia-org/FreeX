@@ -175,7 +175,7 @@ public sealed class ExcelParityCoercionEdgeTests
     [Theory]
     [InlineData("=XLOOKUP(\"B\",A1:A2,B1:B2)")]
     [InlineData("=XMATCH(\"B\",A1:A2)")]
-    public void ModernLookupFunctions_PropagateLookupArrayErrorsBeforeLaterMatches(string formula)
+    public void ModernExactLookupFunctions_SkipLookupArrayErrorsBeforeLaterMatches(string formula)
     {
         var sheet = Sheet(
             (1, 1, ErrorValue.DivByZero),
@@ -183,7 +183,9 @@ public sealed class ExcelParityCoercionEdgeTests
             (1, 2, new NumberValue(10)),
             (2, 2, new NumberValue(20)));
 
-        _eval.Evaluate(formula, sheet).Should().Be(ErrorValue.DivByZero);
+        // Verified against real Excel (COM): exact-mode lookups skip error cells wherever they sit.
+        var expected = formula.StartsWith("=XLOOKUP", StringComparison.Ordinal) ? new NumberValue(20) : new NumberValue(2);
+        _eval.Evaluate(formula, sheet).Should().Be(expected);
     }
 
     [Theory]
