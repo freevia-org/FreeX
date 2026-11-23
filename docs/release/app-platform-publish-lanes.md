@@ -99,7 +99,7 @@ signed release.
   platform caused it (runner lost or never acquired, or only a job-setup or artifact-transfer
   step failed). Timeouts and anything uncertain are real.
 - `release-auto-retry.yml` is dispatched by hand with the `run_id` of a finished run (it has no
-  automatic trigger) and re-runs the failed jobs once when that run concluded `failure`, was on
+  event trigger; `release-readiness.yml` also dispatches it for its own red main run) and re-runs the failed jobs once when that run concluded `failure`, was on
   its first attempt, and every failed job is infrastructure. It never retries a real failure,
   a cancelled run or a second attempt. A re-run still parks Windows signing jobs at the
   `public-preview` approval again.

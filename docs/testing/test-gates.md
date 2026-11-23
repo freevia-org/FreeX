@@ -186,8 +186,8 @@ Every GitHub Actions workflow is started by hand with `workflow_dispatch` (for e
 `gh workflow run ci.yml -f full=true`). No workflow declares a `push`, `schedule` or `pull_request`
 trigger, so pushing to `main` starts nothing and the local gate (`tools/Test-BranchForIntegration.ps1`)
 is the pre-merge check. There are no exceptions: `release-auto-retry.yml` is also
-dispatch-only (an operator passes the `run_id` of a failed Full Signed Release run to re-run its
-infrastructure failures once), and no workflow declares `workflow_run`. `tools/Test-GitHubWorkflows.ps1` enforces the
+dispatch-only (an operator, or the last job of `release-readiness.yml` for its own main run, passes the
+`run_id` of a failed Full Signed Release or Release Readiness run to re-run its infrastructure failures once), and no workflow declares `workflow_run`. `tools/Test-GitHubWorkflows.ps1` enforces the
 contract. Consequences: a commit may have no `ci.yml` run, and `Full Signed Release` still requires
 exact-SHA successful CI and CodeQL runs, so dispatch both for the release SHA first.
 
@@ -355,6 +355,20 @@ tests only when a fresh (7 days) readiness run proved every expected gate on exa
   default changed. The weekly packaging rehearsal sets it so packaging stays rehearsed at the head.
 - An explicit `source_sha` (40-character lowercase) always wins; `release_head` is then ignored.
 - Tag continuations are unchanged: they release the tagged commit, and `source_sha` is rejected there.
+- A readiness run that is red only because GitHub never placed a hosted job is retried once, so it does
+  not remove this default. Measured: run 45222271749 (2026-11-23) went red because three macOS arm64
+  jobs ended `cancelled` with no steps and the annotation `The job was not acquired by Runner of type
+  hosted even after multiple attempts`; a manual `gh run rerun --failed` made it green. Now the last
+  job of `release-readiness.yml` (`Retry infrastructure failures once`; only for a red summary, on
+  attempt 1, on `refs/heads/main`) dispatches `release-auto-retry.yml` with the run id, which waits
+  for the run to conclude, classifies every failed job with `tools/Get-ReleaseRunFailureClass.ps1` and
+  re-runs the failed jobs only when ALL of them are infrastructure (the same `--failed` re-run, at
+  most once, never for a real failure). The classifier counts a cancelled job only with a positive
+  runner annotation, and ignores the `Release readiness summary` aggregator. Evidence of the re-run is
+  accepted as is: `Resolve-ReleaseGateEvidence.ps1` lists jobs with `filter=latest` (the latest
+  execution of each job, so attempt-1 passes plus attempt-2 re-executions, each gate once), and
+  `ReleaseGateEvidenceTests` pins that shape. The `guard` job's two-failed-runs skip rule does not
+  count a run whose failed jobs are all infrastructure, so a capacity blip cannot mark a commit red.
 - The resolved SHA is validated again by the candidate job (40-character lowercase, ancestor of the
   dispatched head, head fetched) and reaches every job only through the `RELEASE_SHA` environment
   variable from the `resolve` job output; no job uses `github.sha` for checkout or tagging. The CI/CodeQL

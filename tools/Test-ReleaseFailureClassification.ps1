@@ -97,6 +97,35 @@ try {
     Assert-Case 'injected real' $r $true $false 1
     $r = Invoke-Classifier @((New-Job 16 'Inject a rehearsal fault' 'completed' 'failure' @((New-Step 'Set up job' 'success'), (New-Step 'Checkout' 'success'), (New-Step 'Injected real failure' 'skipped'), (New-Step 'Download injected rehearsal inputs' 'failure'))))
     Assert-Case 'injected infra' $r $false $true 1
+
+    # The real shape of release-readiness run 45222271749: three macOS gate jobs ended 'cancelled' with
+    # no steps and the annotation below, and the 'Release readiness summary' aggregator failed after
+    # them. Only the platform-cancelled gates count, and they are infrastructure, so one re-run is right.
+    $notAcquired = 'The job was not acquired by Runner of type hosted even after multiple attempts'
+    $r = Invoke-Classifier @($ok,
+        (New-Job 17 'FreeX macos freex-avalonia-macos-1of2' 'completed' 'cancelled' @()),
+        (New-Job 18 'FreeX macos freex-avalonia-macos-2of2' 'completed' 'cancelled' @()),
+        (New-Job 19 'Release readiness summary' 'completed' 'failure' @((New-Step 'Report which release lanes are rotting' 'failure')))) @{ '17' = $notAcquired; '18' = $notAcquired }
+    Assert-Case 'readiness runner not acquired' $r $false $true 2
+
+    # A cancelled job without that evidence (a human, a concurrency group, the early-abort watcher, or
+    # only the capacity notice) is a consequence, never a cause.
+    $r = Invoke-Classifier @($ok,
+        (New-Job 20 'Package K' 'completed' 'cancelled' @()),
+        (New-Job 21 'Package L' 'completed' 'cancelled' @()),
+        (New-Job 22 'Release readiness summary' 'completed' 'failure' @((New-Step 'Report which release lanes are rotting' 'failure')))) @{ '21' = 'Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.' }
+    Assert-Case 'cancelled without evidence' $r $false $false 0
+
+    # A platform-cancelled job next to a real failure: still not retryable.
+    $r = Invoke-Classifier @(
+        (New-Job 23 'Package M' 'completed' 'cancelled' @()),
+        (New-Job 24 'FreeX windows freex-wpf-shell' 'completed' 'failure' @((New-Step 'Run release gate' 'failure')))) @{ '23' = $notAcquired }
+    Assert-Case 'platform cancel plus real' $r $true $false 2
+
+    # Real failure of the summary-adjacent README job is not hidden by the ignored aggregator.
+    $r = Invoke-Classifier @((New-Job 25 'README download links' 'completed' 'failure' @((New-Step 'Compare advertised downloads against the newest published release' 'failure'))),
+        (New-Job 26 'Release readiness summary' 'completed' 'failure' @((New-Step 'Report which release lanes are rotting' 'failure'))))
+    Assert-Case 'readme real' $r $true $false 1
 }
 finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
@@ -106,4 +135,4 @@ if ($errors.Count -gt 0) {
     throw ("Release failure classification contract failed:`n - " + ($errors -join "`n - "))
 }
 
-Write-Host 'Release failure classification contract passed: 12 offline cases (real, infrastructure, mixed, timeout, consequences, gate, injected faults).'
+Write-Host 'Release failure classification contract passed: 16 offline cases (real, infrastructure, platform-cancelled, mixed, timeout, consequences, gate, injected faults).'

@@ -105,7 +105,9 @@ public sealed class ReleaseResilienceWorkflowTests
 
         // The authoritative API re-check pins the workflow, 'failure' and the first attempt,
         // so a re-run is never retried and a cancelled run (the early-abort case) is never retried.
-        retry.Should().Contain("[string]$run.path -ne \".github/workflows/full-release.yml\"");
+        retry.Should().Contain("[string]$run.path -notin @(\".github/workflows/full-release.yml\", \".github/workflows/release-readiness.yml\")");
+        retry.Should().Contain("[string]$run.head_branch -ne \"main\"", "a readiness run is retried only for main");
+        retry.Should().Contain("[string]$run.event -notin @(\"workflow_dispatch\", \"schedule\")");
         retry.Should().Contain("[string]$run.conclusion -ne \"failure\"");
         retry.Should().Contain("[int]$run.run_attempt -ne 1");
 
@@ -122,6 +124,36 @@ public sealed class ReleaseResilienceWorkflowTests
         retry.Should().NotContain("environment:");
         retry.Should().NotContain("secrets.");
         retry.Should().Contain("timeout-minutes: 10");
+    }
+
+    [Fact]
+    public void ReleaseReadiness_DispatchesTheAutoRetryOnceForItsOwnFirstAttemptOnMainAndEvidenceReadsTheLatestJobs()
+    {
+        var workflow = WorkspaceFileLocator.ReadAllText(".github", "workflows", "release-readiness.yml");
+        var job = Job(workflow, "auto-retry");
+
+        // Fires only for a red summary, on the first attempt, on main: the re-run's own copy sees
+        // run_attempt 2 and stays out, so it can never loop.
+        job.Should().Contain("needs: [summary]");
+        job.Should().Contain("needs.summary.result == 'failure'");
+        job.Should().Contain("github.run_attempt == 1");
+        job.Should().Contain("github.ref == 'refs/heads/main'");
+        job.Should().Contain("gh workflow run release-auto-retry.yml --repo $env:REPOSITORY --ref main");
+        job.Should().Contain("actions: write");
+        job.Should().Contain("contents: read");
+        job.Should().NotContain("contents: write");
+        job.Should().NotContain("gh run rerun", "only release-auto-retry.yml, behind the classifier, may re-run anything");
+
+        // The workflow stays manual-only: dispatch is the one event a GITHUB_TOKEN may start.
+        workflow.Should().NotContain("workflow_run:");
+        Regex.Matches(workflow, @"(?m)^on:\r?\n  # Manual-only by policy: no schedule trigger\.\r?\n  workflow_dispatch:").Count.Should().Be(1);
+
+        // A re-run's job set is what the evidence readers see: both ask for the latest execution of
+        // every job (a re-run keeps attempt-1 jobs that passed and replaces the failed ones).
+        foreach (var script in new[] { "Resolve-ReleaseGateEvidence.ps1", "Get-ReleaseRunFailureClass.ps1" })
+        {
+            WorkspaceFileLocator.ReadAllText("tools", script).Should().Contain("'filter=latest'", script);
+        }
     }
 
     [Fact]
@@ -383,6 +415,15 @@ public sealed class ReleaseResilienceWorkflowTests
         classifier.Should().Contain("conclusion -eq 'timed_out'");
         classifier.Should().Contain("retryable = ($failed.Count -gt 0 -and $real.Count -eq 0)");
         classifier.Should().Contain("return $null");
+
+        // A job GitHub cancelled because no runner ever took it (macOS arm64 capacity) is infrastructure,
+        // but only with a positive runner annotation; the readiness aggregator is a consequence.
+        classifier.Should().Contain("was not acquired by Runner");
+        classifier.Should().Contain("function Get-PlatformCancellationReason");
+        classifier.Should().Contain("'Release readiness summary'");
+        WorkspaceFileLocator.ReadAllText("tools", "Test-ReleaseFailureClassification.ps1")
+            .Should().Contain("Assert-Case 'readiness runner not acquired' $r $false $true 2")
+            .And.Contain("Assert-Case 'cancelled without evidence' $r $false $false 0");
 
         // The offline contract runs with the test-gate contract (and therefore repository preflight).
         WorkspaceFileLocator.ReadAllText("tools", "Test-TestGateContract.ps1")

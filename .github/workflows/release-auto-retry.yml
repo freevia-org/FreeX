@@ -8,8 +8,14 @@ name: Release Auto Retry
 # blip while a job set itself up. Re-dispatching the whole release for that costs the better part of an
 # hour, and it also forgets which jobs had already passed.
 #
-# So an operator dispatches this manually (it has no automatic trigger: all CI is manual-only) with
-# the id of a Full Signed Release run that ended in failure. It classifies every failed job with the
+# So an operator dispatches this manually (it has no event trigger: all CI is manual-only) with
+# the id of a Full Signed Release run, or of a Release Readiness run of main, that ended in failure.
+# release-readiness.yml also dispatches it for its own run (its last job, first attempt only): on
+# 2026-11-23 run 45222271749 went red only because three macOS arm64 jobs were never acquired, a manual
+# re-run of the failed jobs made it green, and until then the red nightly had removed the fast-release
+# default (full-release.yml releases the newest readiness-green commit, found through
+# tools/Get-LatestReadinessGreenSha.ps1). A re-run keeps the jobs that passed; the evidence reader asks
+# the jobs API for the latest execution of every job, so the re-run's job set is what counts. It classifies every failed job with the
 # same tools/Get-ReleaseRunFailureClass.ps1 the in-run watcher uses and, ONLY if every failure is
 # infrastructure, re-runs the failed jobs (and what depended on them) once.
 #
@@ -18,14 +24,17 @@ name: Release Auto Retry
 #     positively call infrastructure -- classifies as real and is never retried;
 #   * a run is retried only on its FIRST attempt, so the re-run itself is never retried again;
 #   * a cancelled run (including one the early-abort watcher cancelled for a real failure) is never
-#     retried; only a run that concluded 'failure' is.
+#     retried; only a run that concluded 'failure' is. (A single JOB that GitHub cancelled because it
+#     could never place it on a runner is infrastructure, but only with a runner annotation saying so;
+#     the classifier decides that);
+#   * a Release Readiness run is retried only when it was dispatched on main.
 # A re-run does not bypass any gate: a Windows signing job parks at the public-preview approval again,
 # and publication still needs every upstream job of the run to have succeeded.
 on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Full Signed Release run to classify and, if only infrastructure failed, re-run once
+        description: Full Signed Release or Release Readiness run to classify and, if only infrastructure failed, re-run once
         required: true
         type: string
 
@@ -69,7 +78,15 @@ jobs:
 
           $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$runId" | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $null -eq $run) { throw "Could not read run $runId." }
-          if ([string]$run.path -ne ".github/workflows/full-release.yml") { Stop-Without-Retry "run $runId is not a Full Signed Release run." }
+          if ([string]$run.path -notin @(".github/workflows/full-release.yml", ".github/workflows/release-readiness.yml")) { Stop-Without-Retry "run $runId is neither a Full Signed Release run nor a Release Readiness run." }
+          # Readiness runs are only worth retrying for main: the commit the fast-release default looks for.
+          if ([string]$run.path -eq ".github/workflows/release-readiness.yml" -and ([string]$run.head_branch -ne "main" -or [string]$run.event -notin @("workflow_dispatch", "schedule"))) { Stop-Without-Retry "run $runId is not a dispatched or scheduled Release Readiness run of main." }
+          # The readiness workflow dispatches this while its own run is still finishing its last job; wait a bounded time for it to conclude.
+          for ($waited = 0; [string]$run.status -ne "completed" -and $waited -lt 24; $waited++) {
+            Start-Sleep -Seconds 15
+            $run = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$runId" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $null -eq $run) { throw "Could not read run $runId." }
+          }
           if ([string]$run.status -ne "completed") { Stop-Without-Retry "run $runId has not finished." }
           if ([string]$run.conclusion -ne "failure") { Stop-Without-Retry "run $runId concluded '$($run.conclusion)', not 'failure' (cancelled runs are never retried)." }
           if ([int]$run.run_attempt -ne 1) { Stop-Without-Retry "run $runId is already attempt $($run.run_attempt); it is retried at most once." }

@@ -29,6 +29,49 @@ public sealed class ReleaseGateEvidenceTests
     }
 
     [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
+    public void Evidence_IsReusedFromARerunWhoseJobsSpanBothAttempts()
+    {
+        // Shape of release-readiness run 45222271749 after a `gh run rerun --failed`: the run is on
+        // attempt 2, the jobs listing (filter=latest, which the resolver requests) holds the latest
+        // execution of each job, some from attempt 1 and some re-executed in attempt 2, each exactly once.
+        using var temp = Prepare(runSha: CommitSha, jobs: ExpectedJobs.Select(name => (name, "success")).ToArray());
+        File.WriteAllText(
+            Path.Combine(temp.Path, "jobs", "77.json"),
+            JsonSerializer.Serialize(new
+            {
+                total_count = ExpectedJobs.Length,
+                jobs = ExpectedJobs.Select((name, index) => new { name, run_attempt = index % 2 == 0 ? 1 : 2, status = "completed", conclusion = "success" })
+            }));
+
+        var result = Run(temp.Path, FreshNow);
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        File.ReadAllText(Path.Combine(temp.Path, "out.txt")).Should().Contain("reuse=true").And.Contain("evidence_run_id=77");
+    }
+
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
+    public void Evidence_IsNotReusedWhenAnAttemptOneFailureStillHoldsAGateSlot()
+    {
+        // The reader must not stitch a green set out of a listing that still shows the failed
+        // execution (a filter=all style listing would list the gate twice).
+        using var temp = Prepare(runSha: CommitSha, jobs: ExpectedJobs.Select(name => (name, "success")).ToArray());
+        File.WriteAllText(
+            Path.Combine(temp.Path, "jobs", "77.json"),
+            JsonSerializer.Serialize(new
+            {
+                total_count = ExpectedJobs.Length + 1,
+                jobs = ExpectedJobs
+                    .Select(name => new { name, run_attempt = 2, status = "completed", conclusion = "success" })
+                    .Append(new { name = ExpectedJobs[0], run_attempt = 1, status = "completed", conclusion = "cancelled" })
+            }));
+
+        var result = Run(temp.Path, FreshNow);
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        File.ReadAllText(Path.Combine(temp.Path, "out.txt")).Should().Contain("reuse=false");
+    }
+
+    [RequiresExternalToolFact(ExternalToolPreconditions.PowerShell7)]
     public void Evidence_IsNotReusedWhenAnyGateIsRedMissingOrDuplicated()
     {
         var allGreen = ExpectedJobs.Select(name => (name, "success")).ToArray();

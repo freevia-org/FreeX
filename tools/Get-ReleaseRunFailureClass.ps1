@@ -13,7 +13,10 @@ param(
     [string[]]$IgnoredJobNames = @(
         'FreeX full release gate',
         'Validate complete release inventory',
-        'Watch for a real failure and stop the run early'
+        'Watch for a real failure and stop the run early',
+        # release-readiness.yml's own aggregator: it fails whenever a gate job did, so it is a
+        # consequence, never a cause. (The gate jobs and 'README download links' are judged themselves.)
+        'Release readiness summary'
     ),
 
     [string]$GitHubOutputPath = '',
@@ -104,6 +107,22 @@ function Get-JobAnnotationText([object]$Job) {
     }
 }
 
+function Get-PlatformCancellationReason([object]$Job) {
+    # GitHub ends a job it could never place (for example "The job was not acquired by Runner of type
+    # hosted even after multiple attempts" when macOS arm64 capacity is exhausted) as CANCELLED with
+    # no steps, not as failed -- release-readiness run 45222271749 lost three macOS jobs that way. A
+    # cancelled job is also what a human, a concurrency group or the early-abort watcher produces, so
+    # it counts only with a positive runner annotation; no annotation, or an unreadable listing, means
+    # it is a consequence like any other cancelled sibling. Returns the reason or $null.
+    $annotations = Get-JobAnnotationText $Job
+    if ([string]::IsNullOrEmpty($annotations)) { return $null }
+    foreach ($pattern in $infrastructureAnnotationPatterns) {
+        if ($annotations -match $pattern) { return "the job was cancelled by the platform: runner annotation matches '$pattern'" }
+    }
+
+    return $null
+}
+
 function Get-FailureClass([object]$Job) {
     $conclusion = [string]$Job.conclusion
     if ($conclusion -eq 'timed_out') {
@@ -146,6 +165,13 @@ foreach ($job in @($document.jobs)) {
     if ([string]$job.name -eq 'Validate complete release inventory' -and [string]$job.status -in @('in_progress', 'completed')) { $reachedPublicationGate = $true }
     if ($IgnoredJobNames -contains [string]$job.name) { continue }
     if ([string]$job.status -ne 'completed') { $pending++; continue }
+    if ([string]$job.conclusion -eq 'cancelled') {
+        $cancelReason = Get-PlatformCancellationReason $job
+        if ($null -ne $cancelReason) {
+            $failed.Add([pscustomobject]@{ id = [string]$job.id; name = [string]$job.name; class = 'infrastructure'; reason = $cancelReason })
+        }
+        continue
+    }
     if ([string]$job.conclusion -notin @('failure', 'timed_out')) { continue }
 
     $class = Get-FailureClass $job

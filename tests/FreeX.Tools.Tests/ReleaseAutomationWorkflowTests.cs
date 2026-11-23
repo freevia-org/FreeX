@@ -102,6 +102,14 @@ public sealed class ReleaseAutomationWorkflowTests
         // scheduled run skips it. Only failed runs whose README check passed count (that check reads
         // state outside the repository), and only the schedule is ever skipped.
         guard.Should().Contain("known_red: ${{ steps.decide.outputs.known_red }}");
+        // A run whose every failed job is infrastructure (the classifier release-auto-retry.yml uses) never counts as failed,
+        // and an unrunnable classifier throws so the guard fails open and runs in full.
+        guard.Should().Contain("sparse-checkout: tools/Get-ReleaseRunFailureClass.ps1");
+        guard.Should().Contain("tools/Get-ReleaseRunFailureClass.ps1 -Repository $env:REPOSITORY -RunId $failedParts[0]");
+        guard.Should().Contain("if (-not $classState.retryable) { $failedFull++ }");
+        guard.Should().Contain("the failure classifier could not judge run");
+        guard.Should().Contain("contents: read", "the sparse checkout needs the contents scope");
+        guard.Should().NotContain("contents: write");
         guard.Should().Contain("-f status=failure");
         guard.Should().Contain("-contains \"README download links`tsuccess\"");
         guard.Should().Contain("$failedFull -ge 2");
