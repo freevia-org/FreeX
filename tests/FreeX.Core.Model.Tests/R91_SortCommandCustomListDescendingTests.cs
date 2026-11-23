@@ -18,12 +18,12 @@ namespace FreeX.Core.Model.Tests;
 public sealed class R91_SortCommandCustomListDescendingTests
 {
     [Fact]
-    public void CustomListOrder_Descending_WalksListInReverse_NonMemberStillLast()
+    public void CustomListOrder_Descending_WalksListInReverse_NonMemberFirst()
     {
-        // A1:A4 = Wed, Foo, Mon, Tue — Sort Descending ("Z to A") with the Sun..Sat custom
-        // list active. Excel's behaviour: the custom list is walked in reverse (Wed, Tue, Mon)
-        // and "Foo" (not in the list) still goes LAST, exactly as it would in ascending order —
-        // descending must never let a non-member jump ahead of every list member.
+        // A1:A4 = Wed, Foo, Mon, Tue — Sort Descending with the Sun..Sat custom list active.
+        // Excel-parity round 6: measured with Range.Sort(Order1:=xlDescending, OrderCustom:=...), the
+        // whole ordering is reversed -- "Foo" (not in the list) comes FIRST and then the list is walked
+        // backwards (Wed, Tue, Mon). (R91 had assumed non-members stay last; Excel does not do that.)
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new TestCommandContext(workbook);
@@ -38,10 +38,10 @@ public sealed class R91_SortCommandCustomListDescendingTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.GetValue(1, 1).Should().Be(new TextValue("Wed"));
-        sheet.GetValue(2, 1).Should().Be(new TextValue("Tue"));
-        sheet.GetValue(3, 1).Should().Be(new TextValue("Mon"));
-        sheet.GetValue(4, 1).Should().Be(new TextValue("Foo")); // non-member still last, not first
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Foo"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Wed"));
+        sheet.GetValue(3, 1).Should().Be(new TextValue("Tue"));
+        sheet.GetValue(4, 1).Should().Be(new TextValue("Mon"));
 
         command.Revert(ctx);
 
@@ -52,7 +52,7 @@ public sealed class R91_SortCommandCustomListDescendingTests
     }
 
     [Fact]
-    public void CustomListOrder_Descending_LeftToRight_WalksListInReverse_NonMemberStillLast_NoRegression()
+    public void CustomListOrder_Descending_LeftToRight_WalksListInReverse_NonMemberFirst()
     {
         // No-regression sibling exercising the row-of-columns (ApplyLeftToRight) comparator,
         // which has the identical ascending/descending negation pattern as the row-sort
@@ -74,9 +74,9 @@ public sealed class R91_SortCommandCustomListDescendingTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.GetValue(1, 1).Should().Be(new TextValue("Wed"));
-        sheet.GetValue(1, 2).Should().Be(new TextValue("Tue"));
-        sheet.GetValue(1, 3).Should().Be(new TextValue("Mon"));
-        sheet.GetValue(1, 4).Should().Be(new TextValue("Foo")); // non-member still last, not first
+        sheet.GetValue(1, 1).Should().Be(new TextValue("Foo"));
+        sheet.GetValue(1, 2).Should().Be(new TextValue("Wed"));
+        sheet.GetValue(1, 3).Should().Be(new TextValue("Tue"));
+        sheet.GetValue(1, 4).Should().Be(new TextValue("Mon"));
     }
 }

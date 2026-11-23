@@ -398,43 +398,26 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder, targetIcon) in keyColIndexes)
             {
-                // Excel always places blank (and error) cells last regardless of sort direction.
+                // Excel always places blank cells last regardless of sort direction.
                 // Guard this BEFORE the ascending/descending negation so the blank-last ordering
                 // is never inverted.
                 if (sortOn == SortOn.CellValues)
                 {
-                    bool aBlank = IsBlankOrError(a.Payloads[index].EffectiveValue);
-                    bool bBlank = IsBlankOrError(b.Payloads[index].EffectiveValue);
+                    // Excel-parity round 6: only BLANK cells are pinned last (both directions). Errors
+                    // are NOT: Range.Sort ranks them as the highest value type (after booleans) and
+                    // treats all errors as equal, so Descending puts them FIRST and Ascending puts them
+                    // after the booleans but before the blanks. They go through CompareKey/negation below.
+                    bool aBlank = IsBlank(a.Payloads[index].EffectiveValue);
+                    bool bBlank = IsBlank(b.Payloads[index].EffectiveValue);
                     if (aBlank != bBlank)
-                        return aBlank ? 1 : -1; // blank/error always goes last
+                        return aBlank ? 1 : -1; // blank always goes last
                     if (aBlank)
-                    {
-                        // R27-sort-deep-2: within the "goes last" bucket, Excel's fixed
-                        // precedence puts errors above blanks — independent of direction, same
-                        // as the blank-last rule itself.
-                        bool aError = a.Payloads[index].EffectiveValue is ErrorValue;
-                        bool bError = b.Payloads[index].EffectiveValue is ErrorValue;
-                        if (aError != bError)
-                            return aError ? -1 : 1;
-                        continue; // both blank, or both error — equal on this key, try next
-                    }
+                        continue; // both blank — equal on this key, try next
 
-                    // R91-commands-sort-customlist-5-1: a custom list's "member always precedes
-                    // non-member" rule is a fixed property of the list itself, not of the sort
-                    // direction — Excel's Sort dialog doesn't even let a user combine Descending
-                    // with a custom list (choosing "Custom List..." replaces the A-to-Z/Z-to-A
-                    // choice entirely). FreeX's Ascending toggle and custom-list picker are two
-                    // independent controls that both land on the same SortKey, so guard the
-                    // membership precedence here, before the shared ascending/descending negation
-                    // below, so Descending only reverses the WITHIN-list order (e.g. Wed, Tue,
-                    // Mon) and never lets a non-member value jump ahead of every list member.
-                    if (customOrder is not null)
-                    {
-                        bool aMember = a.Payloads[index].EffectiveValue is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
-                        bool bMember = b.Payloads[index].EffectiveValue is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
-                        if (aMember != bMember)
-                            return aMember ? -1 : 1; // list members precede non-members, regardless of direction
-                    }
+                    // Excel-parity round 6: a custom list is just another ordering of the key, so Descending
+                    // reverses it completely (non-members first, then the list backwards) -- measured against
+                    // Range.Sort(Order1:=xlDescending, OrderCustom:=...). The earlier "members always first"
+                    // guard (R91) was a UI-driven guess that Excel's object model does not share.
                 }
                 else if ((sortOn == SortOn.CellColor || sortOn == SortOn.FontColor) && targetColor is null)
                 {
@@ -669,37 +652,26 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder, targetIcon) in keyRowIndexes)
             {
-                // Excel always places blank (and error) cells last regardless of sort direction.
+                // Excel always places blank cells last regardless of sort direction.
                 // Guard this BEFORE the ascending/descending negation so the blank-last ordering
                 // is never inverted.
                 if (sortOn == SortOn.CellValues)
                 {
-                    bool aBlank = IsBlankOrError(a.Payloads[index].EffectiveValue);
-                    bool bBlank = IsBlankOrError(b.Payloads[index].EffectiveValue);
+                    // Excel-parity round 6: only BLANK cells are pinned last (both directions). Errors
+                    // are NOT: Range.Sort ranks them as the highest value type (after booleans) and
+                    // treats all errors as equal, so Descending puts them FIRST and Ascending puts them
+                    // after the booleans but before the blanks. They go through CompareKey/negation below.
+                    bool aBlank = IsBlank(a.Payloads[index].EffectiveValue);
+                    bool bBlank = IsBlank(b.Payloads[index].EffectiveValue);
                     if (aBlank != bBlank)
-                        return aBlank ? 1 : -1; // blank/error always goes last
+                        return aBlank ? 1 : -1; // blank always goes last
                     if (aBlank)
-                    {
-                        // R27-sort-deep-2: within the "goes last" bucket, Excel's fixed
-                        // precedence puts errors above blanks — independent of direction, same
-                        // as the blank-last rule itself.
-                        bool aError = a.Payloads[index].EffectiveValue is ErrorValue;
-                        bool bError = b.Payloads[index].EffectiveValue is ErrorValue;
-                        if (aError != bError)
-                            return aError ? -1 : 1;
-                        continue; // both blank, or both error — equal on this key, try next
-                    }
+                        continue; // both blank — equal on this key, try next
 
-                    // R91-commands-sort-customlist-5-1: mirrors the guard in Apply's top-to-bottom
-                    // comparator above — a custom list's "member always precedes non-member" rule
-                    // must not be inverted by the Descending direction toggle.
-                    if (customOrder is not null)
-                    {
-                        bool aMember = a.Payloads[index].EffectiveValue is TextValue taMember && customOrder.IndexOf(taMember.Value) >= 0;
-                        bool bMember = b.Payloads[index].EffectiveValue is TextValue tbMember && customOrder.IndexOf(tbMember.Value) >= 0;
-                        if (aMember != bMember)
-                            return aMember ? -1 : 1; // list members precede non-members, regardless of direction
-                    }
+                    // Excel-parity round 6: a custom list is just another ordering of the key, so Descending
+                    // reverses it completely (non-members first, then the list backwards) -- measured against
+                    // Range.Sort(Order1:=xlDescending, OrderCustom:=...). The earlier "members always first"
+                    // guard (R91) was a UI-driven guess that Excel's object model does not share.
                 }
                 else if ((sortOn == SortOn.CellColor || sortOn == SortOn.FontColor) && targetColor is null)
                 {
@@ -2061,14 +2033,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
     }
 
     /// <summary>
-    /// Returns true if the value is blank or an error.
-    /// Excel places both blank and error cells at the bottom regardless of sort direction.
+    /// Returns true if the value is blank. Excel places blank cells at the bottom regardless of sort
+    /// direction; errors are the highest-ranked value type and follow the sort direction.
     /// </summary>
-    private static bool IsBlankOrError(ScalarValue value) =>
-        value is BlankValue or ErrorValue;
+    private static bool IsBlank(ScalarValue value) =>
+        value is BlankValue;
 
     /// <summary>
-    /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, blanks/errors last.
+    /// Sort comparison mirroring Excel's order: numbers/dates, text, booleans, errors, blanks last.
     /// </summary>
     private static int CompareScalar(ScalarValue a, ScalarValue b, CustomSortOrder? customOrder, bool caseSensitive)
     {
@@ -2106,8 +2078,11 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEsti
             (TextValue,      _             ) => -1,  // text before bool/blank
             (_,              TextValue     ) =>  1,
             (BoolValue ba,   BoolValue bb  ) => ba.Value.CompareTo(bb.Value),
-            (BoolValue,      _             ) => -1,  // bools before blank/error
+            (BoolValue,      _             ) => -1,  // bools before error/blank
             (_,              BoolValue     ) =>  1,
+            (ErrorValue,     ErrorValue    ) =>  0,  // all errors compare equal (stable)
+            (ErrorValue,     _             ) => -1,  // errors after bools, before blanks
+            (_,              ErrorValue    ) =>  1,
             (BlankValue,     BlankValue    ) =>  0,
             (BlankValue,     _             ) =>  1,  // blanks last
             (_,              BlankValue    ) => -1,

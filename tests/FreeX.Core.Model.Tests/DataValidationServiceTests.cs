@@ -8,11 +8,14 @@ namespace FreeX.Core.Model.Tests;
 public sealed class DataValidationServiceTests
 {
     [Fact]
-    public void ValidateList_AllowsCaseInsensitiveInlineMatch()
+    public void ValidateList_InlineMatchIsCaseSensitive()
     {
         var rule = NewListRule(SheetId.New(), "Red,Green,Blue");
 
-        DataValidationService.Validate(rule, new TextValue("green")).Should().BeNull();
+        // Excel-parity round 6: a comma-delimited list typed into the rule is case-sensitive
+        // (a range-based source, below, is not).
+        DataValidationService.Validate(rule, new TextValue("green")).Should().NotBeNull();
+        DataValidationService.Validate(rule, new TextValue("Green")).Should().BeNull();
     }
 
     [Fact]

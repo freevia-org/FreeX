@@ -111,7 +111,13 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                                 ? ToDifferentialColorXml(workbookNs, "fgColor", pattern, style.FillPatternThemeColor)
                                 : null,
                         style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid
-                            ? new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))
+                            // Excel paints a SOLID differential fill with the bgColor, not the fgColor: a dxf
+                            // that carries only fgColor (bgColor indexed=64) shows up as a white fill in real
+                            // Excel (measured via Range.DisplayFormat, Excel-parity round 6). Write the color to
+                            // both so Top10/AboveAverage/Duplicate/Text/Blank highlights keep their fill.
+                            ? style.FillColor is { } solidBackground
+                                ? ToDifferentialColorXml(workbookNs, "bgColor", solidBackground, style.FillThemeColor)
+                                : new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))
                             : style.FillColor is { } background
                                 ? ToDifferentialColorXml(workbookNs, "bgColor", background, style.FillThemeColor)
                                 : new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))

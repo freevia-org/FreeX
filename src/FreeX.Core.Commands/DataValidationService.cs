@@ -22,7 +22,7 @@ public static partial class DataValidationService
     {
         // Blanks always pass when AllowBlank is true
         if (value is BlankValue)
-            return dv.AllowBlank ? null : "A value is required.";
+            return dv.AllowBlank ? null : ValidateBlankNotIgnored(dv, sheet: null, address: null, workbook: null);
 
         return dv.Type switch
         {
@@ -46,7 +46,7 @@ public static partial class DataValidationService
         Workbook? workbook = null)
     {
         if (value is BlankValue)
-            return dv.AllowBlank ? null : "A value is required.";
+            return dv.AllowBlank ? null : ValidateBlankNotIgnored(dv, sheet, address, workbook);
 
         return dv.Type switch
         {
@@ -59,6 +59,38 @@ public static partial class DataValidationService
             DvType.Custom => ValidateCustom(dv, value, sheet, address, workbook),
             _ => Validate(dv, value)
         };
+    }
+
+    /// <summary>
+    /// "Ignore blank" unchecked: Excel does not reject an empty cell outright, it validates the empty
+    /// cell as the value 0 (Whole/Decimal/Date/Time), as the empty string (Text length) or by evaluating
+    /// the custom formula against the empty cell -- so e.g. a "not equal to 5" or "less than 10" rule
+    /// still accepts a blank. A List rule has no empty item, so a blank stays invalid there.
+    /// Measured against Range.Validation.Value (Excel-parity round 6).
+    /// </summary>
+    private static string? ValidateBlankNotIgnored(DataValidation dv, Sheet? sheet, CellAddress? address, Workbook? workbook)
+    {
+        const string required = "A value is required.";
+        switch (dv.Type)
+        {
+            case DvType.Any:
+                return null;
+            case DvType.WholeNumber:
+            case DvType.Decimal:
+                return ValidateNumeric(dv, new NumberValue(0), sheet, address, workbook, requireInteger: dv.Type == DvType.WholeNumber) is null ? null : required;
+            case DvType.Date:
+                return ValidateDate(dv, new NumberValue(0), sheet, address, workbook) is null ? null : required;
+            case DvType.Time:
+                return ValidateTime(dv, new NumberValue(0), sheet, address, workbook) is null ? null : required;
+            case DvType.TextLength:
+                return ValidateTextLength(dv, new TextValue(string.Empty), sheet, address, workbook) is null ? null : required;
+            case DvType.Custom:
+                return sheet is null || address is null
+                    ? null
+                    : ValidateCustom(dv, new BlankValue(), sheet, address.Value, workbook) is null ? null : required;
+            default:
+                return required;
+        }
     }
 
     /// <summary>
@@ -348,6 +380,8 @@ public static partial class DataValidationService
             numericValue = nv.Value;
         else if (value is DateTimeValue dtv)
             numericValue = dtv.Value;
+        else if (value is BoolValue boolValue)
+            return ValidateBooleanAgainstNumericBounds(dv, sheet, address, workbook, DataValidationBoundsParser.TryParseNumberBound);
         else
             return dv.ErrorMessage ?? "Value must be a number.";
 
@@ -365,6 +399,27 @@ public static partial class DataValidationService
         }
 
         return ValidateResolvedNumericBounds(dv, numericValue, v1, v2);
+    }
+
+    /// <summary>
+    /// A logical value in a Whole/Decimal/Date/Time rule: Excel ranks TRUE/FALSE above every number, so
+    /// the comparison operators resolve as if the entry were larger than any bound: greater-than,
+    /// greater-or-equal, not-equal and not-between accept it; between, equal, less-than and
+    /// less-or-equal reject it. The whole-number check is not applied to it.
+    /// </summary>
+    private delegate bool BoundParser(string? formula, Sheet? sheet, CellAddress? address, CellAddress? anchor, Workbook? workbook, out double value);
+
+    private static string? ValidateBooleanAgainstNumericBounds(
+        DataValidation dv, Sheet? sheet, CellAddress? address, Workbook? workbook, BoundParser parse)
+    {
+        if (!parse(dv.Formula1, sheet, address, dv.AppliesTo.Start, workbook, out _))
+            return null;
+        if (dv.Operator is DvOperator.Between or DvOperator.NotBetween &&
+            !parse(dv.Formula2, sheet, address, dv.AppliesTo.Start, workbook, out _))
+            return null;
+
+        var passes = dv.Operator is DvOperator.NotBetween or DvOperator.NotEqual or DvOperator.GreaterThan or DvOperator.GreaterThanOrEqual;
+        return passes ? null : dv.ErrorMessage ?? "Value must be a number.";
     }
 
     private static string? ValidateResolvedNumericBounds(
@@ -465,6 +520,8 @@ public static partial class DataValidationService
             oaDate = nv.Value;
         else if (value is DateTimeValue dtv)
             oaDate = dtv.Value;
+        else if (value is BoolValue)
+            return ValidateBooleanAgainstNumericBounds(dv, sheet, address, workbook, DataValidationBoundsParser.TryParseDateBound);
         else
             return dv.ErrorMessage ?? "Value must be a date.";
 
@@ -491,11 +548,15 @@ public static partial class DataValidationService
         CellAddress? address,
         Workbook? workbook)
     {
+        // Excel compares the raw serial (date part included) against the time bounds -- a value of
+        // 1.5 is NOT "12:00" for a between-0.25-and-0.75 rule (Excel-parity round 6).
         double timeValue;
         if (value is NumberValue nv)
-            timeValue = nv.Value - Math.Floor(nv.Value);
+            timeValue = nv.Value;
         else if (value is DateTimeValue dtv)
-            timeValue = dtv.Value - Math.Floor(dtv.Value);
+            timeValue = dtv.Value;
+        else if (value is BoolValue)
+            return ValidateBooleanAgainstNumericBounds(dv, sheet, address, workbook, DataValidationBoundsParser.TryParseTimeBound);
         else
             return dv.ErrorMessage ?? "Value must be a time.";
 
@@ -547,7 +608,8 @@ public static partial class DataValidationService
             if (anchor != address)
                 ast = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, address);
 
-            var result = new FormulaEvaluator().Evaluate(ast, sheet, workbook, currentCell: address);
+            // The validation formula is not stored in the cell it validates, so INDIRECT back to that cell is a plain read.
+            var result = new FormulaEvaluator().Evaluate(ast, sheet, workbook, currentCell: address, isIterativeCalculationPass: true);
 
             // Excel treats FALSE, 0, and any error/blank as invalid.
             var passes = result switch

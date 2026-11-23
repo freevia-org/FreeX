@@ -67,7 +67,7 @@ public partial class DataValidationTests
     }
 
     [Fact]
-    public void Validate_List_CaseInsensitive()
+    public void Validate_List_InlineItems_AreCaseSensitive_AndIgnoreEntrySpaces()
     {
         var dv = new DataValidation
         {
@@ -76,9 +76,12 @@ public partial class DataValidationTests
             AllowBlank = true,
         };
 
-        var result = DataValidationService.Validate(dv, new TextValue("apple"));
-
-        result.Should().BeNull("matching should be case-insensitive");
+        // Excel-parity round 6 (measured with Range.Validation.Value): a comma-delimited list typed into
+        // the rule matches case-sensitively, unlike a range-based source.
+        DataValidationService.Validate(dv, new TextValue("apple"))
+            .Should().NotBeNull("an inline list is case-sensitive");
+        DataValidationService.Validate(dv, new TextValue("Apple")).Should().BeNull();
+        DataValidationService.Validate(dv, new TextValue(" Apple ")).Should().BeNull("surrounding spaces of the entry are ignored");
     }
 
     // ─── WholeNumber validation ───────────────────────────────────────────────
