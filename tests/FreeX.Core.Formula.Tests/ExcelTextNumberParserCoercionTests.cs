@@ -74,10 +74,17 @@ public sealed class ExcelTextNumberParserCoercionTests
     [Theory]
     [InlineData("=\"1,2\"+0")]
     [InlineData("=\"12,34\"+0")]
-    [InlineData("=\"1,2345\"+0")]
     [InlineData("=\"1,23\"+0")]
     public void BadGrouping_IsValueError(string formula) =>
         Eval(formula).Should().Be(ErrorValue.Value);
+
+    // Measured against Excel 16.0 (en-US): only the groups AFTER the first need three or more digits,
+    // so a four-digit group is accepted ("1,2345" is 12345) while a two-digit one is not.
+    [Theory]
+    [InlineData("=\"1,2345\"+0", 12345)]
+    [InlineData("=VALUE(\"1,2345\")", 12345)]
+    public void LongGroupsAfterTheFirstAreAccepted(string formula, double expected) =>
+        Eval(formula).Should().Be(new NumberValue(expected));
 
     [Theory]
     [InlineData("=\"1,234\"+0", 1234.0)]
@@ -89,7 +96,6 @@ public sealed class ExcelTextNumberParserCoercionTests
     [Theory]
     [InlineData("=VALUE(\"1,2\")")]
     [InlineData("=VALUE(\"12,34\")")]
-    [InlineData("=VALUE(\"1,2345\")")]
     public void ValueFunction_BadGrouping_IsValueError(string formula) =>
         Eval(formula).Should().Be(ErrorValue.Value);
 
@@ -107,7 +113,6 @@ public sealed class ExcelTextNumberParserCoercionTests
     [InlineData("=\"-3.5\"+0", -3.5)]
     [InlineData("=\"1.5e2\"+0", 150.0)]
     [InlineData("=\"50%\"+0", 0.5)]
-    [InlineData("=\"50%%\"+0", 0.005)]
     public void PlainNumbers_StillCoerce(string formula, double expected) =>
         Eval(formula).Should().Be(new NumberValue(expected));
 }

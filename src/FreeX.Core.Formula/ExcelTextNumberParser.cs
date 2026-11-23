@@ -132,6 +132,9 @@ internal static class ExcelTextNumberParser
         // Built once per call (not cached statically) so a change to CultureInfo.CurrentCulture
         // between calls is always honored - see CreateCurrentCultureWithExcelTwoDigitYearCutoff.
         var culture = CreateCurrentCultureWithExcelTwoDigitYearCutoff();
+        if (IsUsStyle(culture))
+            return TryParseUsStyle(text, out number, uses1904DateSystem);
+
         var trimmed = text.Trim();
 
         int pctCount = 0;
@@ -175,6 +178,37 @@ internal static class ExcelTextNumberParser
             number = IsTimeOnlyText(trimmed)
                 ? dt.TimeOfDay.TotalDays
                 : ExcelDateSystem.DateToSerial(dt, uses1904DateSystem);
+            return true;
+        }
+
+        number = 0;
+        return false;
+    }
+
+    /// <summary>
+    /// True for a month-first, '.'-decimal, ','-grouped culture (en-US and the invariant baseline), the
+    /// layout whose text-to-number/date grammar was measured against real Excel and is implemented in
+    /// <see cref="ExcelNumberTextGrammar"/> / <see cref="ExcelTextDateTimeParser"/>. Other cultures keep
+    /// the culture-driven parse below.
+    /// </summary>
+    internal static bool IsUsStyle(CultureInfo culture) =>
+        culture.NumberFormat.NumberDecimalSeparator == "." &&
+        culture.NumberFormat.NumberGroupSeparator == "," &&
+        culture.DateTimeFormat.ShortDatePattern.StartsWith('M');
+
+    private static bool TryParseUsStyle(string text, out double number, bool uses1904DateSystem)
+    {
+        number = 0;
+        // Only the ASCII space is whitespace to Excel here: a tab, newline or NBSP is #VALUE!.
+        var s = ExcelNumberTextGrammar.NormalizeDigits(text).Trim(' ');
+        if (s.Length == 0) return false;
+
+        if (ExcelNumberTextGrammar.TryParseStrict(s, out number))
+            return true;
+
+        if (ExcelTextDateTimeParser.TryParse(s, DateTime.Today, out var parsed))
+        {
+            number = ExcelTextDateTimeParser.ToSerial(parsed, uses1904DateSystem);
             return true;
         }
 

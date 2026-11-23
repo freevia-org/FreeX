@@ -23,7 +23,6 @@ public sealed class ExcelParityCoercionEdgeTests
 
     [Theory]
     [InlineData("=\"50%\"+0", 0.5)]
-    [InlineData("=\"50%%\"+0", 0.005)]
     [InlineData("=0+\"$1,234.50\"", 1234.5)]
     [InlineData("=\"1/2/2024\"+1", 45294)]
     [InlineData("=\"1:30 PM\"*24", 13.5)]
@@ -37,9 +36,13 @@ public sealed class ExcelParityCoercionEdgeTests
     }
 
     [Fact]
-    public void Value_ParsesMultipleTrailingPercentSignsLikeExcel()
+    public void Value_RejectsMultiplePercentSignsLikeExcel()
     {
-        _eval.Evaluate("=VALUE(\"50%%\")", Sheet()).Should().Be(new NumberValue(0.005));
+        // Measured against Excel 16.0 (en-US): VALUE("50%%") and "50%%"+0 are #VALUE! (NUMBERVALUE is the
+        // function that tolerates repeated percent signs).
+        _eval.Evaluate("=VALUE(\"50%%\")", Sheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=\"50%%\"+0", Sheet()).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(\"50%%\")", Sheet()).Should().Be(new NumberValue(0.005));
     }
 
     [Fact]

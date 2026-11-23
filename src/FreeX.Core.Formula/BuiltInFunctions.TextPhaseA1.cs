@@ -221,8 +221,14 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
-        var decSep = args.Count > 1 ? args[1] : new TextValue(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
-        var grpSep = args.Count > 2 ? args[2] : new TextValue(CultureInfo.CurrentCulture.NumberFormat.NumberGroupSeparator);
+        var culture = ExcelCulture.Current;
+        var decSep = args.Count > 1 ? args[1] : new TextValue(culture.NumberFormat.NumberDecimalSeparator);
+        var grpSep = args.Count > 2 ? args[2] : new TextValue(culture.NumberFormat.NumberGroupSeparator);
+        // With only decimal_separator given, a default group separator that would collide with it falls
+        // back to the locale's decimal separator (NUMBERVALUE("1.5", ",") is 15 and ("1,5", ",") is 1.5).
+        if (args.Count == 2 && ToText(args[1]).Length > 0 &&
+            ToText(args[1])[..1] == culture.NumberFormat.NumberGroupSeparator)
+            grpSep = new TextValue(culture.NumberFormat.NumberDecimalSeparator);
         return MapTernaryTextArgs(args[0], decSep, grpSep, NumbervalueScalarWithSeparators);
     }
 
@@ -253,11 +259,12 @@ public static partial class BuiltInFunctions
 
         // Excel ignores these ASCII spacing controls in NUMBERVALUE text, but not
         // every Unicode whitespace character such as NBSP.
-        text = text
+        text = ExcelNumberTextGrammar.NormalizeDigits(text)
             .Replace(" ", "")
             .Replace("\t", "")
             .Replace("\n", "")
             .Replace("\r", "");
+        string whitespaceStripped = text;
 
         // A literal '.' that is neither the declared decimal_separator nor the declared
         // group_separator is not a valid character in NUMBERVALUE's input text -- e.g.
@@ -269,18 +276,6 @@ public static partial class BuiltInFunctions
         if (decSep != "." && grpSep != "." && text.Contains('.', StringComparison.Ordinal))
             return ErrorValue.Value;
 
-        bool accountingNegative = text.StartsWith('(') && text.EndsWith(')');
-        if (accountingNegative)
-            text = text[1..^1];
-
-        // Trailing percent
-        int pctCount = 0;
-        while (text.EndsWith('%'))
-        {
-            pctCount++;
-            text = text[..^1];
-        }
-
         var decimalIndex = text.IndexOf(decSep, StringComparison.Ordinal);
         if (decimalIndex >= 0 &&
             text.IndexOf(grpSep, decimalIndex + decSep.Length, StringComparison.Ordinal) >= 0)
@@ -291,15 +286,20 @@ public static partial class BuiltInFunctions
         // Substitute decimal separator with '.'
         if (decSep != ".") text = text.Replace(decSep, ".", StringComparison.Ordinal);
 
-        if (text.Length == 0) return new NumberValue(0);
+        // Nothing but percent signs (or nothing at all) is 0.
+        if (text.All(static c => c == '%')) return new NumberValue(0);
 
-        // AllowTrailingSign lets NUMBERVALUE accept the trailing-minus accounting convention
-        // (e.g. "1234-" meaning -1234), the same as VALUE()'s ExcelTextNumberParser already does.
-        if (!double.TryParse(text, NumberStyles.Float | NumberStyles.AllowTrailingSign, CultureInfo.InvariantCulture, out var v))
-            return ErrorValue.Value;
+        // Measured against Excel: a trailing sign is #VALUE! ("5-"), "$" and "(...)" are accepted
+        // alongside any number of percent signs, and exponent overflow is #VALUE! rather than #NUM!.
+        if (ExcelNumberTextGrammar.TryParseLenient(text, out var v))
+            return double.IsFinite(v) ? NumberResult(v) : ErrorValue.Value;
 
-        for (int i = 0; i < pctCount; i++) v /= 100.0;
-        if (accountingNegative) v = -v;
-        return NumberResult(v);
+        // Like VALUE, NUMBERVALUE falls back to date/time text ("1/2", "12:30", "1/1/2020") once the
+        // spaces are gone; only meaningful with the default separators.
+        if (decSep == "." && grpSep == "," &&
+            ExcelTextDateTimeParser.TryParse(whitespaceStripped, DateTime.Today, out var parsed))
+            return NumberResult(ExcelTextDateTimeParser.ToSerial(parsed, uses1904DateSystem: false));
+
+        return ErrorValue.Value;
     }
 }

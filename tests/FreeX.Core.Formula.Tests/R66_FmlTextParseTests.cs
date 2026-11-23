@@ -42,12 +42,20 @@ public sealed class R66_FmlTextParseTests
     }
 
     [Fact]
-    public void Datevalue_MonthDashTwoDigitYearAtOrBelowPivot_ResolvesToTwoThousands()
+    public void Datevalue_MonthDashTwoDigitNumberThatIsAValidDay_IsTheDayOfTheCurrentYear()
     {
-        // "05" is at/below the pivot, so "Jan-05" resolves to January 2005, not #VALUE!.
-        var expected = new DateTime(2005, 1, 1).ToOADate();
+        // Measured against Excel 16.0 (en-US): "Jan-05" is the 5th of January of the current year, not
+        // January 2005 -- a number that is a valid day of the month wins over the two-digit-year reading.
+        var expected = new DateTime(DateTime.Today.Year, 1, 5).ToOADate();
         _eval.Evaluate("=DATEVALUE(\"Jan-05\")", Sheet())
             .Should().Be(new NumberValue(expected));
+    }
+
+    [Fact]
+    public void Datevalue_MonthDashTwoDigitNumberThatIsNotAValidDay_IsTheTwoDigitYear()
+    {
+        // "Jan-00" cannot be a day, so it is the year 2000 (Excel: 36526).
+        _eval.Evaluate("=DATEVALUE(\"Jan-00\")", Sheet()).Should().Be(new NumberValue(36526));
     }
 
     [Fact]

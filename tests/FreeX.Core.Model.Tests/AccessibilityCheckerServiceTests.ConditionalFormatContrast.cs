@@ -4446,8 +4446,8 @@ public sealed partial class AccessibilityCheckerServiceTests
         AssertFormulaValueFunctionContrastLocations("VALUE(42)>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
         AssertFormulaValueFunctionContrastLocations("VALUE(\"Open\")>0");
         AssertFormulaValueFunctionContrastLocations("VALUE(\"\")>0");
-        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
-        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"1E309\")>0");
+        AssertFormulaValueFunctionContrastLocations("VALUE(\"50%%\")>0");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1&\"x\")>0");
     }
 
@@ -4539,7 +4539,8 @@ public sealed partial class AccessibilityCheckerServiceTests
     {
         AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(DATEVALUE($A1)>60,TRUE,FALSE)", "B4", "B5", "B6", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(DATEVALUE($A1)>60,$D1)", "B4", "B5", "B7");
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNUMBER(DATEVALUE($A1))", "B1", "B2", "B3", "B4", "B5", "B6", "B7");
+        // Row 8 holds "12:00 PM": measured against Excel 16.0 (en-US), DATEVALUE of a time-only text is 0 (a number).
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNUMBER(DATEVALUE($A1))", "B1", "B2", "B3", "B4", "B5", "B6", "B7", "B8");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)+1=45294", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("SUM(DATEVALUE($A1),1)=45307", "B6");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(TIMEVALUE($C1)>=0.5,TRUE,FALSE)", "B2", "B3", "B5", "B6");
@@ -4551,7 +4552,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueErrorPredicates()
     {
-        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))", FormulaDateValueTimeValueAllLocations);
+        AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(TIMEVALUE(\"2024-01-02\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"Open\"))", FormulaDateValueTimeValueAllLocations);
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISNA(TIMEVALUE(NA()))", FormulaDateValueTimeValueAllLocations);

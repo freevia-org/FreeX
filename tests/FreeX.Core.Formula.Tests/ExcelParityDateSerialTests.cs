@@ -181,9 +181,10 @@ public sealed class ExcelParityDateSerialTests
     [Theory]
     [InlineData("=DATEVALUE(\"12:00 PM\")")]
     [InlineData("=DATEVALUE(\"23:59:59\")")]
-    public void DateValue_TimeOnlyText_ReturnsValueError(string formula)
+    public void DateValue_TimeOnlyText_ReturnsDayZero(string formula)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+        // Measured against Excel 16.0 (en-US): a time-only text has no date part, so DATEVALUE is 0.
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(0));
     }
 
     [Theory]
