@@ -247,7 +247,7 @@ foreach ($pin in @(
     'name: "CI coverage: ${{ needs.prepare.outputs.coverage }}"',
     'needs: [prepare, coverage, tests]',
     'needs.coverage.result',
-    'schedule:',
+    'workflow_dispatch:',
     'inputs.full',
     'filter: blob:none',
     'actions: read'

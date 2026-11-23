@@ -8,7 +8,7 @@ workflow matrix.
 
 ## Main Integration Gate
 
-The commit gate is the hosted integration tier for a push to `main`. It runs the relevant app's
+The commit gate is the hosted integration tier, started manually (see Manual-Only Actions below). It runs the relevant app's
 core, contract, integration, Avalonia, and supported sister-app desktop projects on the target
 runner. It excludes WPF UI-host batches, render evidence, package smoke, external-workbook
 benchmarks, signing, and publication.
@@ -27,7 +27,7 @@ identical assertions on three operating systems or paying for a separate runner 
 The two most expensive FreeX macOS legs (`freex-portable-unix` and `freex-avalonia` on macOS, about
 17 of the 22 billed macOS minutes of a push and the longest macOS job) do not run on push: they are
 the release-tier, macOS-only entries `freex-portable-unix-macos` and `freex-avalonia-macos`, which run
-in `release-readiness.yml` every six hours and in `Full Signed Release`, so macOS coverage of the
+in `release-readiness.yml` (manual dispatch) and in `Full Signed Release`, so macOS coverage of the
 same projects arrives before every release rather than being dropped. Windows and Linux keep all of
 those suites in push CI, including the platform-agnostic managed-core ones (Formula, Model,
 Presentation, Localization). `Test-TestGateContract.ps1` pins that every one of those projects stays
@@ -57,8 +57,8 @@ stays a non-WPF project without an assembly-wide `DisableTestParallelization`. M
 with class-level parallelism and 528 and 635 seconds with parallelization forced off, which is how the
 host assembly runs them. The gain is capped by the largest class (`GitHubWorkflowPreflightTests`, one
 script launch per test); splitting that class is the next lever.
-The canonical `CI` workflow runs automatically
-for `main` pushes, remains manually dispatchable, and cancels superseded runs for the same ref.
+The canonical `CI` workflow is dispatched manually (`gh workflow run ci.yml -f full=true`), has no push or
+schedule trigger, and cancels superseded runs for the same ref.
 Branches are integrated after repository preflight and a successful Release build; this repository
 does not use pull-request workflows. Hosted CI runs repository-static validation once, while small
 platform-behavior preflights exercise process, shell, path, macOS-readiness, and Linux-packaging
@@ -72,8 +72,9 @@ Before integration, `tools/Test-BranchForIntegration.ps1` verifies the exact `or
 runs preflight and the Release build, and then executes only the affected Windows commit gates.
 `tools/Get-ImpactedTestGates.ps1` derives those gates from transitive `ProjectReference` consumers
 plus each gate's `impactPaths`. The latter covers source-contract tests that intentionally inspect
-shipping source without compiling a reference to it. Ordinary branches cannot advance a red or
-still-running `main`; `-AllowRedMainFix` is reserved for a branch that repairs the observed failure.
+shipping source without compiling a reference to it. Ordinary branches cannot advance a `main` whose exact-SHA CI run is red or
+still running; a commit with no run at all is allowed because CI is manual-only (the preflight then runs
+in full, since there is no green attestation to scope it against); `-AllowRedMainFix` is reserved for a branch that repairs the observed failure.
 FreeX keeps core and contract suites isolated on Windows, where they have distinct runtime and
 failure characteristics, but coalesces them on Linux and macOS. This removes two checkout/setup/
 restore jobs and keeps CI plus CodeQL within the repository's observed 20-runner concurrency ceiling.
@@ -179,6 +180,17 @@ commit. That rule would have skipped five of those nine runs: about 500 job-minu
 190 are macOS minutes, in ten days. `ReleaseAutomationWorkflowTests` pins the guard and the
 still-red summary.
 
+## Manual-Only Actions
+
+Every GitHub Actions workflow is started by hand with `workflow_dispatch` (for example
+`gh workflow run ci.yml -f full=true`). No workflow declares a `push`, `schedule` or `pull_request`
+trigger, so pushing to `main` starts nothing and the local gate (`tools/Test-BranchForIntegration.ps1`)
+is the pre-merge check. The single exception is `release-auto-retry.yml`, which also reacts
+(`workflow_run`) to the end of a manually dispatched Full Signed Release run to re-run infrastructure
+failures once; it never starts anything by itself. `tools/Test-GitHubWorkflows.ps1` enforces the
+contract. Consequences: a commit may have no `ci.yml` run, and `Full Signed Release` still requires
+exact-SHA successful CI and CodeQL runs, so dispatch both for the release SHA first.
+
 ## Impact-Based CI Coverage
 
 A push to `main` pays for what it can affect, and nothing is guessed. `tools/Select-CiCoverage.ps1`
@@ -220,10 +232,8 @@ attests its commit; an `inert` run attests its commit only if its anchor has a s
 and is an ancestor of the commit; an unreadable record attests nothing. A reduced run therefore
 cannot make a release candidate falsely green; at worst the resolver walks to an older candidate.
 
-A daily scheduled `ci.yml` run (`workflow_dispatch` with `full: true` does the same on demand) always
-runs the full matrix so a full attestation exists near every commit and drift cannot hide behind
-reduced pushes. Scheduled and manual runs use their own concurrency group, so they neither cancel nor
-are cancelled by a push run.
+A manual `ci.yml` run with `full: true` (the default) always runs the full matrix, which is what a release
+attestation needs. Manual runs use their own concurrency group.
 
 ## Diff-Scoped Local Preflight
 

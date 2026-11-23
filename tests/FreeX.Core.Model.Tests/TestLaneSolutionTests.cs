@@ -115,7 +115,7 @@ public sealed class TestLaneSolutionTests
         agents.Should().Contain("Do not merge ordinary work while the exact `origin/main` CI candidate");
         agents.Should().NotContain("- `dotnet test FreeX.DefaultTests.slnx");
         agents.Should().Contain("Do not run `dotnet test FreeX.slnx` or `dotnet test FreeX.UiTests.slnx` as routine/default verification.");
-        readme.Should().Contain("push to `main` runs the hosted integration matrix");
+        readme.Should().Contain("dispatching `ci.yml` (`gh workflow run ci.yml -f full=true`) runs the hosted integration matrix");
         readme.Should().NotContain("dotnet test FreeX.DefaultTests.slnx --configuration Release --no-build");
         readme.Should().Contain("Do not run the complete UI lane locally as routine verification");
         plan.Should().Contain("Branch Build And Main Integration Verification");

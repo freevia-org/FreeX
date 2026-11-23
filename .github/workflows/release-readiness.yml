@@ -18,11 +18,8 @@ name: Release Readiness
 # commit that caused it, rather than by whoever next tries to ship. This workflow is deliberately
 # NOT a merge gate: it reports, it does not block.
 on:
+  # Manual-only by policy: no schedule trigger.
   workflow_dispatch:
-  schedule:
-    # Every six hours. Frequent enough that a regression is attributed to a small range of commits,
-    # infrequent enough not to compete with the commit gate for the runner pool.
-    - cron: "17 */6 * * *"
 
 permissions:
   contents: read

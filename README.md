@@ -66,7 +66,7 @@ dotnet --version
 
 GitHub workflows install the same SDK explicitly, so the runner image's preinstalled SDKs are not part of the build contract.
 
-Run the default branch verification path for routine repository changes. It uses normal .NET restore/build caching and parallelism and builds the full solution; focused tests are optional when useful for the changed component. After integration, a push to `main` runs the hosted integration matrix:
+Run the default branch verification path for routine repository changes. It uses normal .NET restore/build caching and parallelism and builds the full solution; focused tests are optional when useful for the changed component. GitHub Actions are manual-only (a push to `main` starts nothing); dispatching `ci.yml` (`gh workflow run ci.yml -f full=true`) runs the hosted integration matrix:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\Test-RepositoryPreflight.ps1

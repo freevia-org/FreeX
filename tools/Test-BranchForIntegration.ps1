@@ -60,8 +60,17 @@ if (-not $SkipMainHealthCheck) {
         Sort-Object { [DateTimeOffset]$_.createdAt } -Descending
     $latestRun = @($runs | Select-Object -First 1)
     $mainIsGreen = $latestRun.Count -eq 1 -and $latestRun[0].status -eq 'completed' -and $latestRun[0].conclusion -eq 'success'
-    if (-not $mainIsGreen) {
-        $state = if ($latestRun.Count -eq 0) { 'no exact-SHA CI run' } else { "$($latestRun[0].status)/$($latestRun[0].conclusion) in run $($latestRun[0].databaseId)" }
+    # GitHub Actions are manual-only (workflow_dispatch), so a commit may legitimately have no CI run at
+    # all. Absence of a run is not a failure: refuse only when a run exists and is not green (failed,
+    # cancelled, queued or in progress). Without a run there is no green attestation to scope the
+    # preflight against, so the preflight then runs in full.
+    $noExactCiRun = $latestRun.Count -eq 0
+    if ($noExactCiRun) {
+        Write-Host "No exact-SHA CI run exists for $baseSha (CI is manual-only); allowing integration and running the full repository preflight."
+        $Full = [System.Management.Automation.SwitchParameter]::new($true)
+    }
+    elseif (-not $mainIsGreen) {
+        $state = "$($latestRun[0].status)/$($latestRun[0].conclusion) in run $($latestRun[0].databaseId)"
         if (-not $AllowRedMainFix) {
             throw "Refusing ordinary integration because $BaseRef ($baseSha) has $state. Only a branch that fixes that failure may use -AllowRedMainFix."
         }

@@ -21,10 +21,8 @@ name: Release Packaging Rehearsal
 # saturated by the commit gate. Weekly keeps the rehearsal from competing with everyday pushes while
 # still catching packaging rot in days rather than at the next release.
 on:
+  # Manual-only by policy: no schedule trigger.
   workflow_dispatch:
-  schedule:
-    # Sunday 03:41 UTC -- a quiet window, deliberately offset from the release-readiness cron.
-    - cron: "41 3 * * 0"
 
 permissions:
   contents: read
