@@ -18,6 +18,13 @@ public sealed class App : Application
 {
     private const string ApplicationTitle = "FreeX";
 
+    public App()
+    {
+        // Native backends read the name after application setup, before framework completion.
+        // Setting it later leaves macOS's app/quit menu named "Avalonia Application".
+        Name = ApplicationTitle;
+    }
+
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
 
     internal static Func<WorkbookSessionFactory, double, double, bool, WorkbookSession>?
@@ -62,7 +69,6 @@ public sealed class App : Application
             name => AppLanguageCatalog.ResolveCulture(name, CultureInfo.CurrentUICulture),
             CultureInfo.CurrentUICulture);
 
-        Name = ApplicationTitle;
         // ThemeVariant.Default (not a hardcoded Light) lets Avalonia's FluentTheme resolve each
         // control's actual variant from the platform's live color-scheme preference (OS-wide
         // dark-mode/high-contrast) instead of ignoring it (r139 avalonia-hardcoded-light-theme).
