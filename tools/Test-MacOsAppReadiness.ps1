@@ -1161,9 +1161,13 @@ function Test-SourceWiring {
                 "internal static LocalAppDiagnostics? Diagnostics { get; set; }",
                 "Diagnostics?.RecordEvent(`"app_ready`"",
                 "this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime",
-                "args is not FileActivatedEventArgs fileArgs",
-                "fileArgs.Kind != ActivationKind.File",
-                "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);",
+                "activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(args);",
+                "args is FileActivatedEventArgs { Kind: ActivationKind.File } fileArgs",
+                "await OpenNativeActivatedFilesAsync(fileArgs.Files);",
+                "args.Kind == ActivationKind.Reopen",
+                "MainWindow.ActivateRegisteredWorkbookWindow() ?? OpenIndependentWindow()",
+                "var window = index == 0 ? target : OpenIndependentWindow();",
+                "await window.OpenActivatedFilesAsync([openableFiles[index]]);",
                 "ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);"
             )
             OrderedPairs = @()

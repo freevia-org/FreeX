@@ -2052,11 +2052,26 @@ public sealed class MacOsAppReadinessPreflightTests
                     Name = ApplicationTitle;
                     Diagnostics?.RecordEvent("app_ready");
                     this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime;
-                    if (args is not FileActivatedEventArgs fileArgs || fileArgs.Kind != ActivationKind.File)
-                        return;
-
-                    await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
+                    activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(args);
+                    if (args is FileActivatedEventArgs { Kind: ActivationKind.File } fileArgs)
+                        await OpenNativeActivatedFilesAsync(fileArgs.Files);
+                    else if (args.Kind == ActivationKind.Reopen)
+                        ActivateNativeWorkbookWindow();
                     ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
+                }
+
+                internal static MainWindow ActivateNativeWorkbookWindow() =>
+                    MainWindow.ActivateRegisteredWorkbookWindow() ?? OpenIndependentWindow();
+
+                internal static async Task OpenNativeActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
+                {
+                    var target = ActivateNativeWorkbookWindow();
+                    var openableFiles = target.ResolveNativeActivatedFiles(files);
+                    for (var index = 0; index < openableFiles.Count; index++)
+                    {
+                        var window = index == 0 ? target : OpenIndependentWindow();
+                        await window.OpenActivatedFilesAsync([openableFiles[index]]);
+                    }
                 }
             }
             """);
