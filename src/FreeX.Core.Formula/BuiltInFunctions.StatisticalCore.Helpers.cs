@@ -4,25 +4,35 @@ namespace FreeX.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
-    private static (IReadOnlyList<double> Values, ErrorValue? Error) CollectAValues(ScalarValue value)
+    private static (IReadOnlyList<double> Values, ErrorValue? Error) CollectAValues(ScalarValue value, bool arrayTextAsZero = false)
     {
         var values = new List<double>();
-        var error = AddAValues(value, values, directText: value is DirectTextLiteralValue);
+        var error = AddAValues(value, values, directText: value is DirectTextLiteralValue, arrayTextAsZero);
         return (values, error);
     }
 
-    private static ErrorValue? AddAValues(ScalarValue value, List<double> values, bool directText)
+    // Excel (verified via COM) feeds the "A" statistical functions three kinds of input:
+    //  - cell references (A1:A4, and INDEX/OFFSET/IF/LET results that stay references): text counts as 0 --
+    //    even numeric-looking text such as "1" is NOT parsed -- and TRUE/FALSE count as 1/0;
+    //  - literal or computed arrays ({1,"a",TRUE}, TRANSPOSE(range), range&""): booleans are ignored and text
+    //    is ignored too, except that AVERAGEA counts array text as 0;
+    //  - direct scalar arguments: numeric text is parsed, other text is #VALUE!, booleans are 1/0.
+    private static ErrorValue? AddAValues(ScalarValue value, List<double> values, bool directText, bool arrayTextAsZero)
     {
         switch (value)
         {
             case ErrorValue e:
                 return e;
             case ReferencedScalarValue referenced:
-                return AddAValues(referenced.Value, values, directText: false);
+                return AddAReferenceCell(referenced.Value, values);
+            case ArrayElementScalarValue arrayElement:
+                return AddAArrayElement(arrayElement.Value, values, arrayTextAsZero);
             case RangeValue range:
                 foreach (var cell in range.Flatten())
                 {
-                    var error = AddAValues(cell, values, directText: false);
+                    var error = range.IsSheetReference
+                        ? AddAReferenceCell(cell is ReferencedScalarValue r ? r.Value : cell, values)
+                        : AddAArrayElement(cell, values, arrayTextAsZero);
                     if (error is not null) return error;
                 }
                 return null;
@@ -57,12 +67,63 @@ public static partial class BuiltInFunctions
                 return ErrorValue.Value;
         }
     }
+
+    private static ErrorValue? AddAReferenceCell(ScalarValue cell, List<double> values)
+    {
+        switch (cell)
+        {
+            case ErrorValue e:
+                return e;
+            case BlankValue:
+                return null;
+            case NumberValue n:
+                values.Add(n.Value);
+                return null;
+            case DateTimeValue d:
+                values.Add(d.Value);
+                return null;
+            case BoolValue b:
+                values.Add(b.Value ? 1.0 : 0.0);
+                return null;
+            case TextValue:
+                values.Add(0.0);
+                return null;
+            case ReferencedScalarValue inner:
+                return AddAReferenceCell(inner.Value, values);
+            default:
+                return ErrorValue.Value;
+        }
+    }
+
+    private static ErrorValue? AddAArrayElement(ScalarValue element, List<double> values, bool arrayTextAsZero)
+    {
+        switch (element)
+        {
+            case ErrorValue e:
+                return e;
+            case ReferencedScalarValue referenced:
+                return AddAReferenceCell(referenced.Value, values);
+            case NumberValue n:
+                values.Add(n.Value);
+                return null;
+            case DateTimeValue d:
+                values.Add(d.Value);
+                return null;
+            case TextValue or DirectTextLiteralValue:
+                if (arrayTextAsZero) values.Add(0.0);
+                return null;
+            default:
+                // Blank and boolean array elements are skipped.
+                return null;
+        }
+    }
+
     private static (List<double>? Nums, ErrorValue? Error) CollectAValues(IReadOnlyList<ScalarValue> args, int start = 0)
     {
         var list = new List<double>();
         for (var i = start; i < args.Count; i++)
         {
-            var (values, error) = CollectAValues(args[i]);
+            var (values, error) = CollectAValues(args[i], arrayTextAsZero: false);
             if (error is not null) return (null, error);
             list.AddRange(values);
         }

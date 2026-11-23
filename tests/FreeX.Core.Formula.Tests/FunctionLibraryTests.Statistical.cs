@@ -97,10 +97,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Large_NonFiniteK_ReturnsNumError()
+    public void Large_NonFiniteK_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(5)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=LARGE(A1:A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=LARGE(A1:A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
 
@@ -151,10 +151,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Small_NonFiniteK_ReturnsNumError()
+    public void Small_NonFiniteK_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(5)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=SMALL(A1:A1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=SMALL(A1:A1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -265,17 +265,17 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Rank_NonFiniteOrder_ReturnsNumError()
+    public void Rank_NonFiniteOrder_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(5)), (2, 1, new NumberValue(8)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=RANK(5,A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=RANK(5,A1:A2,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Rank_NonFiniteNumber_ReturnsNumError()
+    public void Rank_NonFiniteNumber_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(5)), (2, 1, new NumberValue(8)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=RANK(B1,A1:A2)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=RANK(B1,A1:A2)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -475,10 +475,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Percentile_NonFiniteK_ReturnsNumError()
+    public void Percentile_NonFiniteK_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=PERCENTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PERCENTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -576,10 +576,10 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Quartile_NonFiniteQuart_ReturnsNumError()
+    public void Quartile_NonFiniteQuart_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=QUARTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=QUARTILE(A1:A2,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -669,9 +669,9 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Mode_NonFiniteDirectNumericText_ReturnsNumError()
+    public void Mode_NonFiniteDirectNumericText_ReturnsValueError()
     {
-        _eval.Evaluate("=MODE(\"1E309\",\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=MODE(\"1E309\",\"1E309\")", MakeSheet()).Should().Be(ErrorValue.Value);
     }
 
     [Fact] public void Mode_AllUnique_ReturnsNA()
@@ -733,17 +733,17 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Percentrank_NonFiniteX_ReturnsNumError()
+    public void Percentrank_NonFiniteX_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=PERCENTRANK(A1:A2,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PERCENTRANK(A1:A2,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
-    public void Percentrank_NonFiniteSignificance_ReturnsNumError()
+    public void Percentrank_NonFiniteSignificance_ReturnsValueError()
     {
         var sheet = MakeSheet((1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (1, 2, new TextValue("1E309")));
-        _eval.Evaluate("=PERCENTRANK(A1:A2,1,B1)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=PERCENTRANK(A1:A2,1,B1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -855,14 +855,14 @@ public partial class FunctionLibraryTests
 
 
     [Fact]
-    public void Forecast_NonFiniteInput_ReturnsNumError()
+    public void Forecast_NonFiniteInput_ReturnsValueError()
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1)), (2, 1, new NumberValue(2)), (3, 1, new NumberValue(3)),
             (1, 2, new NumberValue(2)), (2, 2, new NumberValue(4)), (3, 2, new NumberValue(6)),
             (4, 1, new TextValue("1E309")));
 
-        _eval.Evaluate("=FORECAST(A4,A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.Num);
+        _eval.Evaluate("=FORECAST(A4,A1:A3,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

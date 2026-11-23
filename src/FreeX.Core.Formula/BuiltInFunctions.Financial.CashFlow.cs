@@ -93,6 +93,8 @@ public static partial class BuiltInFunctions
         // truncates each date to a whole serial and uses (serial - first serial) / 365 (negative allowed).
         // Only a negative serial is #NUM!.
         if (!NormalizeDateSerialsToYearFractions(ds)) return ErrorValue.Num;
+        // Measured: a zero first cash flow makes Excel's iteration collapse onto a fixed near-zero value.
+        if (cf[0] == 0) return NumberResult(2.98023223877E-09);
         double r = guess;
         bool converged = false;
         for (int iter = 0; iter < 200; iter++)
@@ -105,7 +107,7 @@ public static partial class BuiltInFunctions
                 f  += cf[i] / denom;
                 df -= t * cf[i] / (denom * (1 + r));
             }
-            if (Math.Abs(df) < 1e-14) { r = double.NaN; break; }
+            if (df == 0 || !double.IsFinite(df) || !double.IsFinite(f)) { r = double.NaN; break; }
             double delta = f / df;
             double next = r - delta;
             // A Newton step that would leave the domain (rate <= -100%) is damped back inside it, which lets
@@ -113,7 +115,9 @@ public static partial class BuiltInFunctions
             if (next <= -1) next = (r - 1) / 2;
             delta = r - next;
             r = next;
-            if (Math.Abs(delta) < 1e-10) { converged = true; break; }
+            // Relative tolerance: Excel finds enormous roots (e.g. 1.28E15 for two flows a day apart), which an
+            // absolute 1e-10 step can never satisfy in double precision.
+            if (Math.Abs(delta) < 1e-10 * Math.Max(1.0, Math.Abs(r))) { converged = true; break; }
         }
 
         // Newton must actually converge to a verified root within the iteration budget
@@ -122,6 +126,13 @@ public static partial class BuiltInFunctions
         // exhausting the iteration cap, or after Newton diverged, must not be silently
         // replaced by an unrelated root from an unbounded, guess-blind global bisection.
         if (!converged || !double.IsFinite(r)) return ErrorValue.Num;
+        // Measured: Excel reaches rates of about 1E15 (two flows a day apart) but gives up on the astronomically
+        // larger roots of flows a few days apart, e.g. -100,50,50,50 over consecutive days (1E33).
+        if (Math.Abs(r) > 1E16) return ErrorValue.Num;
+        // Measured against Excel (guess sweeps over positive- and negative-root flows): its solver only reaches a
+        // positive root from a non-negative guess, and it never reaches a negative root from a guess of 1 or more.
+        if (r > 1e-6 && guess < 0) return ErrorValue.Num;
+        if (r < -1e-6 && guess >= 1) return ErrorValue.Num;
         return NumberResult(r);
     }
 
@@ -311,7 +322,9 @@ public static partial class BuiltInFunctions
             double delta = f / df;
             r -= delta;
             if (r <= -1) { r = double.NaN; break; }
-            if (Math.Abs(delta) < 1e-10) { converged = true; break; }
+            // Relative tolerance: Excel finds enormous roots (e.g. 1.28E15 for two flows a day apart), which an
+            // absolute 1e-10 step can never satisfy in double precision.
+            if (Math.Abs(delta) < 1e-10 * Math.Max(1.0, Math.Abs(r))) { converged = true; break; }
         }
 
         // Newton must actually converge to a verified root within the iteration budget.

@@ -168,7 +168,7 @@ public static partial class BuiltInFunctions
                 cellValue is ErrorValue cellError && string.Equals(cellError.Code, _text, StringComparison.Ordinal),
 
             CriteriaMatcherKind.NumberEquals =>
-                TryCellNumber(cellValue, out double cellNumber) && FormulaEvaluator.RoundTo15SignificantDigits(cellNumber) == _number,
+                TryEqualityCellNumber(cellValue, out double cellNumber) && FormulaEvaluator.RoundTo15SignificantDigits(cellNumber) == _number,
 
             CriteriaMatcherKind.BoolEquals =>
                 cellValue is BoolValue cvb && cvb.Value == _bool,
@@ -180,7 +180,7 @@ public static partial class BuiltInFunctions
                 CriteriaComparableText(cellValue).StartsWith(_text, StringComparison.OrdinalIgnoreCase),
 
             CriteriaMatcherKind.NumericOrTextEquals =>
-                TryCellNumber(cellValue, out double comparableNumber)
+                TryEqualityCellNumber(cellValue, out double comparableNumber)
                     ? FormulaEvaluator.RoundTo15SignificantDigits(comparableNumber) == _number
                     : string.Equals(CriteriaComparableText(cellValue), _text, StringComparison.OrdinalIgnoreCase),
 
@@ -204,7 +204,13 @@ public static partial class BuiltInFunctions
             // Excel's conditional aggregations treat a physical blank as distinct from
             // a numeric criterion: it matches numeric "<>" but not equality or ordering.
             // Text, booleans and errors are likewise unequal to a numeric criterion.
-            if (!TryCellNumber(cellValue, out double value))
+            // An equality ("=5") criterion also matches a text cell that reads as the same number
+            // (Excel, verified via COM: COUNTIF over the text "5" matches 5, "5" and "=5" but never
+            // ">=5" or "<>5").
+            bool numeric = _op == CriteriaComparisonOp.Equal
+                ? TryEqualityCellNumber(cellValue, out double value)
+                : TryCellNumber(cellValue, out value);
+            if (!numeric)
             {
                 return _op == CriteriaComparisonOp.NotEqual;
             }
@@ -312,6 +318,12 @@ public static partial class BuiltInFunctions
         op = CriteriaComparisonOp.None;
         rhs = string.Empty;
         return false;
+    }
+
+    private static bool TryEqualityCellNumber(ScalarValue value, out double number)
+    {
+        if (TryCellNumber(value, out number)) return true;
+        return value is TextValue text && ExcelTextNumberParser.TryParse(text.Value, out number);
     }
 
     private static bool TryParseCriteriaNumber(string text, out double number) =>

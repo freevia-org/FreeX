@@ -660,15 +660,16 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Match_NonFiniteMatchType_ReturnsNA()
+    public void Match_OutOfRangeNumericTextMatchType_ReturnsValueError()
     {
+        // Measured against Excel: out-of-range numeric text is not a number at all, so a literal "1E309"
+        // match_type is #VALUE! (a text cell reference there is #REF! in Excel, which is not modelled).
         var sheet = MakeSheet(
             (1, 1, new NumberValue(10)),
             (2, 1, new NumberValue(8)),
-            (3, 1, new NumberValue(5)),
-            (1, 2, new TextValue("1E309")));
+            (3, 1, new NumberValue(5)));
 
-        _eval.Evaluate("=MATCH(7,A1:A3,B1)", sheet).Should().Be(ErrorValue.NA);
+        _eval.Evaluate("=MATCH(7,A1:A3,\"1E309\")", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

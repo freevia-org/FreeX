@@ -136,13 +136,21 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=SECH(134217728)")]
     [InlineData("=SIN(134217728)")]
     [InlineData("=SQRT(-1)")]
-    [InlineData("=SUMX2MY2(\"1E309\",1)")]
-    [InlineData("=SUMX2PY2(1,\"1E309\")")]
-    [InlineData("=SUMXMY2(\"1E309\",1)")]
     [InlineData("=TAN(134217728)")]
     public void MathTrigDomainErrors_ReturnExcelNum(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Num);
+    }
+
+    [Theory]
+    [InlineData("=SUMX2MY2(\"1E309\",1)")]
+    [InlineData("=SUMX2PY2(1,\"1E309\")")]
+    [InlineData("=SUMXMY2(\"1E309\",1)")]
+    [InlineData("=SUMXMY2(\"x\",1)")]
+    public void SumOfSquaresFamily_NonNumericDirectText_LeavesNoPair(string formula)
+    {
+        // Measured against Excel: a non-numeric direct text argument is skipped, so no numeric pair remains.
+        _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.DivByZero);
     }
 
     [Theory]
@@ -177,7 +185,6 @@ public sealed class ExcelParityMathTrigTests
     [InlineData("=SINH(\"x\")")]
     [InlineData("=TANH(\"x\")")]
     [InlineData("=SUM(\"x\")")]
-    [InlineData("=SUMXMY2(\"x\",1)")]
     public void MathTrigInvalidDirectText_ReturnsValueError(string formula)
     {
         _eval.Evaluate(formula, MakeSheet()).Should().Be(ErrorValue.Value);

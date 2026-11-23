@@ -63,10 +63,10 @@ public partial class PhaseBDistributionTests
         => Calc("GAUSS(2)").Should().BeApproximately(0.4772498680518208, 1e-12);
 
     [Fact]
-    public void PhiAndGauss_InvalidNumericText_ReturnNum()
+    public void PhiAndGauss_OutOfRangeNumericText_ReturnValueError()
     {
-        CalcError("""PHI("1E309")""").Should().Be("#NUM!");
-        CalcError("""GAUSS("1E309")""").Should().Be("#NUM!");
+        CalcError("""PHI("1E309")""").Should().Be("#VALUE!");
+        CalcError("""GAUSS("1E309")""").Should().Be("#VALUE!");
     }
 
     // ── NORM.S.INV ───────────────────────────────────────────────────────────

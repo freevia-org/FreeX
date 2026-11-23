@@ -39,11 +39,17 @@ public sealed class ExcelParityStatisticalAliasTests
     [Theory]
     [InlineData("=FISHER(-1)")]
     [InlineData("=FISHER(1)")]
-    [InlineData("=FISHER(\"1E309\")")]
-    [InlineData("=FISHERINV(\"1E309\")")]
     public void FisherAndFisherInv_ReturnNumForExcelDomainErrors(string formula)
     {
         _eval.Evaluate(formula, Values()).Should().Be(ErrorValue.Num);
+    }
+
+    [Theory]
+    [InlineData("=FISHER(\"1E309\")")]
+    [InlineData("=FISHERINV(\"1E309\")")]
+    public void FisherAndFisherInv_OutOfRangeNumericText_ReturnValueError(string formula)
+    {
+        _eval.Evaluate(formula, Values()).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

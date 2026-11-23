@@ -282,6 +282,8 @@ public sealed record LambdaValue(IReadOnlyList<string> Parameters, FormulaNode B
 
 internal sealed record DirectTextLiteralValue(string Value) : ScalarValue;
 internal sealed record ReferencedScalarValue(ScalarValue Value) : ScalarValue;
+/// <summary>An element of a literal/computed array passed to an "A" statistical function (as opposed to a cell reference or direct scalar).</summary>
+internal sealed record ArrayElementScalarValue(ScalarValue Value) : ScalarValue;
 internal sealed record OmittedLambdaArgumentValue : ScalarValue
 {
     public static readonly OmittedLambdaArgumentValue Instance = new();
