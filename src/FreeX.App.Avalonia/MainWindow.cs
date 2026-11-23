@@ -9212,7 +9212,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 // Only the cell being edited shows text, so only it needs the worksheet font chain:
                 // typing into an empty cell then uses the same face the committed value will render
                 // with (resolving a FontFamily for every blank cell on each rebuild would be waste).
-                fontFamily: Equals(_inlineCellEditAddress, address)
+                fontFamily: Equals(_inlineCellEditAddress, address) ||
+                    (_inlineCellEditAddress is { } editAddress && mergeRegion?.Contains(editAddress) == true)
                     ? ResolveAvaloniaCellFontFamily(null, _session.Workbook.Theme)
                     : null);
         }
@@ -9716,11 +9717,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 BeginInlineCellEdit(address, editText, caretIndex);
             args.Handled = true;
         };
-        if (Equals(_inlineCellEditAddress, address))
+        // Covered merge members have no separate rendered Border. Attach their editor to the
+        // representing Border while retaining the literal edit address for input and commit routes.
+        if (_inlineCellEditAddress is { } inlineEditAddress &&
+            (inlineEditAddress == address || mergeRegion?.Contains(inlineEditAddress) == true))
         {
             border.Cursor = new Cursor(StandardCursorType.Ibeam);
             border.Child = CreateInlineCellEditor(
-                address,
+                inlineEditAddress,
                 background ?? Brushes.White,
                 foreground,
                 textAlignment,

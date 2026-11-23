@@ -3,9 +3,11 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -215,6 +217,78 @@ public sealed class WorksheetAutomationPeerTests
         focused.GetName().Should().StartWith("D9: 73").And.Contain("is merged");
         focused.GetProvider<IValueProvider>()!.Value.Should().Be("73");
         focused.GetProvider<ISelectionItemProvider>()!.IsSelected.Should().BeTrue();
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public Task MergedCoveredCellEditing_ExposesFocusedEditorAndPreservesLiteralCommitTarget(
+        bool readyTyping, bool scrollPastAnchor) => Run(async window =>
+    {
+        var sheet = window.Session.ActiveSheet;
+        var anchor = Address(sheet, 2, 2);
+        var covered = Address(sheet, 2, 4);
+        var merge = new GridRange(anchor, Address(sheet, 10, 4));
+        sheet.SetCell(anchor, new NumberValue(73));
+        sheet.AddMergedRegion(merge);
+        var originalCoveredValue = sheet.GetValue(covered);
+        window.Session.SelectRanges(merge, [merge], anchor);
+        Refresh(window);
+        window.ActiveCellBorderForTest!.Focus().Should().BeTrue();
+        await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.OemPeriod, KeyModifiers = KeyModifiers.Control });
+        window.Session.ActiveCell.Should().Be(covered);
+        if (scrollPastAnchor)
+        {
+            window.Session.SetViewportOrigin(7, 3);
+            Refresh(window);
+        }
+
+        if (readyTyping)
+        {
+            var target = window.ActiveCellBorderForTest!;
+            target.RaiseEvent(new TextInputEventArgs
+            {
+                RoutedEvent = InputElement.TextInputEvent,
+                Source = target,
+                Text = "pending",
+            });
+        }
+        else
+        {
+            await window.RaiseKeyDownForTest(new KeyEventArgs { Key = Key.F2 });
+        }
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        window.Session.FormulaEditAddress.Should().Be(covered);
+        window.Session.SelectedRange.Should().Be(merge);
+        var editor = window.ActiveCellBorderForTest!.GetVisualDescendants().OfType<TextBox>().Single();
+        editor.IsFocused.Should().BeTrue();
+        var editorPeer = Cell(GridPeer(window), "D2").GetChildren()
+            .Single(peer => peer.GetAutomationControlType() == AutomationControlType.Edit);
+        editorPeer.HasKeyboardFocus().Should().BeTrue();
+        var value = editorPeer.GetProvider<IValueProvider>()!;
+        value.IsReadOnly.Should().BeFalse();
+        value.Value.Should().Be(readyTyping ? "pending" : "");
+        if (!readyTyping)
+            window.RaiseInlineCellEditorTextInputForTest("pending");
+        window.RaiseInlineCellEditorTextInputForTest("!");
+        value.Value.Should().Be("pending!");
+
+        window.RaiseInlineCellEditorKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        window.Session.FormulaEditAddress.Should().BeNull();
+        window.SheetGridHostForTest.GetVisualDescendants().OfType<TextBox>().Should().BeEmpty();
+        // As on WPF, the literal covered address is passed to EditCellsCommand, which deliberately
+        // skips covered-member writes rather than planting hidden content or changing the anchor.
+        sheet.GetValue(anchor).Should().Be(new NumberValue(73));
+        sheet.GetValue(covered).Should().Be(originalCoveredValue);
+        sheet.MergedRegions.Should().Contain(merge);
+        Cells(GridPeer(window)).Count(peer => peer.HasKeyboardFocus()).Should().Be(1);
     });
 
     [Fact]
