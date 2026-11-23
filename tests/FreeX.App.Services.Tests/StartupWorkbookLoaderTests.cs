@@ -7,14 +7,56 @@ namespace FreeX.App.Services.Tests;
 public sealed class StartupWorkbookLoaderTests
 {
     [Fact]
-    public void Load_WithoutExistingPath_ReturnsPreviewWorkbook()
+    public void Load_WithoutArguments_ReturnsBlankWorkbook()
+    {
+        var result = new StartupWorkbookLoader().Load([]);
+
+        result.IsFallback.Should().BeFalse();
+        result.SourcePath.Should().BeNull();
+        result.SourceFileAccessIdentity.Should().BeNull();
+        result.DisplayName.Should().Be(WorkbookFactory.DefaultWorkbookName);
+        result.Status.Should().Be("Created new workbook.");
+        AssertBlankWorkbook(result.Workbook);
+    }
+
+    [Fact]
+    public void Load_WithoutExistingPath_ReturnsBlankWorkbook()
     {
         var result = new StartupWorkbookLoader().Load(["missing.xlsx"]);
 
         result.IsFallback.Should().BeFalse();
         result.SourceFileAccessIdentity.Should().BeNull();
+        result.DisplayName.Should().Be(WorkbookFactory.DefaultWorkbookName);
+        AssertBlankWorkbook(result.Workbook);
+    }
+
+    [Fact]
+    public void Load_WithExplicitPreviewFactory_PreservesValidationFixture()
+    {
+        var result = new StartupWorkbookLoader(fallbackFactory: PortPreviewWorkbookFactory.Create).Load([]);
+
+        result.IsFallback.Should().BeFalse();
         result.DisplayName.Should().Be("macOS Preview Workbook");
-        result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
+        var sheet = result.Workbook.Sheets.Single();
+        sheet.Name.Should().Be("Port Plan");
+        sheet.EnumerateCells().Should().NotBeEmpty();
+        sheet.DrawingShapes.Should().ContainSingle(shape => shape.Name == PortPreviewWorkbookFactory.PreviewShapeName);
+        sheet.TextBoxes.Should().ContainSingle(textBox => textBox.Name == PortPreviewWorkbookFactory.PreviewTextBoxName);
+        sheet.Pictures.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Load_WithOptionAwareBlankFactory_HonorsNewWorkbookDefaults()
+    {
+        var options = new AppOptions { DefaultSheetCount = 3, DefaultFontName = "Arial", DefaultFontSize = 14 };
+        var result = new StartupWorkbookLoader(fallbackFactory: (status, isFallback) =>
+            StartupWorkbookLoader.CreateBlankWorkbook(status, isFallback, options)).Load([]);
+
+        result.DisplayName.Should().Be(WorkbookFactory.DefaultWorkbookName);
+        result.Workbook.Sheets.Select(sheet => sheet.Name).Should().Equal("Sheet1", "Sheet2", "Sheet3");
+        result.Workbook.Sheets.Should().OnlyContain(sheet => !sheet.EnumerateCells().Any());
+        result.Workbook.GetStyle(StyleId.Default).FontName.Should().Be("Arial");
+        result.Workbook.GetStyle(StyleId.Default).FontSize.Should().Be(14);
     }
 
     [Fact]
@@ -113,7 +155,7 @@ public sealed class StartupWorkbookLoaderTests
     }
 
     [Fact]
-    public async Task Load_WithUnsupportedPath_ReturnsPreviewFallback()
+    public async Task Load_WithUnsupportedPath_ReturnsBlankFallback()
     {
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "notes.unsupported");
@@ -124,11 +166,11 @@ public sealed class StartupWorkbookLoaderTests
         result.IsFallback.Should().BeTrue();
         result.SourceFileAccessIdentity.Should().BeNull();
         result.Status.Should().Contain("Unsupported file type: .unsupported");
-        result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
+        AssertBlankWorkbook(result.Workbook);
     }
 
     [Fact]
-    public async Task Load_WithOnlyUnsupportedExistingPaths_ReturnsFirstUnsupportedPreviewFallback()
+    public async Task Load_WithOnlyUnsupportedExistingPaths_ReturnsFirstUnsupportedBlankFallback()
     {
         using var temp = new TestTemporaryDirectory();
         var firstPath = Path.Combine(temp.Path, "notes.unsupported");
@@ -141,7 +183,35 @@ public sealed class StartupWorkbookLoaderTests
         result.IsFallback.Should().BeTrue();
         result.SourceFileAccessIdentity.Should().BeNull();
         result.Status.Should().Contain("Unsupported file type: .unsupported");
-        result.Workbook.Sheets.Single().Name.Should().Be("Port Plan");
+        AssertBlankWorkbook(result.Workbook);
+    }
+
+    [Fact]
+    public async Task Load_WithCorruptWorkbook_ReturnsBlankFallbackWithOpenFailure()
+    {
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "corrupt.xlsx");
+        await File.WriteAllTextAsync(path, "Invalid workbook fixture");
+
+        var result = new StartupWorkbookLoader().Load([path]);
+
+        result.IsFallback.Should().BeTrue();
+        result.SourcePath.Should().BeNull();
+        result.Status.Should().StartWith("Open failed:");
+        AssertBlankWorkbook(result.Workbook);
+    }
+
+    private static void AssertBlankWorkbook(Workbook workbook)
+    {
+        workbook.Name.Should().Be(WorkbookFactory.DefaultWorkbookName);
+        var sheet = workbook.Sheets.Should().ContainSingle().Subject;
+        sheet.Name.Should().Be("Sheet1");
+        sheet.EnumerateCells().Should().BeEmpty();
+        sheet.DrawingShapes.Should().BeEmpty();
+        sheet.TextBoxes.Should().BeEmpty();
+        sheet.Pictures.Should().BeEmpty();
+        sheet.FrozenRows.Should().Be(0);
+        sheet.FrozenCols.Should().Be(0);
     }
 
     // R133-avalonia-multi-file-startup-args: launching FreeX.Avalonia with more than one file

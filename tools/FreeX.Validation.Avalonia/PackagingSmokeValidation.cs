@@ -54,7 +54,10 @@ internal sealed class WorkbookStartupSmokeService
         IEnumerable<IFileAdapter>? adapters = null)
     {
         _adapters = (adapters ?? WorkbookFileAdapterCatalog.CreateDefaultAdapters()).ToList();
-        _loader = loader ?? new StartupWorkbookLoader(adapters: _adapters);
+        // Packaging smoke deliberately exercises drawing objects; production startup opens Book1.
+        _loader = loader ?? new StartupWorkbookLoader(
+            adapters: _adapters,
+            fallbackFactory: PortPreviewWorkbookFactory.Create);
         _sessionFactory = sessionFactory ?? new WorkbookSessionFactory();
         _saveService = saveService ?? new WorkbookSaveService();
     }

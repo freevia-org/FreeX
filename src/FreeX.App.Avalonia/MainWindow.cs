@@ -1027,11 +1027,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             new AvaloniaPlatformClipboardOptions(FallBackToText: true));
         _recentFilePathExistenceCache = new RecentFilePathExistenceCache(onProbed: _ =>
             Dispatcher.UIThread.Post(RefreshLiveBackstageHomePaneIfShowing));
-        // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
-        // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
-        // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the
-        // real fixture workbook inside CaptureGridRangeAsync.  Every other startup path keeps the normal
-        // loader/fallback behavior.
+        // Capture tools can explicitly supply their fixture session. Normal startup creates the
+        // same blank, option-aware workbook as Windows before recovery or file activation runs.
         StartupWorkbookLoadResult? source = null;
         if (sharedSession is not null)
         {
@@ -1053,12 +1050,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // usable workbook before _statusText exists.
             try
             {
-                source = new StartupWorkbookLoader().Load(
+                source = new StartupWorkbookLoader(fallbackFactory: (status, isFallback) =>
+                    StartupWorkbookLoader.CreateBlankWorkbook(status, isFallback, _optionsRuntimeSession.LiveOptions)).Load(
                     deferStartupFileOpen ? [] : startupArguments);
             }
             catch (Exception ex)
             {
-                source = PortPreviewWorkbookFactory.Create($"Open failed: {ex.Message}", true);
+                source = StartupWorkbookLoader.CreateBlankWorkbook(
+                    $"Open failed: {ex.Message}", true, _optionsRuntimeSession.LiveOptions);
             }
 
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
@@ -29360,7 +29359,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
         }
 
-        BeginFormulaEdit(_session.ActiveCell, e.Text);
+        // Ready-mode typing replaces the cell through the inline editor, as on WPF. A hidden
+        // formula bar cannot receive focus; starting there loses subsequent native text packets.
+        BeginInlineCellEdit(_session.ActiveCell, e.Text, e.Text.Length);
         e.Handled = true;
     }
 

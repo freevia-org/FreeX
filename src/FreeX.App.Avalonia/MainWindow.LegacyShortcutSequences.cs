@@ -107,6 +107,12 @@ public sealed partial class MainWindow
             // Native macOS sends modified KeyDown before text composition and suppresses
             // composition if it is handled. Stop shell shortcut routing (including QAT digits
             // and the generic Alt fallback), leaving the event unhandled for the input method.
+            // Give AppKit the real text editor before it processes a dead key. Waiting for its
+            // first TextInput packet to start editing changes focus mid-composition and commits
+            // the accent separately (Option+e, e becomes "´e" instead of "é").
+            if (CanHandleRibbonKeyTipInput(args))
+                BeginInlineCellEdit(_session.ActiveCell, "", 0);
+
             return true;
         }
 
