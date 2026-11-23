@@ -21,6 +21,7 @@ public sealed class WorkbookSessionFindReplaceParityTests
     [Fact]
     public void ReplaceAllValues_CurrencyCell_ReplacesFormattedDisplayTextAndPreservesStyle()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // Cell holds 1000 formatted as currency, displaying "$1,000.00" (what Find matched).
         // Replace All must not silently skip it just because the invariant raw value ("1000")
         // doesn't contain the searched formatted string.

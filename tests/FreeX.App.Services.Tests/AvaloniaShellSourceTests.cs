@@ -81,19 +81,34 @@ public sealed class AvaloniaShellSourceTests
         var programSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var ingressPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookOpenIngressPlanner.cs"));
+        var activationSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.NativeActivation.cs"));
+        var windowManagementSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.WindowManagement.cs"));
 
         programSource.Should().NotContain("DisableAvaloniaAppDelegate");
         appSource.Should().Contain("new MainWindow(StartupArguments, deferStartupFileOpen: true)");
         appSource.Should().Contain("desktop.MainWindow = mainWindow;");
         appSource.Should().Contain("this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime");
         // Wired through a non-async-void wrapper so a thrown activation cannot crash the dispatcher.
-        appSource.Should().Contain("activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(mainWindow, args);");
-        appSource.Should().Contain("await MainWindow_ActivatedAsync(mainWindow, args);");
-        appSource.Should().Contain("args is not FileActivatedEventArgs fileArgs");
-        appSource.Should().Contain("fileArgs.Kind != ActivationKind.File");
-        appSource.Should().Contain("mainWindow.Show();");
-        appSource.Should().Contain("mainWindow.Activate();");
-        appSource.Should().Contain("await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);");
+        appSource.Should().Contain("activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(args);");
+        appSource.Should().Contain("args is FileActivatedEventArgs { Kind: ActivationKind.File } fileArgs");
+        appSource.Should().Contain("await OpenNativeActivatedFilesAsync(fileArgs.Files);");
+        appSource.Should().Contain("args.Kind == ActivationKind.Reopen");
+        appSource.Should().Contain("MainWindow.ActivateRegisteredWorkbookWindow() ?? OpenIndependentWindow()");
+        // Resolve a live window at activation time and preserve each storage item/bookmark while
+        // opening all Finder-selected files, rather than retaining the original startup window.
+        appSource.Should().Contain("var target = ActivateNativeWorkbookWindow();");
+        appSource.Should().Contain("var openableFiles = target.ResolveNativeActivatedFiles(files);");
+        appSource.Should().Contain("for (var index = 0; index < openableFiles.Count; index++)");
+        appSource.Should().Contain("var window = index == 0 ? target : OpenIndependentWindow();");
+        appSource.Should().Contain("await window.OpenActivatedFilesAsync([openableFiles[index]]);");
+        appSource.Should().Contain("await target.OpenActivatedFilesAsync(files);");
+        activationSource.Should().Contain("window.IsActive");
+        activationSource.Should().Contain("WindowRegistry.HiddenWindows.FirstOrDefault()");
+        activationSource.Should().Contain("target.ActivateWorkbookWindow();");
+        activationSource.Should().Contain("files.Where(file => TryResolveOpenableLocalWorkbookPath([file], out _, out _, out _)).ToArray()");
+        windowManagementSource.Should().Contain("internal void ActivateWorkbookWindow()");
+        windowManagementSource.Should().Contain("Show();");
+        windowManagementSource.Should().Contain("Activate();");
 
         windowSource.Should().Contain("public async Task OpenActivatedFilesAsync(IReadOnlyList<IStorageItem> files)");
         windowSource.Should().Contain("private bool TrySelectOpenableLocalWorkbookPath(IEnumerable<IStorageItem> files, out string? path, out string message)");
@@ -716,6 +731,7 @@ public sealed class AvaloniaShellSourceTests
             RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaLegalNoticesDialog.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var workflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.BackstageWorkflow.cs"));
+        var nativeEditSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.NativeEditMenu.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
         source.Should().Contain("ConfigureNativeMenu();");
@@ -807,15 +823,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureNativeCatalogMenuItems();");
         source.Should().Contain("ConfigureNativeMenuItem(GetNativeMenuItem(id), id);");
         catalogSource.Should().Contain("new(NativeMenuItemId.Undo, \"Undo\", NativeMenuGesture(WorkbookShortcutRoute.Undo))");
-        source.Should().Contain("_undoMenuItem.Click += (_, _) => UndoLastEdit();");
+        source.Should().Contain("_undoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Undo));");
         catalogSource.Should().Contain("new(NativeMenuItemId.Redo, \"Redo\", NativeMenuGesture(WorkbookShortcutRoute.Redo))");
-        source.Should().Contain("_redoMenuItem.Click += (_, _) => RedoLastEdit();");
+        source.Should().Contain("_redoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Redo));");
         catalogSource.Should().Contain("new(NativeMenuItemId.Cut, \"Cut\", NativeMenuGesture(WorkbookShortcutRoute.Cut))");
-        source.Should().Contain("_cutMenuItem.Click += (_, _) => RunGuarded(CutSelectedRangeToClipboardAsync);");
+        source.Should().Contain("_cutMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Cut));");
         catalogSource.Should().Contain("new(NativeMenuItemId.Copy, \"Copy\", NativeMenuGesture(WorkbookShortcutRoute.Copy))");
-        source.Should().Contain("_copyMenuItem.Click += (_, _) => RunGuarded(CopySelectedRangeToClipboardAsync);");
+        source.Should().Contain("_copyMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Copy));");
         catalogSource.Should().Contain("new(NativeMenuItemId.Paste, \"Paste\", NativeMenuGesture(WorkbookShortcutRoute.Paste))");
-        source.Should().Contain("_pasteMenuItem.Click += (_, _) => RunGuarded(PasteClipboardTextAsync);");
+        source.Should().Contain("_pasteMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Paste));");
         catalogSource.Should().Contain("new(NativeMenuItemId.PasteSpecial, \"Paste Special\", NativeMenuGesture(WorkbookShortcutRoute.PasteSpecial))");
         source.Should().Contain("_pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();");
         source.Should().Contain("CreateNativePasteCommentsMenuItem(\"Comments and Notes\")");
@@ -833,7 +849,32 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateNativePastePictureMenuItem(\"Picture\", linkedPicture: false)");
         source.Should().Contain("CreateNativePastePictureMenuItem(\"Linked Picture\", linkedPicture: true)");
         catalogSource.Should().Contain("new(NativeMenuItemId.SelectAll, \"Select All\", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta))");
-        source.Should().Contain("_selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();");
+        source.Should().Contain("_selectAllMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.SelectAll));");
+        var focusedEditBlock = ExtractSourceBlock(nativeEditSource,
+            "if (GetNativeTextEditMenuTarget() is { } editor)",
+            "// A modeless dialog");
+        focusedEditBlock.Should().Contain("!editor.IsReadOnly");
+        focusedEditBlock.Should().Contain("editor.Undo();");
+        focusedEditBlock.Should().Contain("editor.Redo();");
+        focusedEditBlock.Should().Contain("editor.Cut();");
+        focusedEditBlock.Should().Contain("editor.Copy();");
+        focusedEditBlock.Should().Contain("editor.Paste();");
+        focusedEditBlock.Should().Contain("editor.SelectAll();");
+        focusedEditBlock.Should().Contain("return;");
+        focusedEditBlock.Should().NotContain("TryCommitPendingFormulaEdit");
+        focusedEditBlock.Should().NotContain("SelectedRange");
+        focusedEditBlock.Should().NotContain("UndoLastEdit");
+        focusedEditBlock.Should().NotContain("RedoLastEdit");
+        var workbookEditBlock = ExtractSourceBlock(nativeEditSource,
+            "if (IsNativeEditMenuFocusedInOwnedDialog())",
+            "internal void RefreshNativeTextEditMenuAvailability()");
+        workbookEditBlock.Should().Contain("return;");
+        workbookEditBlock.Should().Contain("UndoLastEdit();");
+        workbookEditBlock.Should().Contain("RedoLastEdit();");
+        workbookEditBlock.Should().Contain("await CutSelectedRangeToClipboardAsync();");
+        workbookEditBlock.Should().Contain("await CopySelectedRangeToClipboardAsync();");
+        workbookEditBlock.Should().Contain("await PasteClipboardTextAsync();");
+        workbookEditBlock.Should().Contain("SelectCurrentRegionOrAll();");
         source.Should().Contain("_clearMenuItem.Menu = CreateNativeClearMenu();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Clear, \"Clear\", RequiresGestureInSmoke: false)");
         catalogSource.Should().Contain("new(NativeMenuItemId.ClearAll, \"Clear All\", RequiresGestureInSmoke: false)");
@@ -1784,6 +1825,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresCellEditingThroughFormulaBoxAndKeyboardEntry()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var worksheetSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "WorksheetGridHost.cs"));
 
         source.Should().Contain("private readonly TextBox _formulaBox = new();");
         source.Should().Contain("private string? _formulaBoxEditOriginalText;");
@@ -1800,7 +1842,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private void MainWindow_TextInput(object? sender, TextInputEventArgs e)");
         source.Should().Contain("string.IsNullOrEmpty(e.Text)");
         source.Should().Contain("char.IsControl(character)");
-        source.Should().Contain("BeginFormulaEdit(_session.ActiveCell, e.Text);");
+        source.Should().Contain("BeginInlineCellEdit(_session.ActiveCell, e.Text, e.Text.Length);");
+        source.Should().Contain("var editor = new WorksheetInlineCellEditor");
+        worksheetSource.Should().Contain("internal sealed class WorksheetInlineCellEditor : TextBox");
+        worksheetSource.Should().Contain("protected override Type StyleKeyOverride => typeof(TextBox);");
+        worksheetSource.Should().Contain(": TextBoxAutomationPeer(owner)");
         source.Should().Contain("_formulaRangeEditingSession.PlanEditKey(");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key)");
         source.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers)");

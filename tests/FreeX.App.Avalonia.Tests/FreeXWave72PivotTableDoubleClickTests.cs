@@ -56,7 +56,8 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
     [Fact]
     public void DoubleClickSourceContract_PreservesWpfPivotPrecedenceAndSingleDispatch()
     {
-        var avaloniaGridSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var avaloniaGridSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
         var avaloniaPivotSource = File.ReadAllText(
             RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotAnalyzeActions.cs"));
         var wpfSelectionSource = File.ReadAllText(
@@ -74,22 +75,35 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
         var pointerDoubleClickStart = avaloniaGridSource.IndexOf(
             "if (point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount))",
             StringComparison.Ordinal);
+        pointerDoubleClickStart.Should().BeGreaterThanOrEqualTo(0);
         var pointerDoubleClickEnd = avaloniaGridSource.IndexOf(
             "SelectClickedCell(address, args.KeyModifiers);",
             pointerDoubleClickStart,
             StringComparison.Ordinal);
-        avaloniaGridSource[pointerDoubleClickStart..pointerDoubleClickEnd]
-            .IndexOf("TryShowPivotTableDetailsFromDoubleClick(address)", StringComparison.Ordinal)
-            .Should().BeGreaterThanOrEqualTo(0);
+        pointerDoubleClickEnd.Should().BeGreaterThan(pointerDoubleClickStart);
+        AssertPivotPrecedesInlineEdit(avaloniaGridSource[pointerDoubleClickStart..pointerDoubleClickEnd]);
 
         var doubleTappedStart = avaloniaGridSource.IndexOf("border.DoubleTapped +=", StringComparison.Ordinal);
+        doubleTappedStart.Should().BeGreaterThanOrEqualTo(0);
         var doubleTappedEnd = avaloniaGridSource.IndexOf(
-            "if (Equals(_inlineCellEditAddress, address))",
+            "\n        };",
             doubleTappedStart,
             StringComparison.Ordinal);
-        avaloniaGridSource[doubleTappedStart..doubleTappedEnd]
-            .IndexOf("TryShowPivotTableDetailsFromDoubleClick(address)", StringComparison.Ordinal)
-            .Should().BeGreaterThanOrEqualTo(0);
+        doubleTappedEnd.Should().BeGreaterThan(doubleTappedStart);
+        AssertPivotPrecedesInlineEdit(avaloniaGridSource[doubleTappedStart..doubleTappedEnd]);
+    }
+
+    private static void AssertPivotPrecedesInlineEdit(string handler)
+    {
+        const string pivotDispatch = "TryShowPivotTableDetailsFromDoubleClick(address)";
+        handler.Split(pivotDispatch, StringSplitOptions.None).Should().HaveCount(2,
+            "each physical double-click handler must dispatch pivot details only once");
+        handler.Should().Contain($"if (!{pivotDispatch})");
+        handler.Should().Contain("ConsumePivotDetailsDoubleClickSuppression(address)");
+        var pivotIndex = handler.IndexOf(pivotDispatch, StringComparison.Ordinal);
+        var inlineIndex = handler.IndexOf("BeginInlineCellEdit(address, editText, caretIndex)", StringComparison.Ordinal);
+        inlineIndex.Should().BeGreaterThan(pivotIndex,
+            "inline editing is only the fallback when pivot details did not handle the gesture");
     }
 
     [Fact]
