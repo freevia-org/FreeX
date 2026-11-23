@@ -454,7 +454,7 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = ReadChartCommandSource();
 
         source.Should().Contain("new ChartDataLabelsDialog(chart)");
-        source.Should().Contain("new ChartTrendlineOptionsDialog(chart)");
+        source.Should().Contain("new ChartTrendlineOptionsDialog(chart, seriesIndex)");
         source.Should().Contain("new ChartAxisFormatDialog(chart, useXAxis)");
         source.Should().Contain("var seriesCount = ChartSeriesFormatPlanner.GetSeriesCount(chart);");
         source.Should().Contain("new ChartSeriesFormatDialog(chart, seriesCount)");

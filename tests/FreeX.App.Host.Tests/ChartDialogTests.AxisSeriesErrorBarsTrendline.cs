@@ -46,7 +46,7 @@ public sealed partial class ChartDialogTests
 
         source.Should().Contain("public ChartTrendlineInput Result");
         source.Should().NotContain("ChartTrendlineOptionsDialogResult");
-        source.Should().Contain("ChartTrendlinePlanner.Read(chart)");
+        source.Should().Contain("ChartTrendlinePlanner.Read(chart, seriesIndex)");
         source.Should().Contain("ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(");
         source.Should().Contain("ChartTrendlinePlanner.GetTypeChoices()");
         source.Should().Contain("ChartTrendlinePlanner.GetDashStyleChoices()");
@@ -59,7 +59,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("int.TryParse(");
-        commands.Should().Contain("ChartTrendlinePlanner.Plan(dialog.Result)");
+        commands.Should().Contain("ChartTrendlinePlanner.Plan(dialog.Result, seriesIndex)");
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed partial class ChartDialogTests
 
         source.Should().Contain("public ChartErrorBarsInput Result");
         source.Should().NotContain("ChartErrorBarsDialogResult");
-        source.Should().Contain("ChartErrorBarsPlanner.Read(chart)");
+        source.Should().Contain("ChartErrorBarsPlanner.Read(chart, seriesIndex)");
         source.Should().Contain("ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(");
         source.Should().Contain("ChartErrorBarsPlanner.GetKindChoices()");
         source.Should().Contain("ChartErrorBarsPlanner.GetDirectionChoices()");
@@ -124,7 +124,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("Enum.IsDefined");
         source.Should().NotContain("Math.Clamp");
         source.Should().NotContain("TryReadClampedDouble(");
-        commands.Should().Contain("ChartErrorBarsPlanner.Plan(dialog.Result)");
+        commands.Should().Contain("ChartErrorBarsPlanner.Plan(dialog.Result, seriesIndex)");
     }
 
     [Fact]

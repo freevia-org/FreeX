@@ -308,6 +308,17 @@ launch smoke, signing/notarization, and GitHub publication remain release-workfl
 pwsh -NoProfile -File tools/Invoke-TestGate.ps1 -Gate release -App all -Platform windows
 ```
 
+The WPF host batches (`freex-wpf-host-batch1`..`7`, `freex-wpf-shell`) hold most of the source-pin and
+generated-manifest contract tests (`*SourceTests`, `MainWindowSourceHygieneTests`,
+`RibbonCommandCoverageManifestTests`, `RibbonScreenshotTourPlannerTests`), so a refactor of a host
+`MainWindow.*.cs` partial, a dialog, or a ribbon command only fails them in the nightly Release Readiness
+run. When a branch touches `src/FreeX.App.Host`, `src/FreeX.Ribbon.Definitions` or the parity-capture tool,
+run the affected pins first with
+`tools/Invoke-Throttled.ps1 -Kind Test -- dotnet test tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj --configuration Release --filter "FullyQualifiedName~SourceTests|FullyQualifiedName~SourceHygiene|FullyQualifiedName~CoverageManifest"`,
+and after adding or removing a ribbon command regenerate the manifests with
+`dotnet run --project tools/FreeX.RibbonCoverage` (and again with `-- --interaction-surfaces`).
+A pin that fails because the product intentionally moved is updated; one that guards behaviour is not.
+
 Projects remain serial within a gate where process isolation matters, while independent gates and
 platforms run concurrently. A gate can declare `partitions` and `partitionProjects` when one safe,
 isolated test assembly dominates the critical path. The runner deterministically balances source

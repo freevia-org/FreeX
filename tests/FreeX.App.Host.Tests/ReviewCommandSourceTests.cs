@@ -23,7 +23,8 @@ public sealed class ReviewCommandSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
         source.Should().Contain("var target = ReviewSessionController.GetSelectedThreadedCommentTarget();");
-        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment);");
+        source.Should().Contain("ThreadedCommentCardPlanner.BuildCard(cardSheet, target.Address)");
+        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment, card);");
         source.Should().Contain("SheetGrid_ThreadedCommentInlineEditSubmitted");
         source.Should().Contain("ReviewSessionController.ApplyThreadedComment(");
         source.Should().NotContain("new ThreadedCommentDialog(addr.ToA1(), existing)");
@@ -82,7 +83,8 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("ReviewSessionController.GetSelectedNoteTarget()");
         source.Should().Contain("ReviewSessionController.GetSelectedThreadedCommentTarget()");
         source.Should().Contain("SheetGrid.BeginNoteInlineEdit(target.Address, target.Address.ToA1(), target.NoteText);");
-        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment);");
+        source.Should().Contain("ThreadedCommentCardPlanner.BuildCard(cardSheet, target.Address)");
+        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment, card);");
         source.Should().Contain("SheetGrid_NoteInlineEditSubmitted");
         source.Should().Contain("SheetGrid_ThreadedCommentInlineEditSubmitted");
         source.Should().Contain("e.KeepOpen = true;");

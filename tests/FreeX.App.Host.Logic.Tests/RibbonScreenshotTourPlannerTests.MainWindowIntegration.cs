@@ -522,7 +522,11 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("CaptureInsertObjectsLinksInlineNoteEditorAsync");
         source.Should().Contain("freex_insert_new_comment_inline_popup");
         source.Should().Contain("freex_insert_new_note_inline_popup");
-        source.Should().Contain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs())");
+        // The threaded Comments pane is docked in the main window, so the tour captures the same list
+        // surface hosted in a floating CommentListWindow instead of driving the Show Comments toggle.
+        source.Should().Contain("ShowOrRefreshCommentListWindow(");
+        source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(commentsListSheet.ThreadedComments)");
+        source.Should().NotContain("ReviewShowCommentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("freex_insert_comments_list_surface");
         source.Should().Contain("ShowNotesListForParityCapture();");
         source.Should().Contain("freex_insert_notes_list_surface");

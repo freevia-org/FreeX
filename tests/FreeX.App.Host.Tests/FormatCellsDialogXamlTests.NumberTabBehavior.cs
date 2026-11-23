@@ -205,7 +205,7 @@ public sealed partial class FormatCellsDialogXamlTests
                 preview.Text.Should().Be("GBP   1,234.56");
 
                 symbols.SelectedItem = usCultureLabel;
-                preview.Text.Should().Be("$     1,234.56");
+                preview.Text.Should().Be(" $   1,234.56 "); // Excel keeps the _( and _) skip spaces at the edges (number-format rendering sweep)
             }
             finally
             {

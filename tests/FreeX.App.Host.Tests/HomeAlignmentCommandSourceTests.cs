@@ -36,17 +36,20 @@ public sealed class HomeAlignmentCommandSourceTests
         source.Should().Contain("CellMergePlanner.AnalyzeGroupedContent(");
         source.Should().Contain("CurrentGroupedEditSheetIds(),");
         source.Should().Contain("ShowMergeCellsContentWarningDialog(contentPlan)");
-        source.Should().Contain("MergeCellsContentWarningPlanner.Create(");
-        source.Should().Contain("presentation.Action(MergeCellsContentWarningAction.KeepFirstCell)");
-        source.Should().Contain("presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells)");
-        source.Should().Contain("presentation.Action(MergeCellsContentWarningAction.Cancel)");
-        source.Should().Contain("Content = keepFirstAction.Label");
-        source.Should().Contain("Content = concatenateAction.Label");
-        source.Should().Contain("Content = cancelAction.Label");
-        source.Should().Contain("presentation.DialogAutomationId");
+        source.Should().Contain("new MergeCellsContentWarningDialog(");
+        // The warning window was extracted into MergeCellsContentWarningDialog (see ExtractedInlineDialogTests); its
+        // planner-driven presentation is pinned against the dialog source, not the MainWindow partial.
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("MergeCellsContentWarningDialog.cs");
+        dialogSource.Should().Contain("MergeCellsContentWarningPlanner.Create(");
+        dialogSource.Should().Contain("presentation.Action(MergeCellsContentWarningAction.KeepFirstCell)");
+        dialogSource.Should().Contain("presentation.Action(MergeCellsContentWarningAction.ConcatenateAllCells)");
+        dialogSource.Should().Contain("presentation.Action(MergeCellsContentWarningAction.Cancel)");
+        dialogSource.Should().Contain("Content = keepFirstAction.Label");
+        dialogSource.Should().Contain("Content = concatenateAction.Label");
+        dialogSource.Should().Contain("Content = cancelAction.Label");
+        dialogSource.Should().Contain("presentation.DialogAutomationId");
         source.Should().NotContain("Merging cells can discard cell contents.");
         source.Should().NotContain("Keep only first cell");
-        source.Should().NotContain("new MergeCellsContentWarningDialog(");
         source.Should().Contain("CellMergePlanner.ResolveContentChoice(");
         source.Should().Contain("return decision.ShouldProceed;");
         source.Should().Contain("MergeAcrossMenuItem_Click");
