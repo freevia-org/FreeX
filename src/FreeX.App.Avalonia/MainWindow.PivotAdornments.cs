@@ -86,7 +86,7 @@ public sealed partial class MainWindow
         // captures (Avalonia Button needs its ContentPresenter template to display its Content in
         // headless-platform mode; the autofilter Button works because the live-app theme is loaded,
         // but in --parity-grid headless captures only the intrinsic layout/render pipeline runs).
-        var buttonBorder = new Border
+        var buttonBorder = new WorksheetPivotDropdown
         {
             Width = 15 * zoomFactor,
             MinWidth = 15 * zoomFactor,
@@ -104,6 +104,7 @@ public sealed partial class MainWindow
 
         // Capture menuTarget for the click lambda (avoids repeated dictionary lookup).
         var capturedTarget = menuTarget;
+        buttonBorder.OpenDropdownAction = () => OpenPivotHeaderDropdownMenuFromCell(buttonBorder, capturedTarget);
         buttonBorder.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(buttonBorder);

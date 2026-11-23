@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 
 using FreeX.App.Services;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -211,6 +212,150 @@ public sealed class WorksheetOverlayAutomationTests
         Descendants(grid).Count(peer => peer.GetAutomationId() == "AutoFilterButton_1_1").Should().Be(1);
         AssertUniqueLogicalCells(window, grid);
     });
+
+    [Fact]
+    public Task PivotDropdowns_AreDiscoveredAndInvokeTheCorrectFieldsAcrossRefreshAndScroll() => Run(window =>
+    {
+        var sheet = window.Session.ActiveSheet;
+        var pivot = AddHeaderPivot(window, sheet);
+        Refresh(window);
+        var targets = PivotGridAdornmentPlanner.BuildHeaderTargets(window.Session.Workbook, sheet)
+            .Where(target => target.MenuTarget.PivotTableName == pivot.Name).ToArray();
+        targets.Select(target => target.MenuTarget.FieldCaption).Should().Contain("Category").And.Contain("Quarter");
+        var grid = GridPeer(window);
+        var windowPeer = ControlAutomationPeer.CreatePeerForElement(window);
+        foreach (var target in targets)
+        {
+            var address = target.HeaderCell;
+            var cellId = $"Cell_{CellAddress.NumberToColumnName(address.Col)}{address.Row}";
+            var actionId = $"PivotDropdown_{address.Row}_{address.Col}";
+            var cell = Descendants(grid).Single(peer => peer.GetAutomationId() == cellId);
+            var action = cell.GetChildren().Single(peer => peer.GetAutomationId() == actionId);
+            action.GetAutomationControlType().Should().Be(AutomationControlType.Button);
+            action.GetName().Should().NotBeNullOrWhiteSpace();
+            action.GetParent().Should().BeSameAs(cell);
+            Descendants(windowPeer).Single(peer => peer.GetAutomationId() == actionId).Should().BeSameAs(action);
+            AssertReachesRoot(action, grid);
+            AssertReachesRoot(action, windowPeer);
+            action.GetProvider<IInvokeProvider>().Should().NotBeNull();
+            action.SetFocus();
+            action.GetProvider<IInvokeProvider>()!.Invoke();
+            Drain(window);
+            var menu = AssertOpenPivotMenu(window, target.MenuTarget.FieldCaption);
+            ClosePivotMenu(window, menu);
+
+            Refresh(window);
+            var refreshedCell = Descendants(grid).Single(peer => peer.GetAutomationId() == cellId);
+            refreshedCell.Should().BeSameAs(cell);
+            var refreshedAction = refreshedCell.GetChildren().Single(peer => peer.GetAutomationId() == actionId);
+            refreshedAction.Should().NotBeSameAs(action);
+            refreshedAction.GetParent().Should().BeSameAs(cell);
+            Descendants(grid).Count(peer => peer.GetAutomationId() == actionId).Should().Be(1);
+            refreshedAction.GetProvider<IInvokeProvider>()!.Invoke();
+            Drain(window);
+            ClosePivotMenu(window, AssertOpenPivotMenu(window, target.MenuTarget.FieldCaption));
+        }
+        AssertUniqueLogicalCells(window, grid);
+
+        var firstTarget = targets[0];
+        var heldCellId = $"Cell_{CellAddress.NumberToColumnName(firstTarget.HeaderCell.Col)}{firstTarget.HeaderCell.Row}";
+        var heldCell = Descendants(grid).Single(peer => peer.GetAutomationId() == heldCellId);
+        window.Session.SetViewportOrigin(1000, 100);
+        Refresh(window);
+        heldCell.GetChildren().Should().BeEmpty();
+        Descendants(grid).Should().NotContain(peer => peer.GetAutomationId() != null &&
+            peer.GetAutomationId()!.StartsWith("PivotDropdown_", StringComparison.Ordinal));
+        window.Session.SetViewportOrigin(1, 1);
+        Refresh(window);
+        foreach (var target in targets)
+        {
+            var cellId = $"Cell_{CellAddress.NumberToColumnName(target.HeaderCell.Col)}{target.HeaderCell.Row}";
+            var actionId = $"PivotDropdown_{target.HeaderCell.Row}_{target.HeaderCell.Col}";
+            var restoredCell = Descendants(grid).Single(peer => peer.GetAutomationId() == cellId);
+            restoredCell.GetChildren().Single(peer => peer.GetAutomationId() == actionId)
+                .GetParent().Should().BeSameAs(restoredCell);
+            Descendants(grid).Count(peer => peer.GetAutomationId() == actionId).Should().Be(1);
+        }
+        AssertUniqueLogicalCells(window, grid);
+    });
+
+    [Theory]
+    [InlineData(Key.Enter, PhysicalKey.Enter)]
+    [InlineData(Key.Space, PhysicalKey.Space)]
+    public Task FocusedPivotDropdown_PhysicalActivationOpensFieldMenuWithoutNavigatingWorksheet(
+        Key key, PhysicalKey physicalKey) => Run(window =>
+    {
+        var sheet = window.Session.ActiveSheet;
+        var pivot = AddHeaderPivot(window, sheet);
+        Refresh(window);
+        var target = PivotGridAdornmentPlanner.BuildHeaderTargets(window.Session.Workbook, sheet)
+            .Single(candidate => candidate.MenuTarget.PivotTableName == pivot.Name && candidate.MenuTarget.FieldCaption == "Category");
+        var actionId = $"PivotDropdown_{target.HeaderCell.Row}_{target.HeaderCell.Col}";
+        var action = Descendants(GridPeer(window)).Single(peer => peer.GetAutomationId() == actionId);
+        var active = window.Session.ActiveCell;
+        var selection = window.Session.SelectedRange;
+        action.SetFocus();
+        action.HasKeyboardFocus().Should().BeTrue();
+
+        window.KeyPress(key, RawInputModifiers.None, physicalKey, null);
+        window.KeyRelease(key, RawInputModifiers.None, physicalKey, null);
+        Drain(window);
+
+        var menu = AssertOpenPivotMenu(window, "Category");
+        window.Session.ActiveCell.Should().Be(active);
+        window.Session.SelectedRange.Should().Be(selection);
+        ClosePivotMenu(window, menu);
+    });
+
+    private static PivotTableModel AddHeaderPivot(MainWindow window, Sheet sheet)
+    {
+        foreach (var (row, category, quarter, amount) in new[]
+        {
+            (2u, "A", "Q1", 10d), (3u, "A", "Q2", 20d), (4u, "B", "Q1", 30d),
+        })
+        {
+            sheet.SetCell(new CellAddress(sheet.Id, row, 1), new TextValue(category));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 2), new TextValue(quarter));
+            sheet.SetCell(new CellAddress(sheet.Id, row, 3), new NumberValue(amount));
+        }
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Category"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new TextValue("Quarter"));
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new TextValue("Amount"));
+        var pivot = new PivotTableModel
+        {
+            Name = "AccessibleHeaderPivot",
+            CacheId = 1,
+            SourceRange = Range(sheet, 1, 1, 4, 3),
+            TargetRange = Range(sheet, 3, 5, 8, 8),
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.ColumnFields.Add(new PivotFieldModel(1));
+        pivot.DataFields.Add(new PivotDataFieldModel(2, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+        PivotTableRefreshService.Refresh(window.Session.Workbook, sheet, pivot);
+        return pivot;
+    }
+
+    private static ContextMenu AssertOpenPivotMenu(MainWindow window, string fieldCaption)
+    {
+        var focused = window.FocusManager!.GetFocusedElement();
+        focused.Should().BeAssignableTo<Control>();
+        var focusedControl = (Control)focused!;
+        var menu = focusedControl as ContextMenu ?? focusedControl.GetVisualAncestors().OfType<ContextMenu>().FirstOrDefault();
+        menu.Should().NotBeNull("the invoked dropdown must focus its real context menu");
+        menu!.IsOpen.Should().BeTrue();
+        var menuPeer = ControlAutomationPeer.CreatePeerForElement(menu);
+        Descendants(menuPeer).Should().Contain(peer => peer.GetName() == $"No active filters for {fieldCaption}.");
+        return menu;
+    }
+
+    private static void ClosePivotMenu(MainWindow window, ContextMenu menu)
+    {
+        window.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        window.KeyRelease(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        Drain(window);
+        menu.IsOpen.Should().BeFalse();
+    }
 
     private static void CloseFilterThroughAutomation(MainWindow window)
     {

@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeX.Core.Model;
@@ -236,7 +237,7 @@ internal sealed class WorksheetGridHost : ContentControl
 
         protected override IReadOnlyList<AutomationPeer> GetOrCreateChildrenCore() =>
             Border?.GetVisualDescendants().OfType<Control>()
-                .Where(control => (control is WorksheetInlineCellEditor or WorksheetAutoFilterButton) && control.IsEffectivelyVisible)
+                .Where(control => (control is WorksheetInlineCellEditor or WorksheetAutoFilterButton or WorksheetPivotDropdown) && control.IsEffectivelyVisible)
                 .Select(ControlAutomationPeer.CreatePeerForElement).ToArray() ?? [];
 
         internal void PublishChanges()
@@ -327,5 +328,41 @@ internal sealed class WorksheetAutoFilterButton : Button
             owner.GetVisualAncestors().OfType<WorksheetCellBorder>().FirstOrDefault() is { } border
                 ? CreatePeerForElement(border)
                 : base.GetParentCore();
+    }
+}
+
+/// <summary>Keeps the painted pivot glyph's visual contract while exposing its actual action.</summary>
+internal sealed class WorksheetPivotDropdown : Border
+{
+    internal Action? OpenDropdownAction { get; set; }
+
+    protected override Type StyleKeyOverride => typeof(Border);
+    protected override AutomationPeer OnCreateAutomationPeer() => new WorksheetPivotDropdownAutomationPeer(this);
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!e.Handled && IsFocused && e.KeyModifiers == KeyModifiers.None && (e.Key is Key.Enter or Key.Space))
+        {
+            e.Handled = true;
+            OpenDropdownAction?.Invoke();
+        }
+    }
+
+    private sealed class WorksheetPivotDropdownAutomationPeer(WorksheetPivotDropdown owner)
+        : ControlAutomationPeer(owner), IInvokeProvider
+    {
+        public void Invoke()
+        {
+            EnsureEnabled();
+            owner.OpenDropdownAction?.Invoke();
+        }
+
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Button;
+        protected override AutomationPeer? GetParentCore() =>
+            owner.GetVisualAncestors().OfType<WorksheetCellBorder>().FirstOrDefault() is { } border
+                ? CreatePeerForElement(border)
+                : base.GetParentCore();
+        protected override IReadOnlyList<AutomationPeer> GetChildrenCore() => [];
     }
 }
