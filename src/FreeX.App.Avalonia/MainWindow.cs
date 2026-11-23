@@ -475,8 +475,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private readonly ContentControl _sheetGridHost = new();
-    // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
+    private readonly WorksheetGridHost _sheetGridHost = new();
+    // The active cell's Border from the most recent BuildSheetGrid pass. Cell controls are
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
     // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
     // so a screen reader (Orca/AT-SPI, VoiceOver) actually observes a focus change while navigating
@@ -9492,7 +9492,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // R175: the panel resolves CellBorder.ThemeColor against this theme on every paint, so a
             // border set from the ribbon's Theme Colors picker follows a Theme Colors swap instead of
             // keeping the RGB baked at load time (matches how font/fill already resolve here).
-            theme: _session.Workbook.Theme);
+            theme: _session.Workbook.Theme,
+            isWorksheetCell: true);
+        var accessibleCell = (WorksheetCellBorder)border;
+        accessibleCell.DisplayValue = text;
+        accessibleCell.IsSelected = selected;
 
         // Grid tracks define worksheet ownership. Give the interactive border the exact slot size
         // (cellWidth/cellHeight already include merged spans) so Linux font measurement cannot let
@@ -9537,8 +9541,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // prefix, the merged span, and the hand cursor. HasDataValidation/IsLocked cues are
         // intentionally left out here too, mirroring WPF: CellAnnouncementMetadata's own doc
         // comment (GridView.cs) explains neither is wired to a live signal on that shell either.
-        // Cells are plain Borders rebuilt on every selection change/RefreshShell (no persisted control
-        // to "update" in place), so setting these at construction time keeps them live automatically.
+        // WorksheetCellBorder exposes these properties through a real DataItem peer. Decorative
+        // text layers are kept out of that peer's children so the cell is announced once.
         var columnName = CellAddress.NumberToColumnName(address.Col);
         AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
         var hasHyperlink = _session.Workbook.GetSheet(address.Sheet)?.Hyperlinks.ContainsKey(address) == true;
@@ -12075,7 +12079,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FontFamily? fontFamily = null,
         bool suppressDefaultGridlines = false,
         CellBorderNeighborEdges borderNeighbors = default,
-        WorkbookTheme? theme = null)
+        WorkbookTheme? theme = null,
+        bool isWorksheetCell = false)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -12254,19 +12259,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var defaultBorderBrush = suppressDefaultGridlines
             ? background ?? patternBrush ?? Brushes.Transparent
             : GridLine;
-        return new Border
-        {
-            Background = background,
-            BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent,
-            // Each cell paints only its right and bottom edge, so the edge shared with its neighbour is
-            // ONE scaledBorderThickness line (WPF strokes a single 1-DIP line per shared edge; four
-            // sides per cell produced a doubled 2-DIP line, 4 device pixels on Retina). The Padding
-            // keeps the content slot identical to the old all-sides inset so text geometry is unchanged.
-            BorderThickness = new Thickness(0, 0, scaledBorderThickness, scaledBorderThickness),
-            Padding = new Thickness(scaledBorderThickness, scaledBorderThickness, 0, 0),
-            ClipToBounds = true,
-            Child = cellContent,
-        };
+        Border border = isWorksheetCell ? new WorksheetCellBorder() : new Border();
+        border.Background = background;
+        border.BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent;
+        // Each cell paints only its right and bottom edge, so adjacent cells share one scaled
+        // line. Padding preserves the text's existing position within that border.
+        border.BorderThickness = new Thickness(0, 0, scaledBorderThickness, scaledBorderThickness);
+        border.Padding = new Thickness(scaledBorderThickness, scaledBorderThickness, 0, 0);
+        border.ClipToBounds = true;
+        border.Child = cellContent;
+        return border;
     }
 
     private static AvaloniaGrid CreateDefaultCellContent(
