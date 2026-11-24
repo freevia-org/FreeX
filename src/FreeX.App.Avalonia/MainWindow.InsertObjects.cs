@@ -17,6 +17,9 @@ using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Presentation.TableUI;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
+using CellAddress = FreeX.Core.Model.CellAddress;
+using Sheet = FreeX.Core.Model.Sheet;
+using SheetId = FreeX.Core.Model.SheetId;
 
 namespace FreeX.App.Avalonia;
 
@@ -80,8 +83,68 @@ public sealed partial class MainWindow
             ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.webp", "*.tif", "*.tiff"],
             ["image/*"]);
 
+    // Keep the native item alive through its read without implementing Avalonia's non-client interfaces.
+    internal sealed class InsertObjectPickedFile : IDisposable
+    {
+        private readonly Func<Task<Stream>> _openRead;
+        private readonly IDisposable _owner;
+        private int _disposed;
+
+        internal InsertObjectPickedFile(string name, string? localPath, Func<Task<Stream>> openRead, IDisposable owner)
+        {
+            Name = name;
+            LocalPath = localPath;
+            _openRead = openRead;
+            _owner = owner;
+        }
+
+        internal string Name { get; }
+        internal string? LocalPath { get; }
+        internal Task<Stream> OpenReadAsync()
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            return _openRead();
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                _owner.Dispose();
+        }
+    }
+
+    partial void ResolveInsertObjectFilePicker(
+        ref Func<AvaloniaFilePickerOpenRequest, Task<InsertObjectPickedFile?>>? picker);
+
+    private bool CanPickInsertObjectFile()
+    {
+        Func<AvaloniaFilePickerOpenRequest, Task<InsertObjectPickedFile?>>? picker = null;
+        ResolveInsertObjectFilePicker(ref picker);
+        return picker is not null || StorageProvider.CanOpen;
+    }
+
+    private async Task<InsertObjectPickedFile?> PickInsertObjectFileAsync(AvaloniaFilePickerOpenRequest request)
+    {
+        Func<AvaloniaFilePickerOpenRequest, Task<InsertObjectPickedFile?>>? picker = null;
+        ResolveInsertObjectFilePicker(ref picker);
+        if (picker is not null)
+            return await picker(request);
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(StorageProvider, request);
+        if (file is null)
+            return null;
+        try
+        {
+            return new InsertObjectPickedFile(file.Name, file.TryGetLocalPath(), file.OpenReadAsync, file);
+        }
+        catch
+        {
+            file.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>
-    /// Inserts a picture chosen from a file onto the active sheet at the active cell, through the shared
+    /// Inserts a chosen picture at the captured primary selection start on every grouped sheet, through the shared
     /// session command path and the Core <see cref="FreeX.Core.Commands.InsertPictureCommand"/> the drawing
     /// overlay already paints. The native pixel size is decoded via Avalonia (falling back to a default when
     /// decoding fails); the user can then move/resize it with the existing drawing-object editing. Surfaces
@@ -89,22 +152,29 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task InsertPictureFromFileAsync()
     {
-        if (!((IStorageProvider)StorageProvider).CanOpen)
+        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
+            return;
+
+        using var ownerLifetime = new InsertObjectPickerLifetime(this);
+        var session = _session;
+        var target = new PicturePickerTarget(
+            session, session.ActiveSheet, session.SelectedRange.Start,
+            session.GetCurrentGroupedEditSheetIds().ToArray(), ownerLifetime);
+        if (!IsPicturePickerTargetCurrent(target))
+            return;
+
+        if (!CanPickInsertObjectFile())
         {
             ShowEditIssue(UiText.Get("InsertLoc_PictureUnavailable"));
             return;
         }
 
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-            StorageProvider,
+        using var file = await PickInsertObjectFileAsync(
             AvaloniaFilePickerOpenRequest.FromFileTypes(
                 UiText.Get("InsertLoc_InsertPictureTitle"),
                 [PictureFileType]));
 
-        if (file is null)
+        if (file is null || !IsPicturePickerTargetCurrent(target))
             return;
 
         var contentType = InsertPictureCommandFactory.ContentTypeForPath(file.Name);
@@ -114,7 +184,9 @@ public sealed partial class MainWindow
             return;
         }
 
-        var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
+        var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync, ownerLifetime.Token);
+        if (!IsPicturePickerTargetCurrent(target))
+            return;
         if (readResult.Outcome == FileByteReadOutcome.Canceled)
             return;
         if (readResult.Outcome == FileByteReadOutcome.Failed)
@@ -131,10 +203,16 @@ public sealed partial class MainWindow
 
         var imageBytes = readResult.Bytes;
         var size = DecodePictureSize(imageBytes);
-        var anchor = _session.ActiveCell;
-        var command = PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
-            _session.ActiveSheet.Id, anchor, imageBytes, contentType, size);
-        var result = _session.ExecuteReviewCommand(command);
+        var anchor = target.Address;
+        // Keep the active sheet first so the existing mutation aftermath stays on this view's sheet.
+        var commands = target.SheetIds.OrderBy(id => id == anchor.Sheet ? 0 : 1)
+            .Select(sheetId => (IWorkbookCommand)PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
+                sheetId, new CellAddress(sheetId, anchor.Row, anchor.Col), imageBytes, contentType, size))
+            .ToArray();
+        IWorkbookCommand command = commands.Length == 1
+            ? commands[0]
+            : new CompositeWorkbookCommand("Insert Picture", commands);
+        var result = session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("InsertLoc_InsertPictureFailed"));
@@ -144,6 +222,45 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
         RefreshShell(UiText.Format("InsertLoc_InsertedPictureAt", FormatCellReference(anchor)));
     }
+
+    private sealed class InsertObjectPickerLifetime : IDisposable
+    {
+        private readonly Window _owner;
+        private readonly CancellationTokenSource _cancellation = new();
+
+        internal InsertObjectPickerLifetime(Window owner)
+        {
+            _owner = owner;
+            owner.Closed += OnClosed;
+        }
+
+        internal bool IsClosed { get; private set; }
+        internal CancellationToken Token => _cancellation.Token;
+
+        private void OnClosed(object? sender, EventArgs args)
+        {
+            IsClosed = true;
+            _cancellation.Cancel();
+        }
+
+        public void Dispose()
+        {
+            _owner.Closed -= OnClosed;
+            _cancellation.Dispose();
+        }
+    }
+
+    private sealed record PicturePickerTarget(
+        WorkbookSession Session, Sheet Sheet, CellAddress Address,
+        IReadOnlyList<SheetId> SheetIds, InsertObjectPickerLifetime Lifetime);
+
+    private bool IsPicturePickerTargetCurrent(PicturePickerTarget target) =>
+        !target.Lifetime.IsClosed && !_isOpening && !_isSaving && ReferenceEquals(_session, target.Session) &&
+        ReferenceEquals(target.Session.ActiveSheet, target.Sheet) &&
+        target.Sheet.Id == target.Address.Sheet &&
+        ReferenceEquals(target.Session.Workbook.GetSheet(target.Address.Sheet), target.Sheet) &&
+        target.SheetIds.ToHashSet().SetEquals(target.Session.GetCurrentGroupedEditSheetIds()) &&
+        target.SheetIds.All(id => target.Session.Workbook.GetSheet(id) is not null);
 
     /// <summary>
     /// Inserts a drawing shape of <paramref name="kind"/> anchored at the active cell through the shared
@@ -466,7 +583,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowInsertObjectDialogAsync()
     {
-        if (!((IStorageProvider)StorageProvider).CanOpen)
+        if (!CanPickInsertObjectFile())
         {
             ShowEditIssue(UiText.Get("WfInsertObject_Unavailable"));
             return;
@@ -474,6 +591,8 @@ public sealed partial class MainWindow
 
         if (!TryCommitPendingFormulaEdit())
             return;
+
+        using var ownerLifetime = new InsertObjectPickerLifetime(this);
 
         var linkCheck = new CheckBox { Content = UiText.Get("WfInsertObject_LinkLabel") };
         AutomationProperties.SetAutomationId(linkCheck, "WfInsertObjectLinkCheck");
@@ -485,7 +604,10 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(pathBlock, "WfInsertObjectChosenPath");
 
-        IStorageFile? chosen = null;
+        InsertObjectPickedFile? chosen = null;
+        Task<bool>? insertion = null;
+        Task? browsingWork = null;
+        var browsing = false;
 
         var browse = new Button { Content = UiText.Get("WfInsertObject_BrowseButton"), Width = 110 };
         AutomationProperties.SetAutomationId(browse, "WfInsertObjectBrowseButton");
@@ -504,21 +626,6 @@ public sealed partial class MainWindow
             IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancel, "WfInsertObjectCancelButton");
-
-        browse.Click += (_, _) => RunGuarded(async () =>
-        {
-            chosen = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
-                StorageProvider,
-                AvaloniaFilePickerOpenRequest.FromFileTypes(
-                    UiText.Get("WfInsertObject_Title"),
-                    [AnyFileType]));
-
-            if (chosen is not null)
-            {
-                pathBlock.Text = chosen.Name;
-                insert.IsEnabled = true;
-            }
-        });
 
         var layout = new StackPanel { Margin = new Thickness(16), Spacing = 10, Width = 380 };
         layout.Children.Add(new TextBlock { Text = UiText.Get("WfInsertObject_Heading"), FontWeight = FontWeight.SemiBold });
@@ -542,13 +649,76 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "WfInsertObjectDialog");
+        using var insertionCancellation = CancellationTokenSource.CreateLinkedTokenSource(ownerLifetime.Token);
+        dialog.Closed += (_, _) => insertionCancellation.Cancel();
+
+        async Task BrowseAsync()
+        {
+            if (browsing || insertion is { IsCompleted: false } || !dialog.IsVisible)
+                return;
+            browsing = true;
+            browse.IsEnabled = false;
+            insert.IsEnabled = false;
+            try
+            {
+                var picked = await PickInsertObjectFileAsync(
+                    AvaloniaFilePickerOpenRequest.FromFileTypes(
+                        UiText.Get("WfInsertObject_Title"),
+                        [AnyFileType]));
+                if (picked is null)
+                    return;
+                if (!dialog.IsVisible || ownerLifetime.IsClosed || insertion is { IsCompleted: false })
+                {
+                    picked.Dispose();
+                    return;
+                }
+
+                if (!ReferenceEquals(chosen, picked))
+                    chosen?.Dispose();
+                chosen = picked;
+                pathBlock.Text = chosen.Name;
+            }
+            finally
+            {
+                browsing = false;
+                if (dialog.IsVisible && insertion is not { IsCompleted: false })
+                {
+                    browse.IsEnabled = true;
+                    insert.IsEnabled = chosen is not null;
+                }
+            }
+        }
+        browse.Click += (_, _) =>
+        {
+            if (browsing || insertion is { IsCompleted: false } || !dialog.IsVisible)
+                return;
+            var work = BrowseAsync();
+            browsingWork = work;
+            RunGuarded(() => work);
+        };
 
         insert.Click += (_, _) => RunGuarded(async () =>
         {
-            if (chosen is null)
+            if (chosen is null || browsing || insertion is { IsCompleted: false } ||
+                !dialog.IsVisible || ownerLifetime.IsClosed)
                 return;
-            if (await TryInsertObjectAsync(chosen, linkCheck.IsChecked == true))
-                dialog.Close();
+            browse.IsEnabled = false;
+            insert.IsEnabled = false;
+            insertion = TryInsertObjectAsync(
+                chosen, linkCheck.IsChecked == true, () => dialog.IsVisible, ownerLifetime, insertionCancellation.Token);
+            try
+            {
+                if (await insertion)
+                    dialog.Close();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                {
+                    browse.IsEnabled = true;
+                    insert.IsEnabled = chosen is not null;
+                }
+            }
         });
         cancel.Click += (_, _) => dialog.Close();
 
@@ -562,19 +732,42 @@ public sealed partial class MainWindow
         layout.Children.Add(buttons);
 
         dialog.Content = layout;
-        await dialog.ShowDialog(this);
+        try
+        {
+            await dialog.ShowDialog(this);
+        }
+        finally
+        {
+            // A canceled dialog must not dispose a picked item while its read is still running.
+            try
+            {
+                await Task.WhenAll(
+                    browsingWork ?? Task.CompletedTask,
+                    (Task?)insertion ?? Task.CompletedTask);
+            }
+            finally
+            {
+                chosen?.Dispose();
+            }
+        }
     }
 
     /// <summary>
     /// Validates the chosen file through the portable planner and inserts it: an image is embedded as a real
     /// picture; anything else becomes a generated icon/label placeholder picture. Returns true on success.
     /// </summary>
-    private async Task<bool> TryInsertObjectAsync(IStorageFile file, bool linkToFile)
+    private async Task<bool> TryInsertObjectAsync(
+        InsertObjectPickedFile file, bool linkToFile, Func<bool> canApply,
+        InsertObjectPickerLifetime ownerLifetime, CancellationToken cancellationToken)
     {
         if (_isOpening || _isSaving)
             return false;
 
-        var path = file.TryGetLocalPath() ?? file.Name;
+        var session = _session;
+        var target = new PicturePickerTarget(
+            session, session.ActiveSheet, session.ActiveCell,
+            session.GetCurrentGroupedEditSheetIds().ToArray(), ownerLifetime);
+        var path = file.LocalPath ?? file.Name;
         if (!InsertObjectPlanner.TryPlan(path, fileExists: true, linkToFile, out var plan, out var error))
         {
             ShowEditIssue(error switch
@@ -592,7 +785,7 @@ public sealed partial class MainWindow
 
         if (plan.Rendering == InsertObjectRendering.EmbedImageAsPicture && plan.ImageContentType is not null)
         {
-            var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync);
+            var readResult = await FileByteReadWorkflow.ReadStreamAsync(file.OpenReadAsync, cancellationToken);
             if (readResult.Outcome == FileByteReadOutcome.Canceled)
                 return false;
             if (readResult.Outcome == FileByteReadOutcome.Failed)
@@ -619,10 +812,13 @@ public sealed partial class MainWindow
             size = new PictureInsertionSize(ObjectIconWidth, ObjectIconHeight);
         }
 
-        var anchor = _session.ActiveCell;
+        if (!canApply() || !IsPicturePickerTargetCurrent(target))
+            return false;
+
+        var anchor = target.Address;
         var command = PictureInsertionPlacementPlanner.CreateInsertPictureCommand(
-            _session.ActiveSheet.Id, anchor, imageBytes, contentType, size);
-        var result = _session.ExecuteReviewCommand(command);
+            target.Sheet.Id, anchor, imageBytes, contentType, size);
+        var result = session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("WfInsertObject_ErrorGeneric"));
