@@ -15,6 +15,12 @@ internal static class ExcelTextNumberParser
     private static readonly Regex AmPmRegex = new(
         @"\b(?:am|pm)\b",
         RegexOptions.IgnoreCase);
+    private static readonly Regex ExplicitNumericDateRegex = new(
+        @"^[0-9]{1,4}\s*(?<separator>[-/.])\s*[0-9]{1,2}\s*\k<separator>\s*[0-9]{1,4}\.?(?=$|\s|T)",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex ExplicitYearlessDateTimeRegex = new(
+        @"^(?<date>[0-9]{1,2}\s*(?<separator>[-/])\s*[0-9]{1,2})(?<time>\s+[0-9]{1,2}:.*)$",
+        RegexOptions.CultureInvariant);
 
     // Matches a number whose thousands grouping is correct: each group to the left of the decimal
     // (or end) is exactly 3 digits, except the first group which may be 1–3 digits.  Optional leading
@@ -176,10 +182,11 @@ internal static class ExcelTextNumberParser
             return false;
         }
 
-        // If TryParseNumericStrict identified the input as a malformed numeric (contains commas
-        // but grouping is invalid), do not fall through to DateTime — "1,2" should not become
-        // January 2nd.
-        if (rejectedNumericComma)
+        // A malformed grouped number must not become a guessed date ("1,2" or "1 2").
+        // Whitespace-grouping cultures also see the space in a genuine date/time as grouping,
+        // though: allow explicit dates through to the culture's date parser instead of rejecting
+        // "2024-06-20 09:15:00" or "20 juin 2024 09:15:00" as malformed numbers.
+        if (rejectedNumericComma && !HasExplicitDateSyntax(trimmed, culture))
         {
             number = 0;
             return false;
@@ -188,13 +195,17 @@ internal static class ExcelTextNumberParser
         if (TryParseExcelFakeLeapDayText(trimmed, culture, out number))
             return true;
 
+        // Some culture parsers accept a full date/time but reject its yearless form. Supply the
+        // current calendar year for explicit slash/hyphen dates, preserving the culture's date order.
+        var dateTimeText = CompleteYearlessDateTime(trimmed, culture);
+
         // Gate: only attempt DateTime.TryParse when the text contains at least one ASCII digit.
         // This blocks bare month names ("March", "Monday") which .NET's DateTime parser accepts
         // as current-year dates, producing a result that changes year-to-year — Excel yields #VALUE!.
         if (ContainsAsciiDigit(trimmed) &&
-            DateTime.TryParse(trimmed, culture, DateTimeStyles.None, out var dt))
+            DateTime.TryParse(dateTimeText, culture, DateTimeStyles.None, out var dt))
         {
-            number = IsTimeOnlyText(trimmed)
+            number = IsTimeOnlyText(trimmed, culture)
                 ? dt.TimeOfDay.TotalDays
                 : ExcelDateSystem.DateToSerial(dt, uses1904DateSystem);
             return true;
@@ -310,10 +321,47 @@ internal static class ExcelTextNumberParser
         return true;
     }
 
-    private static bool IsTimeOnlyText(string text)
+    private static string CompleteYearlessDateTime(string text, CultureInfo culture)
+    {
+        var match = ExplicitYearlessDateTimeRegex.Match(text);
+        if (!match.Success) return text;
+
+        var year = culture.DateTimeFormat.Calendar.GetYear(DateTime.Today)
+            .ToString(CultureInfo.InvariantCulture);
+        return string.Concat(match.Groups["date"].Value, match.Groups["separator"].Value,
+            year, match.Groups["time"].Value);
+    }
+
+    private static bool HasExplicitDateSyntax(string text, CultureInfo culture)
+    {
+        if (ExplicitNumericDateRegex.IsMatch(text) || ExplicitYearlessDateTimeRegex.IsMatch(text) ||
+            MonthNameRegex.IsMatch(text))
+            return true;
+
+        var format = culture.DateTimeFormat;
+        foreach (var monthNames in new[]
+        {
+            format.MonthNames,
+            format.AbbreviatedMonthNames,
+            format.MonthGenitiveNames,
+            format.AbbreviatedMonthGenitiveNames,
+        })
+        {
+            foreach (var month in monthNames)
+            {
+                if (month.Length > 0 &&
+                    culture.CompareInfo.IndexOf(text, month, CompareOptions.IgnoreCase) >= 0)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsTimeOnlyText(string text, CultureInfo culture)
     {
         if (text.Contains('/') || text.Contains('-')) return false;
-        if (MonthNameRegex.IsMatch(text))
+        if (HasExplicitDateSyntax(text, culture))
             return false;
 
         return text.Contains(':')
