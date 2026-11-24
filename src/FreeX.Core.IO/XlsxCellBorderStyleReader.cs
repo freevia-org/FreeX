@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -64,8 +65,8 @@ internal static class XlsxCellBorderStyleReader
     {
         var diagEdge = border.Element(workbookNs + "diagonal");
         var diagBorder = ReadBorderEdge(diagEdge, workbookNs, theme, indexedColors);
-        var diagonalDown = border.Attribute("diagonalDown")?.Value is "1" or "true";
-        var diagonalUp = border.Attribute("diagonalUp")?.Value is "1" or "true";
+        var diagonalDown = OoxmlBooleanLexical.IsTrue(border.Attribute("diagonalDown")?.Value);
+        var diagonalUp = OoxmlBooleanLexical.IsTrue(border.Attribute("diagonalUp")?.Value);
         return new XlsxCellBorderStyle(
             ReadBorderEdge(border.Element(workbookNs + "top"), workbookNs, theme, indexedColors),
             ReadBorderEdge(border.Element(workbookNs + "right"), workbookNs, theme, indexedColors),

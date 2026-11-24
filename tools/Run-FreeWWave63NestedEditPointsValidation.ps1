@@ -25,7 +25,7 @@ try {
     if ($before['child-point-0'] -ne '3600,1800') { throw "Fixture child point was not deterministic: '$($before['child-point-0'])'." }
     if ([string]::IsNullOrWhiteSpace($before['child-points'])) { throw "Fixture had no nested leaf geometry points." }
 
-    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
+    Start-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
     $sessionDir = [string]$session.sessionDirectory
@@ -61,11 +61,6 @@ try {
 finally {
     # A failed container stop must not mask the real validation error in flight.
     if ($started) {
-        try {
-            & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
-            if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
-        } catch {
-            Write-Warning "Could not stop harness-owned FreeW container on port ${Port}: $($_.Exception.Message)"
-        }
+        Stop-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port -WarnOnFailure
     }
 }

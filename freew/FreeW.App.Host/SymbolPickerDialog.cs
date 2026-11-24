@@ -7,7 +7,8 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Host;
 
 /// <summary>
-/// A tiny modal picker showing a grid of common glyphs (symbols, punctuation, currency, Greek/math).
+/// A small modal picker showing a grid of glyphs: the curated common set (symbols, punctuation, currency,
+/// Greek/math) or any Unicode subset of the shared symbol catalog chosen from the subset list.
 /// Clicking a glyph closes the dialog and returns it; the caller inserts it at the caret as plain text.
 /// Returns the chosen glyph, or null if the user cancels.
 /// </summary>
@@ -26,25 +27,27 @@ internal sealed class SymbolPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         AutomationProperties.SetAutomationId(this, FreeWSymbolPickerDialogPlanner.DialogAutomationId);
 
         var panel = new StackPanel { Margin = new Thickness(FreeWSymbolPickerDialogPlanner.OuterMargin) };
-        var grid = new UniformGrid { Columns = FreeWSymbolPickerDialogPlanner.Columns };
-        foreach (var glyph in FreeWSymbolPickerDialogPlanner.Glyphs)
+        var subsetChoice = new ComboBox
         {
-            var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph);
-            var button = new Button
-            {
-                Content = glyph,
-                Width = FreeWSymbolPickerDialogPlanner.ButtonSize,
-                Height = FreeWSymbolPickerDialogPlanner.ButtonSize,
-                FontSize = FreeWSymbolPickerDialogPlanner.ButtonFontSize,
-                Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin),
-                ToolTip = semantic.CodePointLabel,
-            };
-            AutomationProperties.SetName(button, semantic.AutomationName);
-            AutomationProperties.SetAutomationId(button, semantic.AutomationId);
-            button.Click += (_, _) => { _result = glyph; DialogResult = true; };
-            grid.Children.Add(button);
-        }
-        panel.Children.Add(grid);
+            ItemsSource = FreeWSymbolPickerDialogPlanner.GetSubsetNames(),
+            SelectedIndex = 0,
+            Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin, 0, FreeWSymbolPickerDialogPlanner.ButtonMargin, FreeWSymbolPickerDialogPlanner.FooterTopMargin),
+        };
+        AutomationProperties.SetAutomationId(subsetChoice, FreeWSymbolPickerDialogPlanner.SubsetAutomationId);
+        AutomationProperties.SetName(subsetChoice, FreeWSymbolPickerDialogPlanner.SubsetAutomationName);
+        panel.Children.Add(subsetChoice);
+
+        var grid = new UniformGrid { Columns = FreeWSymbolPickerDialogPlanner.Columns };
+        PopulateGlyphs(grid, FreeWSymbolPickerDialogPlanner.GetGlyphs(null));
+        subsetChoice.SelectionChanged += (_, _) =>
+            PopulateGlyphs(grid, FreeWSymbolPickerDialogPlanner.GetGlyphs(subsetChoice.SelectedItem as string));
+        panel.Children.Add(new ScrollViewer
+        {
+            Content = grid,
+            MaxHeight = FreeWSymbolPickerDialogPlanner.GridMaxHeight,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
 
         var cancel = new Button
         {
@@ -63,6 +66,28 @@ internal sealed class SymbolPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(cancel);
 
         Content = panel;
+    }
+
+    private void PopulateGlyphs(UniformGrid grid, IReadOnlyList<string> glyphs)
+    {
+        grid.Children.Clear();
+        foreach (var glyph in glyphs)
+        {
+            var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph);
+            var button = new Button
+            {
+                Content = glyph,
+                Width = FreeWSymbolPickerDialogPlanner.ButtonSize,
+                Height = FreeWSymbolPickerDialogPlanner.ButtonSize,
+                FontSize = FreeWSymbolPickerDialogPlanner.ButtonFontSize,
+                Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin),
+                ToolTip = semantic.CodePointLabel,
+            };
+            AutomationProperties.SetName(button, semantic.AutomationName);
+            AutomationProperties.SetAutomationId(button, semantic.AutomationId);
+            button.Click += (_, _) => { _result = glyph; DialogResult = true; };
+            grid.Children.Add(button);
+        }
     }
 
     /// <summary>Show the picker; returns the chosen glyph, or null if cancelled.</summary>

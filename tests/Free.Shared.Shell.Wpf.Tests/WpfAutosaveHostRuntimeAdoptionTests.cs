@@ -67,6 +67,19 @@ public sealed class WpfAutosaveHostRuntimeAdoptionTests
     }
 
     [Fact]
+    public void FreeXEmergencyCrashHandler_UsesSharedBoundedFanOutAndKeepsProductFilter()
+    {
+        var source = ReadHostSource("src", "FreeX.App.Host", "App.xaml.cs");
+
+        source.Should().Contain("WpfEmergencySnapshotFanOut.TrySnapshotAllWindows(window =>");
+        source.Should().Contain("window is MainWindow mainWindow");
+        source.Should().Contain("mainWindow.AutosaveServiceForCrashHandler?.TryEmergencySnapshot(mainWindow)");
+        source.Should().Contain("onAfterFault: TryEmergencySaveAllWindows");
+        source.Should().NotContain("dispatcher.Invoke(");
+        source.Should().NotContain("foreach (Window window in Current.Windows)");
+    }
+
+    [Fact]
     public void SharedEmergencyRuntime_PinsSendPriorityAndEightSecondTimeout()
     {
         var source = File.ReadAllText(TestWorkspaceFileLocator.Find(

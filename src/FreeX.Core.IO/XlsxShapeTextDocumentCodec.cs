@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Globalization;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -62,7 +63,7 @@ internal static class XlsxShapeTextDocumentCodec
         IReadOnlyDictionary<string, (string Target, string? TargetMode)>? relationships)
     {
         if (properties is null) return null;
-        static bool? Flag(XElement e, string name) => e.Attribute(name)?.Value switch { "1" or "true" => true, "0" or "false" => false, _ => null };
+        static bool? Flag(XElement e, string name) => OoxmlBooleanLexical.TryParse(e.Attribute(name)?.Value);
         static int? Int(XElement e, string name) => int.TryParse(e.Attribute(name)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
         var font = properties.Element(A + "latin")?.Attribute("typeface")?.Value;
         var fill = properties.Elements().FirstOrDefault(IsTextFill);

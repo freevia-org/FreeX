@@ -1,5 +1,6 @@
 using System.IO;
 
+using Free.Shared.AppServices;
 using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Avalonia.Tests;

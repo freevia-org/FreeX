@@ -1,3 +1,5 @@
+using Free.Shared.TextSearch;
+
 namespace FreeW.Core.Model.Tests;
 
 public sealed class ProofingDiagnosticPlannerTests

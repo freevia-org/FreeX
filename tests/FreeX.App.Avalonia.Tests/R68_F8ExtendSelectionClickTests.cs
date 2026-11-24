@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -99,6 +100,6 @@ public sealed class R68_F8ExtendSelectionClickTests
     {
         var toggleMethod = typeof(MainWindow).GetMethod(
             "ToggleKeyboardSelectionMode", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        toggleMethod.Invoke(window, [ExcelWorksheetNavigationModifiers.None]);
+        toggleMethod.Invoke(window, [FreeKeyModifiers.None]);
     }
 }

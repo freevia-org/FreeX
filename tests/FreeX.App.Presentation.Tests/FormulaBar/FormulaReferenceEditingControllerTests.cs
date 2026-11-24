@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.FormulaBar;
@@ -49,7 +50,7 @@ public sealed class FormulaReferenceEditingControllerTests
         session.SetPointMode(true);
         session.TrackReferenceSpan(5, 2);
         session.TrackSelection(current, current);
-        session.TryToggleSelectionMode(FormulaEditorKey.F8, FormulaEditorModifiers.Shift);
+        session.TryToggleSelectionMode(FormulaEditorKey.F8, FreeKeyModifiers.Shift);
         ExcelTextEdit? appliedEdit = null;
 
         var applied = FormulaReferenceEditingController.TryApplyKeyboardSelection(
@@ -85,7 +86,7 @@ public sealed class FormulaReferenceEditingControllerTests
         var current = new CellAddress(sheetId, 2, 2);
         var target = new CellAddress(sheetId, 2, 3);
         var session = new FormulaRangeEditingSession();
-        session.TryToggleSelectionMode(FormulaEditorKey.F8, FormulaEditorModifiers.Shift);
+        session.TryToggleSelectionMode(FormulaEditorKey.F8, FreeKeyModifiers.Shift);
         GridRange? fallbackRange = null;
 
         var applied = FormulaReferenceEditingController.TryApplyKeyboardSelection(

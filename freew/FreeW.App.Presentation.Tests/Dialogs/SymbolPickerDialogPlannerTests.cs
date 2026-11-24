@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Presentation.Tests;
@@ -17,6 +18,35 @@ public sealed class SymbolPickerDialogPlannerTests
             "\u2192", "\u2190", "\u2191", "\u2193", "\u20ac", "\u00a3",
             "\u00a5", "\u00a2", "\u00bd", "\u00bc", "\u00be", "\u2030",
             "\u03b1", "\u03b2", "\u03b3", "\u03c0", "\u03a3", "\u03a9");
+    }
+
+    [Fact]
+    public void Subsets_AreTheCommonSetFollowedByTheSharedCatalogSubsets()
+    {
+        var names = FreeWSymbolPickerDialogPlanner.GetSubsetNames();
+
+        names[0].Should().Be(FreeWSymbolPickerDialogPlanner.CommonSubsetName);
+        names.Skip(1).Should().Equal(SymbolPickerCatalogPlanner.GetSubsetNames());
+        FreeWSymbolPickerDialogPlanner.GetGlyphs(null).Should().BeSameAs(FreeWSymbolPickerDialogPlanner.Glyphs);
+        FreeWSymbolPickerDialogPlanner.GetGlyphs(FreeWSymbolPickerDialogPlanner.CommonSubsetName)
+            .Should().BeSameAs(FreeWSymbolPickerDialogPlanner.Glyphs);
+        FreeWSymbolPickerDialogPlanner.GetGlyphs("Greek and Coptic")
+            .Should().Equal(SymbolPickerCatalogPlanner.GetSymbolsForSubset("Greek and Coptic"))
+            .And.Contain("π")
+            .And.HaveCountGreaterThan(FreeWSymbolPickerDialogPlanner.Glyphs.Count);
+    }
+
+    [Fact]
+    public void Planner_ConsumesTheSharedCatalogInsteadOfHardCodingUnicodeRanges()
+    {
+        var source = File.ReadAllText(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "freew", "FreeW.App.Presentation", "Dialogs", "FreeWSymbolPickerDialogPlanner.cs"));
+
+        source.Should().Contain("SymbolPickerCatalogPlanner.GetSubsetNames()");
+        source.Should().Contain("SymbolPickerCatalogPlanner.GetSymbolsForSubset(");
+        source.Should().NotContain("new(0x");
+        File.Exists(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "shared", "Free.Shared.AppServices", "SymbolPickerCatalogPlanner.cs")).Should().BeTrue();
     }
 
     [Fact]

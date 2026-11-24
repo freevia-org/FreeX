@@ -40,6 +40,8 @@ internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
     });
 
     private readonly List<Button> _glyphButtons = [];
+    private readonly ComboBox _subsetChoice;
+    private IReadOnlyList<string> _currentGlyphs = FreeWSymbolPickerDialogPlanner.Glyphs;
 
     public string? Result { get; private set; }
 
@@ -54,31 +56,31 @@ internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(this, FreeWSymbolPickerDialogPlanner.DialogAutomationId);
 
         var panel = new StackPanel { Margin = new Thickness(FreeWSymbolPickerDialogPlanner.OuterMargin) };
-        var grid = new UniformGrid { Columns = FreeWSymbolPickerDialogPlanner.Columns };
-        foreach (var glyph in FreeWSymbolPickerDialogPlanner.Glyphs)
+        var subsetChoice = _subsetChoice = new ComboBox
         {
-            var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph);
-            var button = new Button
-            {
-                Content = glyph,
-                MinWidth = FreeWSymbolPickerDialogPlanner.ButtonSize,
-                Height = FreeWSymbolPickerDialogPlanner.ButtonSize,
-                FontSize = FreeWSymbolPickerDialogPlanner.ButtonFontSize,
-                Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Center,
-                VerticalContentAlignment = VerticalAlignment.Center,
-            };
-            ToolTip.SetTip(button, semantic.CodePointLabel);
-            AutomationProperties.SetName(button, semantic.AutomationName);
-            AutomationProperties.SetAutomationId(button, semantic.AutomationId);
-            button.Click += (_, _) => SelectGlyph(glyph, close: true);
-            _glyphButtons.Add(button);
-            grid.Children.Add(button);
-        }
-        panel.Children.Add(grid);
+            ItemsSource = FreeWSymbolPickerDialogPlanner.GetSubsetNames(),
+            SelectedIndex = 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin, 0, FreeWSymbolPickerDialogPlanner.ButtonMargin, FreeWSymbolPickerDialogPlanner.FooterTopMargin),
+        };
+        AutomationProperties.SetAutomationId(subsetChoice, FreeWSymbolPickerDialogPlanner.SubsetAutomationId);
+        AutomationProperties.SetName(subsetChoice, FreeWSymbolPickerDialogPlanner.SubsetAutomationName);
+        panel.Children.Add(subsetChoice);
 
+        var grid = new UniformGrid { Columns = FreeWSymbolPickerDialogPlanner.Columns };
+        PopulateGlyphs(grid, FreeWSymbolPickerDialogPlanner.GetGlyphs(null));
+        subsetChoice.SelectionChanged += (_, _) =>
+        {
+            PopulateGlyphs(grid, FreeWSymbolPickerDialogPlanner.GetGlyphs(subsetChoice.SelectedItem as string));
+            ApplyGlyphButtonTiles(grid);
+        };
+        panel.Children.Add(new ScrollViewer
+        {
+            Content = grid,
+            MaxHeight = FreeWSymbolPickerDialogPlanner.GridMaxHeight,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
         var cancel = new Button
         {
             Content = FreeWSymbolPickerDialogPlanner.CancelText,
@@ -104,9 +106,37 @@ internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
         };
     }
 
+    private void PopulateGlyphs(UniformGrid grid, IReadOnlyList<string> glyphs)
+    {
+        _currentGlyphs = glyphs;
+        _glyphButtons.Clear();
+        grid.Children.Clear();
+        foreach (var glyph in glyphs)
+        {
+            var semantic = FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph);
+            var button = new Button
+            {
+                Content = glyph,
+                MinWidth = FreeWSymbolPickerDialogPlanner.ButtonSize,
+                Height = FreeWSymbolPickerDialogPlanner.ButtonSize,
+                FontSize = FreeWSymbolPickerDialogPlanner.ButtonFontSize,
+                Margin = new Thickness(FreeWSymbolPickerDialogPlanner.ButtonMargin),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            ToolTip.SetTip(button, semantic.CodePointLabel);
+            AutomationProperties.SetName(button, semantic.AutomationName);
+            AutomationProperties.SetAutomationId(button, semantic.AutomationId);
+            button.Click += (_, _) => SelectGlyph(glyph, close: true);
+            _glyphButtons.Add(button);
+            grid.Children.Add(button);
+        }
+    }
     private void SelectGlyph(string glyph, bool close)
     {
-        if (!FreeWSymbolPickerDialogPlanner.Glyphs.Contains(glyph, StringComparer.Ordinal))
+        if (!_currentGlyphs.Contains(glyph, StringComparer.Ordinal))
             throw new ArgumentOutOfRangeException(nameof(glyph));
 
         Result = glyph;
@@ -115,6 +145,12 @@ internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
     }
 
     private static void ApplyGlyphButtonChrome(UniformGrid grid)
+    {
+        ApplyGlyphButtonTiles(grid);
+        AddGlyphButtonStyles(grid);
+    }
+
+    private static void ApplyGlyphButtonTiles(UniformGrid grid)
     {
         foreach (var button in grid.Children.OfType<Button>())
         {
@@ -133,7 +169,10 @@ internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
             button.BorderThickness = new Thickness(1);
             button.Template = GlyphButtonTemplate;
         }
+    }
 
+    private static void AddGlyphButtonStyles(UniformGrid grid)
+    {
         grid.Styles.Add(new Style(x => x.OfType<Button>().Class(":pointerover"))
         {
             Setters =

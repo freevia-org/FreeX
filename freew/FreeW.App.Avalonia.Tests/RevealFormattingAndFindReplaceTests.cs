@@ -199,6 +199,44 @@ public sealed class RevealFormattingAndFindReplaceTests
     }
 
     [Fact]
+    public async Task FindReplaceDialog_go_to_document_start_and_end_moves_the_caret()
+    {
+        (int Block, int Offset) afterEnd = default;
+        (int Block, int Offset) afterStart = default;
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("First"));
+            document.Blocks.Add(new Paragraph("Middle"));
+            document.Blocks.Add(new Paragraph("Last"));
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 2000));
+            view.MoveCaretToBlock(1, 2);
+
+            var dialog = new FindReplaceDialog(view, FindReplaceOpenMode.Find);
+            try
+            {
+                dialog.GoToForTest(FindReplaceGoToTargetKind.DocumentEnd);
+                afterEnd = view.CaretPositionForTest;
+                dialog.GoToForTest(FindReplaceGoToTargetKind.DocumentStart);
+                afterStart = view.CaretPositionForTest;
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+
+        if (!ran)
+            return;
+
+        afterEnd.Should().Be((2, 4), "Go To > Document end puts the caret at the end of the last paragraph");
+        afterStart.Should().Be((0, 0), "Go To > Document start puts the caret at the start of the first paragraph");
+    }
+
+    [Fact]
     public async Task FindReplaceDialog_reuse_updates_open_mode_for_both_shortcuts()
     {
         FindReplaceOpenMode? initialFocus = null;

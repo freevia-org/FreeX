@@ -37,10 +37,8 @@ namespace FreeP.App.Avalonia.Tests;
 /// Minimal headless Avalonia application used by all FreeP.App.Avalonia tests.
 /// Mirrors the pattern in FreeW.App.Avalonia.Tests.
 /// </summary>
-public sealed class FreePHeadlessApp : Application
+public sealed class FreePHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
-
     // Real Skia drawing rather than the headless stub: the clipboard interop tests round-trip a PNG
     // through DataFormat.Bitmap, and encoding a Bitmap needs an actual imaging backend -- under the stub
     // the encode silently yields nothing and the PNG comes back empty. Mirrors
@@ -892,7 +890,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_session()
     {
-        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs")) +
+            File.ReadAllText(FindRepoFile("freep", "RendererShared", "MainWindow.ReviewFacade.cs"));
 
         source.Should().Contain("_reviewWorkflowSession.SelectAccessibilityCheckerRow(rowIndex)");
         source.Should().Contain("_reviewWorkflowSession.ApplyAccessibilityCheckerRowAction(rowIndex)");

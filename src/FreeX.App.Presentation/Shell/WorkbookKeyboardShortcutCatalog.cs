@@ -203,19 +203,9 @@ public enum WorkbookShortcutKey
     Z
 }
 
-[Flags]
-public enum WorkbookShortcutModifiers
-{
-    None = 0,
-    Control = 1,
-    Alt = 2,
-    Shift = 4,
-    Meta = 8
-}
-
 public readonly record struct WorkbookShortcutChord(
     WorkbookShortcutKey Key,
-    WorkbookShortcutModifiers Modifiers = WorkbookShortcutModifiers.None);
+    FreeKeyModifiers Modifiers = FreeKeyModifiers.None);
 
 public sealed record WorkbookShortcutRouteRule(
     WorkbookShortcutRoute Route,
@@ -227,243 +217,243 @@ public static class WorkbookKeyboardShortcutCatalog
     public static IReadOnlyList<ApplicationKeyboardShortcut<
         KeyboardCommandShortcut,
         WorkbookShortcutKey,
-        WorkbookShortcutModifiers>> ApplicationCommandShortcuts { get; } =
+        FreeKeyModifiers>> ApplicationCommandShortcuts { get; } =
     [
-        C(KeyboardCommandShortcut.CreateTable, WorkbookShortcutKey.T, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.CreateTable, WorkbookShortcutKey.L, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.InsertCurrentDate, WorkbookShortcutKey.OemSemicolon, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.InsertCurrentTime, WorkbookShortcutKey.OemSemicolon, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.ToggleOutlineSymbols, WorkbookShortcutKey.D8, WorkbookShortcutModifiers.Control),
+        C(KeyboardCommandShortcut.CreateTable, WorkbookShortcutKey.T, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.CreateTable, WorkbookShortcutKey.L, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.InsertCurrentDate, WorkbookShortcutKey.OemSemicolon, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.InsertCurrentTime, WorkbookShortcutKey.OemSemicolon, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.ToggleOutlineSymbols, WorkbookShortcutKey.D8, FreeKeyModifiers.Control),
         C(KeyboardCommandShortcut.PasteName, WorkbookShortcutKey.F3),
-        C(KeyboardCommandShortcut.NameManager, WorkbookShortcutKey.F3, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.CreateNamesFromSelection, WorkbookShortcutKey.F3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+        C(KeyboardCommandShortcut.NameManager, WorkbookShortcutKey.F3, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.CreateNamesFromSelection, WorkbookShortcutKey.F3, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
         C(KeyboardCommandShortcut.SpellCheck, WorkbookShortcutKey.F7),
-        C(KeyboardCommandShortcut.RestoreWorkbookWindow, WorkbookShortcutKey.F5, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.MoveWorkbookWindow, WorkbookShortcutKey.F7, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SizeWorkbookWindow, WorkbookShortcutKey.F8, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, WorkbookShortcutKey.F6, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, WorkbookShortcutKey.Tab, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, WorkbookShortcutKey.F6, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, WorkbookShortcutKey.Tab, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.MinimizeWorkbookWindow, WorkbookShortcutKey.F9, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow, WorkbookShortcutKey.F10, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, WorkbookShortcutKey.F9, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.OpenErrorChecking, WorkbookShortcutKey.F10, WorkbookShortcutModifiers.Alt | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.ToggleFormulaBarExpansion, WorkbookShortcutKey.U, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.ToggleFilter, WorkbookShortcutKey.L, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.ReapplyFilter, WorkbookShortcutKey.L, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
-        C(KeyboardCommandShortcut.QuickAnalysis, WorkbookShortcutKey.Q, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.InsertEmbeddedChart, WorkbookShortcutKey.F1, WorkbookShortcutModifiers.Alt),
+        C(KeyboardCommandShortcut.RestoreWorkbookWindow, WorkbookShortcutKey.F5, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.MoveWorkbookWindow, WorkbookShortcutKey.F7, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SizeWorkbookWindow, WorkbookShortcutKey.F8, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, WorkbookShortcutKey.F6, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SwitchToNextWorkbookWindow, WorkbookShortcutKey.Tab, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, WorkbookShortcutKey.F6, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow, WorkbookShortcutKey.Tab, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.MinimizeWorkbookWindow, WorkbookShortcutKey.F9, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow, WorkbookShortcutKey.F10, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.RebuildDependenciesAndCalculate, WorkbookShortcutKey.F9, FreeKeyModifiers.Control | FreeKeyModifiers.Alt | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.OpenErrorChecking, WorkbookShortcutKey.F10, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.ToggleFormulaBarExpansion, WorkbookShortcutKey.U, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.ToggleFilter, WorkbookShortcutKey.L, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.ReapplyFilter, WorkbookShortcutKey.L, FreeKeyModifiers.Control | FreeKeyModifiers.Alt),
+        C(KeyboardCommandShortcut.QuickAnalysis, WorkbookShortcutKey.Q, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.InsertEmbeddedChart, WorkbookShortcutKey.F1, FreeKeyModifiers.Alt),
         // Excel: Ctrl+F1 shows or hides the ribbon commands ("Show tabs only").
-        C(KeyboardCommandShortcut.ToggleRibbonVisibility, WorkbookShortcutKey.F1, WorkbookShortcutModifiers.Control),
+        C(KeyboardCommandShortcut.ToggleRibbonVisibility, WorkbookShortcutKey.F1, FreeKeyModifiers.Control),
         C(KeyboardCommandShortcut.InsertChartSheet, WorkbookShortcutKey.F11),
-        C(KeyboardCommandShortcut.GroupSelection, WorkbookShortcutKey.Right, WorkbookShortcutModifiers.Alt | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.UngroupSelection, WorkbookShortcutKey.Left, WorkbookShortcutModifiers.Alt | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.OpenFormatCellsFont, WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.OpenFormatCellsFont, WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.NewNote, WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.NewThreadedComment, WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.ZoomIn, WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
-        C(KeyboardCommandShortcut.ZoomOut, WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
-        C(KeyboardCommandShortcut.CopyFormulaFromAbove, WorkbookShortcutKey.OemQuotes, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.CopyValueFromAbove, WorkbookShortcutKey.OemQuotes, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.ScrollActiveCellIntoView, WorkbookShortcutKey.Back, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.CycleSelectionCorner, WorkbookShortcutKey.OemPeriod, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SelectDirectPrecedents, WorkbookShortcutKey.OemOpenBrackets, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SelectDirectDependents, WorkbookShortcutKey.OemCloseBrackets, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.SelectAllPrecedents, WorkbookShortcutKey.OemOpenBrackets, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.SelectAllDependents, WorkbookShortcutKey.OemCloseBrackets, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+        C(KeyboardCommandShortcut.GroupSelection, WorkbookShortcutKey.Right, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.UngroupSelection, WorkbookShortcutKey.Left, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.OpenFormatCellsFont, WorkbookShortcutKey.F, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.OpenFormatCellsFont, WorkbookShortcutKey.P, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.NewNote, WorkbookShortcutKey.F2, FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.NewThreadedComment, WorkbookShortcutKey.F2, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.ZoomIn, WorkbookShortcutKey.OemPlus, FreeKeyModifiers.Control | FreeKeyModifiers.Alt),
+        C(KeyboardCommandShortcut.ZoomOut, WorkbookShortcutKey.OemMinus, FreeKeyModifiers.Control | FreeKeyModifiers.Alt),
+        C(KeyboardCommandShortcut.CopyFormulaFromAbove, WorkbookShortcutKey.OemQuotes, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.CopyValueFromAbove, WorkbookShortcutKey.OemQuotes, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.ScrollActiveCellIntoView, WorkbookShortcutKey.Back, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.CycleSelectionCorner, WorkbookShortcutKey.OemPeriod, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SelectDirectPrecedents, WorkbookShortcutKey.OemOpenBrackets, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SelectDirectDependents, WorkbookShortcutKey.OemCloseBrackets, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.SelectAllPrecedents, WorkbookShortcutKey.OemOpenBrackets, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.SelectAllDependents, WorkbookShortcutKey.OemCloseBrackets, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
         C(KeyboardCommandShortcut.ClearSelectionAndEdit, WorkbookShortcutKey.Back),
-        C(KeyboardCommandShortcut.ClearSelectionAndEdit, WorkbookShortcutKey.Back, WorkbookShortcutModifiers.Shift),
-        C(KeyboardCommandShortcut.CloseWorkbook, WorkbookShortcutKey.F4, WorkbookShortcutModifiers.Control),
-        C(KeyboardCommandShortcut.OpenActiveDropdown, WorkbookShortcutKey.Down, WorkbookShortcutModifiers.Alt),
+        C(KeyboardCommandShortcut.ClearSelectionAndEdit, WorkbookShortcutKey.Back, FreeKeyModifiers.Shift),
+        C(KeyboardCommandShortcut.CloseWorkbook, WorkbookShortcutKey.F4, FreeKeyModifiers.Control),
+        C(KeyboardCommandShortcut.OpenActiveDropdown, WorkbookShortcutKey.Down, FreeKeyModifiers.Alt),
     ];
 
     public static IReadOnlyList<WorkbookShortcutRouteRule> Rules { get; } =
     [
         new(
             WorkbookShortcutRoute.NewWorkbook,
-            new WorkbookShortcutChord(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.N, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.N, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.OpenBackstage,
-            new WorkbookShortcutChord(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.OpenWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.O, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.O, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.OpenWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.SaveWorkbook,
-            new WorkbookShortcutChord(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.SaveWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.S, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.S, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.SaveWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.PrintWorkbook,
-            new WorkbookShortcutChord(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.P, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.P, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, FreeKeyModifiers.Control | FreeKeyModifiers.Shift)),
         // Excel: Ctrl+F2 displays the print preview area on the Print tab in the Backstage view.
-        new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control)),
+        new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F2, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.Copy,
-            new WorkbookShortcutChord(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.Copy, new WorkbookShortcutChord(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.C, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.C, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.Copy, new WorkbookShortcutChord(WorkbookShortcutKey.Insert, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.Cut,
-            new WorkbookShortcutChord(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.Cut, new WorkbookShortcutChord(WorkbookShortcutKey.Delete, WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.X, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.X, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.Cut, new WorkbookShortcutChord(WorkbookShortcutKey.Delete, FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.Paste,
-            new WorkbookShortcutChord(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.Paste, new WorkbookShortcutChord(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.V, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.V, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.Paste, new WorkbookShortcutChord(WorkbookShortcutKey.Insert, FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.PasteSpecial,
-            new WorkbookShortcutChord(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt),
-            new WorkbookShortcutChord(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Alt)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.V, FreeKeyModifiers.Control | FreeKeyModifiers.Alt),
+            new WorkbookShortcutChord(WorkbookShortcutKey.V, FreeKeyModifiers.Meta | FreeKeyModifiers.Alt)),
         new(
             WorkbookShortcutRoute.Undo,
-            new WorkbookShortcutChord(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.Undo, new WorkbookShortcutChord(WorkbookShortcutKey.Back, WorkbookShortcutModifiers.Alt)),
-        new(WorkbookShortcutRoute.Redo, new WorkbookShortcutChord(WorkbookShortcutKey.Y, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Z, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Z, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.Undo, new WorkbookShortcutChord(WorkbookShortcutKey.Back, FreeKeyModifiers.Alt)),
+        new(WorkbookShortcutRoute.Redo, new WorkbookShortcutChord(WorkbookShortcutKey.Y, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.Redo,
-            new WorkbookShortcutChord(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Z, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Z, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.ToggleBold,
-            new WorkbookShortcutChord(WorkbookShortcutKey.B, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.B, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.ToggleBold, new WorkbookShortcutChord(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.B, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.B, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.ToggleBold, new WorkbookShortcutChord(WorkbookShortcutKey.D2, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.ToggleItalic,
-            new WorkbookShortcutChord(WorkbookShortcutKey.I, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.I, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.ToggleItalic, new WorkbookShortcutChord(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.I, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.I, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.ToggleItalic, new WorkbookShortcutChord(WorkbookShortcutKey.D3, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.ToggleUnderline,
-            new WorkbookShortcutChord(WorkbookShortcutKey.U, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.U, WorkbookShortcutModifiers.Meta)),
-        new(WorkbookShortcutRoute.ToggleUnderline, new WorkbookShortcutChord(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.U, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.U, FreeKeyModifiers.Meta)),
+        new(WorkbookShortcutRoute.ToggleUnderline, new WorkbookShortcutChord(WorkbookShortcutKey.D4, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.ToggleStrikethrough,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D5, FreeKeyModifiers.Control),
             // Excel for Mac: Cmd+Shift+X. Ctrl+5 stays live through the Windows chord.
-            new WorkbookShortcutChord(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.X, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.FillDown,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.FillRight,
-            new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.R, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.R, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.FlashFill,
-            new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.E, FreeKeyModifiers.Control),
             // Excel for Mac: Cmd+E.
-            new WorkbookShortcutChord(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.E, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.ToggleShowFormulas,
-            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.ActivatePreviousSheet,
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.ActivateNextSheet,
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.SelectPreviousSheetGroup,
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.SelectNextSheetGroup,
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.OpenFormatCells,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D1, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D1, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.NumberFormatGeneral,
-            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.NumberFormatNumber,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D1, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D1, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.NumberFormatTime,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D2, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D2, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.NumberFormatDate,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D3, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D3, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.NumberFormatCurrency,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D4, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D4, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.NumberFormatPercentage,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D5, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D5, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.NumberFormatScientific,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D6, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D6, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.ApplyOutlineBorder,
-            new WorkbookShortcutChord(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D7, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D7, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.ClearOutlineBorder,
-            new WorkbookShortcutChord(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.OemMinus, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.OemMinus, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.Find,
-            new WorkbookShortcutChord(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Meta)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.F, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.F, FreeKeyModifiers.Meta)),
         new(
             WorkbookShortcutRoute.Replace,
-            new WorkbookShortcutChord(WorkbookShortcutKey.H, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.H, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.H, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.H, FreeKeyModifiers.Control)),
         new(
             WorkbookShortcutRoute.GoTo,
-            new WorkbookShortcutChord(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control),
-            new WorkbookShortcutChord(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.G, FreeKeyModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.G, FreeKeyModifiers.Control)),
         new(WorkbookShortcutRoute.GoTo, new WorkbookShortcutChord(WorkbookShortcutKey.F5)),
         new(
             WorkbookShortcutRoute.InsertFunction,
-            new WorkbookShortcutChord(WorkbookShortcutKey.F3, WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.F3, WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.F3, FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.F3, FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.AutoSum,
-            new WorkbookShortcutChord(WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Alt),
+            new WorkbookShortcutChord(WorkbookShortcutKey.OemPlus, FreeKeyModifiers.Alt),
             // Excel for Mac: Cmd+Shift+T.
-            new WorkbookShortcutChord(WorkbookShortcutKey.T, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.T, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.WorkbookStatistics,
-            new WorkbookShortcutChord(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift)),
+            new WorkbookShortcutChord(WorkbookShortcutKey.G, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.G, FreeKeyModifiers.Control | FreeKeyModifiers.Shift)),
         new(
             WorkbookShortcutRoute.InsertWorksheet,
-            new WorkbookShortcutChord(WorkbookShortcutKey.F11, WorkbookShortcutModifiers.Shift),
-            new WorkbookShortcutChord(WorkbookShortcutKey.F11, WorkbookShortcutModifiers.Shift))
+            new WorkbookShortcutChord(WorkbookShortcutKey.F11, FreeKeyModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.F11, FreeKeyModifiers.Shift))
     ];
 
     private static readonly ApplicationKeyboardShortcutCatalog<
         WorkbookShortcutRoute,
         WorkbookShortcutKey,
-        WorkbookShortcutModifiers> WindowsRoutes = new(
+        FreeKeyModifiers> WindowsRoutes = new(
             Rules.Select(rule => new ApplicationKeyboardShortcut<
                 WorkbookShortcutRoute,
                 WorkbookShortcutKey,
-                WorkbookShortcutModifiers>(
+                FreeKeyModifiers>(
                     rule.Route,
                     rule.WindowsChord.Key,
                     rule.WindowsChord.Modifiers)));
@@ -471,13 +461,13 @@ public static class WorkbookKeyboardShortcutCatalog
     private static readonly ApplicationKeyboardShortcutCatalog<
         WorkbookShortcutRoute,
         WorkbookShortcutKey,
-        WorkbookShortcutModifiers> NativeMenuRoutes = new(
+        FreeKeyModifiers> NativeMenuRoutes = new(
             Rules
                 .Where(rule => rule.NativeMenuChord is not null)
                 .Select(rule => new ApplicationKeyboardShortcut<
                     WorkbookShortcutRoute,
                     WorkbookShortcutKey,
-                    WorkbookShortcutModifiers>(
+                    FreeKeyModifiers>(
                         rule.Route,
                         rule.NativeMenuChord!.Value.Key,
                         rule.NativeMenuChord.Value.Modifiers)));
@@ -485,7 +475,7 @@ public static class WorkbookKeyboardShortcutCatalog
     private static readonly ApplicationKeyboardShortcutCatalog<
         KeyboardCommandShortcut,
         WorkbookShortcutKey,
-        WorkbookShortcutModifiers> ApplicationCommands = new(ApplicationCommandShortcuts);
+        FreeKeyModifiers> ApplicationCommands = new(ApplicationCommandShortcuts);
 
     /// <summary>
     /// Maps a platform key enum name onto the portable shortcut key catalog, including the aliases
@@ -523,19 +513,19 @@ public static class WorkbookKeyboardShortcutCatalog
 
     public static bool TryGetWindowsRoute(
         WorkbookShortcutKey key,
-        WorkbookShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         out WorkbookShortcutRoute route) =>
         WindowsRoutes.TryResolve(key, modifiers, out route);
 
     public static bool TryGetNativeMenuRoute(
         WorkbookShortcutKey key,
-        WorkbookShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         out WorkbookShortcutRoute route) =>
         NativeMenuRoutes.TryResolve(key, modifiers, out route);
 
     public static bool TryGetApplicationCommand(
         WorkbookShortcutKey key,
-        WorkbookShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         out KeyboardCommandShortcut command) =>
         ApplicationCommands.TryResolve(key, modifiers, out command);
 
@@ -574,9 +564,9 @@ public static class WorkbookKeyboardShortcutCatalog
     private static ApplicationKeyboardShortcut<
         KeyboardCommandShortcut,
         WorkbookShortcutKey,
-        WorkbookShortcutModifiers> C(
+        FreeKeyModifiers> C(
             KeyboardCommandShortcut command,
             WorkbookShortcutKey key,
-            WorkbookShortcutModifiers modifiers = WorkbookShortcutModifiers.None) =>
+            FreeKeyModifiers modifiers = FreeKeyModifiers.None) =>
         new(command, key, modifiers);
 }

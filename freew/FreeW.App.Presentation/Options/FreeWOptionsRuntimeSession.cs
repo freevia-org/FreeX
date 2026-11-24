@@ -69,21 +69,18 @@ public sealed class FreeWOptionsRuntimeSession
         ArgumentNullException.ThrowIfNull(editedOptions);
         ArgumentNullException.ThrowIfNull(persist);
 
-        var openTimeSnapshot = reloadFresh is null ? null : LiveOptions.Clone();
-        var plan = Apply(editedOptions);
+        FreeWEditorTypingOptionsPlan? plan = null;
+        var persisted = OptionsReloadMergeCommit.Commit(
+            LiveOptions,
+            captureOpenTimeSnapshot: LiveOptions.Clone,
+            applyToLive: () => plan = Apply(editedOptions),
+            captureEdited: () => editedOptions,
+            persist,
+            reloadFresh,
+            MergeOntoFreshLoad,
+            CopyInto);
 
-        if (reloadFresh is null || openTimeSnapshot is null)
-            return new FreeWOptionsPersistOutcome(plan, persist(LiveOptions));
-
-        var fresh = reloadFresh();
-        fresh.Normalize();
-        MergeOntoFreshLoad(fresh, openTimeSnapshot, editedOptions);
-
-        var persisted = persist(fresh);
-        if (persisted)
-            CopyInto(LiveOptions, fresh);
-
-        return new FreeWOptionsPersistOutcome(plan, persisted);
+        return new FreeWOptionsPersistOutcome(plan!, persisted);
     }
 
     private static void MergeOntoFreshLoad(FreeWOptions freshFromDisk, FreeWOptions openTimeSnapshot, FreeWOptions edited)

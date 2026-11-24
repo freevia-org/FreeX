@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -57,7 +58,7 @@ public sealed class Wave196RibbonFormattingPhysicalSourceTests
         wpf.Should().Contain("ApplyStyleDiff(new StyleDiff(Bold: IsRibbonCommandChecked(\"Bold\")))");
         wpfShortcuts.Should().Contain("WorkbookKeyboardShortcutCatalog.Rules");
         wpfShortcuts.Should().Contain("WorkbookShortcutRoute.SaveWorkbook => KeyboardCommandShortcut.SaveWorkbook");
-        shortcutCatalog.Should().Contain("new(WorkbookShortcutRoute.SaveWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift))");
+        shortcutCatalog.Should().Contain("new(WorkbookShortcutRoute.SaveWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, FreeKeyModifiers.Shift))");
         avaloniaShortcuts.Should().Contain("key == Key.F24");
         avaloniaShortcuts.Should().Contain("physicalKey == PhysicalKey.None");
         avaloniaShortcuts.Should().Contain("modifiers.HasFlag(KeyModifiers.Shift)");

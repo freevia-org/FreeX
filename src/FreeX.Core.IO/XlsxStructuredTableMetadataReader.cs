@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using FreeX.Core.Model;
 using System.IO.Compression;
 using System.Xml.Linq;
@@ -249,7 +250,7 @@ internal static class XlsxStructuredTableMetadataReader
         if (element is null)
             return false;
         var raw = element.Attribute("array")?.Value;
-        return raw is "1" or "true";
+        return OoxmlBooleanLexical.IsTrue(raw);
     }
 
     private static List<StructuredTableFilterColumnModel> ReadFilterColumns(

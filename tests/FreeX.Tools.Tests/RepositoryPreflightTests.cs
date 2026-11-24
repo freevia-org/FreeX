@@ -41,9 +41,10 @@ public sealed class RepositoryPreflightTests
 
         var result = PowerShellScriptRunner.RunToolScriptFromTemporaryWorkingDirectory(
             "Test-RepositoryPreflight.ps1",
-            // Generous enough for a loaded CI runner to start pwsh for the passing checks and the
-            // hanging one's first line; only the hanging check should ever reach the limit.
-            "-Mode Static -CheckTimeoutSeconds 10 " +
+            // Every preflight check script parameter is stubbed (a missed one would run the real
+            // check). The limit is generous enough for a loaded runner to start pwsh for a passing
+            // stub; only the hanging check should ever reach it.
+            "-Mode Static -CheckTimeoutSeconds 20 " +
             $"-JsonFilesScriptPath \"{passingScript}\" " +
             $"-XmlFilesScriptPath \"{hangingScript}\" " +
             $"-GitHubWorkflowsScriptPath \"{passingScript}\" " +
@@ -53,11 +54,15 @@ public sealed class RepositoryPreflightTests
             $"-SolutionProjectsScriptPath \"{passingScript}\" " +
             $"-CodeQlSolutionScriptPath \"{passingScript}\" " +
             $"-CrossPlatformPortabilityScriptPath \"{passingScript}\" " +
-            $"-GeneratedDocsScriptPath \"{passingScript}\" " +
-            $"-ConflictMarkersScriptPath \"{passingScript}\"");
+            $"-ConflictMarkersScriptPath \"{passingScript}\" " +
+            $"-LocalOnlyEvidencePathsScriptPath \"{passingScript}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("XML files preflight timed out after 10 second(s) on attempt 1 of 2");
+        result.CombinedOutput.Should().Contain("XML files preflight timed out after 20 second(s) on attempt 1 of 2");
+        // Exactly one check (the hanging one) was killed and retried: the retry warning is printed
+        // once per killed first attempt, so any other check hitting the limit would add to the count.
+        System.Text.RegularExpressions.Regex.Matches(result.CombinedOutput, "preflight timed out after").Count
+            .Should().Be(1, "only the hanging check may be killed and retried; every other check is a passing stub");
         result.CombinedOutput.Should().Contain("Retrying once.");
         result.CombinedOutput.Should().Contain("attempt 2 of 2");
         result.CombinedOutput.Should().Contain("Synthetic preflight started.");

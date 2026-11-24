@@ -104,9 +104,7 @@ public sealed class IconPickerGridKeyboardNavigationTests
     private static List<Border> Tiles(IconPickerDialog dialog) =>
         [.. Grid(dialog).Children.OfType<Border>()];
 
-    private static int FocusedIndex(IconPickerDialog dialog) =>
-        (int)typeof(IconPickerDialog).GetField("_focusedIndex", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(dialog)!;
+    private static int FocusedIndex(IconPickerDialog dialog) => dialog.FocusedIndex;
 
     private static IconPickerDialogSession Session_(IconPickerDialog dialog) =>
         (IconPickerDialogSession)typeof(IconPickerDialog).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!

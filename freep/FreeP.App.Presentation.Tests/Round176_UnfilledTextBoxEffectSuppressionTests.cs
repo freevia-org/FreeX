@@ -34,11 +34,17 @@ public sealed class Round176_UnfilledTextBoxEffectSuppressionTests
                 $"{renderer} must not abandon glow and soft edge along with the shadow -- the PDF " +
                 "exporter draws them for these shapes, so an early return here splits screen from print");
             source.Should().Contain(
-                "var suppressShadow = shape.Text is not null && shape.Fill is ResolvedFill.None;",
-                $"{renderer} must compute the suppression as a shadow-scoped flag");
-            source.Should().Contain(
-                "if (plan.ShadowPasses.Count > 0 && !suppressShadow)",
-                $"{renderer} must apply that flag to the shadow pass and to nothing else");
+                "ShapeRenderSequence.Dispatch(shape, ref sink)",
+                $"{renderer} must take its effect passes from the one shared sequence");
         }
+
+        var sequence = File.ReadAllText(
+            Path.Combine(root, "freep", "FreeP.App.Presentation", "ShapeRenderSequence.cs"));
+        sequence.Should().Contain(
+            "bool suppressShadow = shape.Text is not null && shape.Fill is ResolvedFill.None;",
+            "the shared sequence must compute the suppression as a shadow-scoped flag");
+        sequence.Should().Contain(
+            "if (!suppressShadow)",
+            "the shared sequence must apply that flag to the shadow pass and to nothing else");
     }
 }

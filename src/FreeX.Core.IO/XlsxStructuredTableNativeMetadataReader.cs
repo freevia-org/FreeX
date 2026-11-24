@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Xml.Linq;
 
 namespace FreeX.Core.IO;
@@ -89,13 +90,7 @@ internal static class XlsxStructuredTableNativeMetadataReader
 
     public static bool? ReadOptionalBoolAttribute(XElement element, string name)
     {
-        var value = element.Attribute(name)?.Value;
-        return value switch
-        {
-            "1" or "true" => true,
-            "0" or "false" => false,
-            _ => null
-        };
+        return OoxmlBooleanLexical.TryParse(element.Attribute(name)?.Value);
     }
 
     private static IReadOnlyDictionary<string, string>? ReadUnmodeledAttributesOrNull(

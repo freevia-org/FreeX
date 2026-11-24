@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.App.Presentation.Shell;
@@ -14,7 +15,7 @@ public sealed class InteractiveValidationInventoryTests
             .Should().Be(284);
         InteractiveValidationInventory.KeyboardShortcuts
             .SelectMany(scenario => scenario.Interactions)
-            .Count(interaction => interaction.Steps.Any(step => step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)))
+            .Count(interaction => interaction.Steps.Any(step => step.Modifiers.HasFlag(FreeKeyModifiers.Meta)))
             .Should().Be(33);
 
         AreaCounts(InteractiveValidationInventory.KeyboardShortcuts, scenario => scenario.Area)
@@ -190,7 +191,7 @@ public sealed class InteractiveValidationInventoryTests
             WorkbookKeyboardShortcutCatalog.Rules.Select(rule => rule.WindowsChord));
 
         var representedNativeOnly = interactions
-            .Where(item => item.Chord!.Value.Modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
+            .Where(item => item.Chord!.Value.Modifiers.HasFlag(FreeKeyModifiers.Meta))
             .Select(item => item.Chord!.Value)
             .ToArray();
         representedNativeOnly.Should().BeEquivalentTo(
@@ -230,11 +231,11 @@ public sealed class InteractiveValidationInventoryTests
         if (keyName is null || !Enum.TryParse<WorkbookShortcutKey>(keyName, ignoreCase: true, out var key))
             return null;
 
-        var modifiers = WorkbookShortcutModifiers.None;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= WorkbookShortcutModifiers.Control;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= WorkbookShortcutModifiers.Shift;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= WorkbookShortcutModifiers.Alt;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= WorkbookShortcutModifiers.Meta;
+        var modifiers = FreeKeyModifiers.None;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Control)) modifiers |= FreeKeyModifiers.Control;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Shift)) modifiers |= FreeKeyModifiers.Shift;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Alt)) modifiers |= FreeKeyModifiers.Alt;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Meta)) modifiers |= FreeKeyModifiers.Meta;
         return new WorkbookShortcutChord(key, modifiers);
     }
 }

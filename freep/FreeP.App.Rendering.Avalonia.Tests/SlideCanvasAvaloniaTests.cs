@@ -34,10 +34,8 @@ namespace FreeP.App.Rendering.Avalonia.Tests;
 /// and every caret/selection/inline-table assertion downstream of a click unmet.
 /// </para>
 /// </summary>
-public sealed class SlideHeadlessApp : global::Avalonia.Application
+public sealed class SlideHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new global::Avalonia.Themes.Fluent.FluentTheme());
-
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<SlideHeadlessApp>()
             .UseSkia()
@@ -4182,6 +4180,63 @@ public sealed class SlideCanvasAvaloniaTests
                         },
                     }
                     : null,
+            });
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        return RenderPixels(canvas, width, height);
+    }
+
+    /// <summary>
+    /// Sibling of the WPF SlideCanvas_BevelBottomOnly_RendersOverlay test: a shape with only a
+    /// bottom bevel must paint the bevel overlay (the shared sequence falls back to it), not
+    /// render flat the way the Avalonia canvas did when it only consulted the top bevel.
+    /// </summary>
+    [Fact]
+    public async Task SlideCanvas_BevelBottomOnly_RendersOverlay()
+    {
+        const int width = 300, height = 300;
+        byte[]? flat = null;
+        byte[]? beveled = null;
+
+        await Run(() =>
+        {
+            flat = RenderBevelShapePixels(effects: null, width, height);
+            beveled = RenderBevelShapePixels(
+                new ShapeEffects
+                {
+                    BevelBottom = new BevelInfo { WidthEmu = 914400, HeightEmu = 914400, PresetName = "circle" },
+                },
+                width,
+                height);
+        });
+
+        flat.Should().NotBeNull();
+        beveled.Should().NotBeNull();
+        CountPixelDifferences(flat!, beveled!, width, 0, 0, 200, 100)
+            .Should().BeGreaterThan(0, "a bottom-only bevel must paint an overlay on the shape");
+    }
+
+    private static byte[] RenderBevelShapePixels(ShapeEffects? effects, int width, int height)
+    {
+        var p = MakePresentation(pres =>
+        {
+            pres.SlideSizeCxEmu = (long)width * 9525L;
+            pres.SlideSizeCyEmu = (long)height * 9525L;
+            var slide = pres.Slides[0];
+            slide.Background = new ShapeFill.Solid(SrgbColor.White);
+            slide.Shapes.Clear();
+            slide.Shapes.Add(new SlideShape
+            {
+                Id = 1,
+                AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+                OffsetXEmu = 0,
+                OffsetYEmu = 0,
+                ExtentCxEmu = 1_905_000,
+                ExtentCyEmu = 952_500,
+                Fill = new ShapeFill.Solid(new SrgbColor(0xFF, 0x00, 0x00)),
+                Outline = ShapeOutline.None.Instance,
+                Effects = effects,
             });
         });
 

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Reflection;
 
 using Avalonia.Headless;
@@ -122,6 +123,6 @@ public sealed class R154_M3_FormulaBoxEscapeLocalBeforeFormulaPointModeTests
     {
         var toggleMethod = typeof(MainWindow).GetMethod(
             "ToggleKeyboardSelectionMode", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        toggleMethod.Invoke(window, [ExcelWorksheetNavigationModifiers.None]);
+        toggleMethod.Invoke(window, [FreeKeyModifiers.None]);
     }
 }

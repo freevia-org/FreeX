@@ -4505,29 +4505,12 @@ public static class PresentationReviewWorkflowPlanner
         }
 
         var name = NormalizeText(author) ?? "FreeP User";
-        var parts = name
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Take(3)
-            .Select(FirstLetterOf)
-            .Where(part => part.Length > 0);
-        var derived = string.Concat(parts);
+        // The Office rule (first text element of each name word, upper-cased) is shared with FreeW;
+        // FreeP additionally stores at most three text elements, same as the explicit branch above.
+        var derived = Free.Shared.IO.SurrogateSafeTruncation.LimitToTextElements(
+            Free.Shared.AppServices.AuthorInitials.Derive(name),
+            3);
         return string.IsNullOrWhiteSpace(derived) ? "FU" : derived;
-    }
-
-    /// <summary>
-    /// The leading TEXT ELEMENT of <paramref name="part"/>, upper-cased -- never half of a surrogate
-    /// pair. Empty when the part carries nothing usable, so the caller drops it rather than emitting
-    /// a fragment. <c>NormalizeInitialsBadge</c> a few hundred lines up already avoids the same trap
-    /// for the display-only badge by picking the first letter-or-digit; this is the equivalent for
-    /// the value that gets stored and written to the file.
-    /// </summary>
-    private static string FirstLetterOf(string part)
-    {
-        if (string.IsNullOrEmpty(part))
-            return string.Empty;
-
-        var length = System.Globalization.StringInfo.GetNextTextElementLength(part);
-        return part[..length].ToUpperInvariant();
     }
 
     private static string BuildPreview(string? text)

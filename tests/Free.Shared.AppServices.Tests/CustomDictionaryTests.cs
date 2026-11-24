@@ -1,4 +1,6 @@
-namespace FreeW.Core.Model.Tests;
+using Free.Shared.TextSearch;
+
+namespace Free.Shared.AppServices.Tests;
 
 public class CustomDictionaryTests
 {

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.IO;
 
 using Avalonia.Input;
@@ -1328,16 +1329,16 @@ public sealed class AvaloniaMainWindowChromeSourceTests
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
         };
 
-    private static KeyModifiers ToAvaloniaModifiers(WorkbookShortcutModifiers modifiers)
+    private static KeyModifiers ToAvaloniaModifiers(FreeKeyModifiers modifiers)
     {
         var result = KeyModifiers.None;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control))
+        if (modifiers.HasFlag(FreeKeyModifiers.Control))
             result |= KeyModifiers.Control;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt))
+        if (modifiers.HasFlag(FreeKeyModifiers.Alt))
             result |= KeyModifiers.Alt;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift))
+        if (modifiers.HasFlag(FreeKeyModifiers.Shift))
             result |= KeyModifiers.Shift;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
+        if (modifiers.HasFlag(FreeKeyModifiers.Meta))
             result |= KeyModifiers.Meta;
         return result;
     }

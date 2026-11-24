@@ -120,15 +120,14 @@ public sealed class SourceManagementDialogPlannerTests
             "freew",
             "FreeW.App.Host",
             "Ribbon",
-            "FreeWRibbonCommands.cs"));
+            "FreeWRibbonCommands.AuthorEditorDialog.cs"));
         var avalonia = Slice(
             avaloniaSource,
             "internal sealed class SourceAuthorEditorDialog",
             "internal sealed class ManageSourcesDialog");
-        var wpf = Slice(
-            wpfSource,
-            "private static class AuthorEditorDialog",
-            "private static class ManageSourcesDialog");
+        // The WPF dialog owns its whole partial file, so the file text is the slice.
+        wpfSource.Should().Contain("private static class AuthorEditorDialog");
+        var wpf = wpfSource;
 
         foreach (var source in new[] { avalonia, wpf })
         {

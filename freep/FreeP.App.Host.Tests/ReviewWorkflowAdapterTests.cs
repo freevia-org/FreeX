@@ -2526,11 +2526,16 @@ public sealed class ReviewWorkflowAdapterTests
     [Fact]
     public void MainWindow_Source_UsesPlannerForCommentPaneAndReviewState()
     {
+        // The review facade is linked source shared with the Avalonia host (RendererShared).
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
-            "MainWindow.cs"));
+            "MainWindow.cs")) + File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "RendererShared",
+            "MainWindow.ReviewFacade.cs"));
         var workareaEndpointSource = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",

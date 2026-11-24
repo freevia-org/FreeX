@@ -20,6 +20,21 @@ public sealed class AvaloniaAutosaveRuntimeAdoptionSourceTests
     }
 
     [Fact]
+    public void FreePAvaloniaAdapter_WordsTheStartupOfferLikeItsWpfHost()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var wpfHost = File.ReadAllText(Path.Combine(
+            root, "shared", "Free.Shared.Shell.Wpf", "WpfAutosaveHost.cs"));
+        var freepAdapter = File.ReadAllText(Path.Combine(
+            root, "freep", "FreeP.App.Avalonia", "AutosaveAdapter.cs"));
+
+        // FreeP's WPF host (the reference) uses the unquoted Startup wording; its Avalonia adapter must
+        // opt out of the shared Avalonia default (quoted display name) rather than drift from it.
+        wpfHost.Should().Contain("AutosaveRecoveryPromptMode.Startup)");
+        freepAdapter.Should().Contain("quoteStartupDisplayName: false");
+    }
+
+    [Fact]
     public void SisterAvaloniaAdapters_UseSharedPeriodicAndBoundedTransactionRuntimes()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");

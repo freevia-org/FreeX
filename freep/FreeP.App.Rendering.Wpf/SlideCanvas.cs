@@ -41,9 +41,6 @@ public sealed partial class SlideCanvas : FrameworkElement
     // WPF has no native blur filter for glyph geometry. Keep its translated
     // shadow rings tighter while preserving shared authored offsets for Avalonia.
     private const double TextShadowBlurSpreadScale = 0.6;
-    // WPF centers a stroke on the contour; PowerPoint's shape soft edge is
-    // predominantly an inner feather, so keep the host's visible outer halo narrow.
-    private const double SoftEdgeOuterSpreadScale = 0.20;
 
     // PowerPoint's imported isometricTopUp sample exposes a short projected
     // side wall even though its sp3d payload has no extrusionH. Keep this
@@ -661,8 +658,6 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         var autoFitPlan = ResolveShapeAutoFitPlan(shape);
         var bounds = autoFitPlan.Bounds;
-        var materialPlan = ShapeMaterialRenderPlanner.Plan(shape);
-        var shapeGeometry = GetShapeRenderGeometry(shape, materialPlan);
         bool hasTransform = !autoFitPlan.RenderTransform.IsIdentity;
         bool hasTextTransform = !autoFitPlan.TextRenderTransform.IsIdentity;
         bool hasAutoFitGeometryScale = !autoFitPlan.GeometryTransform.IsIdentity;
@@ -677,45 +672,10 @@ public sealed partial class SlideCanvas : FrameworkElement
             dc.PushTransform(ToWpfTransform(autoFitPlan.GeometryTransform));
         }
 
-        // Effects: draw before the shape (painter's algorithm — shadow behind shape)
-        if (shape.Effects is not null)
-            RenderShapeEffects(dc, shape, shapeGeometry);
-
-        if (materialPlan.Kind == ImportedShapeMaterialKind.IsometricCrossDepth)
-            RenderImportedShapeDepth(dc, shape, materialPlan);
-
-        // Wave 26: if an explicit elbow route is provided, draw it as a polyline and
-        // skip the bbox-derived elbow geometry.
-        if (shape.ElbowRouteDip is { Count: >= 2 })
-        {
-            var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
-            if (pen is not null)
-            {
-                var pg = new PathGeometry();
-                var pf = new PathFigure { StartPoint = new Point(shape.ElbowRouteDip[0].X, shape.ElbowRouteDip[0].Y), IsFilled = false };
-                for (int ri = 1; ri < shape.ElbowRouteDip.Count; ri++)
-                    pf.Segments.Add(new LineSegment(new Point(shape.ElbowRouteDip[ri].X, shape.ElbowRouteDip[ri].Y), isStroked: true));
-                pg.Figures.Add(pf);
-                dc.DrawGeometry(null, pen, pg);
-            }
-        }
-        else if (shape.Geometry.Contours.Count > 0)
-        {
-            // Draw geometry
-            var fillBrush = MakeBrush(shape.Fill, bounds);
-            var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
-            dc.DrawGeometry(fillBrush, pen, shapeGeometry);
-
-            if (materialPlan.Kind == ImportedShapeMaterialKind.Circle)
-                RenderImportedShapeMaterial(dc, materialPlan, shapeGeometry);
-        }
-
-        // Bevel overlay: painted ON TOP of the fill (but before text)
-        if (shape.Effects is not null)
-            RenderShapeBevel(dc, shape, shapeGeometry);
-
-        if (materialPlan.Kind is ImportedShapeMaterialKind.RelaxedInset or ImportedShapeMaterialKind.Angle)
-            RenderImportedShapeMaterial(dc, materialPlan, shapeGeometry);
+        // One portable sequence (effects, extrusion, route/geometry, bevel, material); this host only
+        // supplies the native sink that paints each step.
+        var sink = new ShapeSink(dc, shape, bounds);
+        ShapeRenderSequence.Dispatch(shape, ref sink);
 
         if (hasAutoFitGeometryScale)
             dc.Pop();
@@ -751,105 +711,6 @@ public sealed partial class SlideCanvas : FrameworkElement
                 request.MaximumWidthDip,
                 request.Wrap,
                 useIdealMetrics: false).Height);
-
-    private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape, Geometry shapeGeometry)
-    {
-        if (shape.Geometry.Contours.Count == 0) return;
-        // r176: this used to skip ALL outer effects for an unfilled text box. The case it
-        // exists for is the SHADOW -- a shadow cast by a shape with nothing in it is a dark
-        // blob floating behind transparent text -- but suppressing glow and soft edge with it
-        // also made the screen disagree with print: PresentationPdfExporter has no equivalent
-        // guard and has always drawn the glow for exactly these shapes. A glow authored on a
-        // text box was therefore invisible on screen and present in the exported PDF.
-        var suppressShadow = shape.Text is not null && shape.Fill is ResolvedFill.None;
-        var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects, shape.BoundsDip);
-
-        if (plan.ShadowPasses.Count > 0 && !suppressShadow)
-        {
-            foreach (var pass in plan.ShadowPasses)
-            {
-                var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
-                if (shadowBrush.CanFreeze) shadowBrush.Freeze();
-                dc.PushTransform(new TranslateTransform(pass.OffsetX, pass.OffsetY));
-                dc.DrawGeometry(shadowBrush, null, shapeGeometry);
-                dc.Pop();
-            }
-        }
-
-        if (plan.GlowPasses.Count > 0)
-        {
-            foreach (var pass in plan.GlowPasses)
-            {
-                var glowBrush = new SolidColorBrush(
-                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
-                if (glowBrush.CanFreeze) glowBrush.Freeze();
-                var glowPen = new Pen(glowBrush, pass.StrokeWidthDip);
-                if (glowPen.CanFreeze) glowPen.Freeze();
-                dc.DrawGeometry(null, glowPen, shapeGeometry);
-            }
-        }
-
-        if (plan.SoftEdgePasses.Count > 0)
-        {
-            var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
-            if (fillBrush is not null)
-            {
-                foreach (var pass in plan.SoftEdgePasses)
-                {
-                    var softEdgePen = new Pen(fillBrush, pass.StrokeWidthDip * SoftEdgeOuterSpreadScale);
-                    dc.PushOpacity(pass.Alpha / 255.0);
-                    dc.DrawGeometry(null, softEdgePen, shapeGeometry);
-                    dc.Pop();
-                }
-            }
-        }
-
-        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
-        // mask, exactly like the DrawOp.Picture reflection block in RenderPicture below —
-        // just painting shapeGeometry instead of the decoded bitmap.
-        if (plan.HasReflection)
-        {
-            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
-            var reflectionPen = MakePen(shape.Outline);
-            if (reflectionFillBrush is not null || reflectionPen is not null)
-            {
-                double reflectionCenterX = shape.BoundsDip.X + shape.BoundsDip.Width / 2;
-                foreach (var pass in plan.ReflectionPasses)
-                {
-                    var reflectionMask = new LinearGradientBrush
-                    {
-                        StartPoint = new Point(0.5, 0),
-                        EndPoint = new Point(0.5, 1),
-                    };
-                    reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                        Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0));
-                    reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                        Color.FromArgb(0, 255, 255, 255), plan.ReflectionEndPos));
-                    if (plan.ReflectionNeedsTerminalTransparentStop)
-                        reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                            Color.FromArgb(0, 255, 255, 255), 1));
-
-                    dc.PushTransform(new ScaleTransform(
-                        1, plan.ReflectionScaleY, reflectionCenterX, plan.ReflectionPivotYDip));
-                    dc.PushTransform(new TranslateTransform(pass.OffsetXDip, pass.OffsetYDip));
-                    dc.PushOpacityMask(reflectionMask);
-                    dc.PushOpacity(pass.Opacity);
-                    dc.DrawGeometry(reflectionFillBrush, reflectionPen, shapeGeometry);
-                    dc.Pop();
-                    dc.Pop();
-                    dc.Pop();
-                    dc.Pop();
-                }
-            }
-        }
-
-        // Bevel: overlay highlight + shade stripes on the inner edge of the shape bounds.
-        // This runs AFTER the shape fill/outline are drawn (the caller RenderShape draws
-        // geometry after calling this method for shadows — but bevel must paint ON TOP of
-        // the fill).  We therefore invoke this portion from a second call site in RenderShape
-        // (RenderShapeBevel) so it can be layered correctly.
-    }
 
     private static void RenderImportedShapeDepth(
         DrawingContext dc,
@@ -910,169 +771,148 @@ public sealed partial class SlideCanvas : FrameworkElement
     private static void DrawMaterialBand(DrawingContext dc, LinearGradientBrush brush, Rect bounds) =>
         dc.DrawRectangle(brush, null, bounds);
 
-    /// <summary>
-    /// Renders the bevel highlight/shade overlay for a shape.
-    /// Called AFTER the shape geometry has been painted so the overlay sits on top.
-    /// Also draws the contour outline if one is requested.
-    /// </summary>
-    private static void RenderShapeBevel(DrawingContext dc, DrawOp.Shape shape, Geometry shapeGeometry)
+    private struct ShapeSink(DrawingContext dc, DrawOp.Shape shape, LayoutRect bounds) : IShapeRenderSink
     {
-        var fx = shape.Effects;
-        if (fx is null) return;
+        private Geometry? _geometry;
 
-        bool hasBevel   = fx.BevelTop is not null || fx.BevelBottom is not null;
-        bool hasContour = fx.ContourWidthDip > 0;
-        if (!hasBevel && !hasContour) return;
+        private readonly Geometry Geo => _geometry!;
 
-        if (shape.Geometry.Contours.Count == 0) return;
-
-        var bounds = shape.BoundsDip;
-
-        // A shape may declare only a:bevelB with no a:bevelT (independently settable via
-        // 3-D Format's Bottom bevel). Fall back to BevelBottom so that case still paints
-        // a bevel overlay instead of silently rendering flat.
-        var activeBevel = fx.BevelTop ?? fx.BevelBottom;
-        if (hasBevel && activeBevel is not null)
+        public void UseGeometry(ShapeGeometrySource source)
         {
-            var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, activeBevel, fx.LightDirDeg);
-            DrawBevelOverlay(dc, shapeGeometry, bounds, highlight, shade,
-                activeBevel.WidthDip, activeBevel.HeightDip, activeBevel.PresetName);
-        }
-
-        // Contour outline (thin ring in contourColor)
-        if (hasContour)
-        {
-            var cColor  = fx.ContourColor ?? new SrgbColor(0x60, 0x60, 0x60);
-            var contourBrush = new SolidColorBrush(Color.FromArgb(255, cColor.R, cColor.G, cColor.B));
-            if (contourBrush.CanFreeze) contourBrush.Freeze();
-            var contourPen = new Pen(contourBrush, Math.Max(0.5, fx.ContourWidthDip));
-            if (contourPen.CanFreeze) contourPen.Freeze();
-            dc.DrawGeometry(null, contourPen, shapeGeometry);
-        }
-    }
-
-    private static Geometry GetShapeRenderGeometry(
-        DrawOp.Shape shape,
-        ShapeMaterialRenderPlan materialPlan)
-    {
-        if (materialPlan.Kind == ImportedShapeMaterialKind.RelaxedInset)
-        {
-            var bounds = shape.BoundsDip;
-            var radius = Math.Min(bounds.Width, bounds.Height) * 0.16;
-            var geometry = new RectangleGeometry(
-                new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height),
-                radius,
-                radius);
-            if (geometry.CanFreeze) geometry.Freeze();
-            return geometry;
-        }
-
-        return ContourListToGeometry(shape.Geometry);
-    }
-
-    private static void DrawBevelOverlay(
-        DrawingContext dc,
-        Geometry shapeGeo,
-        LayoutRect bounds,
-        BevelEdgeSet highlight,
-        BevelEdgeSet shade,
-        double bevelW,
-        double bevelH,
-        string presetName)
-    {
-        // We draw simple trapezoidal / rectangular strips clipped to the shape geometry.
-        // Highlight = near-white semi-transparent; Shade = near-black semi-transparent.
-        var highlightBrush = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
-        var shadeBrush     = new SolidColorBrush(Color.FromArgb(110, 0,   0,   0  ));
-        if (highlightBrush.CanFreeze) highlightBrush.Freeze();
-        if (shadeBrush.CanFreeze)     shadeBrush.Freeze();
-
-        // Push clip to the shape boundary so bevel strips are contained within it
-        dc.PushClip(shapeGeo);
-
-        double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
-        var (bw, bh) = BevelGeometryHelper.GetRenderDimensions(bounds, bevelW, bevelH);
-
-        // Draw trapezoidal wedge for each active edge
-        void DrawWedge(bool active, Brush brush, Point tl, Point tr, Point bl, Point br)
-        {
-            if (!active) return;
-            var pg = new StreamGeometry();
-            using (var sgc = pg.Open())
+            if (source.Kind == ShapeGeometryKind.RoundedRect)
             {
-                sgc.BeginFigure(tl, isFilled: true, isClosed: true);
-                sgc.LineTo(tr, isStroked: false, isSmoothJoin: true);
-                sgc.LineTo(br, isStroked: false, isSmoothJoin: true);
-                sgc.LineTo(bl, isStroked: false, isSmoothJoin: true);
+                var rounded = new RectangleGeometry(
+                    new Rect(source.Bounds.X, source.Bounds.Y, source.Bounds.Width, source.Bounds.Height),
+                    source.CornerRadiusDip,
+                    source.CornerRadiusDip);
+                if (rounded.CanFreeze) rounded.Freeze();
+                _geometry = rounded;
+                return;
             }
-            pg.Freeze();
-            dc.DrawGeometry(brush, null, pg);
+
+            _geometry = ContourListToGeometry(shape.Geometry);
         }
 
-        // Top edge wedge (trapezoid: outer rect top edge, inner inset)
-        DrawWedge(highlight.Top || shade.Top,
-            highlight.Top ? highlightBrush : shadeBrush,
-            new Point(x,      y),
-            new Point(x + w,  y),
-            new Point(x + w - bw, y + bh),
-            new Point(x + bw, y + bh));
-
-        // Bottom edge wedge
-        DrawWedge(highlight.Bottom || shade.Bottom,
-            highlight.Bottom ? highlightBrush : shadeBrush,
-            new Point(x + bw, y + h - bh),
-            new Point(x + w - bw, y + h - bh),
-            new Point(x + w,  y + h),
-            new Point(x,      y + h));
-
-        // Left edge wedge
-        DrawWedge(highlight.Left || shade.Left,
-            highlight.Left ? highlightBrush : shadeBrush,
-            new Point(x,      y),
-            new Point(x + bw, y + bh),
-            new Point(x + bw, y + h - bh),
-            new Point(x,      y + h));
-
-        // Right edge wedge
-        DrawWedge(highlight.Right || shade.Right,
-            highlight.Right ? highlightBrush : shadeBrush,
-            new Point(x + w - bw, y + bh),
-            new Point(x + w,      y),
-            new Point(x + w,      y + h),
-            new Point(x + w - bw, y + h - bh));
-
-        if (string.Equals(presetName, "relaxedInset", StringComparison.OrdinalIgnoreCase))
+        public readonly void FillShadow(ShapeShadowPass pass)
         {
-            // PowerPoint's relaxed inset has a second, shaded material band
-            // between the outer bevel highlight and the front face.
-            double ix = x + bw;
-            double iy = y + bh;
-            double iw = Math.Max(0, w - 2 * bw);
-            double ih = Math.Max(0, h - 2 * bh);
-
-            DrawWedge(true, shadeBrush,
-                new Point(ix, iy),
-                new Point(ix + iw, iy),
-                new Point(ix + iw - bw, iy + bh),
-                new Point(ix + bw, iy + bh));
-            DrawWedge(true, shadeBrush,
-                new Point(ix + bw, iy + ih - bh),
-                new Point(ix + iw - bw, iy + ih - bh),
-                new Point(ix + iw, iy + ih),
-                new Point(ix, iy + ih));
-            DrawWedge(true, shadeBrush,
-                new Point(ix, iy),
-                new Point(ix + bw, iy + bh),
-                new Point(ix + bw, iy + ih - bh),
-                new Point(ix, iy + ih));
-            DrawWedge(true, shadeBrush,
-                new Point(ix + iw - bw, iy + bh),
-                new Point(ix + iw, iy),
-                new Point(ix + iw, iy + ih),
-                new Point(ix + iw - bw, iy + ih - bh));
+            var shadowBrush = new SolidColorBrush(
+                Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            if (shadowBrush.CanFreeze) shadowBrush.Freeze();
+            dc.PushTransform(new TranslateTransform(pass.OffsetX, pass.OffsetY));
+            dc.DrawGeometry(shadowBrush, null, Geo);
+            dc.Pop();
         }
 
-        dc.Pop(); // pop clip
+        public readonly void StrokeGlow(ShapeGlowPass pass)
+        {
+            var glowBrush = new SolidColorBrush(
+                Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+            if (glowBrush.CanFreeze) glowBrush.Freeze();
+            var glowPen = new Pen(glowBrush, pass.StrokeWidthDip);
+            if (glowPen.CanFreeze) glowPen.Freeze();
+            dc.DrawGeometry(null, glowPen, Geo);
+        }
+
+        public readonly void StrokeSoftEdge(ShapeSoftEdgePass pass)
+        {
+            var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            if (fillBrush is null) return;
+
+            var softEdgePen = new Pen(fillBrush, pass.StrokeWidthDip);
+            dc.PushOpacity(pass.Alpha / 255.0);
+            dc.DrawGeometry(null, softEdgePen, Geo);
+            dc.Pop();
+        }
+
+        // Reflection: mirror the shape's own fill+outline below itself, faded via an opacity
+        // mask, exactly like the DrawOp.Picture reflection block in RenderPicture below --
+        // just painting the shape geometry instead of the decoded bitmap.
+        public readonly void DrawReflection(ShapeReflectionStep step)
+        {
+            var reflectionFillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            var reflectionPen = MakePen(shape.Outline);
+            if (reflectionFillBrush is null && reflectionPen is null) return;
+
+            var reflectionMask = new LinearGradientBrush
+            {
+                StartPoint = new Point(0.5, 0),
+                EndPoint = new Point(0.5, 1),
+            };
+            reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                Color.FromArgb(step.MaskAlpha, 255, 255, 255), 0));
+            reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                Color.FromArgb(0, 255, 255, 255), step.MaskEndPos));
+            if (step.NeedsTerminalTransparentStop)
+                reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                    Color.FromArgb(0, 255, 255, 255), 1));
+
+            dc.PushTransform(new ScaleTransform(1, step.ScaleY, step.CenterXDip, step.PivotYDip));
+            dc.PushTransform(new TranslateTransform(step.OffsetXDip, step.OffsetYDip));
+            dc.PushOpacityMask(reflectionMask);
+            dc.PushOpacity(step.Opacity);
+            dc.DrawGeometry(reflectionFillBrush, reflectionPen, Geo);
+            dc.Pop();
+            dc.Pop();
+            dc.Pop();
+            dc.Pop();
+        }
+
+        public readonly void FillExtrusion(ShapeMaterialRenderPlan material) =>
+            RenderImportedShapeDepth(dc, shape, material);
+
+        public readonly void StrokeElbowRoute(IReadOnlyList<LayoutPoint> route, bool strokeOutline)
+        {
+            var pen = strokeOutline ? MakePen(shape.Outline) : null;
+            if (pen is null) return;
+
+            var pg = new PathGeometry();
+            var pf = new PathFigure { StartPoint = new Point(route[0].X, route[0].Y), IsFilled = false };
+            for (int ri = 1; ri < route.Count; ri++)
+                pf.Segments.Add(new LineSegment(new Point(route[ri].X, route[ri].Y), isStroked: true));
+            pg.Figures.Add(pf);
+            dc.DrawGeometry(null, pen, pg);
+        }
+
+        public readonly void DrawGeometry(bool strokeOutline) =>
+            dc.DrawGeometry(
+                MakeBrush(shape.Fill, bounds),
+                strokeOutline ? MakePen(shape.Outline) : null,
+                Geo);
+
+        public readonly void PaintMaterial(ShapeMaterialRenderPlan material) =>
+            RenderImportedShapeMaterial(dc, material, Geo);
+
+        public readonly void PaintBevel(IReadOnlyList<ShapeBevelWedge> wedges)
+        {
+            // Clip to the shape boundary so the bevel strips are contained within it.
+            dc.PushClip(Geo);
+            foreach (var wedge in wedges)
+            {
+                var brush = new SolidColorBrush(
+                    Color.FromArgb(wedge.Alpha, wedge.Color.R, wedge.Color.G, wedge.Color.B));
+                if (brush.CanFreeze) brush.Freeze();
+                var pg = new StreamGeometry();
+                using (var sgc = pg.Open())
+                {
+                    sgc.BeginFigure(new Point(wedge.P1.X, wedge.P1.Y), isFilled: true, isClosed: true);
+                    sgc.LineTo(new Point(wedge.P2.X, wedge.P2.Y), isStroked: false, isSmoothJoin: true);
+                    sgc.LineTo(new Point(wedge.P3.X, wedge.P3.Y), isStroked: false, isSmoothJoin: true);
+                    sgc.LineTo(new Point(wedge.P4.X, wedge.P4.Y), isStroked: false, isSmoothJoin: true);
+                }
+                pg.Freeze();
+                dc.DrawGeometry(brush, null, pg);
+            }
+            dc.Pop();
+        }
+
+        public readonly void StrokeContour(SrgbColor color, double widthDip)
+        {
+            var contourBrush = new SolidColorBrush(Color.FromArgb(255, color.R, color.G, color.B));
+            if (contourBrush.CanFreeze) contourBrush.Freeze();
+            var contourPen = new Pen(contourBrush, widthDip);
+            if (contourPen.CanFreeze) contourPen.Freeze();
+            dc.DrawGeometry(null, contourPen, Geo);
+        }
     }
 
     private static Transform ToWpfTransform(ShapeAffineTransform transform)

@@ -678,48 +678,43 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement BuildNumCacheXml(IReadOnlyList<ScalarValue> values, string formatCode, XNamespace chartNs)
     {
-        var cache = new XElement(chartNs + "numCache",
-            new XElement(chartNs + "formatCode", formatCode),
-            new XElement(chartNs + "ptCount", new XAttribute("val", values.Count)));
+        // Which values are cached and what text each becomes is this writer's; the element shape and the
+        // number spelling (culture-invariant, round-trippable -- not the old 15-digit cut) are shared.
+        var points = new List<KeyValuePair<int, string>>(values.Count);
         for (var i = 0; i < values.Count; i++)
         {
             var text = values[i] switch
             {
-                NumberValue number => number.Value.ToString("G15", CultureInfo.InvariantCulture),
-                DateTimeValue dateTime => dateTime.Value.ToString("G15", CultureInfo.InvariantCulture),
+                NumberValue number => DrawingMlChartCache.FormatNumber(number.Value),
+                DateTimeValue dateTime => DrawingMlChartCache.FormatNumber(dateTime.Value),
                 BoolValue boolean => boolean.Value ? "1" : "0",
                 _ => null,
             };
-            if (text is null)
-                continue;
-
-            cache.Add(new XElement(chartNs + "pt", new XAttribute("idx", i), new XElement(chartNs + "v", text)));
+            if (text is not null)
+                points.Add(new KeyValuePair<int, string>(i, text));
         }
 
-        return cache;
+        return DrawingMlChartCache.CreateNumericData(chartNs, "numCache", formatCode, values.Count, points);
     }
 
     private static XElement BuildStrCacheXml(IReadOnlyList<ScalarValue> values, XNamespace chartNs)
     {
-        var cache = new XElement(chartNs + "strCache",
-            new XElement(chartNs + "ptCount", new XAttribute("val", values.Count)));
+        var points = new List<KeyValuePair<int, string>>(values.Count);
         for (var i = 0; i < values.Count; i++)
         {
             var text = values[i] switch
             {
-                NumberValue number => number.Value.ToString("G15", CultureInfo.InvariantCulture),
-                DateTimeValue dateTime => dateTime.Value.ToString("G15", CultureInfo.InvariantCulture),
+                NumberValue number => DrawingMlChartCache.FormatNumber(number.Value),
+                DateTimeValue dateTime => DrawingMlChartCache.FormatNumber(dateTime.Value),
                 TextValue textValue => textValue.Value,
                 BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
                 _ => null,
             };
-            if (text is null)
-                continue;
-
-            cache.Add(new XElement(chartNs + "pt", new XAttribute("idx", i), new XElement(chartNs + "v", text)));
+            if (text is not null)
+                points.Add(new KeyValuePair<int, string>(i, text));
         }
 
-        return cache;
+        return DrawingMlChartCache.CreateStringData(chartNs, "strCache", values.Count, points);
     }
 
     private static XElement? ToCategoryRangeXml(

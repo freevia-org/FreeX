@@ -53,11 +53,15 @@ public sealed class ReviewCommentPaneVisualParitySourceTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var facade = File.ReadAllText(Path.Combine(root, "freep", "RendererShared", "MainWindow.ReviewFacade.cs"));
         var wpf = File.ReadAllText(Path.Combine(
             root,
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
+
+        avalonia += facade;
+        wpf += facade;
 
         AssertSharedCommentWorkflowForwarders(avalonia);
         AssertSharedCommentWorkflowForwarders(wpf);

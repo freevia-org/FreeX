@@ -11,7 +11,7 @@ public sealed partial class MainWindow
             {
                 BeforePresentationReplaced = () => _findReplaceDialog?.Close(),
                 BindEditor = BindWorkareaEditor,
-                ResetAnimationSession = _animationPaneSession.Reset,
+                ResetAnimationSession = () => _animationPaneSession.Reset(),
                 HideTransientPickers = HideTransientPickers,
                 MarkDirty = () => _fileSession.MarkDirty(),
                 RefreshCommandStates = SyncRibbonCommandStates,
@@ -32,7 +32,7 @@ public sealed partial class MainWindow
                 RefreshDocumentStatusAfterReview = transition =>
                     ApplyStatusRefreshPlan(PresentationWorkareaStatusRefreshPlanner.BuildAfterReview(transition)),
                 ClearReviewSelection = () => _reviewWorkflowSession.SelectedCommentIndex = null,
-                ResetAnimationSelection = _animationPaneSession.ResetSelection,
+                ResetAnimationSelection = () => _animationPaneSession.ResetSelection(),
                 ClearMediaSelection = () => _mediaPaneHostCoordinator.SelectCaptionTrack(null),
                 SyncSlidePaneSelection = SyncSlidePaneSelection,
                 RefreshSlidePaneChrome = RefreshSlidePaneChrome,

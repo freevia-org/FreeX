@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.FormulaBar;
@@ -6,16 +7,16 @@ public static class ExcelEditKeyPlanner
 {
     public static bool ShouldCycleFormulaReference(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         FormulaEditorKey systemKey = FormulaEditorKey.None)
     {
         var effectiveKey = key == FormulaEditorKey.None || key == FormulaEditorKey.System ? systemKey : key;
-        return effectiveKey == FormulaEditorKey.F4 && modifiers == FormulaEditorModifiers.None;
+        return effectiveKey == FormulaEditorKey.F4 && modifiers == FreeKeyModifiers.None;
     }
 
     public static ExcelEditKeyIntent GetIntent(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         CellAddress current,
         int pageSize,
         bool allowFormulaBarNavigationKeys,
@@ -28,16 +29,16 @@ public static class ExcelEditKeyPlanner
         var effectiveKey = key == FormulaEditorKey.None || key == FormulaEditorKey.System ? systemKey : key;
         var pageStep = (uint)Math.Max(1, pageSize);
 
-        if (effectiveKey == FormulaEditorKey.Enter && modifiers == FormulaEditorModifiers.Alt)
+        if (effectiveKey == FormulaEditorKey.Enter && modifiers == FreeKeyModifiers.Alt)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.InsertLineBreak, null);
 
-        if (effectiveKey == FormulaEditorKey.Enter && modifiers == FormulaEditorModifiers.Control)
+        if (effectiveKey == FormulaEditorKey.Enter && modifiers == FreeKeyModifiers.Control)
             return new ExcelEditKeyIntent(ExcelEditKeyAction.CommitSelection, null);
 
-        if (modifiers is not FormulaEditorModifiers.None and not FormulaEditorModifiers.Shift)
+        if (modifiers is not FreeKeyModifiers.None and not FreeKeyModifiers.Shift)
             return ExcelEditKeyIntent.None;
 
-        var shiftHeld = (modifiers & FormulaEditorModifiers.Shift) != 0;
+        var shiftHeld = (modifiers & FreeKeyModifiers.Shift) != 0;
 
         if (formulaRangeEntryActive && effectiveKey is FormulaEditorKey.Up or FormulaEditorKey.Down or FormulaEditorKey.Left or FormulaEditorKey.Right or FormulaEditorKey.PageUp or FormulaEditorKey.PageDown)
         {
@@ -57,7 +58,7 @@ public static class ExcelEditKeyPlanner
                 : ExcelEditKeyIntent.None;
         }
 
-        if (inlineEditorCommitsOnArrow && modifiers == FormulaEditorModifiers.None && effectiveKey is FormulaEditorKey.Up or FormulaEditorKey.Down or FormulaEditorKey.Left or FormulaEditorKey.Right)
+        if (inlineEditorCommitsOnArrow && modifiers == FreeKeyModifiers.None && effectiveKey is FormulaEditorKey.Up or FormulaEditorKey.Down or FormulaEditorKey.Left or FormulaEditorKey.Right)
         {
             var emptyEditorTarget = effectiveKey switch
             {

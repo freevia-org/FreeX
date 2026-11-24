@@ -1239,7 +1239,7 @@ public static partial class DocxReader
             if (ex.Attribute(W15 + "paraId")?.Value is not { Length: > 0 } paraId)
                 continue;
             var parent = ex.Attribute(W15 + "paraIdParent")?.Value;
-            var done = ex.Attribute(W15 + "done")?.Value is "1" or "true";
+            var done = OoxmlBooleanLexical.IsTrue(ex.Attribute(W15 + "done")?.Value);
             map[paraId] = (string.IsNullOrEmpty(parent) ? null : parent, done);
         }
         return map;
@@ -1461,7 +1461,7 @@ public static partial class DocxReader
             if (cols.Attribute(W + "space") is { } space)
                 page.ColumnSpacingPt = DxaToPoints(space.Value);
             // @w:sep is an on/off attribute: present and not explicitly "0"/"false"/"off" → draw the line.
-            page.ColumnsLineBetween = cols.Attribute(W + "sep")?.Value is "1" or "true" or "on";
+            page.ColumnsLineBetween = ReadOnOffValue(cols.Attribute(W + "sep")?.Value);
 
             var colElements = cols.Elements(W + "col").ToList();
             var equalWidthOff = cols.Attribute(W + "equalWidth")?.Value is "0" or "false" or "off";
@@ -2540,7 +2540,7 @@ public static partial class DocxReader
             para.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
-            var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
+            var beforeAuto = ReadOnOffValue(sp?.Attribute(W + "beforeAutospacing")?.Value);
             var currentListNumId = ReadBodyListNumId(element);
             if (prevPara is not null && prevAfterAuto && beforeAuto)
             {
@@ -2555,7 +2555,7 @@ public static partial class DocxReader
             }
             prevListNumId = currentListNumId;
             prevPara = para;
-            prevAfterAuto = sp?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+            prevAfterAuto = ReadOnOffValue(sp?.Attribute(W + "afterAutospacing")?.Value);
         }
         else if (element.Name == W + "tbl")
         {
@@ -4454,7 +4454,7 @@ public static partial class DocxReader
             var val = (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))
                 ?.Attribute(W14 + "val")?.Value
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
-            var isChecked = val is "1" or "true" or "on";
+            var isChecked = ReadOnOffValue(val);
             return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked,
                 LockMode: lockMode,
                 WordMetadata: wordMetadata,
@@ -4582,7 +4582,7 @@ public static partial class DocxReader
 
         var value = element.Attribute(W + "val")?.Value
             ?? element.Attribute(W15 + "val")?.Value;
-        return value is null or "1" or "true" or "on";
+        return ReadOnOffValue(value, defaultValue: true);
     }
 
     private static bool? ReadNullableOnOffAttribute(XAttribute? attribute) =>
@@ -4881,7 +4881,7 @@ public static partial class DocxReader
         if (ffCheckBox is not null)
         {
             static bool Toggle(XElement? e) =>
-                e is not null && e.Attribute(W + "val")?.Value is null or "1" or "true" or "on";
+                e is not null && ReadOnOffValue(e.Attribute(W + "val")?.Value, defaultValue: true);
             var isChecked = ffCheckBox.Element(W + "checked") is { } checkedEl
                 ? Toggle(checkedEl)
                 : Toggle(ffCheckBox.Element(W + "default"));
@@ -5633,7 +5633,7 @@ public static partial class DocxReader
             .Elements()
             .FirstOrDefault(child => child.Name.LocalName == "decorative")?
             .Attribute("val")?.Value;
-        return val is "1" or "true" or "on";
+        return ReadOnOffValue(val);
     }
 
     /// <summary>
@@ -5728,8 +5728,8 @@ public static partial class DocxReader
         {
             if (xfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 image.RotationAngle = rotEmu / 60000.0;
-            image.FlipH = xfrm.Attribute("flipH")?.Value is "1" or "true";
-            image.FlipV = xfrm.Attribute("flipV")?.Value is "1" or "true";
+            image.FlipH = OoxmlBooleanLexical.IsTrue(xfrm.Attribute("flipH")?.Value);
+            image.FlipV = OoxmlBooleanLexical.IsTrue(xfrm.Attribute("flipV")?.Value);
         }
 
         // a:srcRect: crop fractions encoded as per-mille integers (×100000).
@@ -5815,7 +5815,7 @@ public static partial class DocxReader
                 && Enum.IsDefined(typeof(ImageArtisticEffect), artisticId))
                 image.ArtisticEffect = (ImageArtisticEffect)artisticId;
             var artisticBakedRaw = ReadFreeWBlipExtensionValue(blip, "artisticEffectBaked");
-            if (artisticBakedRaw is "1" or "true")
+            if (OoxmlBooleanLexical.IsTrue(artisticBakedRaw))
                 image.HasBakedArtisticEffectPreview = true;
 
             // Standard adjustments — only when no recolor mode already consumed lum/alphaModFix.
@@ -6037,7 +6037,7 @@ public static partial class DocxReader
             return ImageWrapping.TopAndBottom;
         // wp:wrapNone (or an unexpected/missing wrap) is a front/behind image, disambiguated by @behindDoc.
         var behindDoc = anchor.Attribute("behindDoc")?.Value;
-        return behindDoc is "1" or "true" ? ImageWrapping.Behind : ImageWrapping.InFront;
+        return OoxmlBooleanLexical.IsTrue(behindDoc) ? ImageWrapping.Behind : ImageWrapping.InFront;
     }
 
     private static FloatingWrapTextSide ReadWrapTextSide(XElement anchor)
@@ -6130,8 +6130,8 @@ public static partial class DocxReader
         {
             if (wordArtXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 wordArt.RotationAngle = rotEmu / 60000.0;
-            wordArt.FlipH = wordArtXfrm.Attribute("flipH")?.Value is "1" or "true";
-            wordArt.FlipV = wordArtXfrm.Attribute("flipV")?.Value is "1" or "true";
+            wordArt.FlipH = OoxmlBooleanLexical.IsTrue(wordArtXfrm.Attribute("flipH")?.Value);
+            wordArt.FlipV = OoxmlBooleanLexical.IsTrue(wordArtXfrm.Attribute("flipV")?.Value);
         }
 
         // Alt text: wp:docPr/@descr on the inline or anchor drawing.
@@ -6312,8 +6312,8 @@ public static partial class DocxReader
         {
             if (shapeXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 shape.RotationAngle = rotEmu / 60000.0;
-            shape.FlipH = shapeXfrm.Attribute("flipH")?.Value is "1" or "true";
-            shape.FlipV = shapeXfrm.Attribute("flipV")?.Value is "1" or "true";
+            shape.FlipH = OoxmlBooleanLexical.IsTrue(shapeXfrm.Attribute("flipH")?.Value);
+            shape.FlipV = OoxmlBooleanLexical.IsTrue(shapeXfrm.Attribute("flipV")?.Value);
         }
 
         // Custom geometry (a:custGeom): recover freeform polygon segments.
@@ -7836,8 +7836,8 @@ public static partial class DocxReader
         var contextualSpacing = contextualSpacingElement is null
             ? (bool?)null
             : ReadToggle(ddPr, "contextualSpacing");
-        var beforeAuto = spacing?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
-        var afterAuto = spacing?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+        var beforeAuto = ReadOnOffValue(spacing?.Attribute(W + "beforeAutospacing")?.Value);
+        var afterAuto = ReadOnOffValue(spacing?.Attribute(W + "afterAutospacing")?.Value);
         const double autoSpacingPt = 14.0;
         var before = beforeAuto ? autoSpacingPt : spacing?.Attribute(W + "before") is { } b ? DxaToPoints(b.Value) : 0.0;
         var after = afterAuto ? autoSpacingPt : spacing?.Attribute(W + "after") is { } a ? DxaToPoints(a.Value) : 0.0;
@@ -7983,8 +7983,8 @@ public static partial class DocxReader
         // take the literal value (often a tiny 100 dxa = 5pt), packing such paragraphs too tightly. Use an
         // auto approximation; else the paragraph's own value; else the document default.
         const double autoSpacingPt = 14.0;
-        var beforeAuto = spacing?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
-        var afterAuto = spacing?.Attribute(W + "afterAutospacing")?.Value is "1" or "true" or "on";
+        var beforeAuto = ReadOnOffValue(spacing?.Attribute(W + "beforeAutospacing")?.Value);
+        var afterAuto = ReadOnOffValue(spacing?.Attribute(W + "afterAutospacing")?.Value);
         var spaceBeforePt = beforeAuto
             ? autoSpacingPt
             : spacing?.Attribute(W + "before") is { } sbAttr ? DxaToPoints(sbAttr.Value) : docDefaults?.SpaceBeforePt ?? 0;
@@ -9603,7 +9603,7 @@ public static partial class DocxReader
                 Type = styleType,
                 // w:default="1" marks the style a pStyle-less paragraph resolves through; its id is only
                 // "Normal" in English-authored packages (localized Word writes e.g. "a").
-                IsDefault = s.Attribute(W + "default")?.Value is "1" or "true" or "on",
+                IsDefault = ReadOnOffValue(s.Attribute(W + "default")?.Value),
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 // The "Style for following paragraph" (w:next): the style applied to the paragraph created
                 // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
@@ -9684,8 +9684,8 @@ public static partial class DocxReader
         {
             if (groupXfrm.Attribute("rot")?.Value is { } rotStr && long.TryParse(rotStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu))
                 group.RotationAngle = rotEmu / 60000.0;
-            group.FlipH = groupXfrm.Attribute("flipH")?.Value is "1" or "true";
-            group.FlipV = groupXfrm.Attribute("flipV")?.Value is "1" or "true";
+            group.FlipH = OoxmlBooleanLexical.IsTrue(groupXfrm.Attribute("flipH")?.Value);
+            group.FlipV = OoxmlBooleanLexical.IsTrue(groupXfrm.Attribute("flipV")?.Value);
         }
 
         // Child offsets/extents use the group xfrm's child-coordinate space. Flatten that space into
@@ -9780,8 +9780,8 @@ public static partial class DocxReader
             {
                 var angle = long.TryParse(xfrm?.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotEmu)
                     ? rotEmu / 60000.0 : 0;
-                var flipH = xfrm?.Attribute("flipH")?.Value is "1" or "true";
-                var flipV = xfrm?.Attribute("flipV")?.Value is "1" or "true";
+                var flipH = OoxmlBooleanLexical.IsTrue(xfrm?.Attribute("flipH")?.Value);
+                var flipV = OoxmlBooleanLexical.IsTrue(xfrm?.Attribute("flipV")?.Value);
                 switch (child)
                 {
                     case InlineImage image: image.RotationAngle = angle; image.FlipH = flipH; image.FlipV = flipV; break;

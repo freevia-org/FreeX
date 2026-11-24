@@ -67,7 +67,9 @@ internal sealed partial class AutosaveAdapter : IDisposable
                 ConfirmDiscardOrSaveAsync: confirmDiscardOrSaveAsync,
                 PromptResponseOverride: ResolvePromptResponse),
             UiText.Get,
-            sessionFactory: sessionPorts => sessionFactory?.Invoke(sessionPorts) ?? new FreePAutosaveSession(sessionPorts));
+            sessionFactory: sessionPorts => sessionFactory?.Invoke(sessionPorts) ?? new FreePAutosaveSession(sessionPorts),
+            // FreeP's WPF host (the reference) words the startup offer with the unquoted display name.
+            quoteStartupDisplayName: false);
     }
 
     /// <summary>

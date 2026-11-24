@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -52,12 +53,12 @@ public sealed class FormulaRangeEditingSessionTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorKey.F8, FormulaEditorModifiers.None, ExcelSelectionMode.Extend)]
-    [InlineData(FormulaEditorKey.F8, FormulaEditorModifiers.Shift, ExcelSelectionMode.Add)]
-    [InlineData(FormulaEditorKey.Left, FormulaEditorModifiers.None, ExcelSelectionMode.Normal)]
+    [InlineData(FormulaEditorKey.F8, FreeKeyModifiers.None, ExcelSelectionMode.Extend)]
+    [InlineData(FormulaEditorKey.F8, FreeKeyModifiers.Shift, ExcelSelectionMode.Add)]
+    [InlineData(FormulaEditorKey.Left, FreeKeyModifiers.None, ExcelSelectionMode.Normal)]
     public void SelectionModeToggle_UsesKeyboardMatrix(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         ExcelSelectionMode expectedMode)
     {
         var session = new FormulaRangeEditingSession();
@@ -160,9 +161,9 @@ public sealed class FormulaRangeEditingSessionTests
                 hasRangeEditor: false,
                 hasFormulaEditCell: false)
             .Should().Be(FormulaPointModeCommand.Commit);
-        session.ShouldAppendDisjointReference(FormulaEditorModifiers.Control).Should().BeTrue();
-        session.ShouldAppendDisjointReference(FormulaEditorModifiers.Meta).Should().BeTrue();
-        session.ShouldAppendDisjointReference(FormulaEditorModifiers.Shift).Should().BeFalse();
+        session.ShouldAppendDisjointReference(FreeKeyModifiers.Control).Should().BeTrue();
+        session.ShouldAppendDisjointReference(FreeKeyModifiers.Meta).Should().BeTrue();
+        session.ShouldAppendDisjointReference(FreeKeyModifiers.Shift).Should().BeFalse();
         session.ShouldOfferCellValueAutoComplete(enabled: true).Should().BeFalse();
     }
 
@@ -286,14 +287,14 @@ public sealed class FormulaRangeEditingSessionTests
         session.SetPointMode(true);
         session.TrackReferenceSpan(5, 2);
         session.TrackSelection(current, current);
-        session.TryToggleSelectionMode(FormulaEditorKey.F8, FormulaEditorModifiers.Shift);
+        session.TryToggleSelectionMode(FormulaEditorKey.F8, FreeKeyModifiers.Shift);
 
         var navigation = session.PlanKeyboardNavigation(
             new GridRange(current, current),
             current,
             FormulaEditorKey.Right,
             FormulaEditorKey.None,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             sheet: null,
             rowPageSize: 10,
             columnPageSize: 10);
@@ -330,7 +331,7 @@ public sealed class FormulaRangeEditingSessionTests
         var intent = session.PlanEditKey(
             FormulaEditorKey.Right,
             FormulaEditorKey.None,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             current,
             pageSize: 10,
             text: "=B2",
@@ -533,7 +534,7 @@ public sealed class FormulaRangeEditingSessionTests
         var sheet = new SheetId(Guid.NewGuid());
         var session = new FormulaRangeEditingSession();
         session.SetPointMode(pointMode);
-        session.TryToggleSelectionMode(FormulaEditorKey.F8, FormulaEditorModifiers.None);
+        session.TryToggleSelectionMode(FormulaEditorKey.F8, FreeKeyModifiers.None);
         session.TrackReferenceSpan(2, 4);
         session.TrackSelection(
             new CellAddress(sheet, 2, 3),

@@ -29,15 +29,14 @@ public sealed class WpfAutosaveHostTests : IDisposable
         WriteSnapshot: WriteDocument,
         ReadSnapshot: ReadDocument);
 
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(),
-        "WpfAutosaveHostTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("WpfAutosaveHostTests_");
+
+    private string _directory => _temporaryDirectory.Path;
 
     private readonly AutosaveSnapshotStore _store;
 
     public WpfAutosaveHostTests()
     {
-        Directory.CreateDirectory(_directory);
         _store = new AutosaveSnapshotStore(_directory);
     }
 
@@ -48,8 +47,7 @@ public sealed class WpfAutosaveHostTests : IDisposable
         foreach (var host in _hosts)
             host.Session.Dispose(); // releases the snapshot ownership lock file
 
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
+        _temporaryDirectory.Dispose();
     }
 
     [Fact]

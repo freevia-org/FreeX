@@ -289,7 +289,17 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         if (plan is null)
             return;
 
-        ScrollEditorToBlock(plan.BlockIndex);
+        // Document start/end move the caret like the WPF host does; headings only scroll the block into view.
+        if (plan.Kind is FindReplaceGoToTargetKind.DocumentStart or FindReplaceGoToTargetKind.DocumentEnd)
+        {
+            if (!_editor.MoveCaretToDocumentEdge(plan.Kind == FindReplaceGoToTargetKind.DocumentEnd))
+                ScrollEditorToBlock(plan.BlockIndex);
+        }
+        else
+        {
+            ScrollEditorToBlock(plan.BlockIndex);
+        }
+
         _editor.Focus();
         _status.Text = _session.State.StatusText;
     }

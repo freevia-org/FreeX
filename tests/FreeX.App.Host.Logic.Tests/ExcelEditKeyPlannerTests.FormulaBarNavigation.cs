@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -13,7 +14,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     [InlineData(FormulaEditorKey.PageDown, 19, 5)]
     public void GetIntent_AllowsFormulaBarNavigationKeys(FormulaEditorKey key, uint expectedRow, uint expectedCol)
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(key, FormulaEditorModifiers.None, Current, pageSize: 9, allowFormulaBarNavigationKeys: true);
+        var intent = ExcelEditKeyPlanner.GetIntent(key, FreeKeyModifiers.None, Current, pageSize: 9, allowFormulaBarNavigationKeys: true);
 
         intent.Action.Should().Be(ExcelEditKeyAction.CommitAndMove);
         intent.Target.Should().Be(new CellAddress(SheetId, expectedRow, expectedCol));
@@ -31,7 +32,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize,
             allowFormulaBarNavigationKeys: true);
@@ -49,7 +50,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.Shift,
+            FreeKeyModifiers.Shift,
             Current,
             pageSize: 9,
             allowFormulaBarNavigationKeys: true);

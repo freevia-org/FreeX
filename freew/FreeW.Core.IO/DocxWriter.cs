@@ -8079,8 +8079,8 @@ public static partial class DocxWriter
     /// Builds a minimal, self-contained xlsx (OPC ZIP) holding the chart's data so Word's "Edit Data" has a
     /// workbook to open (F1). Layout matches the chart's c:f formula refs: row 1 is the header (A1 empty, then
     /// one series name per column B, C, …), rows 2.. are the data (column A = category label, columns B+ = the
-    /// aligned series values). A tiny hand-built package — [Content_Types].xml, _rels/.rels, xl/workbook.xml,
-    /// xl/_rels/workbook.xml.rels and xl/worksheets/sheet1.xml — with NO dependency on FreeX's xlsx writer.
+    /// aligned series values). A tiny hand-built package (scaffolding from the shared
+    /// <see cref="EmbeddedChartWorkbookPackage"/>, one worksheet) with NO dependency on FreeX's xlsx writer.
     /// </summary>
     private static byte[] BuildChartWorkbook(Chart chart)
     {
@@ -8095,7 +8095,7 @@ public static partial class DocxWriter
         {
             var name = chart.Series[c].Name;
             if (!string.IsNullOrEmpty(name))
-                headerRow.Add(InlineStringCell(s, $"{ColumnLetter(c + 1)}1", name));
+                headerRow.Add(EmbeddedChartWorkbookPackage.InlineStringCell($"{ColumnLetter(c + 1)}1", name));
         }
         if (headerRow.HasElements)
             sheetData.Add(headerRow);
@@ -8104,7 +8104,7 @@ public static partial class DocxWriter
         {
             var rowNumber = rowIdx + 2; // data starts on row 2
             var row = new XElement(s + "row", new XAttribute("r", rowNumber));
-            row.Add(InlineStringCell(s, $"A{rowNumber}", chart.Categories[rowIdx]));
+            row.Add(EmbeddedChartWorkbookPackage.InlineStringCell($"A{rowNumber}", chart.Categories[rowIdx]));
             for (var c = 0; c < chart.Series.Count; c++)
             {
                 var values = chart.Series[c].Values;
@@ -8121,58 +8121,15 @@ public static partial class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "r", sr.NamespaceName),
                 sheetData));
 
-        var workbook = new XDocument(
-            new XElement(s + "workbook",
-                new XAttribute(XNamespace.Xmlns + "r", sr.NamespaceName),
-                new XElement(s + "sheets",
-                    new XElement(s + "sheet",
-                        new XAttribute("name", "Sheet1"),
-                        new XAttribute("sheetId", "1"),
-                        new XAttribute(sr + "id", "rId1")))));
-
-        var workbookRels = new XDocument(
-            OpcRelationships.CreateRoot(
-                OpcRelationships.CreateRelationship(
-                    "rId1",
-                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet",
-                    "worksheets/sheet1.xml")));
-
-        var contentTypes = new XDocument(
-            new XElement(Ct + "Types",
-                new XElement(Ct + "Default", new XAttribute("Extension", "rels"),
-                    new XAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml")),
-                new XElement(Ct + "Default", new XAttribute("Extension", "xml"),
-                    new XAttribute("ContentType", "application/xml")),
-                new XElement(Ct + "Override", new XAttribute("PartName", "/xl/workbook.xml"),
-                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")),
-                new XElement(Ct + "Override", new XAttribute("PartName", "/xl/worksheets/sheet1.xml"),
-                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"))));
-
-        var packageRels = new XDocument(
-            OpcRelationships.CreateRoot(
-                OpcRelationships.CreateRelationship(
-                    "rId1",
-                    OfficeDocumentRel,
-                    "xl/workbook.xml")));
-
-        using var buffer = new MemoryStream();
-        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WritePart(zip, "[Content_Types].xml", contentTypes);
-            WritePart(zip, "_rels/.rels", packageRels);
-            WritePart(zip, "xl/workbook.xml", workbook);
-            WritePart(zip, "xl/_rels/workbook.xml.rels", workbookRels);
-            WritePart(zip, "xl/worksheets/sheet1.xml", sheet);
-        }
-        return buffer.ToArray();
+        // The package scaffolding (content types, rels, workbook part) is the shared
+        // EmbeddedChartWorkbookPackage; WritePart keeps this writer's sanitizing and deterministic timestamp.
+        return EmbeddedChartWorkbookPackage.Build(
+            sheet,
+            "Sheet1",
+            includeStyles: false,
+            declaration: null,
+            WritePart);
     }
-
-    /// <summary>Builds an inline-string worksheet cell (t="inlineStr") so the workbook needs no shared-strings part.</summary>
-    private static XElement InlineStringCell(XNamespace s, string reference, string text) =>
-        new(s + "c",
-            new XAttribute("r", reference),
-            new XAttribute("t", "inlineStr"),
-            new XElement(s + "is", new XElement(s + "t", text)));
 
     /// <summary>Builds a c:title carrying a single rich-text run with the chart title text.</summary>
     private static XElement BuildChartTitle(string title) =>
@@ -8366,20 +8323,17 @@ public static partial class DocxWriter
         return new XElement(C + "tx",
             new XElement(C + "strRef",
                 new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$1"),
-                new XElement(C + "strCache",
-                    new XElement(C + "ptCount", new XAttribute("val", 1)),
-                    new XElement(C + "pt", new XAttribute("idx", 0),
-                        new XElement(C + "v", name)))));
+                DrawingMlChartCache.CreateStringData(C, "strCache", 1, [new(0, name)])));
     }
 
     /// <summary>Builds c:cat → c:strRef/c:strCache: the shared category labels as a literal string cache.</summary>
     private static XElement BuildCategoryCache(IReadOnlyList<string> categories)
     {
-        var cache = new XElement(C + "strCache",
-            new XElement(C + "ptCount", new XAttribute("val", categories.Count)));
-        for (var i = 0; i < categories.Count; i++)
-            cache.Add(new XElement(C + "pt", new XAttribute("idx", i),
-                new XElement(C + "v", categories[i])));
+        var cache = DrawingMlChartCache.CreateStringData(
+            C,
+            "strCache",
+            categories.Count,
+            categories.Select((category, i) => new KeyValuePair<int, string>(i, category)));
 
         return new XElement(C + "cat",
             new XElement(C + "strRef",
@@ -8400,23 +8354,17 @@ public static partial class DocxWriter
     /// <summary>Builds a bare c:numCache (formatCode + index-addressed c:pt values) shared by c:val/c:xVal/c:yVal.</summary>
     private static XElement BuildNumCache(IReadOnlyList<double> values)
     {
-        var cache = new XElement(C + "numCache",
-            new XElement(C + "formatCode", "General"),
-            new XElement(C + "ptCount", new XAttribute("val", values.Count)));
-        for (var i = 0; i < values.Count; i++)
-            cache.Add(new XElement(C + "pt", new XAttribute("idx", i),
-                new XElement(C + "v", values[i].ToString(System.Globalization.CultureInfo.InvariantCulture))));
-        return cache;
+        return DrawingMlChartCache.CreateNumericData(
+            C,
+            "numCache",
+            "General",
+            values.Count,
+            values.Select((value, i) => new KeyValuePair<int, string>(i, DrawingMlChartCache.FormatNumber(value))));
     }
 
     /// <summary>Maps a 0-based column index to its spreadsheet letter (0→A, 1→B, …, 26→AA) for c:f refs + the workbook.</summary>
-    private static string ColumnLetter(int index)
-    {
-        var letters = string.Empty;
-        for (var n = index; n >= 0; n = n / 26 - 1)
-            letters = (char)('A' + n % 26) + letters;
-        return letters;
-    }
+    private static string ColumnLetter(int index) =>
+        EmbeddedChartWorkbookPackage.ColumnName(index + 1);
 
     /// <summary>
     /// Builds the c:catAx (category axis) referencing its own id and cross-referencing the value axis, with an
@@ -10181,72 +10129,47 @@ public static partial class DocxWriter
         var scheme = theme.ColorScheme;
         var effects = DocumentEffectSet.FromTheme(theme);
 
-        XElement Srgb(string slot, string hex) =>
-            new(A + slot, new XElement(A + "srgbClr", new XAttribute("val", hex)));
+        // dk1/lt1 are conventionally emitted as window/windowText sysClr with an srgb lastClr; using a
+        // plain srgbClr is equally valid and keeps the reader's parse uniform across all twelve slots.
+        var clrScheme = DrawingMlThemeXml.CreateColorScheme(theme.Name,
+        [
+            new("dk1", scheme.Dark1),
+            new("lt1", scheme.Light1),
+            new("dk2", scheme.Dark2),
+            new("lt2", scheme.Light2),
+            new("accent1", scheme.Accent1),
+            new("accent2", scheme.Accent2),
+            new("accent3", scheme.Accent3),
+            new("accent4", scheme.Accent4),
+            new("accent5", scheme.Accent5),
+            new("accent6", scheme.Accent6),
+            new("hlink", scheme.Hyperlink),
+            new("folHlink", scheme.FollowedHyperlink),
+        ]);
 
-        var clrScheme = new XElement(A + "clrScheme",
-            new XAttribute("name", theme.Name),
-            // dk1/lt1 are conventionally emitted as window/windowText sysClr with an srgb lastClr; using a
-            // plain srgbClr is equally valid and keeps the reader's parse uniform across all twelve slots.
-            Srgb("dk1", scheme.Dark1),
-            Srgb("lt1", scheme.Light1),
-            Srgb("dk2", scheme.Dark2),
-            Srgb("lt2", scheme.Light2),
-            Srgb("accent1", scheme.Accent1),
-            Srgb("accent2", scheme.Accent2),
-            Srgb("accent3", scheme.Accent3),
-            Srgb("accent4", scheme.Accent4),
-            Srgb("accent5", scheme.Accent5),
-            Srgb("accent6", scheme.Accent6),
-            Srgb("hlink", scheme.Hyperlink),
-            Srgb("folHlink", scheme.FollowedHyperlink));
-
-        XElement Font(string element, string typeface) =>
-            new(A + element,
-                new XElement(A + "latin", new XAttribute("typeface", typeface)),
-                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
-                new XElement(A + "cs", new XAttribute("typeface", string.Empty)));
-
-        var fontScheme = new XElement(A + "fontScheme",
-            new XAttribute("name", theme.Name),
-            new XElement(A + "majorFont", Font("latin", theme.HeadingFont).Elements()),
-            new XElement(A + "minorFont", Font("latin", theme.BodyFont).Elements()));
+        var fontScheme = DrawingMlThemeXml.CreateFontScheme(theme.Name, theme.HeadingFont, theme.BodyFont);
 
         // A Word-style format scheme: three fills, lines, effects, and background fills. The selected
         // effect-set name is the durable part FreeW reads back; the line/effect entries make the theme
         // visibly meaningful to downstream shape/SmartArt/WordArt consumers.
-        XElement SolidPhClr() => new(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
+        var fmtScheme = DrawingMlThemeXml.CreateFormatScheme(
+            effects.Name,
+            [DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill()],
+            [
+                DrawingMlThemeXml.CreateLineStyle(effects.LineWidthEmu, includeCapCompoundAlign: true),
+                DrawingMlThemeXml.CreateLineStyle(effects.LineWidthEmu * 2, includeCapCompoundAlign: true),
+                DrawingMlThemeXml.CreateLineStyle(effects.LineWidthEmu * 3, includeCapCompoundAlign: true),
+            ],
+            [EffectStyle(effects, 1), EffectStyle(effects, 2), EffectStyle(effects, 3)],
+            [DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill()]);
 
-        var fmtScheme = new XElement(A + "fmtScheme",
-            new XAttribute("name", effects.Name),
-            new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()),
-            new XElement(A + "lnStyleLst",
-                Line(effects.LineWidthEmu),
-                Line(effects.LineWidthEmu * 2),
-                Line(effects.LineWidthEmu * 3)),
-            new XElement(A + "effectStyleLst",
-                EffectStyle(effects, 1),
-                EffectStyle(effects, 2),
-                EffectStyle(effects, 3)),
-            new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr()));
-
-        var themeElements = new XElement(A + "themeElements", clrScheme, fontScheme, fmtScheme);
-
-        return new XDocument(
-            new XElement(A + "theme",
-                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                new XAttribute("name", theme.Name),
-                themeElements,
-                new XElement(A + "objectDefaults"),
-                new XElement(A + "extraClrSchemeLst")));
-
-        static XElement Line(int widthEmu) => new(A + "ln",
-            new XAttribute("w", widthEmu),
-            new XAttribute("cap", "flat"),
-            new XAttribute("cmpd", "sng"),
-            new XAttribute("algn", "ctr"),
-            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
-            new XElement(A + "prstDash", new XAttribute("val", "solid")));
+        return DrawingMlThemeXml.CreateThemeDocument(
+            theme.Name,
+            clrScheme,
+            fontScheme,
+            fmtScheme,
+            [new XElement(A + "objectDefaults"), new XElement(A + "extraClrSchemeLst")],
+            declaration: null);
 
         static XElement EffectStyle(DocumentEffectSet set, int depth)
         {

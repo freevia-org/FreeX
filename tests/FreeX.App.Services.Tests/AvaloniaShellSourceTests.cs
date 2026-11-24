@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using File = FreeX.App.Services.Tests.AvaloniaShellSourceFile;
 
@@ -803,11 +804,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_saveMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Save));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_SaveAs\"");
-        catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
+        catalogSource.Should().Contain("FreeKeyModifiers.Meta | FreeKeyModifiers.Shift");
         source.Should().Contain("_saveAsMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs));");
         source.Should().Contain("ConfigureNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook);");
         catalogSource.Should().Contain("\"AvaloniaNativeMenu_CloseWorkbook\"");
-        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta)");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.W, FreeKeyModifiers.Meta)");
         source.Should().Contain("_closeWorkbookMenuItem.Click += (_, _) => RunGuarded(() => ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Close));");
         source.Should().Contain("_backstageExportMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageExport));");
         source.Should().Contain("_backstageAccountMenuItem.Click += (_, _) => RunGuarded(() => ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.BackstageAccount));");
@@ -848,7 +849,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateNativePasteSpecialTextMenuItem(\"Unicode Text\")");
         source.Should().Contain("CreateNativePastePictureMenuItem(\"Picture\", linkedPicture: false)");
         source.Should().Contain("CreateNativePastePictureMenuItem(\"Linked Picture\", linkedPicture: true)");
-        catalogSource.Should().Contain("new(NativeMenuItemId.SelectAll, \"Select All\", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.SelectAll, \"Select All\", new NativeMenuGesturePlan(NativeMenuGestureKey.A, FreeKeyModifiers.Meta))");
         source.Should().Contain("_selectAllMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.SelectAll));");
         var focusedEditBlock = ExtractSourceBlock(nativeEditSource,
             "if (GetNativeTextEditMenuTarget() is { } editor)",
@@ -963,11 +964,11 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("new(NativeMenuItemId.ShowHeadings, \"Headings\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_showHeadingsMenuItem.ToggleType = MenuItemToggleType.CheckBox;");
         source.Should().Contain("_showHeadingsMenuItem.Click += (_, _) => ToggleShowHeadings();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomIn, \"Zoom In\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomIn, \"Zoom In\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, FreeKeyModifiers.Meta))");
         source.Should().Contain("_zoomInMenuItem.Click += (_, _) => ZoomIn();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomOut, \"Zoom Out\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemMinus, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.ZoomOut, \"Zoom Out\", new NativeMenuGesturePlan(NativeMenuGestureKey.OemMinus, FreeKeyModifiers.Meta))");
         source.Should().Contain("_zoomOutMenuItem.Click += (_, _) => ZoomOut();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.Zoom100, \"100%\", new NativeMenuGesturePlan(NativeMenuGestureKey.D0, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Zoom100, \"100%\", new NativeMenuGesturePlan(NativeMenuGestureKey.D0, FreeKeyModifiers.Meta))");
         source.Should().Contain("_zoom100MenuItem.Click += (_, _) => ZoomTo100Percent();");
         catalogSource.Should().Contain("new(NativeMenuItemId.ZoomToSelection, \"Zoom to Selection\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_zoomToSelectionMenuItem.Click += (_, _) => ZoomToSelection();");
@@ -1075,7 +1076,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_legalNoticesMenuItem.Click += (_, _) => RunGuarded(ShowLegalNoticesDialogAsync);");
         source.Should().Contain("ConfigureNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit);");
         catalogSource.Should().Contain("\"Quit FreeX\"");
-        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta)");
+        catalogSource.Should().Contain("new NativeMenuGesturePlan(NativeMenuGestureKey.Q, FreeKeyModifiers.Meta)");
         source.Should().Contain("_quitMenuItem.Click += (_, _) => RunGuarded(TryQuitApplicationAsync);");
         source.Should().Contain("var fileMenu = CreateNativeFileMenu();");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.NewWorkbook)");
@@ -1902,9 +1903,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_redoButton.Click += RedoButton_Click;");
         source.Should().Contain("_undoButton.IsEnabled = isIdle && _session.CanUndo;");
         source.Should().Contain("_redoButton.IsEnabled = isIdle && _session.CanRedo;");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Undo", "WorkbookShortcutKey.Z", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Redo", "WorkbookShortcutKey.Y", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Redo", "WorkbookShortcutKey.Z", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Undo", "WorkbookShortcutKey.Z", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Redo", "WorkbookShortcutKey.Y", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Redo", "WorkbookShortcutKey.Z", "FreeKeyModifiers.Control | FreeKeyModifiers.Shift");
         AssertWorkbookShortcutRouteHandled(source, "Undo", "UndoLastEdit();");
         AssertWorkbookShortcutRouteHandled(source, "Redo", "RedoLastEdit();");
         source.Should().Contain("private void UndoLastEdit()");
@@ -2037,9 +2038,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
         source.Should().Contain("if (_formulaBox.IsFocused &&");
         source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Cut", "WorkbookShortcutKey.X", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Copy", "WorkbookShortcutKey.C", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Paste", "WorkbookShortcutKey.V", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Cut", "WorkbookShortcutKey.X", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Copy", "WorkbookShortcutKey.C", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Paste", "WorkbookShortcutKey.V", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "Cut", "await CutSelectedRangeToClipboardAsync();");
         AssertWorkbookShortcutRouteHandled(source, "Copy", "await CopySelectedRangeToClipboardAsync();");
         AssertWorkbookShortcutRouteHandled(source, "Paste", "await PasteClipboardTextAsync();");
@@ -2362,7 +2363,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
         catalogSource.Should().Contain("Item(NativeMenuItemId.FlashFill)");
         catalogSource.Should().Contain("new(NativeMenuItemId.FlashFill, context.IsIdle)");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FlashFill", "WorkbookShortcutKey.E", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FlashFill", "WorkbookShortcutKey.E", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "FlashFill", "FlashFillSelectedRange();");
         source.Should().Contain("private void FlashFillSelectedRange()");
         source.Should().Contain("var result = _session.FlashFillSelectedRange();");
@@ -3974,8 +3975,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("WorksheetCommandPresentationCatalog.FormatFillStatus(direction, rangeReference)");
         source.Should().NotContain("FormatFillCellsAction");
         source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillDown", "WorkbookShortcutKey.D", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillRight", "WorkbookShortcutKey.R", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillDown", "WorkbookShortcutKey.D", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillRight", "WorkbookShortcutKey.R", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "FillDown", "FillSelectedRange(FillCellsDirection.Down);");
         AssertWorkbookShortcutRouteHandled(source, "FillRight", "FillSelectedRange(FillCellsDirection.Right);");
         smokeSource.Should().Contain("HasFillCellsButton: _fillCellsButton.Content?.ToString() == \"Fill Cells\"");
@@ -4147,7 +4148,7 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("return ToCommand(\"Insert Hyperlink\", commands);");
 
         source.Should().Contain("private readonly NativeMenuItem _insertHyperlinkMenuItem = new();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", new NativeMenuGesturePlan(NativeMenuGestureKey.K, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.InsertHyperlink, \"Hyperlink...\", new NativeMenuGesturePlan(NativeMenuGestureKey.K, FreeKeyModifiers.Meta))");
         source.Should().Contain("_insertHyperlinkMenuItem.Click += (_, _) => RunGuarded(ShowInsertHyperlinkDialogAsync);");
         source.Should().Contain("var insertMenu = CreateNativeMenu(NativeMenuTopLevelId.Insert);");
         catalogSource.Should().Contain("Item(NativeMenuItemId.InsertHyperlink)");
@@ -4184,7 +4185,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_BoldFailed\"));");
         source.Should().Contain("enabled ? \"MainLoc_BoldedStatusFormat\" : \"MainLoc_UnboldedStatusFormat\",");
         source.Should().Contain("private static bool HasOnlyCommandModifier(KeyModifiers modifiers)");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleBold", "WorkbookShortcutKey.B", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleBold", "WorkbookShortcutKey.B", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "ToggleBold", "ToggleSelectedRangeBold();");
     }
 
@@ -4210,7 +4211,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("enabled ? \"MainLoc_ItalicizedStatusFormat\" : \"MainLoc_UnitalicizedStatusFormat\",");
         source.Should().Contain("FontStyle = fontStyle,");
         source.Should().Contain("var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleItalic", "WorkbookShortcutKey.I", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleItalic", "WorkbookShortcutKey.I", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "ToggleItalic", "ToggleSelectedRangeItalic();");
     }
 
@@ -4239,8 +4240,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var textDecorations = BuildTextDecorations(style);");
         source.Should().Contain("if (style.Underline || style.DoubleUnderline)");
         source.Should().Contain("textBlock.TextDecorations = textDecorations;");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleUnderline", "WorkbookShortcutKey.U", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleUnderline", "WorkbookShortcutKey.D4", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleUnderline", "WorkbookShortcutKey.U", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleUnderline", "WorkbookShortcutKey.D4", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "ToggleUnderline", "ToggleSelectedRangeUnderline();");
     }
 
@@ -4299,7 +4300,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static TextDecorationCollection? BuildTextDecorations(CellStyle? style)");
         source.Should().Contain("if (style.Strikethrough)");
         source.Should().Contain("decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleStrikethrough", "WorkbookShortcutKey.D5", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleStrikethrough", "WorkbookShortcutKey.D5", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "ToggleStrikethrough", "ToggleSelectedRangeStrikethrough();");
     }
 
@@ -5283,10 +5284,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool IsAnyToolbarControlFocused()");
         source.Should().Contain("private bool IsAnySheetTabFocused()");
         source.Should().Contain("private static bool FocusControl(Control control)");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectPreviousSheetGroup", "WorkbookShortcutKey.PageUp", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectNextSheetGroup", "WorkbookShortcutKey.PageDown", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivatePreviousSheet", "WorkbookShortcutKey.PageUp", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivateNextSheet", "WorkbookShortcutKey.PageDown", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectPreviousSheetGroup", "WorkbookShortcutKey.PageUp", "FreeKeyModifiers.Control | FreeKeyModifiers.Shift");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectNextSheetGroup", "WorkbookShortcutKey.PageDown", "FreeKeyModifiers.Control | FreeKeyModifiers.Shift");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivatePreviousSheet", "WorkbookShortcutKey.PageUp", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivateNextSheet", "WorkbookShortcutKey.PageDown", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
         AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
         AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: false)");
@@ -5484,7 +5485,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("GoToSpecialDialogPlanner.BuildOptions(choice.Kind, GetValueTypes())");
         catalogSource.Should().Contain("new(NativeMenuItemId.Find, \"Find...\", NativeMenuGesture(WorkbookShortcutRoute.Find))");
         source.Should().Contain("_findMenuItem.Click += (_, _) => RunGuarded(ShowFindDialogAsync);");
-        catalogSource.Should().Contain("new(NativeMenuItemId.FindNext, \"Find Next\", new NativeMenuGesturePlan(NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.FindNext, \"Find Next\", new NativeMenuGesturePlan(NativeMenuGestureKey.G, FreeKeyModifiers.Meta))");
         source.Should().Contain("_findNextMenuItem.Click += (_, _) => FindNext();");
         catalogSource.Should().Contain("new(NativeMenuItemId.Replace, \"Replace...\", NativeMenuGesture(WorkbookShortcutRoute.Replace))");
         source.Should().Contain("_replaceMenuItem.Click += (_, _) => RunGuarded(ShowReplaceDialogAsync);");
@@ -5605,9 +5606,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;");
         source.Should().Contain("SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);");
         source.Should().Contain("e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Find", "WorkbookShortcutKey.F", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Replace", "WorkbookShortcutKey.H", "WorkbookShortcutModifiers.Control");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "GoTo", "WorkbookShortcutKey.G", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Find", "WorkbookShortcutKey.F", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Replace", "WorkbookShortcutKey.H", "FreeKeyModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "GoTo", "WorkbookShortcutKey.G", "FreeKeyModifiers.Control");
         AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "GoTo", "WorkbookShortcutKey.F5");
         AssertWorkbookShortcutRouteHandled(source, "Find", "await ShowFindDialogAsync();");
         AssertWorkbookShortcutRouteHandled(source, "Replace", "await ShowReplaceDialogAsync();");
@@ -5771,7 +5772,7 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
-        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "WorkbookStatistics", "WorkbookShortcutKey.G", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "WorkbookStatistics", "WorkbookShortcutKey.G", "FreeKeyModifiers.Control | FreeKeyModifiers.Shift");
         AssertWorkbookShortcutRouteHandled(source, "WorkbookStatistics", "await ShowWorkbookStatisticsDialogAsync();");
         source.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
@@ -5812,22 +5813,22 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.NewWorkbook)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenBackstage)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.SaveWorkbook)");
-        catalogSource.Should().Contain("NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift");
-        catalogSource.Should().Contain("NativeMenuGestureKey.W, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("FreeKeyModifiers.Meta | FreeKeyModifiers.Shift");
+        catalogSource.Should().Contain("NativeMenuGestureKey.W, FreeKeyModifiers.Meta");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Undo)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Redo)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Cut)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Copy)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Paste)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.PasteSpecial)");
-        catalogSource.Should().Contain("NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.A, FreeKeyModifiers.Meta");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Find)");
-        catalogSource.Should().Contain("NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.G, FreeKeyModifiers.Meta");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.ToggleBold)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.ToggleItalic)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.ToggleUnderline)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenFormatCells)");
-        catalogSource.Should().Contain("NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGestureKey.Q, FreeKeyModifiers.Meta");
 
         AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
         AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(request.Direction, selectRange: true)");
@@ -5851,7 +5852,7 @@ public sealed class AvaloniaShellSourceTests
         windowSource.Should().Contain("private readonly NativeMenuItem _minimizeWindowMenuItem = new();");
         windowSource.Should().Contain("private readonly NativeMenuItem _zoomWindowMenuItem = new();");
         windowSource.Should().Contain("private readonly NativeMenuItem _bringAllToFrontMenuItem = new();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.MinimizeWindow, \"Minimize\", new NativeMenuGesturePlan(NativeMenuGestureKey.M, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.MinimizeWindow, \"Minimize\", new NativeMenuGesturePlan(NativeMenuGestureKey.M, FreeKeyModifiers.Meta))");
         windowSource.Should().Contain("_minimizeWindowMenuItem.Click += (_, _) => WindowState = WindowState.Minimized;");
         catalogSource.Should().Contain("new(NativeMenuItemId.ZoomWindow, \"Zoom\", RequiresGestureInSmoke: false)");
         windowSource.Should().Contain("WindowState = WindowState == WindowState.Maximized");

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -9,7 +10,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     [Fact]
     public void GetIntent_DoesNotCommitInlineEditorOnPlainArrowKeys()
     {
-        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Left, FormulaEditorModifiers.None, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
+        var intent = ExcelEditKeyPlanner.GetIntent(FormulaEditorKey.Left, FreeKeyModifiers.None, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
         intent.Action.Should().Be(ExcelEditKeyAction.None);
         intent.Target.Should().BeNull();
@@ -24,7 +25,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -43,7 +44,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             key,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -58,7 +59,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.Right,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -73,7 +74,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.Right,
-            FormulaEditorModifiers.Shift,
+            FreeKeyModifiers.Shift,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,

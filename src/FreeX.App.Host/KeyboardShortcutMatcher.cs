@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
@@ -113,17 +114,8 @@ public static partial class KeyboardShortcutMatcher
     private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey) =>
         WorkbookKeyboardShortcutCatalog.TryParseKeyName(key.ToString(), out shortcutKey);
 
-    private static WorkbookShortcutModifiers ToWorkbookModifiers(ModifierKeys modifiers)
-    {
-        var result = WorkbookShortcutModifiers.None;
-        if (modifiers.HasFlag(ModifierKeys.Control))
-            result |= WorkbookShortcutModifiers.Control;
-        if (modifiers.HasFlag(ModifierKeys.Alt))
-            result |= WorkbookShortcutModifiers.Alt;
-        if (modifiers.HasFlag(ModifierKeys.Shift))
-            result |= WorkbookShortcutModifiers.Shift;
-        return result;
-    }
+    private static FreeKeyModifiers ToWorkbookModifiers(ModifierKeys modifiers) =>
+        Free.Shared.Shell.Wpf.WpfKeyModifiersMapper.FromWpf(modifiers, Free.Shared.Shell.KeyModifierMetaPolicy.Drop);
 
     public static bool TryGetNumberFormatShortcut(Key key, ModifierKeys modifiers, out NumberFormatShortcut shortcut)
     {
