@@ -31,23 +31,17 @@ public sealed class FreeWNativeTextContextCapabilityTests
         checks.Should().Be(mac && (descriptor is "NSWindow" or "NSView") ? 1 : 0);
     }
 
+    public static IEnumerable<object[]> PackageFaultCases =>
+        from bundle in new[] { false, true }
+        from fault in new[] { "metadata", "manifest", "library", "malformed", "source", "patch", "idl",
+            "generator", "symbol", "abi", "version", "hash", "bytes" }
+        select new object[] { bundle, fault };
+
     [Theory]
-    [InlineData("metadata")]
-    [InlineData("manifest")]
-    [InlineData("library")]
-    [InlineData("malformed")]
-    [InlineData("source")]
-    [InlineData("patch")]
-    [InlineData("idl")]
-    [InlineData("generator")]
-    [InlineData("symbol")]
-    [InlineData("abi")]
-    [InlineData("version")]
-    [InlineData("hash")]
-    [InlineData("bytes")]
-    public void StockMissingOrMismatchedPackagesNeverReachANativeMarker(string fault)
+    [MemberData(nameof(PackageFaultCases))]
+    public void StockMissingOrMismatchedPackagesNeverReachANativeMarker(bool bundle, string fault)
     {
-        using var fixture = new PackageFixture();
+        using var fixture = new PackageFixture(bundle);
         string? expectedHash = fixture.Hash;
         switch (fault)
         {
@@ -73,28 +67,85 @@ public sealed class FreeWNativeTextContextCapabilityTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void CorrectPackageStillRequiresTheAlreadyLoadedVersionMarker(bool markerPresent)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CorrectPackageStillRequiresTheAlreadyLoadedVersionMarker(bool bundle, bool markerPresent)
     {
-        using var fixture = new PackageFixture();
+        using var fixture = new PackageFixture(bundle);
         string? probedPath = null;
         FreeWNativeTextContextCapability.VerifyPackage(fixture.DirectoryPath, fixture.Hash,
             path => { probedPath = path; return markerPresent; }).Should().Be(markerPresent);
         probedPath.Should().Be(fixture.LibraryPath);
     }
 
+    [Theory]
+    [InlineData("missing-directory")]
+    [InlineData("missing-file")]
+    [InlineData("malformed")]
+    [InlineData("mismatched-hash")]
+    public void BundleCannotFallBackToAValidManifestMisplacedBesideTheLibrary(string resourceFault)
+    {
+        using var fixture = new PackageFixture(bundle: true);
+        File.Copy(fixture.ManifestPath, Path.Combine(fixture.DirectoryPath, FreeWNativeTextContextCapability.ManifestFileName));
+        switch (resourceFault)
+        {
+            case "missing-directory": Directory.Delete(Path.GetDirectoryName(fixture.ManifestPath)!, recursive: true); break;
+            case "missing-file": File.Delete(fixture.ManifestPath); break;
+            case "malformed": File.WriteAllText(fixture.ManifestPath, "{"); break;
+            case "mismatched-hash":
+                fixture.Manifest["librarySha256"] = new string('0', 64);
+                fixture.WriteManifest();
+                break;
+        }
+        var calls = 0;
+        FreeWNativeTextContextCapability.VerifyPackage(fixture.DirectoryPath, fixture.Hash,
+            _ => { calls++; return true; }).Should().BeFalse();
+        calls.Should().Be(0, "bundle activation requires verified Resources evidence before consulting native code");
+    }
+
+    [Fact]
+    public void BundleReadsItsResourceManifestAndProbesOnlyTheExecutableDirectoryLibrary()
+    {
+        using var fixture = new PackageFixture(bundle: true);
+        File.WriteAllText(Path.Combine(fixture.DirectoryPath, FreeWNativeTextContextCapability.ManifestFileName), "{");
+        // A decoy next to the resource manifest must not redirect the native marker probe.
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(fixture.ManifestPath)!, FreeWNativeTextContextCapability.LibraryFileName), "decoy");
+        string? probed = null;
+        FreeWNativeTextContextCapability.VerifyPackage(fixture.DirectoryPath + Path.DirectorySeparatorChar, fixture.Hash,
+            path => { probed = path; return true; }).Should().BeTrue();
+        probed.Should().Be(fixture.LibraryPath);
+    }
+
+    [Fact]
+    public void StandaloneProbeWithContentsMacOSDirectoriesKeepsTheIntentionalFlatLayout()
+    {
+        using var fixture = new PackageFixture(standaloneMacOS: true);
+        string? probed = null;
+        FreeWNativeTextContextCapability.VerifyPackage(fixture.DirectoryPath, fixture.Hash,
+            path => { probed = path; return true; }).Should().BeTrue();
+        probed.Should().Be(fixture.LibraryPath);
+    }
+
     private sealed class PackageFixture : IDisposable
     {
-        public string DirectoryPath { get; } = Path.Combine(Path.GetTempPath(), "freew-native-context-" + Guid.NewGuid().ToString("N"));
+        private string RootDirectory { get; } = Path.Combine(Path.GetTempPath(), "freew-native-context-" + Guid.NewGuid().ToString("N"));
+        public string DirectoryPath { get; }
         public string LibraryPath => Path.Combine(DirectoryPath, FreeWNativeTextContextCapability.LibraryFileName);
-        public string ManifestPath => Path.Combine(DirectoryPath, FreeWNativeTextContextCapability.ManifestFileName);
+        public string ManifestPath { get; }
         public string Hash { get; }
         public Dictionary<string, object> Manifest { get; }
 
-        public PackageFixture()
+        public PackageFixture(bool bundle = false, bool standaloneMacOS = false)
         {
+            DirectoryPath = bundle ? Path.Combine(RootDirectory, "FreeW.app", "Contents", "MacOS")
+                : standaloneMacOS ? Path.Combine(RootDirectory, "PrivateProbe", "Contents", "MacOS") : RootDirectory;
+            ManifestPath = Path.Combine(bundle
+                ? Path.Combine(RootDirectory, "FreeW.app", "Contents", "Resources") : DirectoryPath,
+                FreeWNativeTextContextCapability.ManifestFileName);
             Directory.CreateDirectory(DirectoryPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(ManifestPath)!);
             File.WriteAllText(LibraryPath, "test bytes; never loaded as a native library");
             Hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(LibraryPath))).ToLowerInvariant();
             Manifest = new()
@@ -113,6 +164,6 @@ public sealed class FreeWNativeTextContextCapabilityTests
         }
 
         public void WriteManifest() => File.WriteAllText(ManifestPath, JsonSerializer.Serialize(Manifest));
-        public void Dispose() => Directory.Delete(DirectoryPath, recursive: true);
+        public void Dispose() => Directory.Delete(RootDirectory, recursive: true);
     }
 }

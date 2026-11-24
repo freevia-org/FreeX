@@ -52,9 +52,13 @@ Before installing the override, verify the actual published `Avalonia.Native.dll
 
 1. Pass the pre-signed library's SHA256 to `dotnet publish` as `-p:FreeWNativeTextContextSha256=<signed hash>`. The FreeW project emits the optional `FreeW.NativeTextContext.Sha256` assembly metadata.
 2. Package the stock publish output and perform the normal deep ad-hoc signing of the app.
-3. Replace only `FreeW.app/Contents/MacOS/libAvaloniaNative.dylib` with the exact pre-signed artifact, then copy `FreeW.NativeTextContext.json` beside it. Check that the copied hash still matches the managed metadata and manifest.
+3. Replace only `FreeW.app/Contents/MacOS/libAvaloniaNative.dylib` with the exact pre-signed artifact. Put `FreeW.NativeTextContext.json` and the preserved `FreeW.NativeTextContext.LICENSE.txt` in `FreeW.app/Contents/Resources`; neither sidecar belongs in `Contents/MacOS`. Check that the copied library hash still matches the managed metadata and resource manifest.
 4. Sign the outer app only (`codesign --force --sign - FreeW.app`), without `--deep`. A later deep signing would change the pinned nested library bytes.
 5. Verify the app using `codesign --verify --deep --strict`, then verify again after ZIP extraction. Confirm the nested library hash remains unchanged and perform native app QA.
+
+Apple's [macOS Code Signing In Depth](https://developer.apple.com/library/archive/technotes/tn2206/) and [Code Signing Guide](https://developer.apple.com/library/archive/documentation/Security/Conceptual/CodeSigningGuide/Procedures/Procedures.html) distinguish code from resources. The manifest and license are sealed as bundle resources; the signed native library stays in the executable directory. The publisher verifies these locations before outer signing, after signing, and after ZIP extraction.
+
+For a `*.app/Contents/MacOS` executable directory, the product gate requires the manifest in the sibling `Contents/Resources` directory. A missing or invalid resource manifest cannot fall back to a copy beside the library. Deliberate standalone publish outputs and private probes outside an app bundle retain the flat layout, with the manifest beside the library.
 
 The product gate applies only to actual Cocoa native handles. It validates the managed hash, manifest and file bytes once, then uses `RTLD_NOLOAD` to inspect the already loaded app-local library. It never loads a candidate library or changes global native exports. Stock or incomplete packages keep the Cocoa client detached; headless and other platform client plumbing remain testable.
 

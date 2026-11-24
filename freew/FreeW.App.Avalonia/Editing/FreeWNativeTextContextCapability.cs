@@ -52,7 +52,18 @@ internal static class FreeWNativeTextContextCapability
             return false;
         try
         {
-            var manifestPath = Path.Combine(directory, ManifestFileName);
+            var executableDirectory = new DirectoryInfo(Path.GetFullPath(directory));
+            // Bundle sidecars are signed resources, not code beside the Mach-O images. Never
+            // rescue an incomplete bundle with legacy evidence misplaced in Contents/MacOS.
+            // Standalone publish outputs and private probes deliberately retain the flat layout.
+            var isAppBundle = executableDirectory.Name.Equals("MacOS", StringComparison.OrdinalIgnoreCase)
+                && executableDirectory.Parent is { } contents
+                && contents.Name.Equals("Contents", StringComparison.OrdinalIgnoreCase)
+                && contents.Parent?.Name.EndsWith(".app", StringComparison.OrdinalIgnoreCase) == true;
+            var manifestDirectory = isAppBundle
+                ? Path.Combine(executableDirectory.Parent!.FullName, "Resources")
+                : executableDirectory.FullName;
+            var manifestPath = Path.Combine(manifestDirectory, ManifestFileName);
             var libraryPath = Path.GetFullPath(Path.Combine(directory, LibraryFileName));
             var manifestFile = new FileInfo(manifestPath);
             var libraryFile = new FileInfo(libraryPath);

@@ -19,6 +19,7 @@ MANAGED_NATIVE_SHA256 = "bd80972b554098a50fb95395659fdd9bcc9d6dfb24ea856c5676e5f
 MANAGED_NATIVE_VERSION = "12.0.4+a8dd6417fd8918570edefdbecd92d16ac7620069"
 MANIFEST_NAME = "FreeW.NativeTextContext.json"
 METADATA_KEY = "FreeW.NativeTextContext.Sha256"
+LICENSE_NAME = "FreeW.NativeTextContext.LICENSE.txt"
 
 
 def digest(path):
@@ -205,7 +206,8 @@ def main():
     env = dict(os.environ, TMPDIR=str(scratch_root), DOTNET_ROOT=str(dotnet.parent),
         PATH=str(dotnet.parent) + os.pathsep + os.environ.get("PATH", ""), NUGET_PACKAGES=str(packages),
         NUGET_HTTP_CACHE_PATH=str(http_cache), NUGET_FALLBACK_PACKAGES=";".join(str(path) for path in fallbacks),
-        DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1")
+        DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_SKIP_FIRST_TIME_EXPERIENCE="1",
+        DOTNET_GENERATE_ASPNET_CERTIFICATE="false")
     throttle = ["pwsh", "-NoProfile", "-File", str(repo / "tools/Invoke-Throttled.ps1")]
 
     def run(label, arguments, kind=None):
@@ -241,13 +243,17 @@ def main():
 
     def verify_app_inputs(app):
         contents = app / "Contents/MacOS"
+        resources = app / "Contents/Resources"
+        if any((contents / name).exists() or (contents / name).is_symlink()
+                for name in [MANIFEST_NAME, LICENSE_NAME]):
+            raise RuntimeError("Native capability data belongs in Contents/Resources, not Contents/MacOS")
         verify_managed_native(contents / "Avalonia.Native.dll")
         verify_managed_metadata(contents / "FreeW.dll", signed_hash)
         if digest(contents / pins["LIBRARY"]) != signed_hash:
             raise RuntimeError("Packaged native library bytes changed after the verified leaf signature")
-        if (contents / MANIFEST_NAME).read_bytes() != (native / MANIFEST_NAME).read_bytes():
+        if (resources / MANIFEST_NAME).read_bytes() != (native / MANIFEST_NAME).read_bytes():
             raise RuntimeError("Packaged native capability manifest changed")
-        if digest(contents / "FreeW.NativeTextContext.LICENSE.txt") != digest(native / "Avalonia-LICENSE.txt"):
+        if digest(resources / LICENSE_NAME) != digest(native / "Avalonia-LICENSE.txt"):
             raise RuntimeError("Packaged framework copyright/license changed")
 
     def interrupted(_signal, _frame):
@@ -314,8 +320,10 @@ def main():
             contents = app / "Contents/MacOS"
             # Only after deep signing the stock app: preserve the EXACT already signed leaf bytes.
             shutil.copy2(native / pins["LIBRARY"], contents / pins["LIBRARY"])
-            shutil.copy2(native / MANIFEST_NAME, contents / MANIFEST_NAME)
-            shutil.copy2(native / "Avalonia-LICENSE.txt", contents / "FreeW.NativeTextContext.LICENSE.txt")
+            resources = app / "Contents/Resources"
+            resources.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(native / MANIFEST_NAME, resources / MANIFEST_NAME)
+            shutil.copy2(native / "Avalonia-LICENSE.txt", resources / LICENSE_NAME)
             verify_app_inputs(app)
             run("outer-app-sign", ["codesign", "--force", "--sign", "-", app])
             run("app-deep-strict-verify", ["codesign", "--verify", "--deep", "--strict", app])
