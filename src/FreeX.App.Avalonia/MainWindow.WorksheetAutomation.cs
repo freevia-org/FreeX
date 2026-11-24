@@ -74,27 +74,33 @@ public sealed partial class MainWindow
             var hasRow = rowSlots.TryGetValue(row, out var rowSlot);
             var hasColumn = columnSlots.TryGetValue(column, out var columnSlot);
             var inViewport = hasRow && hasColumn;
-            // Grid layout may honor a header/control minimum beyond the requested metric
-            // (e.g. a 30px row header arranges at32px). Use the actual physical definitions
-            // after layout; keep literal merged members as individual unit slots.
+            // Control minima can make Grid slots larger than the requested metrics. Use
+            // their actual layout offsets while keeping literal merged members as unit slots.
             var actualRow = hasRow && rowSlot.Index < surface.RowDefinitions.Count && surface.RowDefinitions[rowSlot.Index].ActualHeight > 0;
             var actualColumn = hasColumn && columnSlot.Index < surface.ColumnDefinitions.Count && surface.ColumnDefinitions[columnSlot.Index].ActualWidth > 0;
             var y = actualRow ? surface.RowDefinitions.Take(rowSlot.Index).Sum(definition => definition.ActualHeight) : rowSlot.Offset;
             var x = actualColumn ? surface.ColumnDefinitions.Take(columnSlot.Index).Sum(definition => definition.ActualWidth) : columnSlot.Offset;
-            // The renderer gives each Border its metric Width/Height. A larger arranged
-            // Grid slot centers that fixed-size control, then applies layout pixel rounding.
-            // Follow that placement for literal unit cells, including covered merge members.
+            // Follow Layoutable.ArrangeCore: round the fixed Border size and available
+            // slot up before centering, then round the origin. Nearest-size rounding loses
+            // a pixel at fractional zoom (e.g. a 20.2px row arranges at 21px).
             var height = rowSlot.Size;
             var width = columnSlot.Size;
-            if (actualRow) y += (surface.RowDefinitions[rowSlot.Index].ActualHeight - height) / 2;
-            if (actualColumn) x += (surface.ColumnDefinitions[columnSlot.Index].ActualWidth - width) / 2;
+            var slotHeight = actualRow ? surface.RowDefinitions[rowSlot.Index].ActualHeight : height;
+            var slotWidth = actualColumn ? surface.ColumnDefinitions[columnSlot.Index].ActualWidth : width;
+            var scale = global::Avalonia.Controls.TopLevel.GetTopLevel(surface)?.RenderScaling ?? 1;
             if (surface.UseLayoutRounding)
             {
-                var scale = global::Avalonia.Controls.TopLevel.GetTopLevel(surface)?.RenderScaling ?? 1;
+                width = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(width, scale);
+                height = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(height, scale);
+                slotWidth = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(slotWidth, scale);
+                slotHeight = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(slotHeight, scale);
+            }
+            x += (slotWidth - width) / 2;
+            y += (slotHeight - height) / 2;
+            if (surface.UseLayoutRounding)
+            {
                 x = global::Avalonia.Layout.LayoutHelper.RoundLayoutValue(x, scale);
                 y = global::Avalonia.Layout.LayoutHelper.RoundLayoutValue(y, scale);
-                width = global::Avalonia.Layout.LayoutHelper.RoundLayoutValue(width, scale);
-                height = global::Avalonia.Layout.LayoutHelper.RoundLayoutValue(height, scale);
             }
             var bounds = inViewport ? new Rect(x, y, width, height) : default;
             var cell = default(DisplayCell);

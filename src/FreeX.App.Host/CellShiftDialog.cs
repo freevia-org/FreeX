@@ -24,7 +24,9 @@ public sealed class CellShiftDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        // LastChildFill stays off: the docked button row is the last child, and filling would stretch the
+        // OK/Cancel buttons to the whole remaining height (Excel uses standard-height buttons).
+        var root = new DockPanel { Margin = new Thickness(12), LastChildFill = false };
         var optionPanel = new StackPanel { Margin = new Thickness(8, 6, 8, 8) };
         DockPanel.SetDock(optionPanel, Dock.Top);
         root.Children.Add(new TextBlock

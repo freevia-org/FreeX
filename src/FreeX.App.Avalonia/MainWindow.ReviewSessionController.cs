@@ -10,7 +10,8 @@ public sealed partial class MainWindow
 
     private PresentationReviewSessionController CreateReviewSessionController(
         CellAddress? targetAddress = null,
-        bool preserveSelection = false) =>
+        bool preserveSelection = false,
+        bool repeatable = false) =>
         new(new PresentationReviewSessionAdapter(
             () => _session.Workbook,
             () => _session.ActiveSheet.Id,
@@ -35,15 +36,31 @@ public sealed partial class MainWindow
                         UiText.Get("MainLoc_ReviewTargetNotSelected"));
                 }
 
-                var command = plan.CreateCommand(fallbackRange);
-                var result = preserveSelection
-                    ? _session.ExecuteCommandPreservingSelection(command)
-                    : _session.ExecuteReviewCommand(command);
+                var result = repeatable
+                    ? ExecuteRepeatableReviewCommand(plan, fallbackRange)
+                    : preserveSelection
+                        ? _session.ExecuteCommandPreservingSelection(plan.CreateCommand(fallbackRange))
+                        : _session.ExecuteReviewCommand(plan.CreateCommand(fallbackRange));
                 return new PresentationCommentMutationExecutionResult(
                     result.Success,
                     result.ErrorMessage);
             },
             _session.SelectCell));
+
+    // The context menu belongs to the clicked cell, even inside a preserved multi-cell selection.
+    // Repeat Last follows the then-current selection, while the first execution uses that target.
+    private WorkbookCellEditResult ExecuteRepeatableReviewCommand(
+        PresentationCommentMutationPlan plan,
+        GridRange fallbackRange)
+    {
+        var initialExecution = true;
+        return _session.ExecuteRepeatableCommandPreservingSelection(() =>
+        {
+            var start = initialExecution ? fallbackRange.Start : _session.SelectedRange.Start;
+            initialExecution = false;
+            return plan.CreateCommand(new GridRange(start, start));
+        });
+    }
 
     private void ApplyReviewRefreshPlan(PresentationReviewRefreshPlan plan, string status)
     {
