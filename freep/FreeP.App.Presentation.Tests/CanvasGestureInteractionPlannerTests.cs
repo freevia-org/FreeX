@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class CanvasGestureInteractionPlannerTests
@@ -15,7 +17,7 @@ public sealed class CanvasGestureInteractionPlannerTests
             transform,
             selection,
             clickCount: 1,
-            CanvasGestureModifiers.Shift,
+            FreeKeyModifiers.Shift,
             editPointsEnabled: true,
             canNotifyChartPointDoubleClick: false);
         var geometry = CanvasGestureInteractionPlanner.BuildPressRequest(
@@ -23,7 +25,7 @@ public sealed class CanvasGestureInteractionPlannerTests
             transform,
             selection,
             clickCount: 2,
-            CanvasGestureModifiers.None,
+            FreeKeyModifiers.None,
             editPointsEnabled: true,
             canNotifyChartPointDoubleClick: true);
 

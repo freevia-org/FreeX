@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using Free.Shared.Ribbon;
+using Free.Shared.Shell;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 
@@ -2004,7 +2005,7 @@ public sealed class ReviewWorkflowAdapterTests
 
             var addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,
-                SmartArtTextPaneShortcutModifiers.None,
+                FreeKeyModifiers.None,
                 "n1");
             addSibling!.Applied.Should().BeTrue();
             window.LastSmartArtTextPaneKeyboardRoute!.RouteId.Should().Be("smartart.text-pane.enter.add-sibling-after");
@@ -2012,7 +2013,7 @@ public sealed class ReviewWorkflowAdapterTests
 
             var addChild = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,
-                SmartArtTextPaneShortcutModifiers.Control,
+                FreeKeyModifiers.Control,
                 "n2");
             addChild!.Applied.Should().BeTrue();
             window.SmartArtTextPaneRenderedRows.Should().Contain(row => row.Contains("|1|False|New node", StringComparison.Ordinal));

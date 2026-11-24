@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -18888,17 +18890,9 @@ public sealed partial class DocumentView : Control
         _ => DocumentEditorInputKey.None,
     };
 
-    private static DocumentEditorInputModifiers ToEditorInputModifiers(KeyModifiers modifiers)
-    {
-        var result = DocumentEditorInputModifiers.None;
-        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
-            result |= DocumentEditorInputModifiers.Control;
-        if ((modifiers & KeyModifiers.Shift) != 0)
-            result |= DocumentEditorInputModifiers.Shift;
-        if ((modifiers & KeyModifiers.Alt) != 0)
-            result |= DocumentEditorInputModifiers.Alt;
-        return result;
-    }
+    // Meta policy: Command (Meta) acts as Control for editor shortcuts on macOS, so it folds to Control.
+    private static FreeKeyModifiers ToEditorInputModifiers(KeyModifiers modifiers) =>
+        AvaloniaKeyModifiersMapper.FromAvalonia(modifiers, KeyModifierMetaPolicy.AsControl);
 
     // ---- Editing operations (all via the command bus) -------------------------------------------
 

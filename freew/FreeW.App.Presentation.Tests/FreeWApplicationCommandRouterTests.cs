@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Presentation.Tests;
@@ -85,9 +86,9 @@ public sealed class FreeWApplicationCommandRouterTests
             Track(FreeWKeyboardCommand.UpdateCurrentField)));
 
         router.Shortcuts.Should().BeSameAs(FreeWKeyboardShortcutCatalog.All);
-        router.TryExecute(FreeWKeyboardKey.S, FreeWKeyboardModifiers.Control)
+        router.TryExecute(FreeWKeyboardKey.S, FreeKeyModifiers.Control)
             .Should().BeTrue();
-        router.TryExecute(FreeWKeyboardKey.F1, FreeWKeyboardModifiers.Control)
+        router.TryExecute(FreeWKeyboardKey.F1, FreeKeyModifiers.Control)
             .Should().BeFalse();
         executed.Should().Equal(FreeWKeyboardCommand.SaveDocument);
     }

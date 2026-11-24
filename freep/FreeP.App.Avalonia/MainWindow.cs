@@ -5693,7 +5693,7 @@ public sealed partial class MainWindow : Window,
 
     private SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _smartArtTextPaneSession.ApplyKeyboardRoute(key, modifiers);
 
 
@@ -5721,7 +5721,7 @@ public sealed partial class MainWindow : Window,
         Key key,
         KeyModifiers keyboardModifiers,
         out SmartArtTextPaneShortcutKey shortcutKey,
-        out SmartArtTextPaneShortcutModifiers modifiers)
+        out FreeKeyModifiers modifiers)
     {
         shortcutKey = key switch
         {
@@ -5734,17 +5734,12 @@ public sealed partial class MainWindow : Window,
         };
         if (key is not (Key.Enter or Key.Tab or Key.Up or Key.Down or Key.Delete))
         {
-            modifiers = SmartArtTextPaneShortcutModifiers.None;
+            modifiers = FreeKeyModifiers.None;
             return false;
         }
 
-        modifiers = SmartArtTextPaneShortcutModifiers.None;
-        if (keyboardModifiers.HasFlag(KeyModifiers.Shift))
-            modifiers |= SmartArtTextPaneShortcutModifiers.Shift;
-        if (keyboardModifiers.HasFlag(KeyModifiers.Control) || keyboardModifiers.HasFlag(KeyModifiers.Meta))
-            modifiers |= SmartArtTextPaneShortcutModifiers.Control;
-        if (keyboardModifiers.HasFlag(KeyModifiers.Alt))
-            modifiers |= SmartArtTextPaneShortcutModifiers.Alt;
+        // Meta policy: AsControl. Command acts as Ctrl for the SmartArt text pane shortcuts.
+        modifiers = AvaloniaKeyModifiersMapper.FromAvalonia(keyboardModifiers, KeyModifierMetaPolicy.AsControl);
         return true;
     }
 
@@ -7957,17 +7952,9 @@ public sealed partial class MainWindow : Window,
             Key.F10 or Key.Apps or Key.Escape;
     }
 
-    private static FreePKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)
-    {
-        var result = FreePKeyboardModifiers.None;
-        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
-            result |= FreePKeyboardModifiers.Control;
-        if ((modifiers & KeyModifiers.Shift) != 0)
-            result |= FreePKeyboardModifiers.Shift;
-        if ((modifiers & KeyModifiers.Alt) != 0)
-            result |= FreePKeyboardModifiers.Alt;
-        return result;
-    }
+    // Meta policy: AsControl. The shortcut catalog has no Meta modifier; Command acts as Ctrl.
+    private static FreeKeyModifiers ToKeyboardModifiers(KeyModifiers modifiers) =>
+        AvaloniaKeyModifiersMapper.FromAvalonia(modifiers, KeyModifierMetaPolicy.AsControl);
 
     // ── Slide show launch ──────────────────────────────────────────────────────
 

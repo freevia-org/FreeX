@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace FreeW.App.Presentation.Shell;
 
 public sealed record FreeWApplicationCommandActions(
@@ -43,7 +45,7 @@ public sealed class FreeWApplicationCommandRouter
 
     public bool TryExecute(
         FreeWKeyboardKey key,
-        FreeWKeyboardModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         FreeWKeyboardShortcutCatalog.TryDispatch(key, modifiers, Execute);
 
     public void Execute(FreeWKeyboardCommand command)

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Avalonia;
 using Avalonia.Input;
 using FreeP.App.Compositor;
@@ -68,7 +69,7 @@ public sealed partial class AvaloniaCanvasGestureHandler
                 var preview = previewRouter.PreviewPointer(
                     new CanvasGesturePoint(4, 4),
                     _canvas.CurrentTransform,
-                    CanvasGestureModifiers.None);
+                    FreeKeyModifiers.None);
                 if (preview.MultiTransform is { } transform)
                     _canvas.UpdateTransformPreview(transform);
             }
