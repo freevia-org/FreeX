@@ -82,7 +82,7 @@ public sealed class ChartClipboardPixelTests
             clipboard.Current!.Image!.PngBytes.Should().NotEqual(original);
         });
 
-    private static Task Run(Func<MainWindow, Clipboard, Task> test) => Session.Dispatch(async () =>
+    internal static Task Run(Func<MainWindow, Clipboard, Task> test) => Session.Dispatch(async () =>
     {
         var clipboard = new Clipboard();
         var window = new MainWindow([], WorkbookShareSheetServiceFactory.Create("macOS Share Sheet"),
@@ -133,7 +133,7 @@ public sealed class ChartClipboardPixelTests
         return ShortcutAsync(window, cut ? Key.X : Key.C);
     }
 
-    private static Task ShortcutAsync(MainWindow window, Key key) => window.RaiseKeyDownForTest(new KeyEventArgs
+    internal static Task ShortcutAsync(MainWindow window, Key key) => window.RaiseKeyDownForTest(new KeyEventArgs
     {
         Key = key,
         KeyModifiers = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control,
@@ -146,7 +146,7 @@ public sealed class ChartClipboardPixelTests
         return bitmap!.Pixels.Count(pixel => pixel == new SKColor(17, 90, 150));
     }
 
-    private sealed class Clipboard : IPlatformClipboard
+    internal sealed class Clipboard : IPlatformClipboard
     {
         public PlatformClipboardContent? Current { get; private set; }
 

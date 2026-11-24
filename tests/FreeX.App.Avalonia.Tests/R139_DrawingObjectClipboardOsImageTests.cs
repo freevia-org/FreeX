@@ -23,10 +23,8 @@ public sealed class R139_DrawingObjectClipboardOsImageTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Theory]
-    // Charts require the real Skia framebuffer; see ChartClipboardPixelTests in CaptureTests Batch6.
-    [InlineData(SelectionPaneObjectKind.Shape)]
+    // Chart and shape/text images use the real Skia framebuffer in CaptureTests Batch6.
     [InlineData(SelectionPaneObjectKind.Picture)]
-    [InlineData(SelectionPaneObjectKind.TextBox)]
     public async Task CopySelectedDrawingObject_PlacesRenderedImageOnOsClipboard(SelectionPaneObjectKind kind)
     {
         await Session.Dispatch(async () =>

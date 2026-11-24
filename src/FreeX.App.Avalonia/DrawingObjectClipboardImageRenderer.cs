@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Free.Shared.AppServices;
 using FreeX.App.Avalonia.Charts;
@@ -17,7 +18,7 @@ namespace FreeX.App.Avalonia;
 /// (<c>MainWindow.ClipboardCommands.TryRenderDrawingObjectClipboardImage</c>). Picture reuses SkiaSharp's
 /// own decoder for full fidelity, including whatever alpha channel the source bytes carry. Charts use
 /// the production chart layout and renderer with workbook data, independently of the visible viewport.
-/// Shape/TextBox retain their filled-rectangle-plus-text picture flavor. Returns null (never throws) when the
+/// Shape/TextBox retain their simple geometry with bounded, wrapped text. Returns null (never throws) when the
 /// object can no longer be found or nothing sensible can be rendered.
 /// </summary>
 internal static class DrawingObjectClipboardImageRenderer
@@ -73,9 +74,7 @@ internal static class DrawingObjectClipboardImageRenderer
         var pixels = new PixelSize((int)Math.Ceiling(size.Width), (int)Math.Ceiling(size.Height));
         using var target = new RenderTargetBitmap(pixels, new Vector(96, 96));
         target.Render(visual);
-        using var stream = new MemoryStream();
-        target.Save(stream);
-        return stream.Length == 0 ? null : new PlatformClipboardImage(stream.ToArray(), pixels.Width, pixels.Height);
+        return EncodeBitmap(target, pixels.Width, pixels.Height);
     }
 
     // A fresh visual excludes selection handles and other on-sheet interaction chrome. Read the
@@ -140,41 +139,41 @@ internal static class DrawingObjectClipboardImageRenderer
         var width = Math.Max(1, (int)Math.Round(widthDip));
         var height = Math.Max(1, (int)Math.Round(heightDip));
 
-        using var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        using var canvas = new SKCanvas(bitmap);
-        canvas.Clear(SKColors.Transparent);
-
-        if (fill is { } f)
+        using var target = new RenderTargetBitmap(new PixelSize(width, height), new Vector(96, 96));
+        using (var context = target.CreateDrawingContext())
         {
-            using var fillPaint = new SKPaint { Color = new SKColor(f.R, f.G, f.B), Style = SKPaintStyle.Fill };
-            canvas.DrawRect(new SKRect(0, 0, width, height), fillPaint);
-        }
+            if (fill is { } f)
+                context.FillRectangle(new SolidColorBrush(Color.FromRgb(f.R, f.G, f.B)), new Rect(0, 0, width, height));
 
-        if (outline is { } o)
-        {
-            using var outlinePaint = new SKPaint
+            if (outline is { } o)
             {
-                Color = new SKColor(o.R, o.G, o.B),
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 1.5f,
-            };
-            canvas.DrawRect(new SKRect(0.75f, 0.75f, width - 0.75f, height - 0.75f), outlinePaint);
-        }
+                var pen = new Pen(new SolidColorBrush(Color.FromRgb(o.R, o.G, o.B)), 1.5);
+                context.DrawRectangle(null, pen, new Rect(0.75, 0.75, Math.Max(0, width - 1.5), Math.Max(0, height - 1.5)));
+            }
 
-        if (!string.IsNullOrEmpty(text))
-        {
-            using var typeface = SKTypeface.FromFamilyName("Segoe UI");
-            using var font = new SKFont(typeface ?? SKTypeface.Default, 12f);
-            using var textPaint = new SKPaint { Color = SKColors.Black, IsAntialias = true };
-            var metrics = font.Metrics;
-            canvas.Save();
-            canvas.ClipRect(new SKRect(4, 4, Math.Max(4, width - 4), Math.Max(4, height - 4)));
-            canvas.DrawText(text, 4, 4 - metrics.Ascent, font, textPaint);
-            canvas.Restore();
+            if (!string.IsNullOrEmpty(text))
+                context.DrawText(CreateTextLayout(text, width, height), new Point(4, 4));
         }
+        return EncodeBitmap(target, width, height);
+    }
 
-        using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        return data is null ? null : new PlatformClipboardImage(data.ToArray(), width, height);
+    internal static FormattedText CreateTextLayout(string text, double width, double height) => new(
+        text,
+        System.Globalization.CultureInfo.CurrentCulture,
+        FlowDirection.LeftToRight,
+        new Typeface("Segoe UI"),
+        12,
+        Brushes.Black)
+    {
+        MaxTextWidth = Math.Max(1, width - 8),
+        MaxTextHeight = Math.Max(1, height - 8),
+        Trimming = TextTrimming.CharacterEllipsis,
+    };
+
+    private static PlatformClipboardImage? EncodeBitmap(RenderTargetBitmap target, int width, int height)
+    {
+        using var stream = new MemoryStream();
+        target.Save(stream);
+        return stream.Length == 0 ? null : new PlatformClipboardImage(stream.ToArray(), width, height);
     }
 }
