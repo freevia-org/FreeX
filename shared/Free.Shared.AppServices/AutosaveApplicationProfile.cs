@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Free.Shared.AppServices;
 
 /// <summary>One recovery offer's worth of state: the candidate plus the display name it resolved to.</summary>
@@ -13,13 +15,22 @@ public sealed record AutosaveRecoveryOffer(
     AutosaveRecoveryPlan Recovery,
     int RemainingCount,
     AutosaveRecoveryPromptMode PromptMode,
-    AutosaveRecoveryPromptText PromptText)
+    AutosaveRecoveryPromptText PromptText,
+    Func<string, string?>? GetText = null,
+    CultureInfo? Culture = null)
 {
+    /// <summary>
+    /// The localized prompt body, including when the snapshot was last saved (same "g" local-time
+    /// format FreeX's startup recovery prompt uses).
+    /// </summary>
     public string Prompt => AutosaveRecoveryPromptFormatter.Format(
         Recovery.DisplayName,
         RemainingCount,
         PromptMode,
-        PromptText);
+        PromptText,
+        AutosaveRecoveryOfferPlanner.FormatTimestamp(Recovery.Candidate, Culture),
+        GetText,
+        Culture ?? CultureInfo.CurrentCulture);
 }
 
 /// <summary>
@@ -53,7 +64,8 @@ public sealed class AutosaveRecoveryProfile
     /// <summary>Display name used when a snapshot sidecar carries none, e.g. "a document".</summary>
     public string UnnamedItemFallback { get; }
 
-    public IReadOnlyList<string> RequiredResourceKeys => _textResolver.RequiredResourceKeys;
+    public IReadOnlyList<string> RequiredResourceKeys =>
+        [.. _textResolver.RequiredResourceKeys, .. AutosaveRecoveryPromptFormatter.RequiredResourceKeys];
 
     public AutosaveRecoveryTextValues ResolveText(Func<string, string?>? getText = null) =>
         _textResolver.Resolve(getText);
@@ -76,19 +88,22 @@ public sealed class AutosaveRecoveryProfile
     public AutosaveRecoveryOffer CreateOffer(
         AutosaveRecoveryPlan recovery,
         int remainingCount,
-        AutosaveRecoveryPromptMode promptMode) =>
-        new(recovery, remainingCount, promptMode, PromptText);
+        AutosaveRecoveryPromptMode promptMode,
+        Func<string, string?>? getText = null,
+        CultureInfo? culture = null) =>
+        new(recovery, remainingCount, promptMode, PromptText, getText, culture);
 
     /// <summary>Runs the shared recovery sequencer with this profile's offer type.</summary>
     public ValueTask<AutosaveRecoveryWorkflowResult> RunAsync(
         IReadOnlyList<AutosaveRecoveryPlan> recoveries,
         AutosaveRecoveryPromptMode promptMode,
         Func<AutosaveRecoveryOffer, ValueTask<bool>> promptAsync,
-        Func<AutosaveRecoveryPlan, bool, ValueTask<bool>> completeRecoveryAsync) =>
+        Func<AutosaveRecoveryPlan, bool, ValueTask<bool>> completeRecoveryAsync,
+        Func<string, string?>? getText = null) =>
         AutosaveRecoveryWorkflow.RunAsync(
             recoveries,
             promptMode,
-            (recovery, remainingCount) => CreateOffer(recovery, remainingCount, promptMode),
+            (recovery, remainingCount) => CreateOffer(recovery, remainingCount, promptMode, getText),
             promptAsync,
             completeRecoveryAsync);
 

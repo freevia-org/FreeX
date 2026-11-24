@@ -4097,6 +4097,12 @@
   <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Skip</value></data>
   <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved presentations were found.</value></data>
   <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the presentation.&#xA;&#xA;{0}</value></data>
+  <data name="Autosave_Recovery_Prompt_Startup" xml:space="preserve"><value>FreeP found unsaved changes to {0} from a previous session. Recover them? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_Startup_Multiple" xml:space="preserve"><value>FreeP found unsaved changes to {0} from a previous session ({1} unsaved presentations found). Recover this one? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_StartupQuotedDisplayName" xml:space="preserve"><value>FreeP found unsaved changes to "{0}" from a previous session. Recover them? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_StartupQuotedDisplayName_Multiple" xml:space="preserve"><value>FreeP found unsaved changes to "{0}" from a previous session ({1} unsaved presentations found). Recover this one? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_Manual" xml:space="preserve"><value>Recover unsaved changes to {0}? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_Manual_Multiple" xml:space="preserve"><value>Recover unsaved changes to {0}? ({1} unsaved presentations found.) (Last autosaved: {2})</value></data>
   <data name="Autosave_Recovery_Backstage_Label" xml:space="preserve"><value>Recover Unsaved Presentations</value></data>
   <data name="Ribbon_Command_ChangeZoomTarget_Label" xml:space="preserve"><value>Change Zoom Target</value></data>
   <data name="Ribbon_Command_ChangeZoomTarget_KeyTip" xml:space="preserve"><value>ZT</value></data>

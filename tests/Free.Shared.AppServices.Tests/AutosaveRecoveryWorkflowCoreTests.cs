@@ -59,15 +59,15 @@ public sealed class AutosaveRecoveryWorkflowCoreTests : IDisposable
     [InlineData(
         AutosaveRecoveryPromptMode.Startup,
         2,
-        "Product found unsaved changes to Draft from a previous session (2 unsaved items found). Recover this one?")]
+        "Product found unsaved changes to Draft from a previous session (2 unsaved items found). Recover this one? (Last autosaved: 3/4/2026 5:06 AM)")]
     [InlineData(
         AutosaveRecoveryPromptMode.StartupQuotedDisplayName,
         1,
-        "Product found unsaved changes to \"Draft\" from a previous session. Recover them?")]
+        "Product found unsaved changes to \"Draft\" from a previous session. Recover them? (Last autosaved: 3/4/2026 5:06 AM)")]
     [InlineData(
         AutosaveRecoveryPromptMode.Manual,
         2,
-        "Recover unsaved changes to Draft? (2 unsaved items found.)")]
+        "Recover unsaved changes to Draft? (2 unsaved items found.) (Last autosaved: 3/4/2026 5:06 AM)")]
     public void PromptFormatter_UsesProductAndDocumentText(
         AutosaveRecoveryPromptMode promptMode,
         int remainingCount,
@@ -77,7 +77,8 @@ public sealed class AutosaveRecoveryWorkflowCoreTests : IDisposable
                 "Draft",
                 remainingCount,
                 promptMode,
-                new AutosaveRecoveryPromptText("Product", "items"))
+                new AutosaveRecoveryPromptText("Product", "items"),
+                "3/4/2026 5:06 AM")
             .Should().Be(expected);
     }
 

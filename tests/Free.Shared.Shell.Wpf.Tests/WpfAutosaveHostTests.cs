@@ -234,6 +234,25 @@ public sealed class WpfAutosaveHostTests : IDisposable
     }
 
     [Fact]
+    public void StartupOffer_PromptBodyIsResolvedThroughTheSuppliedLocalizer()
+    {
+        CreateCandidate("loc", "Alpha");
+        var dialogs = new RecordingDialogs { StartupAnswers = new Queue<bool>([false]) };
+
+        NewHost(
+                dialogs,
+                hasExplicitDocument: false,
+                restore: (_, _) => true,
+                getText: key => key.StartsWith("Autosave_Recovery_Prompt_", StringComparison.Ordinal)
+                    ? "T[" + key + "|{0}|{2}]"
+                    : null)
+            .OfferRecovery(owner: null);
+
+        dialogs.Events.Should().ContainSingle().Which.Should().StartWith(
+            "startup:T[Autosave_Recovery_Prompt_Startup|Alpha|");
+    }
+
+    [Fact]
     public void TryEmergencySnapshot_WritesTheDirtyDocumentAndStopRemovesTheSnapshot()
     {
         var host = NewHost(new RecordingDialogs(), hasExplicitDocument: false, restore: (_, _) => true);

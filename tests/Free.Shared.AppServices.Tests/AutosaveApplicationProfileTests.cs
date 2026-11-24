@@ -106,16 +106,16 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
     [Theory]
     [InlineData(
         AutosaveRecoveryPromptMode.Startup,
-        "TestApp found unsaved changes to Alpha from a previous session (3 unsaved widgets found). Recover this one?",
-        "TestApp found unsaved changes to Gamma from a previous session. Recover them?")]
+        "TestApp found unsaved changes to Alpha from a previous session (3 unsaved widgets found). Recover this one? (Last autosaved: {saved})",
+        "TestApp found unsaved changes to Gamma from a previous session. Recover them? (Last autosaved: {saved})")]
     [InlineData(
         AutosaveRecoveryPromptMode.StartupQuotedDisplayName,
-        "TestApp found unsaved changes to \"Alpha\" from a previous session (3 unsaved widgets found). Recover this one?",
-        "TestApp found unsaved changes to \"Gamma\" from a previous session. Recover them?")]
+        "TestApp found unsaved changes to \"Alpha\" from a previous session (3 unsaved widgets found). Recover this one? (Last autosaved: {saved})",
+        "TestApp found unsaved changes to \"Gamma\" from a previous session. Recover them? (Last autosaved: {saved})")]
     [InlineData(
         AutosaveRecoveryPromptMode.Manual,
-        "Recover unsaved changes to Alpha? (3 unsaved widgets found.)",
-        "Recover unsaved changes to Gamma?")]
+        "Recover unsaved changes to Alpha? (3 unsaved widgets found.) (Last autosaved: {saved})",
+        "Recover unsaved changes to Gamma? (Last autosaved: {saved})")]
     public async Task RunAsync_PreservesPromptModeAndUsesCurrentWindowOnlyForFirstAcceptance(
         AutosaveRecoveryPromptMode promptMode,
         string firstPrompt,
@@ -144,8 +144,9 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
         result.AnyRecovered.Should().BeTrue();
         offers.Select(offer => offer.RemainingCount).Should().Equal(3, 2, 1);
         offers.Should().OnlyContain(offer => offer.PromptMode == promptMode);
-        offers[0].Prompt.Should().Be(firstPrompt);
-        offers[2].Prompt.Should().Be(lastPrompt);
+        var saved = AutosaveRecoveryOfferPlanner.FormatTimestamp(recoveries[0].Candidate);
+        offers[0].Prompt.Should().Be(firstPrompt.Replace("{saved}", saved));
+        offers[2].Prompt.Should().Be(lastPrompt.Replace("{saved}", saved));
         completions.Should().Equal(("Beta", true), ("Gamma", false));
     }
 
@@ -388,7 +389,7 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
             new AutosaveRecoveryCandidate(
                 displayName + ".test",
                 displayName + ".sidecar.json",
-                new AutosaveSidecar { DisplayName = displayName }),
+                new AutosaveSidecar { DisplayName = displayName, TimestampUtc = "2026-03-04T05:06:00Z" }),
             displayName);
 
     private static AutosaveDocumentPorts<TestDocument> Ports(

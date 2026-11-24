@@ -613,6 +613,12 @@
   <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Skip</value></data>
   <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved documents were found.</value></data>
   <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the document.&#xA;&#xA;{0}</value></data>
+  <data name="Autosave_Recovery_Prompt_Startup" xml:space="preserve"><value>FreeW found unsaved changes to {0} from a previous session. Recover them? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_Startup_Multiple" xml:space="preserve"><value>FreeW found unsaved changes to {0} from a previous session ({1} unsaved documents found). Recover this one? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_StartupQuotedDisplayName" xml:space="preserve"><value>FreeW found unsaved changes to "{0}" from a previous session. Recover them? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_StartupQuotedDisplayName_Multiple" xml:space="preserve"><value>FreeW found unsaved changes to "{0}" from a previous session ({1} unsaved documents found). Recover this one? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_Manual" xml:space="preserve"><value>Recover unsaved changes to {0}? (Last autosaved: {2})</value></data>
+  <data name="Autosave_Recovery_Prompt_Manual_Multiple" xml:space="preserve"><value>Recover unsaved changes to {0}? ({1} unsaved documents found.) (Last autosaved: {2})</value></data>
   <data name="QuickParts_Save_Title" xml:space="preserve"><value>Save to Quick Parts</value></data>
   <data name="QuickParts_Name_Label" xml:space="preserve"><value>Name:</value></data>
   <data name="QuickParts_EmptySelection_Message" xml:space="preserve"><value>Select some text first, then choose Save Selection to Quick Parts.</value></data>

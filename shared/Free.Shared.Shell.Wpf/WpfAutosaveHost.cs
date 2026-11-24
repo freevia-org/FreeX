@@ -110,7 +110,8 @@ public sealed class WpfAutosaveHost<TDocument>
             (recovery, remainingCount) => _profile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                AutosaveRecoveryPromptMode.Startup).Prompt,
+                AutosaveRecoveryPromptMode.Startup,
+                _getText).Prompt,
             (recovery, useCurrentWindow) => Complete(
                 recovery,
                 accepted: true,
@@ -136,7 +137,8 @@ public sealed class WpfAutosaveHost<TDocument>
             (recovery, remainingCount) => _profile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                AutosaveRecoveryPromptMode.Manual).Prompt,
+                AutosaveRecoveryPromptMode.Manual,
+                _getText).Prompt,
             (recovery, useCurrentWindow) =>
             {
                 if (useCurrentWindow && !_callbacks.ConfirmRecoveryIntoCurrentWindow())
