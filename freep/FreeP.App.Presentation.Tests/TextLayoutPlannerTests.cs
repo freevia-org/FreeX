@@ -1440,7 +1440,7 @@ public sealed class TextLayoutPlannerTests
             {
                 requests.Add(request);
                 return new TextNativeMeasurement<string>(
-                    $"{request.ParagraphIndex}:{request.Paragraph.Runs[0].FontSizePt:F1}",
+                    FormattableString.Invariant($"{request.ParagraphIndex}:{request.Paragraph.Runs[0].FontSizePt:F1}"),
                     HeightDip: 120);
             });
 

@@ -1849,6 +1849,7 @@ public sealed class AnimationPanePlannerTests
     [Fact]
     public void EasingMutationPlan_ParsesPercentagesAndPreservesUndo()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         var presentation = Presentation.CreateEmpty();
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         editor.CurrentSlide!.Animations.Add(new ShapeAnimation
@@ -1877,6 +1878,23 @@ public sealed class AnimationPanePlannerTests
         editor.Undo();
         editor.CurrentSlideAnimations[0].Acceleration.Should().Be(10000);
         editor.CurrentSlideAnimations[0].Deceleration.Should().Be(20000);
+    }
+
+    [Theory]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void EasingMutationPlan_ParsesAndDisplaysLocalizedPercentages(string cultureName)
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture(cultureName);
+        var animations = new[] { new ShapeAnimation { Acceleration = 10000, Deceleration = 20000 } };
+
+        var plan = AnimationPanePlanner.BuildEasingMutationPlan(animations, 0, "35,5%", "12%");
+
+        plan.ShouldApply.Should().BeTrue();
+        plan.Acceleration.Should().Be(35500);
+        plan.Deceleration.Should().Be(12000);
+        plan.AccelerationText.Should().Be("35,5%");
+        plan.DecelerationText.Should().Be("12%");
     }
 
     [Theory]
