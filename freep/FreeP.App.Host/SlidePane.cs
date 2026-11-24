@@ -23,9 +23,7 @@ public sealed partial class SlidePane : Border
     private bool _realizing;
     private bool _restoreFocusAfterRefresh;
     private bool _isSlideSorter;
-    private int _slideSorterDragSourceIndex = -1;
-    private Point _slideSorterDragStart;
-    private bool _slideSorterDragging;
+    private readonly SlideShowCustomShowDragTracker _slideSorterDrag = new();
 
     private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
 
@@ -563,16 +561,9 @@ public sealed partial class SlidePane : Border
     private static bool TryMapKeyboardIntent(KeyEventArgs e, out SlidePaneKeyboardIntentKind intent)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        var modifiers = Keyboard.Modifiers;
-        intent = key switch
-        {
-            Key.Insert when modifiers == ModifierKeys.None => SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide,
-            Key.Delete when modifiers == ModifierKeys.None => SlidePaneKeyboardIntentKind.DeleteCurrentSlide,
-            Key.D when modifiers == ModifierKeys.Control => SlidePaneKeyboardIntentKind.DuplicateCurrentSlide,
-            Key.Up when modifiers == ModifierKeys.Alt => SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier,
-            Key.Down when modifiers == ModifierKeys.Alt => SlidePaneKeyboardIntentKind.MoveCurrentSlideLater,
-            _ => SlidePaneKeyboardIntentKind.None,
-        };
+        intent = SlidePaneInputPlanner.ResolveKeyboardIntent(
+            key.ToString(),
+            WpfKeyModifiersMapper.FromWpf(Keyboard.Modifiers, KeyModifierMetaPolicy.Keep));
         return intent != SlidePaneKeyboardIntentKind.None;
     }
 
@@ -582,9 +573,8 @@ public sealed partial class SlidePane : Border
         {
             if (_isSlideSorter)
             {
-                _slideSorterDragSourceIndex = sourceSlideIndex;
-                _slideSorterDragStart = e.GetPosition(_list);
-                _slideSorterDragging = false;
+                var pressPoint = e.GetPosition(_list);
+                _slideSorterDrag.Press(pressPoint.X, pressPoint.Y, sourceSlideIndex);
                 return;
             }
             _workarea.BeginSlidePaneDrag(sourceSlideIndex, e.GetPosition(item).Y);
@@ -597,14 +587,17 @@ public sealed partial class SlidePane : Border
             return;
         if (_isSlideSorter)
         {
-            if (_slideSorterDragSourceIndex < 0)
+            if (_slideSorterDrag.SourceIndex < 0)
                 return;
             var pointer = e.GetPosition(_list);
-            if (!_slideSorterDragging &&
-                Math.Abs(pointer.X - _slideSorterDragStart.X) < SlidePanePlanner.DefaultDragStartThreshold &&
-                Math.Abs(pointer.Y - _slideSorterDragStart.Y) < SlidePanePlanner.DefaultDragStartThreshold)
+            if (!_slideSorterDrag.IsActive &&
+                !_slideSorterDrag.ShouldBegin(
+                    pointer.X,
+                    pointer.Y,
+                    SlidePanePlanner.DefaultDragStartThreshold,
+                    SlidePanePlanner.DefaultDragStartThreshold))
                 return;
-            _slideSorterDragging = true;
+            _slideSorterDrag.MarkActive();
             item.CaptureMouse();
             e.Handled = true;
             return;
@@ -626,17 +619,16 @@ public sealed partial class SlidePane : Border
             return;
         if (_isSlideSorter)
         {
-            if (_slideSorterDragging && _slideSorterDragSourceIndex >= 0)
+            if (_slideSorterDrag.IsActive && _slideSorterDrag.SourceIndex >= 0)
             {
                 var target = FindSlideSorterInsertionIndex(e.GetPosition(_list));
                 _workarea.ExecuteSlidePaneAction(
                     SlidePaneActionKind.MoveSlide,
-                    _slideSorterDragSourceIndex,
+                    _slideSorterDrag.SourceIndex,
                     target);
                 item.ReleaseMouseCapture();
             }
-            _slideSorterDragSourceIndex = -1;
-            _slideSorterDragging = false;
+            _slideSorterDrag.Reset();
             e.Handled = true;
             return;
         }
@@ -653,8 +645,7 @@ public sealed partial class SlidePane : Border
     {
         if (_isSlideSorter)
         {
-            _slideSorterDragSourceIndex = -1;
-            _slideSorterDragging = false;
+            _slideSorterDrag.Reset();
             return;
         }
         _workarea.CancelSlidePaneDrag();
@@ -663,22 +654,23 @@ public sealed partial class SlidePane : Border
 
     private int FindSlideSorterInsertionIndex(Point pointer)
     {
-        var items = _list.Items.OfType<ListBoxItem>()
+        var tiles = _list.Items.OfType<ListBoxItem>()
             .Where(item => item.Tag is int)
-            .Select(item => new { Item = item, SlideIndex = (int)item.Tag })
-            .OrderBy(item => item.Item.TranslatePoint(new Point(), _list).Y)
-            .ThenBy(item => item.Item.TranslatePoint(new Point(), _list).X)
-            .ToArray();
-        foreach (var candidate in items)
-        {
-            var origin = candidate.Item.TranslatePoint(new Point(), _list);
-            if (pointer.Y < origin.Y + candidate.Item.ActualHeight / 2 ||
-                (pointer.Y < origin.Y + candidate.Item.ActualHeight &&
-                 pointer.X < origin.X + candidate.Item.ActualWidth / 2))
-                return candidate.SlideIndex;
-        }
-
-        return _workarea.Presentation.Slides.Count;
+            .Select(item =>
+            {
+                var origin = item.TranslatePoint(new Point(), _list);
+                return new SlideSorterTileBounds(
+                    (int)item.Tag,
+                    origin.X,
+                    origin.Y,
+                    item.ActualWidth,
+                    item.ActualHeight);
+            });
+        return SlidePaneInputPlanner.ResolveSlideSorterInsertionIndex(
+            tiles,
+            pointer.X,
+            pointer.Y,
+            _workarea.Presentation.Slides.Count);
     }
 
     private void ShowInsertIndicator(SlidePaneDropVisualPlan plan)

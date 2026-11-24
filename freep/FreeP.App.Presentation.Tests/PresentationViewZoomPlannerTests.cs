@@ -433,6 +433,46 @@ public sealed class PresentationViewZoomPlannerTests
     }
 
     [Fact]
+    public void View_transform_without_rulers_is_the_stage_transform()
+    {
+        var state = new PresentationViewZoomState(PresentationViewZoomMode.Percent, 50);
+
+        var view = PresentationViewZoomPlanner.PlanViewTransform(800, 600, 960, 540, state, showRulers: false);
+        var stage = PresentationViewZoomPlanner.PlanStageTransform(800, 600, 960, 540, state);
+
+        view.Scale.Should().Be(stage.Scale);
+        view.OffsetX.Should().Be(stage.OffsetX);
+        view.OffsetY.Should().Be(stage.OffsetY);
+        view.SlideWidthDip.Should().Be(960);
+        view.SlideHeightDip.Should().Be(540);
+    }
+
+    [Fact]
+    public void View_transform_with_rulers_plans_inside_the_ruler_inset_and_shifts_back()
+    {
+        const double inset = PresentationRulerTickPlanner.RulerThickness;
+
+        var view = PresentationViewZoomPlanner.PlanViewTransform(
+            800, 600, 960, 540, PresentationViewZoomState.FitToWindow, showRulers: true);
+        var stage = PresentationViewZoomPlanner.PlanStageTransform(
+            800 - inset, 600 - inset, 960, 540, PresentationViewZoomState.FitToWindow);
+
+        view.Scale.Should().Be(stage.Scale);
+        view.OffsetX.Should().Be(stage.OffsetX + inset);
+        view.OffsetY.Should().Be(stage.OffsetY + inset);
+    }
+
+    [Fact]
+    public void View_transform_never_plans_into_a_negative_area()
+    {
+        var view = PresentationViewZoomPlanner.PlanViewTransform(
+            4, 4, 960, 540, PresentationViewZoomState.FitToWindow, showRulers: true);
+
+        double.IsNaN(view.Scale).Should().BeFalse();
+        view.Scale.Should().BeGreaterThanOrEqualTo(0);
+    }
+
+    [Fact]
     public void Unknown_command_id_does_not_execute()
     {
         PresentationViewZoomPlanner.TryExecute(

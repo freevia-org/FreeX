@@ -524,21 +524,13 @@ public sealed partial class SlideCanvas : Control
         double slideWidthDip,
         double slideHeightDip)
     {
-        var rulerInset = _viewShowState.ShowRulers
-            ? PresentationRulerTickPlanner.RulerThickness
-            : 0;
-        var plan = PresentationViewZoomPlanner.PlanStageTransform(
-            Math.Max(0, renderW - rulerInset),
-            Math.Max(0, renderH - rulerInset),
+        return PresentationViewZoomPlanner.PlanViewTransform(
+            renderW,
+            renderH,
             slideWidthDip,
             slideHeightDip,
-            _viewZoomState);
-        return new SlideTransformCore(
-            plan.Scale,
-            plan.OffsetX + rulerInset,
-            plan.OffsetY + rulerInset,
-            plan.SlideWidthDip,
-            plan.SlideHeightDip);
+            _viewZoomState,
+            _viewShowState.ShowRulers);
     }
 
     private static void RenderCommand(DrawingContext dc, SlideRenderExecutionCommand command)
