@@ -9,6 +9,66 @@ public sealed partial class DocumentView
 {
     private bool TextHistoryStateRestored { get; set; }
     private readonly HashSet<IPointer> _textHistoryPointersToRelease = [];
+    private bool _textGestureActive;
+    private double _textGestureLayoutWidth = FallbackWidth;
+
+    private void RunTextGesture(string label, Action action) => RunTextGesture(label, () =>
+    {
+        action();
+        return true;
+    });
+
+    private T RunTextGesture<T>(string label, Func<T> action)
+    {
+        if (_textGestureActive)
+            return action();
+
+        var before = CaptureTextCaretState();
+        var pendingFormatting = _pendingRunFmt;
+        _textGestureLayoutWidth = _laidOutWidth > 0 && double.IsFinite(_laidOutWidth)
+            ? _laidOutWidth
+            : Bounds.Width > 0 && double.IsFinite(Bounds.Width) ? Bounds.Width : FallbackWidth;
+        using var scope = _bus.BeginCommandScope(() =>
+        {
+            // Legacy placement helpers may consult placed glyphs after each source edit.
+            // Refresh model-derived caches now, while public notifications stay deferred.
+            RebindHeaderFooterCaretOwner();
+            ClearBitmapCache();
+            InvalidateLayoutAndVisual();
+        });
+        _textGestureActive = true;
+        try
+        {
+            var result = action();
+            var after = CaptureTextCaretState();
+            // Changed observers may initiate another gesture. The source scope closes
+            // before it publishes, so reentrant edits must start their own scope too.
+            _textGestureActive = false;
+            scope.Commit(label, command => StateRestoringDocumentCommand<TextCaretState>.FromApplied(
+                command, before, after, RestoreTextCaretState, estimatedStateBytes: 256));
+            return result;
+        }
+        catch (Exception exception)
+        {
+            if (!scope.IsCommitted)
+            {
+                IReadOnlyList<Exception> failures = scope.IsCompleted ? [] : scope.Rollback();
+                RestoreTextCaretState(before);
+                _pendingRunFmt = pendingFormatting;
+                try { PublishTextHistorySelection(); }
+                finally { CaretMoved?.Invoke(); }
+                if (failures.Count > 0)
+                    throw new AggregateException(new[] { exception }.Concat(failures));
+            }
+            throw;
+        }
+        finally
+        {
+            _textGestureActive = false;
+            if (scope.IsCommitted)
+                CaretMoved?.Invoke();
+        }
+    }
 
     private sealed record TextCaretState(
         DocPosition BodyCaret,

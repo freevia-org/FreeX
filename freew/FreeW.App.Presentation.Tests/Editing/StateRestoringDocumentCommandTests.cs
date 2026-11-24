@@ -5,6 +5,29 @@ namespace FreeW.App.Presentation.Tests.Editing;
 public sealed class StateRestoringDocumentCommandTests
 {
     [Fact]
+    public void AlreadyAppliedScopeCommitDoesNotReapplyTheSourceAndRestoresBothHistoryEndpoints()
+    {
+        var context = new Context();
+        var bus = new DocumentCommandBus(context);
+        var trace = new List<string>();
+        var state = "before";
+        using (var scope = bus.BeginCommandScope())
+        {
+            bus.Execute(new SourceCommand(trace));
+            state = "after";
+            scope.Commit("Gesture", command => StateRestoringDocumentCommand<string>.FromApplied(
+                command, "before", state, saved => state = saved, 256));
+        }
+        trace.Should().Equal("apply");
+        state = "later navigation";
+        bus.Undo();
+        state.Should().Be("before");
+        bus.Redo();
+        state.Should().Be("after");
+        trace.Should().Equal("apply", "revert", "apply");
+    }
+
+    [Fact]
     public void ApplyUndoRedoPublishCoherentModelAndStateWithoutRepeatingInitialPlacement()
     {
         var context = new Context();

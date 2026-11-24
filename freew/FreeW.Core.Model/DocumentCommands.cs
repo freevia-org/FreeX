@@ -168,7 +168,7 @@ public sealed class CompositeDocumentCommand : IDocumentCommand
 /// invalidation — are the shared <see cref="UndoRedoStack{TCommand,TPayload}"/>; this bus only
 /// adds the document-command apply/revert and a change notification for the view to redraw.
 /// </summary>
-public sealed class DocumentCommandBus(IDocumentCommandContext context)
+public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
 {
     private const int MaxDepth = 200;
     private const int MaxBytes = 50 * 1024 * 1024;
@@ -211,12 +211,34 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
         if (!command.HasEffect(_context))
             return;
 
-        command.Apply(_context);
+        try
+        {
+            command.Apply(_context);
+        }
+        catch (Exception exception) when (_commandScope is not null)
+        {
+            // A scoped gesture must also attempt to restore a command that failed partway
+            // through Apply, before its previously successful siblings are rolled back.
+            try { command.Revert(_context); }
+            catch (Exception rollbackFailure) { throw new AggregateException(exception, rollbackFailure); }
+            throw;
+        }
+        RecordAppliedCommand(command);
+        for (var scope = _commandScope; scope is not null; scope = scope.ParentScope)
+            scope.CommandApplied?.Invoke();
+    }
+
+    private void RecordAppliedCommand(IDocumentCommand command)
+    {
         if (_batch is not null)
         {
             _batch.Add(command);
-            if (_notifyOnEachBatchedExecute)
+            if (_notifyOnEachBatchedExecute && _commandScope is null)
                 Changed?.Invoke();
+        }
+        else if (_commandScope is not null)
+        {
+            _commandScope.Add(command);
         }
         else
         {
@@ -258,8 +280,7 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
         if (batch.Count == 0)
             return;
         var composite = new CompositeDocumentCommand(label, batch);
-        _stack.Push(composite, composite.EstimatedBytes, null, label);
-        Changed?.Invoke();
+        RecordAppliedCommand(composite);
     }
 
     /// <summary>
@@ -269,6 +290,8 @@ public sealed class DocumentCommandBus(IDocumentCommandContext context)
     /// </summary>
     public void AbortUndoGroup()
     {
+        if (_batch is { Count: > 0 } && _commandScope is not null)
+            _commandScope.PreserveAbortedGroup(_batch);
         _batch = null;
     }
 

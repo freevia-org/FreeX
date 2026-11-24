@@ -43,6 +43,17 @@ public sealed class StateRestoringDocumentCommand<TState> : IDocumentCommand
     public DocumentCommandMutationKind MutationKind => _command.MutationKind;
     public bool HasEffect(IDocumentCommandContext context) => _command.HasEffect(context);
 
+    /// <summary>Attaches state to commands already executed in a quiet gesture scope.</summary>
+    public static StateRestoringDocumentCommand<TState> FromApplied(
+        IDocumentCommand command, TState before, TState after, Action<TState> restore, int estimatedStateBytes)
+    {
+        var wrapper = new StateRestoringDocumentCommand<TState>(command, before, () => after,
+            restore, () => { }, estimatedStateBytes);
+        wrapper._after = after;
+        wrapper._hasAfter = true;
+        return wrapper;
+    }
+
     public void Apply(IDocumentCommandContext context)
     {
         _command.Apply(context);

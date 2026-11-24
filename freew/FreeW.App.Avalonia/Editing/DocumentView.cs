@@ -1889,7 +1889,9 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>Insert literal text at the H/F caret (field runs are never split).</summary>
-    private void HfInsertText(string text)
+    private void HfInsertText(string text) => RunTextGesture("Insert text", () => HfInsertTextCore(text));
+
+    private void HfInsertTextCore(string text)
     {
         if (_hfCaret is not { } hc)
             return;
@@ -15440,7 +15442,10 @@ public sealed partial class DocumentView : Control
     }
 
     /// <summary>Insert a real paragraph break at the active text-box caret.</summary>
-    public void InsertShapeTextParagraphBreak()
+    public void InsertShapeTextParagraphBreak() =>
+        RunTextGesture("Insert paragraph break", InsertShapeTextParagraphBreakCore);
+
+    private void InsertShapeTextParagraphBreakCore()
     {
         if (IsEditingLocked || _shapeCaret is not { } caret
             || !TryGetShapeTextRun(caret.BlockIndex, caret.RunIndex, caret.TextParagraphIndex,
@@ -18832,7 +18837,9 @@ public sealed partial class DocumentView : Control
 
     // ---- Editing operations (all via the command bus) -------------------------------------------
 
-    public void InsertText(string text)
+    public void InsertText(string text) => RunTextGesture("Insert text", () => InsertTextCore(text));
+
+    private void InsertTextCore(string text)
     {
         if (SelectionNeedsDisplayProjection() && !TryResolveContentControlTextCaret(out _)
             && TryReplaceDisplaySelection(text, out _))
@@ -20039,7 +20046,9 @@ public sealed partial class DocumentView : Control
         }
     }
 
-    internal void Backspace()
+    internal void Backspace() => RunTextGesture("Backspace", BackspaceCore);
+
+    private void BackspaceCore()
     {
         if (SelectionNeedsDisplayProjection() && !TryResolveContentControlTextCaret(out _)
             && TryDeleteDisplaySelection(out _))
@@ -20199,7 +20208,9 @@ public sealed partial class DocumentView : Control
             MergeWithPrevious();
     }
 
-    private void DeleteForward()
+    private void DeleteForward() => RunTextGesture("Delete", DeleteForwardCore);
+
+    private void DeleteForwardCore()
     {
         if (SelectionNeedsDisplayProjection() && !TryResolveContentControlTextCaret(out _)
             && TryDeleteDisplaySelection(out _))
@@ -20372,7 +20383,9 @@ public sealed partial class DocumentView : Control
         }
     }
 
-    private void InsertParagraphBreak()
+    private void InsertParagraphBreak() => RunTextGesture("Insert paragraph break", InsertParagraphBreakCore);
+
+    private void InsertParagraphBreakCore()
     {
         if (TrySplitBookmarkedBodyParagraph())
             return;
@@ -20931,7 +20944,9 @@ public sealed partial class DocumentView : Control
 
     private readonly record struct TableCellEntry(int TableBlock, int Row, int Col, TableCell Cell);
 
-    private void DeleteSelection()
+    private void DeleteSelection() => RunTextGesture("Delete selection", DeleteSelectionCore);
+
+    private void DeleteSelectionCore()
     {
         if (IsEditingLocked)
             return;
@@ -25422,7 +25437,9 @@ public sealed partial class DocumentView : Control
         return to > from ? text[from..to] : string.Empty;
     }
 
-    public bool TryDeleteSelection()
+    public bool TryDeleteSelection() => RunTextGesture("Delete selection", TryDeleteSelectionCore);
+
+    private bool TryDeleteSelectionCore()
     {
         if (IsEditingLocked)
             return false;
@@ -25470,7 +25487,10 @@ public sealed partial class DocumentView : Control
     /// Replaces one empty editable body paragraph with parsed source blocks. Partial-paragraph and
     /// tracked-change edits keep the merge-formatting route until inline rich splicing is lossless.
     /// </summary>
-    internal bool PasteKeepSourceFormatting(TextDocument source)
+    internal bool PasteKeepSourceFormatting(TextDocument source) =>
+        RunTextGesture("Paste", () => PasteKeepSourceFormattingCore(source));
+
+    private bool PasteKeepSourceFormattingCore(TextDocument source)
     {
         if (source is null
             || source.Blocks.Count == 0
@@ -25560,7 +25580,10 @@ public sealed partial class DocumentView : Control
         Focus();
     }
 
-    private bool PasteNormalizedText(string? clipboardText, DocumentPasteTextKind kind)
+    private bool PasteNormalizedText(string? clipboardText, DocumentPasteTextKind kind) =>
+        RunTextGesture("Paste", () => PasteNormalizedTextCore(clipboardText, kind));
+
+    private bool PasteNormalizedTextCore(string? clipboardText, DocumentPasteTextKind kind)
     {
         if (IsEditingLocked)
             return false;
@@ -25572,7 +25595,9 @@ public sealed partial class DocumentView : Control
         if (plan.Lines.Count > 1 && SelectionNeedsStructuralPreservation())
             return false;
 
-        _bus.BeginUndoGroup();
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
         try
         {
             InsertText(plan.Lines[0]);
@@ -25583,11 +25608,13 @@ public sealed partial class DocumentView : Control
                     InsertText(plan.Lines[i]);
             }
 
-            _bus.CommitUndoGroup(plan.UndoLabel);
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup(plan.UndoLabel);
         }
         catch
         {
-            _bus.AbortUndoGroup();
+            if (ownsUndoGroup && _bus.IsUndoGroupOpen)
+                _bus.RollbackUndoGroup();
             throw;
         }
 
@@ -26092,6 +26119,9 @@ public sealed partial class DocumentView : Control
     // address + paragraph offset, so _caret.Offset can be set correctly for TryGetCaretRect.
     private int FindCellGlyphOffset(int tableBlock, int row, int col, int paraIdx, int paraOffset)
     {
+        if (_laidOutWidth < 0)
+            Relayout(_textGestureActive ? _textGestureLayoutWidth
+                : Bounds.Width > 0 && double.IsFinite(Bounds.Width) ? Bounds.Width : FallbackWidth);
         // Find the glyph (character or sentinel) at exactly that cell+para+offset.
         // Prefer non-sentinel glyphs; fall back to sentinel if offset == para length.
         PlacedChar? found = null;
