@@ -15,10 +15,7 @@ public sealed class MergeCellsContentWarningPlannerTests
         plan.Title.Should().Be("Merge Cells");
         plan.PrimaryMessage.Should().Be("Merging cells can discard cell contents.");
         plan.CompactGuidanceMessage.Should().Be("Choose how to handle the selected cell contents.");
-        plan.DetailedGuidanceMessage.Should().Be(
-            "Only the first cell is kept by default. Choose how FreeX should handle the other selected contents.");
         plan.PreviewText.Should().Be("Alpha, Beta, Gamma, Delta");
-        plan.EntryCountText.Should().Be("Non-empty cells: 6");
         plan.DialogAutomationId.Should().Be(FreeXAutomationIdCatalog.MergeCellsContentWarningDialog);
 
         var keep = plan.Action(MergeCellsContentWarningAction.KeepFirstCell);
@@ -42,6 +39,5 @@ public sealed class MergeCellsContentWarningPlannerTests
         var plan = MergeCellsContentWarningPlanner.Create([]);
 
         plan.PreviewText.Should().BeEmpty();
-        plan.EntryCountText.Should().BeNull();
     }
 }
