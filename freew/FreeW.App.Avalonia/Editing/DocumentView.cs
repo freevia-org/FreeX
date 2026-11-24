@@ -687,10 +687,23 @@ public sealed partial class DocumentView : Control
             return;
 
         var selectedChild = SelectedFloatingGroupChildObject();
+        TextHistoryStateRestored = false;
         if (_bus.Undo())
         {
-            RestoreSelectedFloatingGroupChildPath(selectedChild);
-            ClampCaret();
+            if (!TextHistoryStateRestored)
+            {
+                RestoreSelectedFloatingGroupChildPath(selectedChild);
+                ClampCaret();
+            }
+            try
+            {
+                if (TextHistoryStateRestored)
+                    PublishTextHistorySelection();
+            }
+            finally
+            {
+                CaretMoved?.Invoke();
+            }
         }
     }
 
@@ -702,10 +715,23 @@ public sealed partial class DocumentView : Control
             return;
 
         var selectedChild = SelectedFloatingGroupChildObject();
+        TextHistoryStateRestored = false;
         if (_bus.Redo())
         {
-            RestoreSelectedFloatingGroupChildPath(selectedChild);
-            ClampCaret();
+            if (!TextHistoryStateRestored)
+            {
+                RestoreSelectedFloatingGroupChildPath(selectedChild);
+                ClampCaret();
+            }
+            try
+            {
+                if (TextHistoryStateRestored)
+                    PublishTextHistorySelection();
+            }
+            finally
+            {
+                CaretMoved?.Invoke();
+            }
         }
     }
 
@@ -19962,25 +19988,27 @@ public sealed partial class DocumentView : Control
             && target.Column is { } column
             && target.ParagraphIndex is { } paragraphIndex)
         {
-            _bus.Execute(new ReplaceCellContentControlRunSpanCommand(
-                target.BlockIndex, row, column, paragraphIndex, target.RunIndex, caret.RunCount, replacement));
-            _cellCaret = (target.BlockIndex, row, column, paragraphIndex, contentOffset);
-            _cellAnchor = _cellCaret;
-            _caret = new DocPosition(
-                target.BlockIndex,
-                FindCellGlyphOffset(target.BlockIndex, row, column, paragraphIndex, contentOffset));
-            _selectionAnchor = _caret;
+            ExecuteTextEditWithCaretHistory(new ReplaceCellContentControlRunSpanCommand(
+                target.BlockIndex, row, column, paragraphIndex, target.RunIndex, caret.RunCount, replacement), () =>
+            {
+                _cellCaret = (target.BlockIndex, row, column, paragraphIndex, contentOffset);
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(
+                    target.BlockIndex,
+                    FindCellGlyphOffset(target.BlockIndex, row, column, paragraphIndex, contentOffset));
+                _selectionAnchor = _caret;
+            });
         }
         else
         {
-            _bus.Execute(new ReplaceContentControlRunSpanCommand(
-                target.BlockIndex, target.RunIndex, caret.RunCount, replacement));
-            _caret = new DocPosition(target.BlockIndex, contentOffset);
-            _selectionAnchor = _caret;
+            ExecuteTextEditWithCaretHistory(new ReplaceContentControlRunSpanCommand(
+                target.BlockIndex, target.RunIndex, caret.RunCount, replacement), () =>
+            {
+                _caret = new DocPosition(target.BlockIndex, contentOffset);
+                _selectionAnchor = _caret;
+            });
         }
 
-        InvalidateLayoutAndVisual();
-        CaretMoved?.Invoke();
         return true;
     }
 

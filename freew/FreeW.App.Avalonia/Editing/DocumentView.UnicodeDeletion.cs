@@ -23,15 +23,15 @@ public sealed partial class DocumentView
                 return true;
             var paragraphs = shape.TextParagraphs.Select(item => (Paragraph)DocumentMerge.CloneBlock(item)).ToList();
             var deletion = ApplyUnicodeDeletion(paragraphs[shapeCaret.TextParagraphIndex], range);
-            _bus.Execute(new ReplaceShapeTextParagraphsCommand(shapeCaret.BlockIndex, shapeCaret.RunIndex,
-                paragraphs, _activeShapeTextChildPath));
-            var target = new Shape();
-            target.TextParagraphs.AddRange(paragraphs);
-            _shapeCaret = ShapeTextPositionAtOffset(target, shapeCaret.BlockIndex, shapeCaret.RunIndex,
-                shapeCaret.TextParagraphIndex, UnicodeDeletionCaret(displayRange, deletion, backward));
-            _shapeSelectionAnchor = _shapeCaret;
-            InvalidateLayoutAndVisual();
-            CaretMoved?.Invoke();
+            ExecuteTextEditWithCaretHistory(new ReplaceShapeTextParagraphsCommand(shapeCaret.BlockIndex, shapeCaret.RunIndex,
+                paragraphs, _activeShapeTextChildPath), () =>
+            {
+                var target = new Shape();
+                target.TextParagraphs.AddRange(paragraphs);
+                _shapeCaret = ShapeTextPositionAtOffset(target, shapeCaret.BlockIndex, shapeCaret.RunIndex,
+                    shapeCaret.TextParagraphIndex, UnicodeDeletionCaret(displayRange, deletion, backward));
+                _shapeSelectionAnchor = _shapeCaret;
+            });
             return true;
         }
 
@@ -44,13 +44,13 @@ public sealed partial class DocumentView
             if (!CanDeleteUnicodeRange(paragraph, range))
                 return true;
             var deletion = default(RevisionEditPlanner.DeleteResult);
-            _bus.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(hfCaret.Target.SectionIndex,
+            ExecuteTextEditWithCaretHistory(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(hfCaret.Target.SectionIndex,
                 hfCaret.Target.UseFinalSectionStore, HeaderFooterDialogPlanner.CommandSlotIndexFor(hfCaret.Target.Slot),
-                hfCaret.Target.ParaIdx, item => deletion = ApplyUnicodeDeletion(item, range)));
-            _hfCaret = (hfCaret.Target, UnicodeDeletionCaret(displayRange, deletion, backward));
-            _hfSelectionAnchor = null;
-            InvalidateLayoutAndVisual();
-            CaretMoved?.Invoke();
+                hfCaret.Target.ParaIdx, item => deletion = ApplyUnicodeDeletion(item, range)), () =>
+            {
+                _hfCaret = (hfCaret.Target, UnicodeDeletionCaret(displayRange, deletion, backward));
+                _hfSelectionAnchor = null;
+            });
             return true;
         }
 
@@ -66,14 +66,15 @@ public sealed partial class DocumentView
             if (!CanDeleteUnicodeRange(paragraph, range))
                 return true;
             var deletion = default(RevisionEditPlanner.DeleteResult);
-            _bus.Execute(new ReplaceCellParagraphRunsCommand(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx,
-                item => deletion = ApplyUnicodeDeletion(item, range)));
-            var offset = UnicodeDeletionCaret(displayRange, deletion, backward);
-            _cellCaret = cell with { Offset = offset };
-            _cellAnchor = _cellCaret;
-            _caret = new DocPosition(cell.TableBlock, FindCellGlyphOffset(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, offset));
-            _selectionAnchor = _caret;
-            CaretMoved?.Invoke();
+            ExecuteTextEditWithCaretHistory(new ReplaceCellParagraphRunsCommand(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx,
+                item => deletion = ApplyUnicodeDeletion(item, range)), () =>
+            {
+                var offset = UnicodeDeletionCaret(displayRange, deletion, backward);
+                _cellCaret = cell with { Offset = offset };
+                _cellAnchor = _cellCaret;
+                _caret = new DocPosition(cell.TableBlock, FindCellGlyphOffset(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, offset));
+                _selectionAnchor = _caret;
+            });
             return true;
         }
 
@@ -85,10 +86,11 @@ public sealed partial class DocumentView
         if (!CanDeleteUnicodeRange(body, bodyRange))
             return true;
         var result = default(RevisionEditPlanner.DeleteResult);
-        _bus.Execute(new ReplaceParagraphRunsCommand(_caret.Block, item => result = ApplyUnicodeDeletion(item, bodyRange)));
-        _caret = new DocPosition(_caret.Block, UnicodeDeletionCaret(bodyDisplayRange, result, backward));
-        _selectionAnchor = _caret;
-        CaretMoved?.Invoke();
+        ExecuteTextEditWithCaretHistory(new ReplaceParagraphRunsCommand(_caret.Block, item => result = ApplyUnicodeDeletion(item, bodyRange)), () =>
+        {
+            _caret = new DocPosition(_caret.Block, UnicodeDeletionCaret(bodyDisplayRange, result, backward));
+            _selectionAnchor = _caret;
+        });
         return true;
     }
 
