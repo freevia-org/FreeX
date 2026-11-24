@@ -144,6 +144,14 @@ internal static class ExcelTextNumberParser
             trimmed = trimmed[..^1].TrimEnd();
         }
 
+        // VALUE and implicit arithmetic coercion use the strict grammar in every locale.
+        // Multiple percent signs are only accepted by NUMBERVALUE's separate lenient parser.
+        if (pctCount > 1)
+        {
+            number = 0;
+            return false;
+        }
+
         if (pctCount > 0 &&
             TryParseNumericStrict(trimmed, culture, out var pct, out _))
         {
