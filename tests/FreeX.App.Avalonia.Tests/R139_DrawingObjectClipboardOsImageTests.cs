@@ -23,7 +23,7 @@ public sealed class R139_DrawingObjectClipboardOsImageTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     [Theory]
-    [InlineData(SelectionPaneObjectKind.Chart)]
+    // Charts require the real Skia framebuffer; see ChartClipboardPixelTests in CaptureTests Batch6.
     [InlineData(SelectionPaneObjectKind.Shape)]
     [InlineData(SelectionPaneObjectKind.Picture)]
     [InlineData(SelectionPaneObjectKind.TextBox)]

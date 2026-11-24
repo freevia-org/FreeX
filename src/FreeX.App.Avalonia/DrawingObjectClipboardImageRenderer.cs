@@ -1,5 +1,11 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Free.Shared.AppServices;
+using FreeX.App.Avalonia.Charts;
+using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using SkiaSharp;
 
@@ -9,17 +15,15 @@ namespace FreeX.App.Avalonia;
 /// R139-shared-clipboard-images: renders a selected chart/shape/picture/text box into a PNG-backed
 /// <see cref="PlatformClipboardImage"/> for the OS clipboard, mirroring the WPF host's identical fix
 /// (<c>MainWindow.ClipboardCommands.TryRenderDrawingObjectClipboardImage</c>). Picture reuses SkiaSharp's
-/// own decoder for full fidelity, including whatever alpha channel the source bytes carry. Chart/Shape/
-/// TextBox have no isolated off-screen renderer available in this shell without attaching a live control
-/// to a compositor (AvaloniaChartRenderer/the shape-painting overlay are both tied to an on-screen visual
-/// tree pass), so they get the same simple filled-rectangle-plus-text stand-in <see cref="SkiaClipboardRangePictureRenderer"/>
-/// already established for the plain cell-range picture flavor. Returns null (never throws) when the
+/// own decoder for full fidelity, including whatever alpha channel the source bytes carry. Charts use
+/// the production chart layout and renderer with workbook data, independently of the visible viewport.
+/// Shape/TextBox retain their filled-rectangle-plus-text picture flavor. Returns null (never throws) when the
 /// object can no longer be found or nothing sensible can be rendered.
 /// </summary>
 internal static class DrawingObjectClipboardImageRenderer
 {
     public static PlatformClipboardImage? TryRender(
-        Sheet? sheet, WorkbookTheme theme, SelectionPaneObjectKind kind, Guid objectId)
+        Sheet? sheet, Workbook workbook, SelectionPaneObjectKind kind, Guid objectId)
     {
         if (sheet is null)
             return null;
@@ -29,9 +33,9 @@ internal static class DrawingObjectClipboardImageRenderer
             return kind switch
             {
                 SelectionPaneObjectKind.Picture => RenderPicture(sheet, objectId),
-                SelectionPaneObjectKind.Chart => RenderChartStandIn(sheet, objectId),
-                SelectionPaneObjectKind.Shape => RenderShapeStandIn(sheet, theme, objectId),
-                SelectionPaneObjectKind.TextBox => RenderTextBoxStandIn(sheet, theme, objectId),
+                SelectionPaneObjectKind.Chart => RenderChart(sheet, workbook, objectId),
+                SelectionPaneObjectKind.Shape => RenderShapeStandIn(sheet, workbook.Theme, objectId),
+                SelectionPaneObjectKind.TextBox => RenderTextBoxStandIn(sheet, workbook.Theme, objectId),
                 _ => null,
             };
         }
@@ -57,17 +61,47 @@ internal static class DrawingObjectClipboardImageRenderer
         return data is null ? null : new PlatformClipboardImage(data.ToArray(), bitmap.Width, bitmap.Height);
     }
 
-    private static PlatformClipboardImage? RenderChartStandIn(Sheet sheet, Guid objectId)
+    private static PlatformClipboardImage? RenderChart(Sheet sheet, Workbook workbook, Guid objectId)
     {
         var chart = sheet.Charts.Find(c => c.Id == objectId);
-        if (chart is null)
+        if (chart is null || CreateChartVisual(workbook, chart) is not { } visual)
             return null;
-        return RenderStandIn(
-            chart.Width,
-            chart.Height,
-            DrawingShapeModel.DefaultFillColor,
-            DrawingShapeModel.DefaultOutlineColor,
-            chart.Title);
+
+        var size = new Size(visual.Width, visual.Height);
+        visual.Measure(size);
+        visual.Arrange(new Rect(size));
+        var pixels = new PixelSize((int)Math.Ceiling(size.Width), (int)Math.Ceiling(size.Height));
+        using var target = new RenderTargetBitmap(pixels, new Vector(96, 96));
+        target.Render(visual);
+        using var stream = new MemoryStream();
+        target.Save(stream);
+        return stream.Length == 0 ? null : new PlatformClipboardImage(stream.ToArray(), pixels.Width, pixels.Height);
+    }
+
+    // A fresh visual excludes selection handles and other on-sheet interaction chrome. Read the
+    // workbook directly: a chart may reference another sheet or cells outside the viewport sample.
+    internal static Canvas? CreateChartVisual(Workbook workbook, ChartModel chart)
+    {
+        if (!ChartLayoutEngine.IsSupported(chart.Type))
+            return null;
+
+        var readCell = ViewportService.CreateChartDataCellReader(workbook, chart);
+        bool ReadCell(uint row, uint col, out ScalarValue? rawValue, out double value, out string text)
+        {
+            (rawValue, text) = readCell(row, col);
+            return ChartRenderPolicyPlanner.TryGetNumericValue(rawValue, text, out value);
+        }
+
+        var width = Math.Max(1, chart.Width);
+        var height = Math.Max(1, chart.Height);
+        var inset = Math.Min(28, Math.Min(width, height) / 4);
+        var plotArea = new PlotRect(inset, inset, Math.Max(1, width - (2 * inset)), Math.Max(1, height - (2 * inset)));
+        var request = ChartLayoutRequestBuilder.TryBuild(chart, plotArea, ReadCell, new AvaloniaTextMeasurer());
+        if (request is null)
+            return null;
+
+        var layout = ChartLayoutEngine.Layout(request.WithChartSize(width, height));
+        return new AvaloniaChartRenderer(chart, workbook.Theme).Render(layout, width, height);
     }
 
     private static PlatformClipboardImage? RenderShapeStandIn(Sheet sheet, WorkbookTheme theme, Guid objectId)

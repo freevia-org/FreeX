@@ -28,7 +28,7 @@ public sealed partial class MainWindow
         // Publish the marker even when the drawing cannot be rendered for other applications.
         var marker = _drawingObjectClipboard.Marker;
         var clipboardImage = DrawingObjectClipboardImageRenderer.TryRender(
-            _session.ActiveSheet, _session.Workbook.Theme, kind, objectId);
+            _session.ActiveSheet, _session.Workbook, kind, objectId);
         var write = WriteDrawingClipboardAsync(clipboardImage, marker, isCut);
         _drawingClipboardWrite = write;
         try
