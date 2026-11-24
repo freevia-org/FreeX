@@ -10,7 +10,7 @@ name: Release Auto Retry
 #
 # So an operator dispatches this manually (it has no event trigger: all CI is manual-only) with
 # the id of a Full Signed Release run, or of a Release Readiness run of main, that ended in failure.
-# release-readiness.yml also dispatches it for its own run (its last job, first attempt only): on
+# No other workflow dispatches this one; retries always require an operator action. On
 # 2026-11-23 run 45222271749 went red only because three macOS arm64 jobs were never acquired, a manual
 # re-run of the failed jobs made it green, and until then the red nightly had removed the fast-release
 # default (full-release.yml releases the newest readiness-green commit, found through

@@ -161,7 +161,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("src/FreeX.App.Services/WorkbookViewportScrollPlanner.cs");
         script.Should().Contain("public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)");
         script.Should().Contain("public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(");
-        script.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
+        script.Should().Contain("WorkbookViewportScrollPlanner.Create(");
+        script.Should().Contain("_session.ActiveSheet, _session.Viewport,");
         script.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
         script.Should().Contain("shared/Free.Shared.AppServices/LocalFilePath.cs");
         script.Should().Contain("public static bool TryNormalize(string? candidate, out string normalizedPath)");
@@ -2281,7 +2282,10 @@ public sealed class MacOsAppReadinessPreflightTests
                 _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
                 _verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
                 _horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;
-                WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)
+                WorkbookViewportScrollPlanner.Create(
+                    _session.ActiveSheet, _session.Viewport,
+                    origin.TopRow, origin.LeftCol,
+                    _session.GetEffectiveFrozenRows(), _session.GetEffectiveFrozenCols());
                 ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);
                 ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);
                 WorkbookViewportScrollPlanner.CalculateViewportOrigin(
@@ -4847,8 +4851,8 @@ public sealed class MacOsAppReadinessPreflightTests
 
                 public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
                 {
-                    CountVisibleScrollableRows(viewport, sheet.FrozenRows);
-                    CountVisibleScrollableColumns(viewport, sheet.FrozenCols);
+                    CountVisibleScrollableRows(viewport, frozenRows);
+                    CountVisibleScrollableColumns(viewport, frozenColumns);
                     return default;
                 }
 

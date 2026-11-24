@@ -98,10 +98,10 @@ signed release.
 - A failure is real unless `tools/Get-ReleaseRunFailureClass.ps1` can positively show the
   platform caused it (runner lost or never acquired, or only a job-setup or artifact-transfer
   step failed). Timeouts and anything uncertain are real.
-- `release-auto-retry.yml` is dispatched by hand with the `run_id` of a finished run (it has no
-  event trigger; `release-readiness.yml` also dispatches it for its own red main run) and re-runs the failed jobs once when that run concluded `failure`, was on
-  its first attempt, and every failed job is infrastructure. It never retries a real failure,
-  a cancelled run or a second attempt. A re-run still parks Windows signing jobs at the
+- `release-auto-retry.yml` is dispatched by an operator with the `run_id` of a finished run (it has no
+  event trigger and no workflow starts it automatically). It re-runs failed jobs once only when that
+  run concluded `failure`, was on its first attempt, and every failed job is infrastructure. It never
+  retries a real failure, a cancelled run or a second attempt. A re-run still parks Windows signing jobs at the
   `public-preview` approval again.
 - Publication resumes safely: `tools/Send-ReleaseAssets.ps1` uploads only assets that are
   missing, leaves identical ones, replaces only interrupted uploads, and refuses to overwrite a
