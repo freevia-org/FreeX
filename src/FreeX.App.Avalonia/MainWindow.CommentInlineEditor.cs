@@ -30,6 +30,8 @@ public sealed partial class MainWindow
     private ThreadedComment? _inlineThreadedCommentEditExisting;
     private CellAddress? _inlineNoteEditAddress;
     private string _inlineNoteEditInitialText = string.Empty;
+    private bool _inlineNotePreserveSelection;
+    private bool _inlineThreadedCommentPreserveSelection;
     private TextBox? _inlineNoteEditBox;
     private TextBlock? _inlineNoteError;
     private TextBox? _inlineThreadedCommentRootBox;
@@ -41,12 +43,17 @@ public sealed partial class MainWindow
     private CheckBox? _inlineThreadedCommentResolvedBox;
     private TextBlock? _inlineThreadedCommentError;
 
-    private void BeginNoteInlineEdit()
+    private void BeginNoteInlineEdit() => BeginNoteInlineEditCore(null, preserveSelection: false);
+
+    private void BeginNoteInlineEditAt(CellAddress address, bool preserveSelection) =>
+        BeginNoteInlineEditCore(address, preserveSelection);
+
+    private void BeginNoteInlineEditCore(CellAddress? address, bool preserveSelection)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var target = ReviewSessionController.GetSelectedNoteTarget();
+        var target = CreateReviewSessionController(address).GetSelectedNoteTarget();
         if (target is null)
         {
             RefreshShell(UiText.Get("MainLoc_ReviewTargetNotSelected"));
@@ -57,17 +64,24 @@ public sealed partial class MainWindow
         ClearInlineThreadedCommentEditorState();
         EnsureInlineEditorAddressVisible(target.Address);
         _inlineNoteEditAddress = target.Address;
+        _inlineNotePreserveSelection = preserveSelection;
         _inlineNoteEditInitialText = target.NoteText;
         RefreshShell(UiText.Get("MainLoc_Ready"));
         Dispatcher.UIThread.Post(FocusInlineNoteEditor, DispatcherPriority.Input);
     }
 
-    private void BeginThreadedCommentInlineEdit(ThreadedComment? existing)
+    private void BeginThreadedCommentInlineEdit(ThreadedComment? existing) =>
+        BeginThreadedCommentInlineEditCore(null, existing, preserveSelection: false);
+
+    private void BeginThreadedCommentInlineEditAt(CellAddress address, ThreadedComment? existing, bool preserveSelection) =>
+        BeginThreadedCommentInlineEditCore(address, existing, preserveSelection);
+
+    private void BeginThreadedCommentInlineEditCore(CellAddress? address, ThreadedComment? existing, bool preserveSelection)
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        var target = ReviewSessionController.GetSelectedThreadedCommentTarget();
+        var target = CreateReviewSessionController(address).GetSelectedThreadedCommentTarget();
         if (target is null)
         {
             RefreshShell(UiText.Get("MainLoc_ReviewTargetNotSelected"));
@@ -80,6 +94,7 @@ public sealed partial class MainWindow
         _inlineThreadedCardPassive = false;
         _inlineThreadedCardDismissedAddress = null;
         _inlineThreadedCommentEditAddress = target.Address;
+        _inlineThreadedCommentPreserveSelection = preserveSelection;
         _inlineThreadedCommentEditExisting = existing ?? target.ThreadedComment;
         RefreshShell(UiText.Get("MainLoc_Ready"));
         Dispatcher.UIThread.Post(FocusInlineThreadedCommentEditor, DispatcherPriority.Input);
@@ -117,6 +132,7 @@ public sealed partial class MainWindow
         }
 
         _inlineThreadedCommentEditAddress = address;
+        _inlineThreadedCommentPreserveSelection = true;
         _inlineThreadedCommentEditExisting = thread;
         _inlineThreadedCardPassive = true;
     }
@@ -135,6 +151,7 @@ public sealed partial class MainWindow
         Dispatcher.UIThread.Post(() =>
         {
             if (_isOpening || _isSaving || _inlineNoteEditAddress is not null ||
+                address.Sheet != _session.ActiveSheet.Id ||
                 !_session.ActiveSheet.ThreadedComments.TryGetValue(address, out var thread))
             {
                 return;
@@ -143,6 +160,7 @@ public sealed partial class MainWindow
             ClearInlineThreadedCommentEditorState();
             _inlineThreadedCardDismissedAddress = null;
             _inlineThreadedCommentEditAddress = address;
+            _inlineThreadedCommentPreserveSelection = true;
             _inlineThreadedCommentEditExisting = thread;
             RefreshShell(UiText.Get("MainLoc_Ready"));
             Dispatcher.UIThread.Post(FocusInlineThreadedCommentEditor, DispatcherPriority.Input);
@@ -704,7 +722,7 @@ public sealed partial class MainWindow
         if (_inlineNoteEditAddress is not { } address)
             return;
 
-        var result = ReviewSessionController.ApplyNote(text);
+        var result = CreateReviewSessionController(address, _inlineNotePreserveSelection).ApplyNote(text);
         if (!result.Success)
         {
             ShowInlineNoteError(result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
@@ -801,8 +819,10 @@ public sealed partial class MainWindow
 
     private void ApplyInlineThreadedCommentResult(ThreadedCommentDialogResult result)
     {
-        var address = _inlineThreadedCommentEditAddress;
-        var mutation = ReviewSessionController.ApplyThreadedComment(result);
+        if (_inlineThreadedCommentEditAddress is not { } address)
+            return;
+        var mutation = CreateReviewSessionController(address, _inlineThreadedCommentPreserveSelection)
+            .ApplyThreadedComment(result);
         if (!mutation.Success)
         {
             ShowInlineThreadedCommentError(mutation.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
@@ -810,9 +830,7 @@ public sealed partial class MainWindow
         }
 
         ClearInlineThreadedCommentEditorState();
-        ApplyReviewRefreshPlan(mutation.RefreshPlan, address is { } cell
-            ? UiText.Format("Comment_CommentUpdated", FormatCellReference(cell))
-            : UiText.Get("Comment_CommentUpdated"));
+        ApplyReviewRefreshPlan(mutation.RefreshPlan, UiText.Format("Comment_CommentUpdated", FormatCellReference(address)));
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
@@ -899,6 +917,7 @@ public sealed partial class MainWindow
     private void ClearInlineNoteEditorState()
     {
         _inlineNoteEditAddress = null;
+        _inlineNotePreserveSelection = false;
         _inlineNoteEditInitialText = string.Empty;
         ClearInlineNoteControlReferences();
     }
@@ -913,6 +932,7 @@ public sealed partial class MainWindow
     {
         _inlineThreadedCardPassive = false;
         _inlineThreadedCommentEditAddress = null;
+        _inlineThreadedCommentPreserveSelection = false;
         _inlineThreadedCommentEditExisting = null;
         ClearInlineThreadedCommentControlReferences();
     }

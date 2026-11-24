@@ -152,16 +152,16 @@ public partial class MainWindow
             AutoFitColumnWidth = Handled(() => FormatAutoColMenuItem_Click(this, new RoutedEventArgs())),
             Group = Handled(() => GroupRowsBtn_Click(this, new RoutedEventArgs())),
             Ungroup = Handled(() => UngroupRowsBtn_Click(this, new RoutedEventArgs())),
-            NewThreadedComment = Handled(() =>
+            NewThreadedComment = Handled<WorkbookApplicationCommandInvocation>(_ =>
                 ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())),
-            EditThreadedComment = Handled(() =>
+            EditThreadedComment = Handled<WorkbookApplicationCommandInvocation>(_ =>
                 ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())),
             SetThreadedCommentResolution = Handled<CellAddress, bool>(ResolveContextThreadedComment),
-            DeleteThreadedComment = Handled(() =>
+            DeleteThreadedComment = Handled<WorkbookApplicationCommandInvocation>(_ =>
                 ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs())),
-            NewNote = Handled(() => ReviewNewCommentBtn_Click(this, new RoutedEventArgs())),
-            EditNote = Handled(() => ReviewNewCommentBtn_Click(this, new RoutedEventArgs())),
-            DeleteNote = Handled(() => ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs())),
+            NewNote = Handled<WorkbookApplicationCommandInvocation>(_ => ReviewNewCommentBtn_Click(this, new RoutedEventArgs())),
+            EditNote = Handled<WorkbookApplicationCommandInvocation>(_ => ReviewNewCommentBtn_Click(this, new RoutedEventArgs())),
+            DeleteNote = Handled<WorkbookApplicationCommandInvocation>(_ => ReviewDeleteCommentBtn_Click(this, new RoutedEventArgs())),
             ShowNotes = Handled(() => ReviewShowNotesBtn_Click(this, new RoutedEventArgs())),
             ShowHideNote = Handled<CellAddress>(address => ExecuteShowHideNote(address)),
             ShowAllNotes = Handled(() => ExecuteShowAllNotes()),

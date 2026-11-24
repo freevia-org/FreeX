@@ -148,13 +148,19 @@ public partial class MainWindow
             AutoFitColumnWidth = Handled(() => AutoFitSelectedColumnWidth()),
             Group = Handled(() => GroupSelectedRows()),
             Ungroup = Handled(() => UngroupSelection()),
-            NewThreadedComment = Handled(async () => await ShowNewThreadedCommentDialogAsync()),
-            EditThreadedComment = Handled(async () => await ShowEditThreadedCommentDialogAsync()),
+            NewThreadedComment = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
+                await ShowContextThreadedCommentEditorAsync(invocation.TargetAddress, editExisting: false)),
+            EditThreadedComment = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
+                await ShowContextThreadedCommentEditorAsync(invocation.TargetAddress, editExisting: true)),
             SetThreadedCommentResolution = Handled<CellAddress, bool>(ResolveContextThreadedComment),
-            DeleteThreadedComment = Handled(() => DeleteActiveCellThreadedComment()),
-            NewNote = Handled(async () => await ShowNewNoteDialogAsync()),
-            EditNote = Handled(async () => await ShowEditNoteDialogAsync()),
-            DeleteNote = Handled(() => DeleteActiveCellNote()),
+            DeleteThreadedComment = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                DeleteContextReviewAnnotation(invocation.TargetAddress, threaded: true)),
+            NewNote = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
+                await ShowContextNoteEditorAsync(invocation.TargetAddress, editExisting: false)),
+            EditNote = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
+                await ShowContextNoteEditorAsync(invocation.TargetAddress, editExisting: true)),
+            DeleteNote = Handled<WorkbookApplicationCommandInvocation>(invocation =>
+                DeleteContextReviewAnnotation(invocation.TargetAddress, threaded: false)),
             ShowNotes = Handled(() => ToggleAllNotesVisibility()),
             ShowHideNote = Handled<CellAddress>(ToggleContextCellNoteVisibility),
             ShowAllNotes = Handled(() => ToggleAllNotesVisibility()),

@@ -78,6 +78,58 @@ public sealed partial class MainWindow
         return Task.CompletedTask;
     }
 
+    private Task ShowContextNoteEditorAsync(CellAddress? address, bool editExisting)
+    {
+        if (address is not { } target)
+            return editExisting ? ShowEditNoteDialogAsync() : ShowNewNoteDialogAsync();
+
+        BeginNoteInlineEditAt(target, preserveSelection: true);
+        return Task.CompletedTask;
+    }
+
+    private Task ShowContextThreadedCommentEditorAsync(CellAddress? address, bool editExisting)
+    {
+        if (address is not { } target)
+            return editExisting ? ShowEditThreadedCommentDialogAsync() : ShowNewThreadedCommentDialogAsync();
+
+        var existing = CreateReviewSessionController(target).GetSelectedThreadedCommentTarget()?.ThreadedComment;
+        if (editExisting && existing is null)
+        {
+            RefreshShell(UiText.Get("Comment_NoComment"));
+            return Task.CompletedTask;
+        }
+
+        BeginThreadedCommentInlineEditAt(target, existing, preserveSelection: true);
+        return Task.CompletedTask;
+    }
+
+    private void DeleteContextReviewAnnotation(CellAddress? address, bool threaded)
+    {
+        if (address is not { } target)
+        {
+            if (threaded) DeleteActiveCellThreadedComment();
+            else DeleteActiveCellNote();
+            return;
+        }
+
+        if (_isOpening || _isSaving || target.Sheet != _session.ActiveSheet.Id || !TryCommitPendingFormulaEdit())
+            return;
+
+        var controller = CreateReviewSessionController(target, preserveSelection: true);
+        var result = threaded ? controller.DeleteThreadedComment() : controller.DeleteNote();
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
+            return;
+        }
+
+        if (threaded && _inlineThreadedCommentEditAddress == target)
+            ClearInlineThreadedCommentEditorState();
+        if (!threaded && _inlineNoteEditAddress == target)
+            ClearInlineNoteEditorState();
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("InsertLoc_ClearedCommentsAndNotes"));
+    }
+
     private void ResolveActiveCellThreadedComment(bool resolved)
     {
         var result = ReviewSessionController.ResolveThreadedComment(resolved);
