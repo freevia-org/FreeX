@@ -254,6 +254,7 @@ public sealed class WorkbookApplicationCommandRouterTests
     [InlineData(WorkbookApplicationCommandIntent.NewNote)]
     [InlineData(WorkbookApplicationCommandIntent.EditNote)]
     [InlineData(WorkbookApplicationCommandIntent.DeleteNote)]
+    [InlineData(WorkbookApplicationCommandIntent.EditHyperlink)]
     public async Task WorkareaBinder_RetainsReviewTargetAndNativeInvocation(WorkbookApplicationCommandIntent intent)
     {
         var calls = new List<EndpointCall>();

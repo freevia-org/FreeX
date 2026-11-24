@@ -166,7 +166,7 @@ public partial class MainWindow
             ShowHideNote = Handled<CellAddress>(address => ExecuteShowHideNote(address)),
             ShowAllNotes = Handled(() => ExecuteShowAllNotes()),
             OpenHyperlink = Handled<CellAddress>(address => TryOpenHyperlink(address)),
-            EditHyperlink = Handled(() => InsertLinkBtn_Click(this, new RoutedEventArgs())),
+            EditHyperlink = Handled<WorkbookApplicationCommandInvocation>(_ => InsertLinkBtn_Click(this, new RoutedEventArgs())),
             PivotTableOptions = Handled<CellAddress>(address => ShowPivotTableOptionsDialog(address)),
             ClearAll = Handled(() => ClearAllMenuItem_Click(this, new RoutedEventArgs())),
             ClearFormats = Handled(() => ClearFormats()),

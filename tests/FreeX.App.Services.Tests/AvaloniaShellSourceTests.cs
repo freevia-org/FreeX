@@ -4157,8 +4157,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"HyperlinkCompactDialog\");");
         source.Should().Contain("HyperlinkDialogPlanner.TryPlan(");
-        source.Should().Contain("var result = _session.SetSelectedRangeHyperlink(plan);");
-        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_InsertHyperlinkFailed\"));");
+        var workflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.HyperlinkContext.cs"));
+        workflowSource.Should().Contain("var result = session.ExecuteRepeatableCommandPreservingSelection(CreateCommand);");
+        workflowSource.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_InsertHyperlinkFailed\"));");
     }
 
 
