@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -1078,20 +1080,10 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _ => TableCellEditKeyboardKey.Other,
     };
 
-    private static TableCellEditKeyboardModifiers ToTableCellEditKeyboardModifiers(
-        KeyModifiers modifiers)
-    {
-        var result = TableCellEditKeyboardModifiers.None;
-        if ((modifiers & KeyModifiers.Control) != 0)
-            result |= TableCellEditKeyboardModifiers.Control;
-        if ((modifiers & KeyModifiers.Shift) != 0)
-            result |= TableCellEditKeyboardModifiers.Shift;
-        if ((modifiers & KeyModifiers.Alt) != 0)
-            result |= TableCellEditKeyboardModifiers.Alt;
-        if ((modifiers & KeyModifiers.Meta) != 0)
-            result |= TableCellEditKeyboardModifiers.Platform;
-        return result;
-    }
+    // Meta policy: Keep. Command is the planner's platform modifier and blocks plain-text cell edits.
+    private static FreeKeyModifiers ToTableCellEditKeyboardModifiers(
+        KeyModifiers modifiers) =>
+        AvaloniaKeyModifiersMapper.FromAvalonia(modifiers, KeyModifierMetaPolicy.Keep);
 
     private void RefreshTableCellHighlight()
     {

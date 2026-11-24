@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 
@@ -189,7 +190,7 @@ public sealed class MasterEditingSessionTests
         session.Select(90);
         var router = new CanvasGestureRouter(session);
 
-        router.HandleKeyDown(CanvasGestureKey.Right, CanvasGestureModifiers.None).Handled.Should().BeTrue();
+        router.HandleKeyDown(CanvasGestureKey.Right, FreeKeyModifiers.None).Handled.Should().BeTrue();
 
         shape.OffsetXEmu.Should().Be(CanvasGesturePlanner.ResolveNudgeStep(useLargeStep: false));
         presentation.Slides.Should().BeEmpty();

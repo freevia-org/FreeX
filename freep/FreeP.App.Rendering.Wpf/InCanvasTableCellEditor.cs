@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -684,20 +686,10 @@ public sealed class InCanvasTableCellEditor
         _ => TableCellEditKeyboardKey.Other,
     };
 
-    private static TableCellEditKeyboardModifiers ToTableCellEditKeyboardModifiers(
-        ModifierKeys modifiers)
-    {
-        var result = TableCellEditKeyboardModifiers.None;
-        if ((modifiers & ModifierKeys.Control) != 0)
-            result |= TableCellEditKeyboardModifiers.Control;
-        if ((modifiers & ModifierKeys.Shift) != 0)
-            result |= TableCellEditKeyboardModifiers.Shift;
-        if ((modifiers & ModifierKeys.Alt) != 0)
-            result |= TableCellEditKeyboardModifiers.Alt;
-        if ((modifiers & ModifierKeys.Windows) != 0)
-            result |= TableCellEditKeyboardModifiers.Platform;
-        return result;
-    }
+    // Meta policy: Keep. The Windows key is the planner's platform modifier and blocks plain-text cell edits.
+    private static FreeKeyModifiers ToTableCellEditKeyboardModifiers(
+        ModifierKeys modifiers) =>
+        WpfKeyModifiersMapper.FromWpf(modifiers, KeyModifierMetaPolicy.Keep);
 
     // ── Cell highlight overlay ─────────────────────────────────────────────────
 
