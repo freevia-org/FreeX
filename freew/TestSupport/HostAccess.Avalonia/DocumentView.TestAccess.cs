@@ -199,6 +199,25 @@ public sealed partial class DocumentView
         return TryHitTestHeaderFooter(point);
     }
 
+    internal IReadOnlyList<(int Start, int Length, int NewLineLength, double Height, string Runs, bool ContainsCaret)>
+        HeaderFooterBackendLinesForTest()
+    {
+        if (_hfCaret is not { } caret || GetHfParagraph(caret.Target) is not { } paragraph)
+            return [];
+        using var layout = BuildHeaderFooterParagraphLayout(paragraph);
+        var bounds = HeaderFooterInsertionBounds(layout, paragraph.PlainText, caret.Offset);
+        var top = 0.0;
+        var lines = new List<(int, int, int, double, string, bool)>();
+        foreach (var line in layout.TextLines)
+        {
+            lines.Add((line.FirstTextSourceIndex, line.Length, line.NewLineLength, line.Height,
+                string.Join(",", line.TextRuns.Select(run => $"{run.GetType().Name}:{run.Length}")),
+                Math.Abs(top - bounds.Y) < 0.01));
+            top += line.Height;
+        }
+        return lines;
+    }
+
     internal Rect? HfCaretRectForTest => TryGetHfCaretRect(out var rect) ? rect : null;
     internal void BackspaceForTest() => Backspace();
     internal void DeleteForwardForTest() => DeleteForward();

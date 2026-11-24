@@ -428,6 +428,7 @@ public sealed partial class DocumentView : Control
         CaretMoved += RaiseAutomationSelectionChanged;
         FloatingSelectionChanged += RaiseAutomationSelectionChanged;
         DocumentChanged += RaiseAutomationValueChanged;
+        InitializeTextInputMethod();
     }
 
     internal Func<bool>? CanPasteProvider { get; set; }
@@ -1595,7 +1596,7 @@ public sealed partial class DocumentView : Control
         if (best?.Target is not { } target)
             return false;
 
-        var modelOffset = HfOffsetFromPoint(best, point.X);
+        var modelOffset = HfOffsetFromPoint(best, point.X, point.Y);
         PlaceCaretInHeaderFooter(target, modelOffset, extendSelection);
         return true;
     }
@@ -1638,10 +1639,17 @@ public sealed partial class DocumentView : Control
     /// <summary>Horizontal distance from <paramref name="x"/> to a rendered H/F item's drawn text range (0 when inside).</summary>
     private double HfItemHorizontalDistance(HfRenderItem item, double x)
     {
-        var ft = Build(item.Text.Length == 0 ? " " : item.Text, item.Fmt);
-        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, ft.WidthIncludingTrailingWhitespace, isLast: true);
-        var x0 = item.X + alignOffset;
-        var x1 = x0 + ft.WidthIncludingTrailingWhitespace;
+        var width = HeaderFooterTextWidth(item.Text, item.Fmt);
+        var x0 = item.X + AlignmentOffset(item.Alignment, item.AvailableWidth, width, isLast: true);
+        if (SharedHeaderFooterLayout(item) is { } layout)
+        {
+            using (layout)
+            {
+                width = layout.WidthIncludingTrailingWhitespace;
+                x0 = HeaderFooterLayoutOrigin(item, layout).X;
+            }
+        }
+        var x1 = x0 + width;
         if (x < x0) return x0 - x;
         if (x > x1) return x - x1;
         return 0;
@@ -1652,10 +1660,31 @@ public sealed partial class DocumentView : Control
     /// Returns ModelStartOffset + (chars before X). Field-resolved text is treated by displayed-char count,
     /// which is exact for literal segments and a good approximation when a field's resolved length differs.
     /// </summary>
-    private int HfOffsetFromPoint(HfRenderItem item, double x)
+    private int HfOffsetFromPoint(HfRenderItem item, double x, double y)
     {
-        var ft = Build(item.Text.Length == 0 ? " " : item.Text, item.Fmt);
-        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, ft.WidthIncludingTrailingWhitespace, isLast: true);
+        if (SharedHeaderFooterLayout(item) is { } literalLayout)
+        {
+            using (literalLayout)
+            {
+                var origin = HeaderFooterLayoutOrigin(item, literalLayout);
+                var localY = y - origin.Y;
+                var lineTop = 0.0;
+                foreach (var line in literalLayout.TextLines)
+                {
+                    if (localY < lineTop + line.Height || line == literalLayout.TextLines[^1])
+                    {
+                        var hit = line.GetCharacterHitFromDistance(x - origin.X);
+                        return item.ModelStartOffset + HeaderFooterLayoutBoundary(item.Text,
+                            hit.FirstCharacterIndex + hit.TrailingLength);
+                    }
+                    lineTop += line.Height;
+                }
+                return item.ModelStartOffset;
+            }
+        }
+
+        var width = HeaderFooterTextWidth(item.Text, item.Fmt);
+        var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth, width, isLast: true);
         var x0 = item.X + alignOffset;
         var local = x - x0;
         if (local <= 0 || item.Text.Length == 0)
@@ -1664,8 +1693,8 @@ public sealed partial class DocumentView : Control
         var best = item.Text.Length;
         for (var i = 1; i <= item.Text.Length; i++)
         {
-            var prefixW = Build(item.Text[..i], item.Fmt).WidthIncludingTrailingWhitespace;
-            var prevW = Build(item.Text[..(i - 1)], item.Fmt).WidthIncludingTrailingWhitespace;
+            var prefixW = HeaderFooterTextWidth(item.Text[..i], item.Fmt);
+            var prevW = HeaderFooterTextWidth(item.Text[..(i - 1)], item.Fmt);
             var mid = (prefixW + prevW) / 2;
             if (local < mid)
             {
@@ -7463,6 +7492,34 @@ public sealed partial class DocumentView : Control
             var pf = ResolveParagraphFmt(para);
             var paraTarget = targetFactory?.Invoke(paraIdx);
 
+            if (HeaderFooterUsesSharedLiteralLayout(para))
+            {
+                using var layout = BuildHeaderFooterParagraphLayout(para);
+                var firstLineHeight = layout.TextLines.Count > 0 ? layout.TextLines[0].Height : 0;
+                var reservation = Math.Max(DefaultFontSizePt * PxPerPoint * 1.3, firstLineHeight * 1.15)
+                    + Math.Max(0, layout.Height - firstLineHeight);
+                var formatting = para.Runs.Count > 0 ? ResolveRunFmt(para.Runs[0], para)
+                    : ResolveRunFmt(RunFormatting.Default, para, null);
+                _headerFooterItems.Add(new HfRenderItem
+                {
+                    Text = para.PlainText,
+                    Fmt = formatting,
+                    Slot = slot,
+                    X = _contentLeft,
+                    Y = y,
+                    AvailableWidth = availWidth,
+                    Alignment = pf.Alignment,
+                    Target = paraTarget,
+                    OwnerTarget = paraTarget,
+                    LineHeight = reservation,
+                    Height = reservation,
+                    Width = layout.WidthIncludingTrailingWhitespace,
+                    ModelStartOffset = 0,
+                });
+                y += reservation;
+                continue;
+            }
+
             // Build segments split on TAB characters.
             // Each entry carries (tabStopIndex, Text, Fmt, ModelStart):
             //   tabStopIndex 0 → segment before the first tab (left-aligned at X=_contentLeft)
@@ -7626,7 +7683,12 @@ public sealed partial class DocumentView : Control
 
                 if (!string.IsNullOrEmpty(segment.Text))
                 {
-                    var sampleText = segment.Text.Length > 1 ? segment.Text[..1] : segment.Text;
+                    // A standalone line/format control has no glyph and can stall the formatter.
+                    // Use font metrics for controls and a complete first text element otherwise.
+                    var firstCharacter = segment.Text[0];
+                    var sampleText = IsBodySoftLineBreak(firstCharacter) || char.IsControl(firstCharacter)
+                        || char.GetUnicodeCategory(firstCharacter) == UnicodeCategory.Format
+                            ? "Ag" : StringInfo.GetNextTextElement(segment.Text);
                     lineH = Math.Max(lineH, Build(sampleText, segment.Fmt).Height * 1.15);
                 }
             }
@@ -7647,7 +7709,7 @@ public sealed partial class DocumentView : Control
                     ? segment.Width
                     : string.IsNullOrEmpty(segment.Text)
                         ? 0
-                        : Build(segment.Text, segment.Fmt).WidthIncludingTrailingWhitespace;
+                        : HeaderFooterTextWidth(segment.Text, segment.Fmt);
 
             void AddSegmentItem(HfSegment segment, double itemX)
             {
@@ -8769,10 +8831,7 @@ public sealed partial class DocumentView : Control
         var nextPf = ResolveParagraphFmt(nextParagraph);
         var nextIndentFirst = nextPf.FirstLineIndentPt * PxPerPoint;
 
-        var nextRawCells = IsEditable(nextParagraph)
-            ? ParaCells(nextParagraph, includeFlowBreaks: true)
-            : DisplayCells(blockIndex + 1, nextParagraph, includeFlowBreaks: true);
-        var nextCells = nextRawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, nextParagraph, c.StyleId) }).ToList();
+        var nextCells = DisplayCells(blockIndex + 1, nextParagraph, includeFlowBreaks: true);
         var nextSupportsCompleteParagraphPlanning = nextIndentFirst == 0
             && _wrapExclusions.Count == 0
             && nextCells.All(cell =>
@@ -9107,9 +9166,7 @@ public sealed partial class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
-        var rawCells = IsEditable(paragraph)
-            ? ParaCells(paragraph, includeFlowBreaks: true)
-            : DisplayCells(blockIndex, paragraph, includeFlowBreaks: true);
+        var rawCells = DisplayCells(blockIndex, paragraph, includeFlowBreaks: true, captureDiagnostics: true);
         var flowBreakPlan = InlineFlowBreakSegmentationPlanner.Build(
             rawCells.Select(cell => new InlineFlowRunInput(
                 SourceLength: 1,
@@ -9117,9 +9174,7 @@ public sealed partial class DocumentView : Control
                 IsColumnBreak: cell.IsColumnBreak)).ToList());
         // Resolve document defaults and named styles for display only; editing re-derives raw cells
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
-        var cells = rawCells
-            .Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph, c.StyleId), Ch = DisplayGlyph(c) })
-            .ToList();
+        var cells = rawCells;
         var reviewPolicy = CurrentReviewDisplayPolicy;
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
@@ -9157,23 +9212,14 @@ public sealed partial class DocumentView : Control
         // that over ALL cells (safe upper bound) ensures Peek breaks whenever the real first-line
         // ReserveContentY would.  Empty paragraphs (no cells) fall back to the default line height.
         var firstLineNaturalH = DefaultFontSizePt * PxPerPoint * 1.3; // default / fallback
-        foreach (var run in paragraph.Runs)
-        {
-            if (run.Image is not null || run.Shape is not null) continue; // skip non-text
-            var effectiveFormatting = ResolveRunFmt(run, paragraph);
-            if (IsTextHiddenInCurrentView(effectiveFormatting)) continue;
-            foreach (var ch in run.Text)
-            {
-                var h = MeasureBodyTextCell(ch, effectiveFormatting).Height;
-                if (h > firstLineNaturalH) firstLineNaturalH = h;
-                // VV1: do NOT break — scan all chars across ALL text runs (max over all cells).
-            }
-            // VV1: do NOT break — scan all runs.
-        }
         foreach (var cell in cells)
         {
-            if (cell.EquationElement is { } equationElement)
-                firstLineNaturalH = Math.Max(firstLineNaturalH, MeasureEquationVisualElement(equationElement, cell.Fmt).Height);
+            if (cell.IsPageBreak || cell.IsColumnBreak || IsTextHiddenInCurrentView(cell.Fmt))
+                continue;
+            var height = cell.EquationElement is { } equationElement
+                ? MeasureEquationVisualElement(equationElement, cell.Fmt).Height
+                : MeasureBodyTextCell(cell.Ch, cell.Fmt).Height;
+            firstLineNaturalH = Math.Max(firstLineNaturalH, height);
         }
 
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH * naturalLineHeightScale, pf);
@@ -10022,7 +10068,7 @@ public sealed partial class DocumentView : Control
     private void LayoutTablePaged(int blockIndex, Table table, double textWidth)
     {
         var cols = Math.Max(1, table.ColumnCount);
-        var colWidths = ComputeColumnWidths(table, cols, textWidth);
+        var colWidths = ComputeColumnWidths(blockIndex, table, cols, textWidth);
         // AV-COL-NONTXT AG1: build columnLeft[] as offsets from _contentLeft (column-0 base).
         // Each row re-applies the per-row column shift after reserving its Y slot.
         var colOffsets = new double[cols + 1]; // relative to _contentLeft
@@ -10169,7 +10215,7 @@ public sealed partial class DocumentView : Control
                 var prCellHeight = prParagraphs.Sum(paragraph =>
                 {
                     var spacing = CellParagraphSpacing(paragraph);
-                    return WrapCellLines(blockIndex, paragraph, prFmt, prInnerW).Sum(line => line.Height)
+                    return WrapCellLines(blockIndex, paragraph, prFmt, prInnerW, forceBold: EffectiveFillFor(pr, cellIndex).EffectiveBold).Sum(line => line.Height)
                         + spacing.Before + spacing.After;
                 }) + prVerticalPad;
                 if (prCellHeight > prRowHeight)
@@ -10262,7 +10308,8 @@ public sealed partial class DocumentView : Control
                         : 0d).ToList();
                 var paragraphSpacings = cellParagraphs.Select(CellParagraphSpacing).ToList();
                 var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
-                    WrapCellLines(blockIndex, paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
+                    WrapCellLines(blockIndex, paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]),
+                        forceBold: cellAppearance.EffectiveBold, captureDiagnostics: true)).ToList();
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After)
@@ -10398,8 +10445,8 @@ public sealed partial class DocumentView : Control
                                     startCol,
                                     pIdx));
                                 _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, objectY, 0, item.Height,
-                                    fmt, '\0', Sentinel: false, CellRow: r, CellCol: startCol,
-                                    CellParaIdx: pIdx, CellParaOffset: paraCharOffset));
+                                    item.Formatting, '\0', Sentinel: false, CellRow: r, CellCol: startCol,
+                                    CellParaIdx: pIdx, CellParaOffset: item.DisplayOffset));
                                 glyphOffset++;
                                 tx += item.Width;
                                 continue;
@@ -10408,10 +10455,17 @@ public sealed partial class DocumentView : Control
                             var ch = item.Ch;
                             var w = item.Width;
                             var hidden = item.Hidden;
-                            var placedFormatting = hidden ? fmt with { Hidden = true } : fmt;
+                            var placedFormatting = hidden ? item.Formatting with { Hidden = true } : item.Formatting;
+                            var sourceRun = cellModel.Paragraphs[pIdx].Runs[item.RunIndex];
+                            var link = sourceRun.HyperlinkUrl is { Length: > 0 } || sourceRun.HyperlinkAnchor is { Length: > 0 }
+                                ? new LinkInfo(sourceRun.HyperlinkUrl, sourceRun.HyperlinkAnchor, sourceRun.HyperlinkTooltip)
+                                : (LinkInfo?)null;
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, placedFormatting, ch,
-                                Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: paraCharOffset,
-                                Control: item.Control));
+                                Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: item.DisplayOffset,
+                                CommentId: sourceRun.CommentId, Revision: sourceRun.Revision, RevisionAuthor: sourceRun.RevisionAuthor,
+                                Link: link, HasFormatRevision: sourceRun.FormatRevision is not null,
+                                EquationElement: item.EquationElement, Control: item.Control,
+                                IsLegacyFormField: sourceRun.ComplexField?.FormField is not null));
                             glyphOffset++;
                             paraCharOffset++;
                             tx += w;
@@ -10434,6 +10488,7 @@ public sealed partial class DocumentView : Control
                                 FormatRevision: null));
                         }
 
+                        paraCharOffset = line.EndDisplayOffset;
                         ty += lineHeight;
                     }
 
@@ -11216,7 +11271,7 @@ public sealed partial class DocumentView : Control
         return null;
     }
 
-    private double[] ComputeColumnWidths(Table table, int cols, double textWidth)
+    private double[] ComputeColumnWidths(int blockIndex, Table table, int cols, double textWidth)
     {
         // freew-table-layout F1: an AutoFit-to-Contents table (Word's default "AutoFit to Contents",
         // or FreeW's Table Layout > AutoFit > AutoFit to Contents, round-tripped via DocxReader /
@@ -11225,7 +11280,7 @@ public sealed partial class DocumentView : Control
         // AutoFit-to-Contents table falls through to AllocateColumnWidths below, which always
         // distributes/stretches to the full available width -- correct for Fixed/Window tables, wrong
         // for Contents ones.
-        var contentAutoFitWidths = ResolveContentAutoFitColumnWidths(table, textWidth);
+        var contentAutoFitWidths = ResolveContentAutoFitColumnWidths(blockIndex, table, textWidth);
         if (contentAutoFitWidths is not null)
             return contentAutoFitWidths.ToArray();
 
@@ -11240,7 +11295,7 @@ public sealed partial class DocumentView : Control
     /// AutoFit-to-Contents (BuildContentAutoFitWidths's own gate), in which case the caller falls back to
     /// AllocateColumnWidths.
     /// </summary>
-    private IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(Table table, double availableWidthDip)
+    private IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(int blockIndex, Table table, double availableWidthDip)
     {
         if (table.AutoFit != AutoFitMode.Contents)
             return null;
@@ -11254,7 +11309,7 @@ public sealed partial class DocumentView : Control
                 var cell = row.Cells[cellIndex];
                 var contentWidth = cell.Paragraphs.Count == 0
                     ? 0
-                    : cell.Paragraphs.Max(MeasureContentAutoFitParagraphWidth);
+                    : cell.Paragraphs.Max(paragraph => MeasureContentAutoFitParagraphWidth(blockIndex, paragraph));
                 measurements.Add(new TableCellContentMeasurement(rowIndex, cellIndex, contentWidth));
             }
         }
@@ -11266,99 +11321,16 @@ public sealed partial class DocumentView : Control
         int blockIndex,
         Paragraph paragraph,
         RunFormatting fmt,
-        double maxInner)
+        double maxInner,
+        bool forceBold = false,
+        bool captureDiagnostics = false)
     {
         var result = new List<CellWrappedLine>();
         var lineHeight = Build("Ag", fmt).Height;
-        var items = new List<CellWrappedItem>();
-
-        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
-        {
-            var run = paragraph.Runs[runIndex];
-            if (run.EmbeddedObject is { } embeddedObject)
-            {
-                var plan = EmbeddedObjectVisualPlanner.Build(embeddedObject);
-                var width = plan.WidthPt * PxPerPoint;
-                var height = plan.HeightPt * PxPerPoint;
-                if (width > maxInner)
-                {
-                    var scale = maxInner / width;
-                    width = maxInner;
-                    height *= scale;
-                }
-                items.Add(new CellWrappedItem('\0', width, height, Hidden: false, plan, runIndex));
-                continue;
-            }
-
-            var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run, paragraph));
-            // A table cell paints through this wrap-measurement path, not DisplayCells -- so a simple
-            // RunFieldKind field (DATE/PAGE/AUTHOR/...) inside a cell needs the same live-vs-locked
-            // resolution DisplayCells applies for the body, or it stays frozen at its cached text there
-            // too. See ResolveSimpleFieldDisplayText / DisplayCells for the identical body-level fix.
-            var text = run.ComplexField is not null
-                ? BuildBodyComplexFieldDisplayPlan(blockIndex, run).Text
-                : run.FieldKind != RunFieldKind.None
-                    ? ResolveSimpleFieldDisplayText(run)
-                    : run.Text;
-            for (var textIndex = 0; textIndex < text.Length; textIndex++)
-            {
-                var ch = text[textIndex];
-                // A DOCX w:br is retained as a newline in the portable run text. It is a hard
-                // line boundary, not a printable glyph: treating it as ordinary text collapsed
-                // table-cell values such as "Q1\n$1.20M" onto one line and consequently made
-                // the entire row too short versus Word. Collapse CRLF to one boundary so imported
-                // Windows line endings do not produce a spurious blank table line.
-                if (ch == '\r' && textIndex + 1 < text.Length && text[textIndex + 1] == '\n')
-                    continue;
-
-                var isHardBreak = ch is '\r' or '\n';
-                // AV-CCEDIT: a check box owns its glyph here too — see DisplayGlyph.
-                var glyph = DisplayGlyph(new Cell(ch, fmt, Control: run.Control));
-                var width = hidden || isHardBreak ? 0 : Build(glyph.ToString(), fmt).WidthIncludingTrailingWhitespace;
-                items.Add(new CellWrappedItem(
-                    glyph,
-                    width,
-                    lineHeight,
-                    hidden,
-                    null,
-                    runIndex,
-                    run.Control,
-                    IsHardBreak: isHardBreak));
-            }
-        }
-
-        ApplyTableCharacterSpacing(paragraph, items);
+        var items = BuildCellDisplayItems(blockIndex, paragraph, maxInner, forceBold, captureDiagnostics);
         if (items.Count == 0)
         {
-            result.Add(new CellWrappedLine(lineHeight, [], 0));
-            return result;
-        }
-
-        if (items.Any(item => item.EmbeddedObject is not null))
-        {
-            var lineItems = new List<CellWrappedItem>();
-            var objectLineWidth = 0.0;
-            var currentHeight = lineHeight;
-
-            void FlushLine()
-            {
-                if (lineItems.Count == 0)
-                    return;
-                result.Add(new CellWrappedLine(currentHeight, [.. lineItems], 0));
-                lineItems.Clear();
-                objectLineWidth = 0;
-                currentHeight = lineHeight;
-            }
-
-            foreach (var item in items)
-            {
-                if (lineItems.Count > 0 && objectLineWidth + item.Width > maxInner)
-                    FlushLine();
-                lineItems.Add(item);
-                objectLineWidth += item.Width;
-                currentHeight = Math.Max(currentHeight, item.Height);
-            }
-            FlushLine();
+            result.Add(new CellWrappedLine(lineHeight, [], 0, 0));
             return result;
         }
 
@@ -11379,19 +11351,22 @@ public sealed partial class DocumentView : Control
         var lastSpace = -1;
         var consecutiveAutomaticHyphenLines = 0;
 
-        void AddLine(int from, int to, double automaticHyphenWidth = 0)
+        void AddLine(int from, int to, double automaticHyphenWidth = 0, int? endDisplayOffset = null)
         {
+            var lineItems = items.Skip(from).Take(to - from).ToList();
+            var end = endDisplayOffset ?? (to > from
+                ? items[to - 1].DisplayOffset + (items[to - 1].EmbeddedObject is null ? 1 : 0)
+                : from < items.Count ? items[from].DisplayOffset : items[^1].DisplayOffset + 1);
             result.Add(new CellWrappedLine(
-                lineHeight,
-                items.Skip(from).Take(to - from).ToList(),
-                automaticHyphenWidth));
+                lineItems.Count > 0 ? Math.Max(lineHeight, lineItems.Max(item => item.Height)) : lineHeight,
+                lineItems, automaticHyphenWidth, end));
         }
 
         for (var index = 0; index < items.Count; index++)
         {
             if (items[index].IsHardBreak)
             {
-                AddLine(lineStart, index);
+                AddLine(lineStart, index, endDisplayOffset: items[index].DisplayOffset + 1);
                 lineStart = index + 1;
                 currentWidth = 0;
                 lastSpace = -1;
@@ -12507,6 +12482,27 @@ public sealed partial class DocumentView : Control
 
                 if (string.IsNullOrEmpty(item.Text))
                     continue;
+                if (SharedHeaderFooterLayout(item) is { } literalLayout)
+                {
+                    using (literalLayout)
+                        literalLayout.Draw(context, HeaderFooterLayoutOrigin(item, literalLayout));
+                    continue;
+                }
+                if (HeaderFooterHasOnlyNonprintingControls(item.Text))
+                    continue; // Preserve structural source text without drawing a synthetic glyph.
+                if (HeaderFooterContainsSoftBreak(item.Text))
+                {
+                    // Preserve legacy styled/field segment positions and model mapping. Only the
+                    // segment's formatter changes: FormattedText can stall on an empty first line.
+                    using var segmentLayout = BuildHeaderFooterLiteralLayout(item.Text, item.Fmt);
+                    var origin = HeaderFooterLayoutOrigin(item, segmentLayout);
+                    if (item.Control is not null)
+                        context.FillRectangle(ContentControlShadeBrush, new Rect(origin.X, item.Y,
+                            Math.Max(1, segmentLayout.WidthIncludingTrailingWhitespace),
+                            item.LineHeight > 0 ? item.LineHeight : segmentLayout.Height));
+                    segmentLayout.Draw(context, origin);
+                    continue;
+                }
                 var ft = Build(item.Text, item.Fmt);
                 var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
                     ft.WidthIncludingTrailingWhitespace, isLast: true);
@@ -12834,20 +12830,35 @@ public sealed partial class DocumentView : Control
         if (overlapEnd <= overlapStart)
             return;
 
-        var ft = Build(item.Text, item.Fmt);
+        if (SharedHeaderFooterLayout(item) is { } literalLayout)
+        {
+            using (literalLayout)
+            {
+                var origin = HeaderFooterLayoutOrigin(item, literalLayout);
+                var start = HeaderFooterLayoutBoundary(item.Text, overlapStart - itemStart);
+                var end = HeaderFooterLayoutBoundary(item.Text, overlapEnd - itemStart);
+                foreach (var bounds in literalLayout.HitTestTextRange(start, end - start))
+                    context.FillRectangle(SelectionBrush, new Rect(
+                        origin.X + bounds.X, origin.Y + bounds.Y,
+                        Math.Max(2, bounds.Width), Math.Max(1, bounds.Height)));
+            }
+            return;
+        }
+
+        var width = HeaderFooterTextWidth(item.Text, item.Fmt);
         var alignOffset = AlignmentOffset(
             item.Alignment,
             item.AvailableWidth,
-            ft.WidthIncludingTrailingWhitespace,
+            width,
             isLast: true);
         var localStart = Math.Clamp(overlapStart - itemStart, 0, item.Text.Length);
         var localEnd = Math.Clamp(overlapEnd - itemStart, localStart, item.Text.Length);
         var prefixWidth = localStart == 0
             ? 0
-            : Build(item.Text[..localStart], item.Fmt).WidthIncludingTrailingWhitespace;
+            : HeaderFooterTextWidth(item.Text[..localStart], item.Fmt);
         var selectedWidth = localEnd == localStart
             ? 0
-            : Build(item.Text[localStart..localEnd], item.Fmt).WidthIncludingTrailingWhitespace;
+            : HeaderFooterTextWidth(item.Text[localStart..localEnd], item.Fmt);
         context.FillRectangle(
             SelectionBrush,
             new Rect(
@@ -12887,15 +12898,27 @@ public sealed partial class DocumentView : Control
             return false;
         }
 
-        var ft = Build(hostItem.Text.Length == 0 ? " " : hostItem.Text, hostItem.Fmt);
+        if (SharedHeaderFooterLayout(hostItem) is { } literalLayout)
+        {
+            using (literalLayout)
+            {
+                var offset = HeaderFooterLayoutBoundary(hostItem.Text, hc.Offset - hostItem.ModelStartOffset);
+                var caret = HeaderFooterInsertionBounds(literalLayout, hostItem.Text, offset);
+                var origin = HeaderFooterLayoutOrigin(hostItem, literalLayout);
+                rect = new Rect(origin.X + caret.X, origin.Y + caret.Y, 1.5, Math.Max(1, caret.Height));
+            }
+            return true;
+        }
+
+        var width = HeaderFooterTextWidth(hostItem.Text, hostItem.Fmt);
         var alignOffset = AlignmentOffset(hostItem.Alignment, hostItem.AvailableWidth,
-            ft.WidthIncludingTrailingWhitespace, isLast: true);
+            width, isLast: true);
         var localOffset = Math.Clamp(hc.Offset - hostItem.ModelStartOffset, 0, hostItem.Text.Length);
         var prefixW = hostItem.Text.Length == 0 || localOffset == 0
             ? 0
-            : Build(hostItem.Text[..localOffset], hostItem.Fmt).WidthIncludingTrailingWhitespace;
+            : HeaderFooterTextWidth(hostItem.Text[..localOffset], hostItem.Fmt);
         var caretX = hostItem.X + alignOffset + prefixW;
-        var caretH = hostItem.LineHeight > 0 ? hostItem.LineHeight : ft.Height;
+        var caretH = hostItem.LineHeight > 0 ? hostItem.LineHeight : Build("Ag", hostItem.Fmt).Height;
         rect = new Rect(caretX, hostItem.Y, 1.5, caretH);
         return true;
     }
@@ -26733,71 +26756,33 @@ public sealed partial class DocumentView : Control
         return cells;
     }
 
-    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph, bool includeFlowBreaks = false)
+    private List<Cell> DisplayCells(int blockIndex, Paragraph paragraph, bool includeFlowBreaks = false,
+        bool captureDiagnostics = false)
     {
         var cells = new List<Cell>();
-        foreach (var run in paragraph.Runs)
+        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
         {
-            // Non-editable paragraphs (including note references and fields) still need their
-            // per-run display formatting. Flattening to PlainText loses superscript markers.
-            // A floating drawing's fallback text belongs to its overlay, not the body flow.
-            if (IsFloatingDrawingRun(run))
-                continue;
-
+            var run = paragraph.Runs[runIndex];
             if (includeFlowBreaks)
+            {
+                var start = cells.Count;
                 AddInlineFlowBreakCell(run, cells);
-
+                if (cells.Count > start)
+                    cells[^1] = cells[^1] with { Fmt = ResolveRunFmt(run, paragraph) };
+            }
+            var projection = ResolveRunDisplayProjection(paragraph, run, runIndex, blockIndex, isTableCell: false);
+            if (captureDiagnostics && projection.EquationPlan is { } equationPlan)
+                CaptureEquationVisualPlan(equationPlan);
             var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
                 ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
                 : (LinkInfo?)null;
-            if (run.Equation is { } equation)
-            {
-                AddEquationDisplayCells(equation, run.Formatting, cells);
-                continue;
-            }
-
-            var displayText = run.Text;
-            var displayFormatting = run.Formatting;
-            if (run.ComplexField is { } complexField)
-            {
-                var displayPlan = BuildBodyComplexFieldDisplayPlan(blockIndex, run);
-                displayText = displayPlan.Text;
-                if (displayPlan.IsFieldCode)
-                    displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
-            }
-            else if (run.FieldKind != RunFieldKind.None)
-            {
-                // A simple DATE/TIME/PAGE/AUTHOR/FILENAME/NUMPAGES/... field (Insert > Header & Footer >
-                // Page Number, Insert > Quick Parts > Date, Quick Parts > Document Property). Unlike
-                // run.ComplexField, this has no wrapper object -- the lock lives on run.FieldLocked and the
-                // code/result display mode lives on run.FieldCodeVisible, and ResolveSimpleFieldDisplayText
-                // honors both exactly like BuildBodyComplexFieldDisplayPlan honors ComplexField.IsLocked/
-                // ShowCode above. Matches WPF's BuildFieldRun: without this branch the field never
-                // re-resolved at all here, staying frozen at its cached insertion-time/imported text even
-                // when unlocked.
-                displayText = ResolveSimpleFieldDisplayText(run);
-                if (run.FieldCodeVisible)
-                    displayFormatting = displayFormatting with { ColorHex = ComplexFieldDisplayPlanner.FieldCodeColorHex };
-            }
-            else if (run.FootnoteId is { } footnoteId)
-            {
-                // The body reference mark must show the note's computed display sequence, not the raw
-                // internal FootnoteId that keys _doc.Footnotes — otherwise it drifts from the footnote
-                // area's own number the moment an earlier note is deleted (ids stay stable; only the
-                // display sequence shifts).
-                displayText = ResolveNoteBodyMarkDisplayNumber(_doc, footnoteId, isFootnote: true);
-            }
-            else if (run.EndnoteId is { } endnoteId)
-            {
-                displayText = ResolveNoteBodyMarkDisplayNumber(_doc, endnoteId, isFootnote: false);
-            }
-
-            foreach (var ch in displayText)
-                // AV-CCEDIT: carry the control on the display path too, so a field keeps its chrome in a
-                // paragraph that layout routes here (one holding a note mark, field or equation).
-                cells.Add(new Cell(ch, displayFormatting, run.CommentId, run.Revision, run.RevisionAuthor,
-                    run.RevisionDateXml, link, run.FormatRevision, StyleId: run.StyleId, Control: run.Control,
-                    IsLegacyFormField: run.ComplexField?.FormField is not null));
+            foreach (var token in projection.Tokens)
+                foreach (var ch in token.Text)
+                    cells.Add(new Cell(ch, token.Formatting, run.CommentId, run.Revision, run.RevisionAuthor,
+                        run.RevisionDateXml, link, run.FormatRevision, FootnoteId: run.FootnoteId,
+                        EndnoteId: run.EndnoteId, StyleId: run.StyleId, Control: run.Control,
+                        IsLegacyFormField: run.ComplexField?.FormField is not null,
+                        EquationElement: token.EquationElement));
         }
         return cells;
     }
@@ -26853,63 +26838,34 @@ public sealed partial class DocumentView : Control
         return ComplexFieldDisplayPlanner.Build(complexField, resolved, _doc);
     }
 
-    private void AddEquationDisplayCells(Equation equation, RunFormatting baseFormatting, List<Cell> cells)
+    private void CaptureEquationVisualPlan(EquationVisualPlan plan)
     {
-        var plan = EquationVisualPlanner.Build(equation);
         foreach (var element in plan.Elements)
-            AddEquationVisualElement(element, baseFormatting, cells);
-    }
-
-    private void AddEquationVisualElement(
-        EquationVisualElement element,
-        RunFormatting baseFormatting,
-        List<Cell> cells)
-    {
-        _equationVisualElements.Add((
-            element.Kind,
-            element.LinearText,
-            element.Numerator,
-            element.Denominator,
-            element.Radicand,
-            element.Degree,
-            element.Operator,
-            element.LowerLimit,
-            element.UpperLimit,
-            element.Operand,
-            element.MatrixRows,
-            element.BaseText,
-            element.Accent,
-            element.BarTop,
-            element.OpenDelimiter,
-            element.CloseDelimiter,
-            element.GroupCharacter,
-            element.GroupCharacterPosition,
-            element.FunctionName,
-            element.FunctionArgument));
-
-        // Keep genuinely two-dimensional OfficeMath forms intact through pagination. Scripts stay
-        // character-level so the normal text/caret path continues to own their inline behavior.
-        if (element.Kind != EquationVisualElementKind.Segments)
         {
+            _equationVisualElements.Add((
+                element.Kind,
+                element.LinearText,
+                element.Numerator,
+                element.Denominator,
+                element.Radicand,
+                element.Degree,
+                element.Operator,
+                element.LowerLimit,
+                element.UpperLimit,
+                element.Operand,
+                element.MatrixRows,
+                element.BaseText,
+                element.Accent,
+                element.BarTop,
+                element.OpenDelimiter,
+                element.CloseDelimiter,
+                element.GroupCharacter,
+                element.GroupCharacterPosition,
+                element.FunctionName,
+                element.FunctionArgument));
             foreach (var segment in element.Segments)
                 CaptureEquationVisualSegment(segment);
-            cells.Add(new Cell('\uFFFC', baseFormatting, EquationElement: element));
-            return;
         }
-
-        foreach (var segment in element.Segments)
-            AddEquationVisualSegment(segment, baseFormatting, cells);
-    }
-
-    private void AddEquationVisualSegment(
-        EquationVisualSegment segment,
-        RunFormatting baseFormatting,
-        List<Cell> cells)
-    {
-        CaptureEquationVisualSegment(segment);
-        var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
-        foreach (var ch in segment.Text)
-            cells.Add(new Cell(ch, fmt));
     }
 
     private void CaptureEquationVisualSegment(EquationVisualSegment segment)
@@ -27665,6 +27621,9 @@ public sealed partial class DocumentView : Control
         bool Hidden,
         EmbeddedObjectVisualPlan? EmbeddedObject,
         int RunIndex,
+        RunFormatting Formatting,
+        int DisplayOffset,
+        EquationVisualElement? EquationElement = null,
         // AV-CCEDIT: the content control this cell glyph belongs to, so a field inside a table renders with
         // the same chrome (shade, tooltip, check-box glyph) as one in the body.
         ModelContentControl? Control = null,
@@ -27673,7 +27632,8 @@ public sealed partial class DocumentView : Control
     private readonly record struct CellWrappedLine(
         double Height,
         List<CellWrappedItem> Items,
-        double AutomaticHyphenWidth);
+        double AutomaticHyphenWidth,
+        int EndDisplayOffset);
 
     /// <summary>
     /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)

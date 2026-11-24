@@ -523,14 +523,18 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
-    public void AvaloniaDocumentView_TreatsTableCellRunNewlinesAsHardLineBreaks()
+    public void AvaloniaDocumentView_RoutesProjectedTableBreaksThroughWrappingAndDisplayOffsets()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+        var projection = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.RunDisplayProjection.cs"));
 
-        source.Should().Contain("var isHardBreak = ch is '\\r' or '\\n';");
-        source.Should().Contain("IsHardBreak: isHardBreak");
+        // The shared projection owns text normalization; the actual wrapper consumes its break
+        // classifications and advances display offsets even though a separator paints no glyph.
+        // DocumentViewRunDisplayProjectionTests checks LF/CR/CRLF geometry, caret, selection and AX.
+        projection.Should().Contain("ResolveRunDisplayProjection(paragraph, run");
+        source.Should().Contain("var items = BuildCellDisplayItems(blockIndex, paragraph");
         source.Should().Contain("if (items[index].IsHardBreak)");
-        source.Should().Contain("AddLine(lineStart, index);");
+        source.Should().Contain("endDisplayOffset: items[index].DisplayOffset + 1");
     }
 
     [Fact]

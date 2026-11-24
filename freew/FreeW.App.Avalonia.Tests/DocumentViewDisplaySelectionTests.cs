@@ -99,7 +99,7 @@ public sealed class DocumentViewDisplaySelectionTests
         var unrelated = new Footnote(404);
         unrelated.Content.Add(new Paragraph("Unreferenced entry"));
         view.Document.Footnotes[404] = unrelated;
-        Select(view, story, 0, story == "body" ? 1 : 3);
+        Select(view, story, 0, 1);
 
         view.TryDeleteSelection().Should().BeTrue();
 
@@ -109,7 +109,7 @@ public sealed class DocumentViewDisplaySelectionTests
         view.Undo();
         paragraph.Runs.First().Should().BeSameAs(noteRun);
         view.Document.Footnotes[403].Should().BeSameAs(note);
-        view.SelectedText.Should().Be(story == "body" ? "1" : "403");
+        view.SelectedText.Should().Be("1");
         view.Redo();
         view.Document.Footnotes.Should().NotContainKey(403);
         view.Document.Footnotes[404].Should().BeSameAs(unrelated);
@@ -713,8 +713,8 @@ public sealed class DocumentViewDisplaySelectionTests
         if (kind == "complex")
             return (Run.ComplexFieldRun(" PAGE ", "OLD LONG CACHED RESULT", showCode: true), "{ PAGE }");
         if (kind == "note")
-            return (Run.FootnoteReference(403), story == "body" ? "1" : "403");
-        return (new Run("") { Equation = Equation.FromText("x+y") }, story == "body" ? "x+y" : "");
+            return (Run.FootnoteReference(403), "1");
+        return (new Run("") { Equation = Equation.FromText("x+y") }, "x+y");
     }
 
     private static (DocumentView View, Paragraph Paragraph) Story(string story, params Run[] runs)

@@ -23,15 +23,15 @@ public sealed partial class DocumentView
 
     private void ApplyTableCharacterSpacing(Paragraph paragraph, List<CellWrappedItem> items)
     {
-        var formatting = paragraph.Runs.Select(run => ResolveRunFmt(run, paragraph)).ToArray();
-        if (!formatting.Any(format => RunCharacterSpacingPlanner.ResolveAdvanceDip(format, PxPerPoint) != 0))
+        if (!items.Any(item => RunCharacterSpacingPlanner.ResolveAdvanceDip(item.Formatting, PxPerPoint) != 0))
             return;
         var advances = items.Select(item => item.Width).ToArray();
         ApplyCharacterSpacingAdvances(
             new string(items.Select(item => item.Ch).ToArray()),
-            index => formatting[items[index].RunIndex],
+            index => items[index].Formatting,
             advances,
-            index => !items[index].Hidden && !items[index].IsHardBreak && items[index].EmbeddedObject is null);
+            index => !items[index].Hidden && !items[index].IsHardBreak && items[index].EmbeddedObject is null
+                && items[index].EquationElement is null);
         for (var index = 0; index < items.Count; index++)
             items[index] = items[index] with { Width = advances[index] };
     }
@@ -76,52 +76,20 @@ public sealed partial class DocumentView
         }
     }
 
-    private double MeasureContentAutoFitParagraphWidth(Paragraph paragraph)
+    private double MeasureContentAutoFitParagraphWidth(int blockIndex, Paragraph paragraph)
     {
-        // Keep the existing per-run font measurement, but find text elements across run
-        // boundaries: a formatting boundary does not add a new combining/ZWJ character.
-        var text = string.Concat(paragraph.Runs.Select(run => run.Text));
-        var elements = StringInfo.ParseCombiningCharacters(text);
-        var spacedElementStarts = new HashSet<int>();
-        for (var index = 0; index < elements.Length; index++)
+        var maximum = 0.0;
+        var lineWidth = 0.0;
+        foreach (var item in BuildCellDisplayItems(blockIndex, paragraph))
         {
-            var end = index + 1 < elements.Length ? elements[index + 1] : text.Length;
-            if (RunCharacterSpacingPlanner.IsSpacedElement(text[elements[index]..end]))
-                spacedElementStarts.Add(elements[index]);
-        }
-        var paragraphOffset = 0;
-        var width = 0.0;
-        foreach (var run in paragraph.Runs)
-        {
-            if (string.IsNullOrEmpty(run.Text))
-                continue;
-            var formatting = ResolveRunFmt(run, paragraph);
-            var spacing = RunCharacterSpacingPlanner.ResolveAdvanceDip(formatting, PxPerPoint);
-            if (spacing == 0)
+            if (item.IsHardBreak)
             {
-                width += BuildForLayout(run.Text, formatting).WidthIncludingTrailingWhitespace;
-                paragraphOffset += run.Text.Length;
-                continue;
+                maximum = Math.Max(maximum, lineWidth);
+                lineWidth = 0;
             }
-
-            var lineOffset = 0;
-            var runWidth = 0.0;
-            foreach (var line in run.Text.Split(['\r', '\n']))
-            {
-                var spacedElements = 0;
-                for (var index = 0; index < line.Length; index++)
-                {
-                    var position = paragraphOffset + lineOffset + index;
-                    if (spacedElementStarts.Contains(position))
-                        spacedElements++;
-                }
-                runWidth = Math.Max(runWidth, Math.Max(0,
-                    BuildForLayout(line, formatting).WidthIncludingTrailingWhitespace + spacing * spacedElements));
-                lineOffset += line.Length + 1;
-            }
-            width += runWidth;
-            paragraphOffset += run.Text.Length;
+            else
+                lineWidth += item.Width;
         }
-        return width;
+        return Math.Max(maximum, lineWidth);
     }
 }

@@ -99,77 +99,10 @@ public sealed partial class DocumentView
         return paragraphs;
     }
 
-    private string KeyboardParagraphText(KeyboardParagraph paragraph)
-    {
-        if (paragraph.RowIndex < 0)
-        {
-            // Match LayoutParagraphPaged's offset space. Fields, equations and note marks
-            // can paint a different number of characters than their stored cached text.
-            // Flow breaks have no source-text width, so omit those synthetic cells here.
-            if (IsEditable(paragraph.Model))
-                return new string(ParaCells(paragraph.Model).Select(DisplayGlyph).ToArray());
-            return KeyboardBodyDisplayText(paragraph);
-        }
-
-        // CellParaOffset is advanced by WrapCellLines' resolved text stream. That path
-        // resolves simple/complex fields, skips embedded-object model text and collapses
-        // CRLF. Header/footer and shape stories deliberately retain their model offsets.
-        var text = new System.Text.StringBuilder();
-        foreach (var run in paragraph.Model.Runs)
-        {
-            if (run.EmbeddedObject is not null)
-                continue;
-            var content = run.ComplexField is not null
-                ? BuildBodyComplexFieldDisplayPlan(paragraph.BlockIndex, run).Text
-                : run.FieldKind != RunFieldKind.None ? ResolveSimpleFieldDisplayText(run) : run.Text;
-            for (var index = 0; index < content.Length; index++)
-            {
-                var character = content[index];
-                if (character == '\r' && index + 1 < content.Length && content[index + 1] == '\n')
-                    continue;
-                text.Append(DisplayGlyph(new Cell(character, run.Formatting, Control: run.Control)));
-            }
-        }
-        return text.ToString();
-    }
-
-    private string KeyboardBodyDisplayText(KeyboardParagraph paragraph)
-    {
-        var text = new System.Text.StringBuilder();
-        foreach (var run in paragraph.Model.Runs)
-        {
-            if (IsFloatingDrawingRun(run))
-                continue;
-            if (run.Equation is { } equation)
-            {
-                // DisplayCells captures equation diagnostics while emitting glyph cells.
-                // Project the same text/atomic stops without appending render-only state
-                // every time an arrow key is pressed.
-                foreach (var element in EquationVisualPlanner.Build(equation).Elements)
-                {
-                    if (element.Kind == EquationVisualElementKind.Segments)
-                    {
-                        foreach (var segment in element.Segments)
-                            text.Append(segment.Text);
-                    }
-                    else
-                    {
-                        text.Append('\uFFFC');
-                    }
-                }
-                continue;
-            }
-            var content = run.ComplexField is not null
-                ? BuildBodyComplexFieldDisplayPlan(paragraph.BlockIndex, run).Text
-                : run.FieldKind != RunFieldKind.None ? ResolveSimpleFieldDisplayText(run)
-                : run.FootnoteId is { } footnote ? ResolveNoteBodyMarkDisplayNumber(_doc, footnote, isFootnote: true)
-                : run.EndnoteId is { } endnote ? ResolveNoteBodyMarkDisplayNumber(_doc, endnote, isFootnote: false)
-                : run.Text;
-            foreach (var character in content)
-                text.Append(DisplayGlyph(new Cell(character, run.Formatting, Control: run.Control)));
-        }
-        return text.ToString();
-    }
+    private string KeyboardParagraphText(KeyboardParagraph paragraph) =>
+        string.Concat(paragraph.Model.Runs.Select((run, index) =>
+            ResolveRunDisplayProjection(paragraph.Model, run, index, paragraph.BlockIndex,
+                isTableCell: paragraph.RowIndex >= 0).DisplayText));
 
     private KeyboardParagraph? CurrentKeyboardParagraph()
     {

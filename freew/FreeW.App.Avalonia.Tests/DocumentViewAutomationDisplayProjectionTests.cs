@@ -45,8 +45,8 @@ public sealed class DocumentViewAutomationDisplayProjectionTests
         var display = kind switch
         {
             "field" => "{ DATE }",
-            "note" => cell ? "403" : "1",
-            _ => cell ? "" : "x+y",
+            "note" => "1",
+            _ => "x+y",
         };
         var view = View(document);
         if (cell) view.SetCellTextSelectionForTest(0, 0, 0, 0, display.Length + 4, 0, 0, 0, display.Length + 1);

@@ -7,13 +7,19 @@ public sealed class EquationVisualPlannerSourceGuardTests
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
-        // Pins the display-cell path, not its exact arity: the method gained a block index and a
-        // flow-break flag, which does not change what this guard is protecting.
+        var projection = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.RunDisplayProjection.cs"));
+        var keyboard = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.KeyboardNavigation.cs"));
+        var spacing = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.CharacterSpacing.cs"));
+
+        // Pin the shared planner and its actual body, table, keyboard and intrinsic-width consumers.
         source.Should().Contain("DisplayCells(blockIndex, paragraph");
-        source.Should().Contain("EquationVisualPlanner.Build(equation)");
-        source.Should().Contain("AddEquationVisualElement");
+        projection.Should().Contain("EquationVisualPlanner.Build(equation)");
+        source.Should().Contain("ResolveRunDisplayProjection(paragraph, run");
+        source.Should().Contain("BuildCellDisplayItems(blockIndex, paragraph");
+        keyboard.Should().Contain("ResolveRunDisplayProjection(paragraph.Model, run");
+        spacing.Should().Contain("BuildCellDisplayItems(blockIndex, paragraph)");
         source.Should().Contain("ApplyEquationVisualStyle");
-        source.Should().Contain("EquationElement: element");
+        source.Should().Contain("EquationElement: token.EquationElement");
         source.Should().Contain("MeasureEquationVisualElement");
         source.Should().Contain("DrawEquationVisualElement");
         source.Should().Contain("_equationVisualElements");
@@ -25,7 +31,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("GroupCharacterPosition");
         source.Should().Contain("FunctionName");
         source.Should().Contain("FunctionArgument");
-        source.Should().Contain("run.Equation is { } equation");
+        projection.Should().Contain("source.Equation is { } equation");
         source.Should().NotContain("hasInlineEquation");
     }
 
