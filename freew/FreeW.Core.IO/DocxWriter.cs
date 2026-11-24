@@ -3684,10 +3684,20 @@ public static partial class DocxWriter
                 {
                     if (text.Length == 0)
                         return;
-                    elements.Add(WithProps(new XElement(
-                        instructionText ? W + "instrText" : W + "t",
-                        new XAttribute(XNamespace.Xml + "space", "preserve"),
-                        SanitizeXmlText(text))));
+                    if (instructionText)
+                    {
+                        elements.Add(WithProps(new XElement(
+                            W + "instrText",
+                            new XAttribute(XNamespace.Xml + "space", "preserve"),
+                            SanitizeXmlText(text))));
+                    }
+                    else
+                    {
+                        // Cached results are ordinary displayed text, including explicit wrapping
+                        // breaks. Literal LF/CR in w:t does not encode a Word line break.
+                        var textElement = fieldRun.Revision == RevisionKind.Deleted ? "delText" : "t";
+                        elements.Add(WithProps(BuildRunTextContent(text, textElement)));
+                    }
                 }
 
                 var fieldElements = BuildComplexFieldElements(complex, fieldRun.Text);
@@ -4452,7 +4462,8 @@ public static partial class DocxWriter
             if (index < text.Length
                 && text[index] != Hyphenator.SoftHyphen
                 && text[index] != Hyphenator.NoBreakHyphen
-                && text[index] != '\n')
+                && text[index] != '\n'
+                && text[index] != '\r')
                 continue;
 
             if (index > start)
@@ -4468,6 +4479,11 @@ public static partial class DocxWriter
                     Hyphenator.NoBreakHyphen => new XElement(W + "noBreakHyphen"),
                     _ => new XElement(W + "br"),
                 };
+            // The model accepts text from several importers/platforms. Treat CRLF as one
+            // wrapping break and lone CR like LF, without leaving a CR inside a text node.
+            if (index < text.Length && text[index] == '\r'
+                && index + 1 < text.Length && text[index + 1] == '\n')
+                index++;
             start = index + 1;
         }
     }

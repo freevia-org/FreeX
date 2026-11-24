@@ -2447,10 +2447,11 @@ public static partial class DocxReader
     /// <summary>
     /// Appends the text content of a field-result run element to <paramref name="sb"/>. Handles:
     /// <list type="bullet">
-    /// <item><c>w:t</c> — literal run text (normal characters).</item>
+    /// <item><c>w:t</c> / <c>w:delText</c> — literal or tracked-deleted run text.</item>
     /// <item><c>w:tab</c> — a tab character ('\t'). TOC entries use tabs between the heading title and
     ///   the page number; without this the tab leader is lost in the cached result text.</item>
-    /// <item><c>w:br</c> — a line break ('\n'). Preserves soft return structure in multi-line fields.</item>
+    /// <item><c>w:br</c> / <c>w:cr</c> — a line break ('\n'). Preserves soft return structure in multi-line fields.</item>
+    /// <item><c>w:softHyphen</c> / <c>w:noBreakHyphen</c> — explicit hyphen characters.</item>
     /// </list>
     /// All other children (e.g. drawing runs, footnote references) are ignored in the result accumulation.
     /// </summary>
@@ -2458,12 +2459,16 @@ public static partial class DocxReader
     {
         foreach (var child in run.Elements())
         {
-            if (child.Name == W + "t")
+            if (child.Name == W + "t" || child.Name == W + "delText")
                 sb.Append(child.Value);
-            else if (child.Name == W + "tab")
+            else if (child.Name == W + "tab" || child.Name == W + "ptab")
                 sb.Append('\t');
-            else if (child.Name == W + "br")
+            else if (child.Name == W + "br" || child.Name == W + "cr")
                 sb.Append('\n');
+            else if (child.Name == W + "softHyphen")
+                sb.Append(Hyphenator.SoftHyphen);
+            else if (child.Name == W + "noBreakHyphen")
+                sb.Append(Hyphenator.NoBreakHyphen);
         }
     }
 
@@ -3585,7 +3590,10 @@ public static partial class DocxReader
     {
         var instruction = fldSimple.Attribute(W + "instr")?.Value ?? string.Empty;
         var inner = fldSimple.Element(W + "r");
-        var text = string.Concat(fldSimple.Descendants(W + "t").Select(t => t.Value));
+        var cachedText = new System.Text.StringBuilder();
+        foreach (var resultRun in fldSimple.Descendants(W + "r"))
+            AppendRunResultText(cachedText, resultRun);
+        var text = cachedText.ToString();
         var formatting = ReadRunFormatting(inner?.Element(W + "rPr"));
 
         // A Mark Citation (TA) field: the instruction's leading keyword is "TA". Recover the long/short
