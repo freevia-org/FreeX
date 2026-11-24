@@ -156,8 +156,9 @@ public sealed partial class MainWindow
         if (rowVisible && columnVisible)
             return;
 
-        var topRow = rowVisible ? _session.ActiveSheet.ViewTopRow ?? 1 : address.Row;
-        var leftColumn = columnVisible ? _session.ActiveSheet.ViewLeftCol ?? 1 : address.Col;
+        var origin = _session.ViewportOrigin;
+        var topRow = rowVisible ? origin.TopRow : address.Row;
+        var leftColumn = columnVisible ? origin.LeftCol : address.Col;
         _session.SetViewportOrigin(topRow, leftColumn);
     }
 

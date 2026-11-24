@@ -1813,7 +1813,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;");
         source.Should().Contain("_verticalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;");
         source.Should().Contain("_horizontalWorksheetScrollBar.ValueChanged += WorksheetScrollBar_ValueChanged;");
-        source.Should().Contain("WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport)");
+        source.Should().Contain("var origin = _session.ViewportOrigin;");
+        source.Should().Contain("_session.ActiveSheet, _session.Viewport,");
+        source.Should().Contain("origin.TopRow, origin.LeftCol,");
+        source.Should().Contain("_session.GetEffectiveFrozenRows(), _session.GetEffectiveFrozenCols()");
         source.Should().Contain("ApplyWorksheetScrollAxis(_verticalWorksheetScrollBar, state.Vertical);");
         source.Should().Contain("ApplyWorksheetScrollAxis(_horizontalWorksheetScrollBar, state.Horizontal);");
         source.Should().Contain("WorkbookViewportScrollPlanner.CalculateViewportOrigin(");
