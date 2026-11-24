@@ -20,8 +20,8 @@ hash already exists.
 
 .PARAMETER ResultsDirectory
 Host-relative directory (under the repo root) that receives TRX results. Defaults to
-"artifacts/test-gates-linux". Mounted straight into the container (small file count, so the
-bind-mount cost that matters for build outputs does not apply here).
+"artifacts/test-gates-linux". Results are copied out of the container-local volume after the
+gates run, so the test user does not need write access to host bind mounts.
 
 .EXAMPLE
 pwsh -NoProfile -File tools/Run-LinuxTestGate.ps1
@@ -58,6 +58,16 @@ Set-StrictMode -Version Latest
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($ResultsDirectory) -or (Test-ToolPathRooted -Path $ResultsDirectory)) {
+    throw "ResultsDirectory must name a directory relative to the repository root."
+}
+$resultsFullPath = Resolve-ToolFullPath -Path $ResultsDirectory -BasePath $repoRoot
+$resultsRelativePath = ConvertTo-ToolRepoRelativePath -Path $resultsFullPath -RepoRoot $repoRoot
+if ([string]::IsNullOrWhiteSpace($resultsRelativePath)) {
+    throw "ResultsDirectory must remain inside the repository and cannot be the repository root."
+}
+# A bash single-quoted literal also handles spaces and literal quote characters in the path.
+$resultsPathLiteral = "'" + $resultsRelativePath.Replace("'", "'\''") + "'"
 $dockerfilePath = Join-Path $PSScriptRoot "LinuxTestGate/Dockerfile"
 if (-not (Test-Path -LiteralPath $dockerfilePath -PathType Leaf)) {
     throw "Missing $dockerfilePath."
@@ -124,7 +134,6 @@ else {
 }
 
 # --- Prepare host-side mounts. ----------------------------------------------------------------------
-$resultsFullPath = Resolve-ToolFullPath -Path $ResultsDirectory -BasePath $repoRoot
 if (-not (Test-Path -LiteralPath $resultsFullPath)) {
     New-Item -ItemType Directory -Path $resultsFullPath -Force | Out-Null
 }
@@ -165,9 +174,17 @@ rsync -a --delete \
     --exclude='.worktrees/' \
     --exclude='artifacts/' \
     /repo-src/ /repo/
-rm -rf /repo/__RESULTS_DIR__
-mkdir -p "$(dirname /repo/__RESULTS_DIR__)"
-ln -s /results /repo/__RESULTS_DIR__
+resultsRelativePath=__RESULTS_PATH_LITERAL__
+resultsSource="/repo/$resultsRelativePath"
+rm -rf "$resultsSource"
+mkdir -p "$resultsSource"
+
+# The SDK image supplies the unprivileged app user. Running tests as root bypasses Unix
+# directory permissions and makes real read-only save failures silently succeed. Bootstrap
+# the persistent volumes as root, then use the same ordinary-user semantics as hosted CI.
+# Do not chown /results: it is a host bind mount, and changing its owner would affect the host.
+id app
+chown -R app:app /repo /nuget-cache
 
 cd /repo
 export NUGET_PACKAGES=/nuget-cache
@@ -175,14 +192,18 @@ status=0
 for gate in __GATE_IDS__; do
     echo ''
     echo "=== Linux commit gate: $gate ==="
-    args=(-Gate commit -App all -Platform linux -GateId "$gate" -PartitionIndex __PARTITION_INDEX__ -PartitionCount __PARTITION_COUNT__ -Configuration "__CONFIGURATION__" -HangTimeout "__HANG_TIMEOUT__" -ResultsDirectory "__RESULTS_DIR__")
-__EXTRA_ARG_LINES__    pwsh -NoProfile -File tools/Invoke-TestGate.ps1 "${args[@]}" || status=$?
+    args=(-Gate commit -App all -Platform linux -GateId "$gate" -PartitionIndex __PARTITION_INDEX__ -PartitionCount __PARTITION_COUNT__ -Configuration "__CONFIGURATION__" -HangTimeout "__HANG_TIMEOUT__" -ResultsDirectory "$resultsRelativePath")
+__EXTRA_ARG_LINES__    runuser -u app -- pwsh -NoProfile -File tools/Invoke-TestGate.ps1 "${args[@]}" || status=$?
 done
+# Match the bind mount's owner rather than copying the container-only app UID to the host.
+# This also respects the UID mapping used by Docker Desktop and Colima.
+resultsOwner=$(stat -c '%u:%g' /results)
+rsync -a --chown="$resultsOwner" "$resultsSource/" /results/
 exit $status
 '@
 
 $innerScript = $innerScriptTemplate.
-    Replace("__RESULTS_DIR__", $ResultsDirectory).
+    Replace("__RESULTS_PATH_LITERAL__", $resultsPathLiteral).
     Replace("__GATE_IDS__", $gateIdList).
     Replace("__PARTITION_INDEX__", [string]$PartitionIndex).
     Replace("__PARTITION_COUNT__", [string]$PartitionCount).
@@ -190,22 +211,27 @@ $innerScript = $innerScriptTemplate.
     Replace("__HANG_TIMEOUT__", $HangTimeout).
     Replace("__EXTRA_ARG_LINES__", $extraArgLines)
 
-$scratchDir = Join-Path ([System.IO.Path]::GetTempPath()) "freex-linux-testgate"
+$scratchDir = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-linux-testgate-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $scratchDir -Force | Out-Null
-$innerScriptPath = Join-Path $scratchDir "run-gates.sh"
-[System.IO.File]::WriteAllText($innerScriptPath, $innerScript.Replace("`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+try {
+    $innerScriptPath = Join-Path $scratchDir "run-gates.sh"
+    [System.IO.File]::WriteAllText($innerScriptPath, $innerScript.Replace("`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
 
-$runStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-& docker run --rm `
-    -v "${repoRoot}:/repo-src:ro" `
-    -v "${repoVolume}:/repo" `
-    -v "${nugetVolume}:/nuget-cache" `
-    -v "${resultsFullPath}:/results" `
-    -v "${innerScriptPath}:/run-gates.sh:ro" `
-    $imageTag `
-    bash /run-gates.sh
-$exitCode = $LASTEXITCODE
-$runStopwatch.Stop()
+    $runStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    & docker run --rm `
+        -v "${repoRoot}:/repo-src:ro" `
+        -v "${repoVolume}:/repo" `
+        -v "${nugetVolume}:/nuget-cache" `
+        -v "${resultsFullPath}:/results" `
+        -v "${innerScriptPath}:/run-gates.sh:ro" `
+        $imageTag `
+        bash /run-gates.sh
+    $exitCode = $LASTEXITCODE
+    $runStopwatch.Stop()
+}
+finally {
+    Remove-Item -LiteralPath $scratchDir -Recurse -Force
+}
 Write-Host ("Linux test-gate run took {0:N1}s (wall clock)." -f $runStopwatch.Elapsed.TotalSeconds)
 
 if ($exitCode -ne 0) {

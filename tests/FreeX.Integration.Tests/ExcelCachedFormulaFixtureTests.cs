@@ -26,6 +26,9 @@ public sealed class ExcelCachedFormulaFixtureTests
     [MemberData(nameof(CachedFormulaFixtureFiles))]
     public void ExcelCachedFormulaFixture_MatchesFreeXEvaluation(string path)
     {
+        // Quoted numeric text such as ABS("-2.5") uses regional coercion; this reference
+        // cache comparison requires the dot-decimal text context, unlike OOXML numeric values.
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         using var stream = File.OpenRead(path);
         var workbook = new XlsxFileAdapter().Load(stream);
 

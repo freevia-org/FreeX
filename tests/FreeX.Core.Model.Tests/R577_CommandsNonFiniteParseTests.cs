@@ -115,10 +115,25 @@ public sealed class R577_CommandsNonFiniteParseTests
     [InlineData("< -2.5")]
     public void FilterCriterion_FiniteThreshold_StillParses(string input)
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // Non-vacuity: the finite test must not have rejected ordinary comparison criteria.
         FilterCriterionInputParser.TryParseCriterion(input, out var criterion, out var error)
             .Should().BeTrue(error);
         criterion.Should().NotBeNull();
+    }
+
+    [Theory]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void FilterCriterion_LocalizedFiniteThreshold_ComparesNumerically(string cultureName)
+    {
+        using var culture = TestCultureScope.CurrentCulture(cultureName);
+
+        FilterCriterionInputParser.TryParseCriterion("< -2,5", out var criterion, out var error)
+            .Should().BeTrue(error);
+        criterion.Should().NotBeNull();
+        criterion!.Matches(new NumberValue(-3)).Should().BeTrue();
+        criterion.Matches(new NumberValue(-2)).Should().BeFalse();
     }
 
     // ---- PersistedCustomFilterCriterion.Matches -----------------------------------------------

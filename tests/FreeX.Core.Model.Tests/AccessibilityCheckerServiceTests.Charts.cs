@@ -119,6 +119,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastChartTitleText()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Charts");
         var dataRange = new GridRange(
@@ -265,6 +266,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastChartAxisLabelsDataTableAndTrendlineText()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Charts");
         var dataRange = new GridRange(
@@ -307,6 +309,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastChartSeriesDataLabelOverrideText()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Charts");
         var dataRange = new GridRange(
@@ -341,6 +344,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastChartPointDataLabelOverrideText()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility")
         {
             Theme = WorkbookTheme.Office

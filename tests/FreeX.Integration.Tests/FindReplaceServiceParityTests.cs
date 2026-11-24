@@ -28,6 +28,7 @@ public class FindReplaceServiceParityTests
     [Fact]
     public void ReplaceAll_CurrencyCell_ReplacesFormattedDisplayText()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         // Cell holds 1000 formatted as currency, displaying "$1,000.00" (Find already matches
         // this formatted text). Replace must not silently skip it just because the invariant
         // raw value ("1000") doesn't contain the searched formatted string.
@@ -131,6 +132,7 @@ public class FindReplaceServiceParityTests
     [Fact]
     public void TryCreateReplacementCommand_WithWorkbook_FormattedCellIsReplaced()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         // The same scenario succeeds once the owning workbook is supplied, proving the fix is
         // reachable through the public single-match replace API used by the Find/Replace dialog.
         var (wb, sheet, commandBus) = Setup();

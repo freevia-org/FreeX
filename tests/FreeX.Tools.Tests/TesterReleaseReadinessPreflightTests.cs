@@ -63,11 +63,11 @@ public sealed class TesterReleaseReadinessPreflightTests
             "-RunNumber 42 -PublicPreviewCandidate");
 
         result.ExitCode.Should().NotBe(0);
-        result.Error.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
-        result.Error.Should().Contain("Keyboard-only smoke validation");
-        result.Error.Should().Contain("Screen-reader smoke validation");
-        result.Error.Should().Contain("UI Automation catalog review");
-        result.Error.Should().Contain("Known accessibility issues reviewed/listed");
+        result.NormalizedCombinedOutput.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
+        result.NormalizedCombinedOutput.Should().Contain("Keyboard-only smoke validation");
+        result.NormalizedCombinedOutput.Should().Contain("Screen-reader smoke validation");
+        result.NormalizedCombinedOutput.Should().Contain("UI Automation catalog review");
+        result.NormalizedCombinedOutput.Should().Contain("Known accessibility issues reviewed/listed");
     }
 
     [Fact]

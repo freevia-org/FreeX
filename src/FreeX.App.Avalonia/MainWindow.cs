@@ -475,8 +475,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private readonly ContentControl _sheetGridHost = new();
-    // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
+    private readonly WorksheetGridHost _sheetGridHost = new();
+    // The active cell's Border from the most recent BuildSheetGrid pass. Cell controls are
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
     // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
     // so a screen reader (Orca/AT-SPI, VoiceOver) actually observes a focus change while navigating
@@ -1027,11 +1027,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             new AvaloniaPlatformClipboardOptions(FallBackToText: true));
         _recentFilePathExistenceCache = new RecentFilePathExistenceCache(onProbed: _ =>
             Dispatcher.UIThread.Post(RefreshLiveBackstageHomePaneIfShowing));
-        // The headless --parity-capture and --parity-grid modes both render against the fixed parity demo
-        // workbook (the same content the WPF host adopts) so the startup grid reflects only rendering
-        // differences, not the built-in macOS-preview demo.  --parity-grid then swaps the session to the
-        // real fixture workbook inside CaptureGridRangeAsync.  Every other startup path keeps the normal
-        // loader/fallback behavior.
+        // Capture tools can explicitly supply their fixture session. Normal startup creates the
+        // same blank, option-aware workbook as Windows before recovery or file activation runs.
         StartupWorkbookLoadResult? source = null;
         if (sharedSession is not null)
         {
@@ -1053,12 +1050,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // usable workbook before _statusText exists.
             try
             {
-                source = new StartupWorkbookLoader().Load(
+                source = new StartupWorkbookLoader(fallbackFactory: (status, isFallback) =>
+                    StartupWorkbookLoader.CreateBlankWorkbook(status, isFallback, _optionsRuntimeSession.LiveOptions)).Load(
                     deferStartupFileOpen ? [] : startupArguments);
             }
             catch (Exception ex)
             {
-                source = PortPreviewWorkbookFactory.Create($"Open failed: {ex.Message}", true);
+                source = StartupWorkbookLoader.CreateBlankWorkbook(
+                    $"Open failed: {ex.Message}", true, _optionsRuntimeSession.LiveOptions);
             }
 
             _session = _sessionFactory.Create(source, InitialViewportHeight, InitialViewportWidth, includeObjects: true);
@@ -2456,21 +2455,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _deleteSheetMenuItem.Click += (_, _) => DeleteActiveSheet();
 
-        _undoMenuItem.Click += (_, _) => UndoLastEdit();
+        _undoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Undo));
 
-        _redoMenuItem.Click += (_, _) => RedoLastEdit();
+        _redoMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Redo));
 
-        _cutMenuItem.Click += (_, _) => RunGuarded(CutSelectedRangeToClipboardAsync);
+        _cutMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Cut));
 
-        _copyMenuItem.Click += (_, _) => RunGuarded(CopySelectedRangeToClipboardAsync);
+        _copyMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Copy));
 
-        _pasteMenuItem.Click += (_, _) => RunGuarded(PasteClipboardTextAsync);
+        _pasteMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.Paste));
 
         _pasteSpecialMenuItem.Menu = CreateNativePasteSpecialMenu();
 
         _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
 
-        _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
+        _selectAllMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.SelectAll));
 
         _findMenuItem.Click += (_, _) => RunGuarded(ShowFindDialogAsync);
 
@@ -4425,7 +4424,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void RefreshShell(string status)
     {
         var preserveFormulaEdit = _session.FormulaEditAddress is not null;
-        var formulaText = _inlineCellEditText ?? _inlineCellEditor?.Text ?? _formulaBox.Text;
+        var formulaText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? _formulaBox.Text;
         var formulaCaretIndex = _formulaBox.CaretIndex;
         var formulaSelectionStart = _formulaBox.SelectionStart;
         var formulaSelectionEnd = _formulaBox.SelectionEnd;
@@ -4854,6 +4853,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (item.IsChecked is { } isChecked)
                 nativeMenuItem.IsChecked = isChecked;
         }
+
+        RefreshNativeTextEditMenuAvailability();
     }
 
     private int FindActiveSheetTabIndex()
@@ -5150,11 +5151,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private Control BuildSheetGrid()
     {
+        // TextChanged is deferred by Avalonia. Preserve the live text before detaching its editor,
+        // including when a resize/preview rebuild arrives before that notification is dispatched.
+        if (_inlineCellEditAddress is not null && _inlineCellEditor is { } liveEditor)
+            _inlineCellEditText = liveEditor.Text ?? "";
         RecordSheetGridBuilt();
         _pageLayoutRuler = null;
         _autofillPreviewVisual = null;
         if (IsChartsheet(_session.ActiveSheet))
+        {
+            _sheetGridHost.ClearAutomationViewport();
             return BuildChartsheetView();
+        }
         _formulaReferenceGridOverlay = null;
         _cellAffordanceOverlay = null;
         _formulaReferenceGridHighlightVisuals.Clear();
@@ -5192,10 +5200,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sparklinesByCell = BuildSparklineCellLookup(_session.Workbook, _session.ActiveSheet);
         BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
         _activeSheetHasBackgroundImage = _session.ActiveSheet.BackgroundImage != null;
-        var grid = new AvaloniaGrid
+        var grid = new WorksheetGridSurface
         {
             Background = (IBrush?)BuildWorksheetBackgroundBrush(_session.ActiveSheet.BackgroundImage) ?? Brushes.White,
         };
+        UpdateWorksheetAutomation(grid, rowMetrics, colMetrics, cellsByAddress);
 
         if (showHeadings)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetRowHeaderWidth(viewport, zoomFactor)) });
@@ -9211,7 +9220,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 // Only the cell being edited shows text, so only it needs the worksheet font chain:
                 // typing into an empty cell then uses the same face the committed value will render
                 // with (resolving a FontFamily for every blank cell on each rebuild would be waste).
-                fontFamily: Equals(_inlineCellEditAddress, address)
+                fontFamily: Equals(_inlineCellEditAddress, address) ||
+                    (_inlineCellEditAddress is { } editAddress && mergeRegion?.Contains(editAddress) == true)
                     ? ResolveAvaloniaCellFontFamily(null, _session.Workbook.Theme)
                     : null);
         }
@@ -9490,7 +9500,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // R175: the panel resolves CellBorder.ThemeColor against this theme on every paint, so a
             // border set from the ribbon's Theme Colors picker follows a Theme Colors swap instead of
             // keeping the RGB baked at load time (matches how font/fill already resolve here).
-            theme: _session.Workbook.Theme);
+            theme: _session.Workbook.Theme,
+            isWorksheetCell: true);
+        var accessibleCell = (WorksheetCellBorder)border;
 
         // Grid tracks define worksheet ownership. Give the interactive border the exact slot size
         // (cellWidth/cellHeight already include merged spans) so Linux font measurement cannot let
@@ -9524,33 +9536,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ToolTip.SetTip(border, hyperlinkTooltip);
         }
 
-        // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
-        // can announce which cell has focus, its address, its value, and (R114 parity fix for
-        // finding "Avalonia grid's screen-reader cell name silently drops comment/formula/merge/
-        // hyperlink cues that WPF announces") the same "has <note>", "is a formula", "is merged",
-        // and "has a hyperlink" cues WPF's GridViewCellAutomationPeer.GetNameCore/
-        // GridView.BuildCellAnnouncementName append (GridView.cs:688-708) -- previously this shell
-        // only ever emitted the bare "<address>" or "<address>: <value>", silently omitting every
-        // cue a sighted user gets for free from the comment corner-triangle, the formula-bar "="
-        // prefix, the merged span, and the hand cursor. HasDataValidation/IsLocked cues are
-        // intentionally left out here too, mirroring WPF: CellAnnouncementMetadata's own doc
-        // comment (GridView.cs) explains neither is wired to a live signal on that shell either.
-        // Cells are plain Borders rebuilt on every selection change/RefreshShell (no persisted control
-        // to "update" in place), so setting these at construction time keeps them live automatically.
-        var columnName = CellAddress.NumberToColumnName(address.Col);
-        AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
-        var hasHyperlink = _session.Workbook.GetSheet(address.Sheet)?.Hyperlinks.ContainsKey(address) == true;
-        AutomationProperties.SetName(
-            border,
-            CellAnnouncementPlanner.BuildName(
-                $"{columnName}{address.Row}",
-                text,
-                new CellAnnouncementMetadata(
-                    HasComment: commentDisplay is not null,
-                    CommentTitle: commentDisplay?.Title,
-                    IsFormula: isFormula,
-                    IsMerged: mergeRegion is not null,
-                    HasHyperlink: hasHyperlink)));
+        // The merge's real focus target uses the true active coordinate; other logical cells
+        // remain available through the persistent worksheet automation surface.
+        var representsActiveCell = address == _session.ActiveCell ||
+            mergeRegion?.Contains(_session.ActiveCell) == true;
+        var contentAddress = mergeRegion?.Start ?? address;
+        var automationAddress = representsActiveCell ? _session.ActiveCell : contentAddress;
+        accessibleCell.SetAutomationOwner(_sheetGridHost, automationAddress.Row, automationAddress.Col);
 
         // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
         // element so keyboard focus actually moves as the user arrows around the grid, matching
@@ -9561,7 +9553,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // moving actual keyboard focus here (see MoveFocusToActiveCellBorder, called after each
         // BuildSheetGrid/RefreshShell pass) is what makes a screen reader announce the new
         // cell's name/address on every navigation instead of staying silent on _sheetGridHost.
-        if (address == _session.ActiveCell)
+        if (representsActiveCell)
         {
             border.Focusable = true;
             _activeCellBorder = border;
@@ -9704,11 +9696,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 BeginInlineCellEdit(address, editText, caretIndex);
             args.Handled = true;
         };
-        if (Equals(_inlineCellEditAddress, address))
+        // Covered merge members have no separate rendered Border. Attach their editor to the
+        // representing Border while retaining the literal edit address for input and commit routes.
+        if (_inlineCellEditAddress is { } inlineEditAddress &&
+            (inlineEditAddress == address || mergeRegion?.Contains(inlineEditAddress) == true))
         {
             border.Cursor = new Cursor(StandardCursorType.Ibeam);
             border.Child = CreateInlineCellEditor(
-                address,
+                inlineEditAddress,
                 background ?? Brushes.White,
                 foreground,
                 textAlignment,
@@ -9760,7 +9755,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             0,
             editorTextInset,
             0);
-        var editor = new TextBox
+        var editor = new WorksheetInlineCellEditor
         {
             Text = _inlineCellEditText ?? "",
             Background = background,
@@ -12073,7 +12068,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FontFamily? fontFamily = null,
         bool suppressDefaultGridlines = false,
         CellBorderNeighborEdges borderNeighbors = default,
-        WorkbookTheme? theme = null)
+        WorkbookTheme? theme = null,
+        bool isWorksheetCell = false)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -12252,19 +12248,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var defaultBorderBrush = suppressDefaultGridlines
             ? background ?? patternBrush ?? Brushes.Transparent
             : GridLine;
-        return new Border
-        {
-            Background = background,
-            BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent,
-            // Each cell paints only its right and bottom edge, so the edge shared with its neighbour is
-            // ONE scaledBorderThickness line (WPF strokes a single 1-DIP line per shared edge; four
-            // sides per cell produced a doubled 2-DIP line, 4 device pixels on Retina). The Padding
-            // keeps the content slot identical to the old all-sides inset so text geometry is unchanged.
-            BorderThickness = new Thickness(0, 0, scaledBorderThickness, scaledBorderThickness),
-            Padding = new Thickness(scaledBorderThickness, scaledBorderThickness, 0, 0),
-            ClipToBounds = true,
-            Child = cellContent,
-        };
+        Border border = isWorksheetCell ? new WorksheetCellBorder() : new Border();
+        border.Background = background;
+        border.BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent;
+        // Each cell paints only its right and bottom edge, so adjacent cells share one scaled
+        // line. Padding preserves the text's existing position within that border.
+        border.BorderThickness = new Thickness(0, 0, scaledBorderThickness, scaledBorderThickness);
+        border.Padding = new Thickness(scaledBorderThickness, scaledBorderThickness, 0, 0);
+        border.ClipToBounds = true;
+        border.Child = cellContent;
+        return border;
     }
 
     private static AvaloniaGrid CreateDefaultCellContent(
@@ -29356,8 +29349,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
         }
 
-        BeginFormulaEdit(_session.ActiveCell, e.Text);
+        // Ready-mode typing replaces the cell through the inline editor, as on WPF. A hidden
+        // formula bar cannot receive focus; starting there loses subsequent native text packets.
+        BeginInlineCellEdit(_session.ActiveCell, e.Text, e.Text.Length);
         e.Handled = true;
+    }
+
+    private readonly PointerWheelNotchAccumulator _worksheetWheelAccumulator = new();
+    private (bool Horizontal, bool Zoom)? _worksheetWheelMode;
+
+    private int ResolveWorksheetWheelNotches(double delta, bool horizontal, bool zoom)
+    {
+        if (!double.IsFinite(delta) || delta == 0)
+            return 0;
+        if (!OperatingSystem.IsMacOS())
+            return WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(delta);
+
+        var mode = (horizontal, zoom);
+        if (_worksheetWheelMode != mode)
+        {
+            _worksheetWheelAccumulator.Reset();
+            _worksheetWheelMode = mode;
+        }
+
+        return _worksheetWheelAccumulator.Accumulate(delta);
     }
 
     private void SheetScrollViewer_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -29367,36 +29382,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         CloseAutoFilterFlyout();
 
-        var vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.Y);
-        var horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.X);
+        // Select the axis before quantizing: both axes may carry tiny trackpad deltas, and rounding
+        // each to a sign loses which direction the gesture actually favors.
+        var vertical = double.IsFinite(e.Delta.Y) ? e.Delta.Y : 0;
+        var horizontal = double.IsFinite(e.Delta.X) ? e.Delta.X : 0;
+        if (!OperatingSystem.IsMacOS())
+        {
+            vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(vertical);
+            horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(horizontal);
+        }
+        var horizontalDominant = Math.Abs(horizontal) > Math.Abs(vertical);
 
         if (IsWheelZoomModifier(e.KeyModifiers))
         {
             // Ctrl+Scroll (Cmd+Scroll on macOS) = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
-            var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
+            var wheelScroll = ResolveWorksheetWheelNotches(
+                horizontalDominant ? horizontal : vertical, horizontalDominant, zoom: true);
             if (wheelScroll != 0)
-                ApplyZoomPercent(_session.ZoomPercent + wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
+                ApplyZoomPercent((int)Math.Clamp(
+                    _session.ZoomPercent + (long)wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent,
+                    int.MinValue, int.MaxValue), "Zoom failed.");
 
             e.Handled = true;
             return;
         }
 
-        var rowDelta = 0;
-        var colDelta = 0;
-        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ||
-            Math.Abs(horizontal) > Math.Abs(vertical))
-        {
-            var scroll = Math.Abs(horizontal) > 0 ? horizontal : vertical;
-            colDelta = -scroll;
-        }
-        else if (Math.Abs(vertical) > 0)
-        {
-            rowDelta = -vertical;
-        }
-
-        if (rowDelta == 0 && colDelta == 0)
+        var horizontalScroll = e.KeyModifiers.HasFlag(KeyModifiers.Shift) || horizontalDominant;
+        var scroll = OperatingSystem.IsMacOS()
+            ? (horizontalDominant ? horizontal : vertical)
+            : (horizontalScroll && horizontal != 0 ? horizontal : vertical);
+        var notches = ResolveWorksheetWheelNotches(scroll, horizontalScroll, zoom: false);
+        // Consume the packet even while a fractional Mac gesture is waiting for its next whole step,
+        // so an ancestor ScrollViewer cannot scroll independently of the worksheet viewport.
+        e.Handled = true;
+        if (notches == 0)
             return;
 
+        var rowDelta = horizontalScroll ? 0 : -notches;
+        var colDelta = horizontalScroll ? -notches : 0;
         var visibleSpan = colDelta != 0
             ? _horizontalWorksheetScrollBar.ViewportSize
             : _verticalWorksheetScrollBar.ViewportSize;
@@ -29432,7 +29455,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             splitTarget is { Region: SplitPanePointerRegion.TopRight, Horizontal: true } ||
             splitTarget is { Region: SplitPanePointerRegion.BottomLeft, Horizontal: false };
         var changed = routesToSharedScrollbar
-            ? _session.PanViewport(rowDelta * step, colDelta * step)
+            ? _session.PanViewport(
+                (int)Math.Clamp((long)rowDelta * step, int.MinValue, int.MaxValue),
+                (int)Math.Clamp((long)colDelta * step, int.MinValue, int.MaxValue))
             : false;
 
         if (changed)

@@ -45,8 +45,19 @@ public sealed class ChartTextOptionsTests
     [InlineData("14.5", 14.5)]
     public void ParseOptionalFontSize_MapsBlankAndParsesCurrentCulture(string text, double? expected)
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         ChartTextOptionsDialogSession.ParseOptionalFontSize(text, CultureInfo.CurrentCulture)
             .Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void ParseOptionalFontSize_AcceptsLocalizedDecimalText(string cultureName)
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture(cultureName);
+        ChartTextOptionsDialogSession.ParseOptionalFontSize("14,5", CultureInfo.CurrentCulture)
+            .Should().Be(14.5);
     }
 
     [Fact]

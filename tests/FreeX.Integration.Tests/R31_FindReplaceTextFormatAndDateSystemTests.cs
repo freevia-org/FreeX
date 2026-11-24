@@ -58,6 +58,7 @@ public class R31_FindReplaceTextFormatAndDateSystemTests
     [Fact]
     public void ReplaceAll_OnWorkbookUsing1904DateSystem_StoresSerialInThat1904Epoch()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         var (wb, sheet, commandBus) = Setup();
         wb.Uses1904DateSystem = true;
         var address = new CellAddress(sheet.Id, 1, 1);
@@ -77,6 +78,7 @@ public class R31_FindReplaceTextFormatAndDateSystemTests
     [Fact]
     public void ReplaceAll_OnDefault1900Workbook_StoresSerialInThat1900Epoch()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         var (wb, sheet, commandBus) = Setup();
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new TextValue("OldLabel"));
@@ -93,6 +95,7 @@ public class R31_FindReplaceTextFormatAndDateSystemTests
     [Fact]
     public void ReplaceAll_WithTwoDigitYear_UsesExcelCutoffNotDotNetDefault()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         var (wb, sheet, commandBus) = Setup();
         var address = new CellAddress(sheet.Id, 1, 1);
         sheet.SetCell(address, new TextValue("OldLabel"));

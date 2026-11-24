@@ -139,12 +139,14 @@ public sealed class StatusBarDisplayModelBuilderTests
     [InlineData(123456789.1234, "123456789.1")]
     public void FormatNumber_UsesCompactExcelLikeStatusText(double value, string expected)
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         StatusBarDisplayModelBuilder.FormatNumber(value).Should().Be(expected);
     }
 
     [Fact]
     public void FormatNumber_DoesNotCorruptLargeNonIntegerTotalsRoundedByFlatG10()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // freex-status-aggregates F1: a hardcoded "G10" doesn't just trim decimal precision --
         // once the integer part itself needs 10+ significant digits, G10 rounds the whole
         // number, so 1200000000.6 (true Sum of 400000000.1 + 400000000.2 + 400000000.3) used to
@@ -159,6 +161,7 @@ public sealed class StatusBarDisplayModelBuilderTests
     [Fact]
     public void Stats_SumReadoutShowsTrueLargeNonIntegerTotal()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // Same defect, exercised through the actual Stats() aggregate path (Sum/Average/Min/Max)
         // that the status bar renders, not just the FormatNumber helper directly.
         var stats = new WorkbookSelectionStats(
@@ -172,6 +175,29 @@ public sealed class StatusBarDisplayModelBuilderTests
         var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
 
         model.FindReadout(StatusBarReadoutKind.Sum)!.Value.Value.Should().Be("Sum: 1200000000.6");
+    }
+
+    [Theory]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void FormatNumberAndStats_PreserveLocalizedDecimalsAndLargeTotalPrecision(string cultureName)
+    {
+        using var culture = TestCultureScope.CurrentCulture(cultureName);
+        StatusBarDisplayModelBuilder.FormatNumber(12.5).Should().Be("12,5");
+        StatusBarDisplayModelBuilder.FormatNumber(123456789.1234).Should().Be("123456789,1");
+        StatusBarDisplayModelBuilder.FormatNumber(1200000000.6).Should().Be("1200000000,6");
+        var stats = new WorkbookSelectionStats(
+            Sum: 1200000000.6,
+            Count: 3,
+            NumericalCount: 3,
+            Average: 400000000.2,
+            Min: 400000000.1,
+            Max: 400000000.3);
+
+        var model = StatusBarDisplayModelBuilder.Stats(StatusBarViewMode.Normal, zoomPercent: 100, stats, Text);
+
+        model.FindReadout(StatusBarReadoutKind.Sum)!.Value.Value.Should().Be("Sum: 1200000000,6");
+        model.FindReadout(StatusBarReadoutKind.Average)!.Value.Value.Should().Be("Average: 400000000,2");
     }
 
     [Fact]

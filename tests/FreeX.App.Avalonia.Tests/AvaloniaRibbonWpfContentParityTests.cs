@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using FreeX.App.Localization;
+using FreeX.App.Services;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -31,11 +32,14 @@ public sealed class AvaloniaRibbonWpfContentParityTests
     private static string Tip(Button button) =>
         string.Join("|", ((Panel)ToolTip.GetTip(button)!).Children.OfType<TextBlock>().Select(t => t.Text));
 
-    private static async Task WithWindow(Action<MainWindow> body)
+    private static async Task WithWindow(Action<MainWindow> body, AppOptions? options = null)
     {
         await Session.Dispatch(() =>
         {
-            var window = new MainWindow([]);
+            var window = options is null
+                ? new MainWindow([])
+                : new MainWindow([], null!, new FreeXOptionsRuntimeSession(
+                    load: () => options.Clone(), save: static _ => true));
             window.Show();
             try { body(window); }
             finally
@@ -54,16 +58,19 @@ public sealed class AvaloniaRibbonWpfContentParityTests
             "8", "9", "10", "11", "12", "14", "16", "18", "20", "24", "28", "36", "48", "72");
     });
 
-    [Fact]
-    public Task HomeFontCombo_ListsSortedPlatformFontsAndKeepsCalibriSelected() => WithWindow(window =>
+    [Theory]
+    [InlineData("Calibri")]
+    [InlineData("Aptos Narrow")]
+    public Task HomeFontCombo_ListsSortedPlatformFontsAndKeepsConfiguredWorkbookFontSelected(string fontName) => WithWindow(window =>
     {
         var combo = Ribbon(window).GetLogicalDescendants().OfType<ComboBox>().First(c => Equals(c.Tag, "Font"));
         var names = combo.Items.Cast<object>().Select(i => i.ToString()!).ToList();
         names.Should().Contain("Calibri");
+        names.Should().Contain(fontName);
         names.Should().BeInAscendingOrder(StringComparer.CurrentCultureIgnoreCase);
         names.Distinct(StringComparer.CurrentCultureIgnoreCase).Should().HaveCount(names.Count);
-        combo.SelectedItem.Should().Be("Calibri");
-    });
+        combo.SelectedItem.Should().Be(fontName);
+    }, new AppOptions { DefaultFontName = fontName });
 
     [Fact]
     public Task ProtectSheetAndWorkbook_ToggleLabelAndTooltipWithProtectionState() => WithWindow(window =>

@@ -402,6 +402,7 @@ public sealed class R53_CrossSheetFormulaPointModeTests
                 var sourceSheet = window.Session.ActiveSheet;
                 var source = new CellAddress(sourceSheet.Id, 1, 1);
                 var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+                sourceSheet.SetCell(source, new TextValue("Original source value"));
 
                 window.BeginFormulaEditForTest(source, "=");
                 window.SetFormulaBoxSelectionForTest(1, 0);
@@ -419,6 +420,8 @@ public sealed class R53_CrossSheetFormulaPointModeTests
                     new CellAddress(sourceSheet.Id, CellAddress.MaxRow, 5)));
                 sourceSheet.GetCell(source)!.HasFormula.Should().BeFalse(
                     "header pointing must not commit the formula edit");
+                sourceSheet.GetValue(source).Should().Be(new TextValue("Original source value"),
+                    "the pending edit must leave the original source cell unchanged");
             }
             finally
             {

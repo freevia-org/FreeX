@@ -38,12 +38,14 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var wpfComments = Read("src", "FreeX.App.UI", "GridView.CommentPreview.cs");
         var wpfFill = Read("src", "FreeX.App.Host", "MainWindow.HomeEditing.cs");
         var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
+        var avaloniaAnnouncements = Read("src", "FreeX.App.Avalonia", "MainWindow.WorksheetAutomation.cs");
         var session = Read("src", "FreeX.App.Services", "WorkbookSession.cs");
 
         wpfGrid.Should().Contain("CellAnnouncementPlanner.BuildName(");
-        avalonia.Should().Contain("CellAnnouncementPlanner.BuildName(");
+        avaloniaAnnouncements.Should().Contain("CellAnnouncementPlanner.BuildName(");
         wpfGrid.Should().NotContain("record struct CellAnnouncementMetadata");
         avalonia.Should().NotContain("FormatCellAccessibleName");
+        avaloniaAnnouncements.Should().NotContain("FormatCellAccessibleName");
         wpfComments.Should().Contain("ThreadedCommentDialogPlanner.DescribeReply(");
         wpfComments.Should().Contain("ThreadedCommentTimestampProfile.InlineRelativeLocal");
         wpfComments.Should().NotContain("private static string SummarizeReplyText");

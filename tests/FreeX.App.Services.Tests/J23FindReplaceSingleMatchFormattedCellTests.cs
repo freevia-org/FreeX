@@ -25,6 +25,7 @@ public sealed class J23FindReplaceSingleMatchFormattedCellTests
     [Fact]
     public void TryReplaceSingleMatch_CurrencyCell_ReplacesFormattedDisplayText()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // Cell holds 1000 formatted as currency, displaying "$1,000.00" (what Find matched).
         // The single-match Replace must not silently skip it just because the invariant raw
         // value ("1000") doesn't contain the searched formatted string.

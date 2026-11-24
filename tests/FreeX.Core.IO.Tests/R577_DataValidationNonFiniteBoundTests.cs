@@ -73,6 +73,7 @@ public sealed class R577_DataValidationNonFiniteBoundTests
     public void NormalizeNumericFormulaForSave_StillCanonicalizesFiniteBounds(
         string formula, string expected)
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // Non-vacuity: the guard must not have turned the normalizer into a no-op for the ordinary
         // finite bounds it exists to canonicalize.
         XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(DvType.Decimal, formula)

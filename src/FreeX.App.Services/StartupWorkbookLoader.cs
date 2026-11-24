@@ -15,8 +15,20 @@ public sealed class StartupWorkbookLoader
         WorkbookOpenService? openService = null)
     {
         _adapters = (adapters ?? WorkbookFileAdapterCatalog.CreateDefaultAdapters()).ToList();
-        _fallbackFactory = fallbackFactory ?? PortPreviewWorkbookFactory.Create;
+        _fallbackFactory = fallbackFactory ?? ((status, isFallback) => CreateBlankWorkbook(status, isFallback));
         _openService = openService ?? new WorkbookOpenService();
+    }
+
+    /// <summary>Creates the same empty, option-aware workbook used by File &gt; New.</summary>
+    public static StartupWorkbookLoadResult CreateBlankWorkbook(
+        string status,
+        bool isFallback,
+        AppOptions? options = null)
+    {
+        var workbook = options is null
+            ? WorkbookFactory.Create()
+            : WorkbookFactory.CreateFromAppOptions(options);
+        return new StartupWorkbookLoadResult(workbook, workbook.Name, status, isFallback);
     }
 
     public StartupWorkbookLoadResult Load(IReadOnlyList<string> startupArguments)
@@ -31,7 +43,7 @@ public sealed class StartupWorkbookLoader
         }
 
         return firstUnsupportedExtension is null
-            ? _fallbackFactory("Showing sample workbook.", false)
+            ? _fallbackFactory("Created new workbook.", false)
             : _fallbackFactory($"Unsupported file type: {firstUnsupportedExtension}.", true);
     }
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
@@ -17,6 +18,13 @@ namespace FreeX.App.Avalonia;
 public sealed class App : Application
 {
     private const string ApplicationTitle = "FreeX";
+
+    public App()
+    {
+        // Native backends read the name after application setup, before framework completion.
+        // Setting it later leaves macOS's app/quit menu named "Avalonia Application".
+        Name = ApplicationTitle;
+    }
 
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
 
@@ -62,7 +70,6 @@ public sealed class App : Application
             name => AppLanguageCatalog.ResolveCulture(name, CultureInfo.CurrentUICulture),
             CultureInfo.CurrentUICulture);
 
-        Name = ApplicationTitle;
         // ThemeVariant.Default (not a hardcoded Light) lets Avalonia's FluentTheme resolve each
         // control's actual variant from the platform's live color-scheme preference (OS-wide
         // dark-mode/high-contrast) instead of ignoring it (r139 avalonia-hardcoded-light-theme).
@@ -179,7 +186,7 @@ public sealed class App : Application
             Dispatcher.UIThread.Post(() => _ = CompleteStartupAsync(mainWindow, snapshotStore, StartupArguments));
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
-                activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(mainWindow, args);
+                activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(args);
 
             ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
         }
@@ -231,11 +238,14 @@ public sealed class App : Application
 
     // Wraps the fire-and-forget activation handler so an exception cannot escape an async-void
     // event handler and tear the process down; failures are routed to diagnostics instead.
-    private static async Task OnActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
+    private static async Task OnActivatedAsync(ActivatedEventArgs args)
     {
         try
         {
-            await MainWindow_ActivatedAsync(mainWindow, args);
+            if (args is FileActivatedEventArgs { Kind: ActivationKind.File } fileArgs)
+                await OpenNativeActivatedFilesAsync(fileArgs.Files);
+            else if (args.Kind == ActivationKind.Reopen)
+                ActivateNativeWorkbookWindow();
         }
         catch (Exception ex)
         {
@@ -249,17 +259,30 @@ public sealed class App : Application
         }
     }
 
-    private static async Task MainWindow_ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
+    internal static MainWindow ActivateNativeWorkbookWindow() =>
+        MainWindow.ActivateRegisteredWorkbookWindow() ?? OpenIndependentWindow();
+
+    internal static async Task OpenNativeActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
     {
-        if (args is not FileActivatedEventArgs fileArgs ||
-            fileArgs.Kind != ActivationKind.File)
+        if (files.Count == 0)
+            return;
+
+        // The original startup window can have closed while sibling workbook views remain.
+        // Resolve the target when AppKit delivers the request, never retain that old instance.
+        var target = ActivateNativeWorkbookWindow();
+        var openableFiles = target.ResolveNativeActivatedFiles(files);
+        if (openableFiles.Count == 0)
         {
+            await target.OpenActivatedFilesAsync(files);
             return;
         }
 
-        mainWindow.Show();
-        mainWindow.Activate();
-        await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
+        for (var index = 0; index < openableFiles.Count; index++)
+        {
+            var window = index == 0 ? target : OpenIndependentWindow();
+            // Retain the actual storage item: on macOS its bookmark grants subsequent access.
+            await window.OpenActivatedFilesAsync([openableFiles[index]]);
+        }
     }
 
     /// <summary>

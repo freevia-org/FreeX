@@ -30,6 +30,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 #   rsync                   - tools/Run-LinuxTestGate.ps1 syncs the bind-mounted repo into a
 #                             container-local volume with rsync (excluding bin/obj) so MSBuild's many
 #                             small file writes never hit the slow Windows-bind-mounted filesystem.
+#   util-linux              - runuser runs gates as the SDK image's unprivileged app user, so Unix
+#                             permission checks behave as they do for a desktop or hosted CI user.
 RUN apt-get update -qq \
     && apt-get install -y -qq --no-install-recommends \
         libicu74 \
@@ -40,6 +42,7 @@ RUN apt-get update -qq \
         fontconfig \
         fonts-dejavu-core \
         rsync \
+        util-linux \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /repo

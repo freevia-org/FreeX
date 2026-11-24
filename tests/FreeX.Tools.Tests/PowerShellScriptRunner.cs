@@ -6,6 +6,9 @@ namespace FreeX.App.Host.Tests;
 
 internal static class PowerShellScriptRunner
 {
+    // Preserve Windows PowerShell 5.1 coverage on Windows; Unix hosts use PowerShell 7.
+    public static string DefaultExecutable => OperatingSystem.IsWindows() ? "powershell.exe" : "pwsh";
+
     public static PowerShellResult Run(string scriptPath, string workingDirectory)
     {
         return RunWithPowerShellArguments(workingDirectory, $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"");
@@ -52,7 +55,7 @@ internal static class PowerShellScriptRunner
 
     private static PowerShellResult RunWithPowerShellArguments(string workingDirectory, string powerShellArguments)
     {
-        return TestProcessRunner.Run("powershell.exe", powerShellArguments, workingDirectory);
+        return TestProcessRunner.Run(DefaultExecutable, powerShellArguments, workingDirectory);
     }
 }
 
@@ -145,5 +148,13 @@ internal sealed record PowerShellResult(int ExitCode, string Output, string Erro
 {
     public string CombinedOutput => Output + Error;
 
-    public string NormalizedCombinedOutput => Regex.Replace(CombinedOutput, "\\s+", " ");
+    public string NormalizedCombinedOutput
+    {
+        get
+        {
+            // PowerShell 7 prefixes wrapped error lines with a pipe; keep inline pipes as diagnostic data.
+            var withoutLinePrefixes = Regex.Replace(CombinedOutput, @"(?m)^[ \t]*\|[ \t]*", string.Empty);
+            return Regex.Replace(withoutLinePrefixes, @"\s+", " ");
+        }
+    }
 }

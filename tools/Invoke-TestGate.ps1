@@ -233,6 +233,11 @@ foreach ($testGate in $gates) {
             }
             if (-not [string]::IsNullOrWhiteSpace($HangTimeout)) {
                 $arguments += @("--blame-hang-timeout", $HangTimeout)
+                # Local worktrees keep the termination guard without multi-gigabyte dump files.
+                # Hosted verification retains its existing diagnostic collection.
+                if ($env:GITHUB_ACTIONS -ne "true") {
+                    $arguments += @("--blame-hang-dump-type", "none")
+                }
             }
             if (-not [string]::IsNullOrWhiteSpace($ResultsDirectory)) {
                 $resultGateId = if ($PartitionCount -eq 1) {

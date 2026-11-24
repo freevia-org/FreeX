@@ -455,6 +455,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastTextBoxText_WithExplicitFill()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Objects");
         sheet.TextBoxes.Add(new TextBoxModel
@@ -475,6 +476,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastTextBoxText_WithThemeFill()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility")
         {
             Theme = WorkbookTheme.Office
@@ -506,6 +508,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastTextBoxText_WithObjectDefaultThemeFill()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility")
         {
             Theme = WorkbookTheme.Office
@@ -584,6 +587,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastShapeText()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // R131 (a): DrawingShapeModel.ShapeText was previously never checked for contrast at all --
         // this proves it is now reachable.
         var workbook = new Workbook("Accessibility");

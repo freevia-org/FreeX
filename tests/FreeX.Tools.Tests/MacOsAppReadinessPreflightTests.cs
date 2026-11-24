@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -921,7 +922,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        var combinedOutput = result.Output + result.Error;
+        var combinedOutput = result.NormalizedCombinedOutput;
         combinedOutput.Should().Contain(
             "RegisterCrashHandlers' in shared/Free.Shared.AppServices/LocalAppDiagnostics.cs");
         combinedOutput.Should().Contain("AppCrashHandlers.Register('");
@@ -948,7 +949,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        var combinedOutput = result.Output + result.Error;
+        var combinedOutput = result.NormalizedCombinedOutput;
         combinedOutput.Should().Contain("AtomicFileWriter.CreateTempLease");
         combinedOutput.Should().Contain("shared/Free.Shared.AppServices/AtomicExportExecutor.cs");
     }
@@ -963,7 +964,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("Avalonia app TargetFramework must be net10.0");
+        (result.NormalizedCombinedOutput).Should().Contain("Avalonia app TargetFramework must be net10.0");
     }
 
     [Fact]
@@ -976,7 +977,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("macOS workflow runtime markers must not include unexpected value 'osx-ppc'");
+        (result.NormalizedCombinedOutput).Should().Contain("macOS workflow runtime markers must not include unexpected value 'osx-ppc'");
     }
 
     [Fact]
@@ -989,7 +990,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("macOS workflow runtime runner matrix must include 'osx-arm64=macos-15'");
+        (result.NormalizedCombinedOutput).Should().Contain("macOS workflow runtime runner matrix must include 'osx-arm64=macos-15'");
     }
 
     [Fact]
@@ -1010,7 +1011,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("macOS workflow is missing required readiness marker: Require hosted smoke before app artifact upload");
+        (result.NormalizedCombinedOutput).Should().Contain("macOS workflow is missing required readiness marker: Require hosted smoke before app artifact upload");
     }
 
     [Fact]
@@ -1031,7 +1032,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("macOS workflow is missing required readiness marker: run_bounded_launchservices_smoke \"bundle_id\"");
+        (result.NormalizedCombinedOutput).Should().Contain("macOS workflow is missing required readiness marker: run_bounded_launchservices_smoke \"bundle_id\"");
     }
 
     [Fact]
@@ -1053,7 +1054,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        var combinedOutput = result.Output + result.Error;
+        var combinedOutput = result.NormalizedCombinedOutput;
         combinedOutput.Should().Contain("Portable macOS source contains forbidden token 'System.Windows'");
         combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
     }
@@ -1079,7 +1080,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        var combinedOutput = result.Output + result.Error;
+        var combinedOutput = result.NormalizedCombinedOutput;
         combinedOutput.Should().Contain("Portable macOS source contains native macOS token 'AppKit' outside src/FreeX.App.Avalonia/MacOs");
         combinedOutput.Should().Contain("src/FreeX.App.Avalonia/WindowsOnlyLeak.cs");
     }
@@ -1104,7 +1105,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        var combinedOutput = result.Output + result.Error;
+        var combinedOutput = result.NormalizedCombinedOutput;
         combinedOutput.Should().Contain("Portable macOS source contains forbidden token 'System.Windows'");
         combinedOutput.Should().Contain("src/FreeX.App.Avalonia/MacOs/NativeWorkbookShareSheetService.cs");
     }
@@ -1131,7 +1132,7 @@ public sealed class MacOsAppReadinessPreflightTests
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
-        result.ExitCode.Should().Be(0, result.Output + result.Error);
+        result.ExitCode.Should().Be(0, result.NormalizedCombinedOutput);
         result.Output.Should().Contain("macOS app readiness preflight passed.");
     }
 
@@ -1158,8 +1159,8 @@ public sealed class MacOsAppReadinessPreflightTests
         var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
-        result.ExitCode.Should().Be(0, result.Output + result.Error);
-        (result.Output + result.Error).Should().Contain("macOS app readiness preflight passed.");
+        result.ExitCode.Should().Be(0, result.NormalizedCombinedOutput);
+        (result.NormalizedCombinedOutput).Should().Contain("macOS app readiness preflight passed.");
     }
 
     [Fact]
@@ -1175,13 +1176,23 @@ public sealed class MacOsAppReadinessPreflightTests
         var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        (result.Output + result.Error).Should().Contain("macOS app icon must start with the icns magic header");
+        (result.NormalizedCombinedOutput).Should().Contain("macOS app icon must start with the icns magic header");
     }
 
     private static PowerShellResult RunScriptFromTemporaryWorkingDirectory(string scriptPath, string arguments)
     {
         using var workingDirectory = new TestTemporaryDirectory();
-        return PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, arguments);
+        if (OperatingSystem.IsWindows())
+            return PowerShellScriptRunner.Run(scriptPath, workingDirectory.Path, arguments);
+
+        // Match Windows PowerShell's diagnostic format; PS7's ConciseView inserts a pipe
+        // before every wrapped line, which is presentation rather than diagnostic content.
+        var command = $"$ErrorView = 'NormalView'; & '{scriptPath.Replace("'", "''")}' {arguments}; if (-not $?) {{ exit 1 }}";
+        var encodedCommand = Convert.ToBase64String(Encoding.Unicode.GetBytes(command));
+        return TestProcessRunner.Run(
+            "pwsh",
+            $"-NoProfile -ExecutionPolicy Bypass -EncodedCommand {encodedCommand}",
+            workingDirectory.Path);
     }
 
     private static void CreateMinimalMacOsReadinessRepo(
@@ -2052,11 +2063,26 @@ public sealed class MacOsAppReadinessPreflightTests
                     Name = ApplicationTitle;
                     Diagnostics?.RecordEvent("app_ready");
                     this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime;
-                    if (args is not FileActivatedEventArgs fileArgs || fileArgs.Kind != ActivationKind.File)
-                        return;
-
-                    await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
+                    activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(args);
+                    if (args is FileActivatedEventArgs { Kind: ActivationKind.File } fileArgs)
+                        await OpenNativeActivatedFilesAsync(fileArgs.Files);
+                    else if (args.Kind == ActivationKind.Reopen)
+                        ActivateNativeWorkbookWindow();
                     ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
+                }
+
+                internal static MainWindow ActivateNativeWorkbookWindow() =>
+                    MainWindow.ActivateRegisteredWorkbookWindow() ?? OpenIndependentWindow();
+
+                internal static async Task OpenNativeActivatedFilesAsync(IReadOnlyList<IStorageItem> files)
+                {
+                    var target = ActivateNativeWorkbookWindow();
+                    var openableFiles = target.ResolveNativeActivatedFiles(files);
+                    for (var index = 0; index < openableFiles.Count; index++)
+                    {
+                        var window = index == 0 ? target : OpenIndependentWindow();
+                        await window.OpenActivatedFilesAsync([openableFiles[index]]);
+                    }
                 }
             }
             """);
@@ -2618,7 +2644,11 @@ public sealed class MacOsAppReadinessPreflightTests
                     WorkbookStatisticsFormatter.Format(statistics)
                     _selectAllMenuItem.Header = "Select All";
                     _selectAllMenuItem.Gesture = new KeyGesture(Key.A, KeyModifiers.Meta);
-                    _selectAllMenuItem.Click += (_, _) => SelectCurrentRegionOrAll();
+                    _selectAllMenuItem.Click += (_, _) => RunGuarded(() => ExecuteNativeEditMenuCommandAsync(NativeMenuItemId.SelectAll));
+                    internal async Task ExecuteNativeEditMenuCommandAsync(NativeMenuItemId command)
+                    if (GetNativeTextEditMenuTarget() is { } editor)
+                    editor.SelectAll();
+                    RefreshNativeTextEditMenuAvailability();
                     homeMenu.Items.Add(_selectAllMenuItem);
                     _selectAllMenuItem.IsEnabled = isIdle;
                     private readonly NativeMenuItem _findMenuItem = new();

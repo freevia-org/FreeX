@@ -125,8 +125,8 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
             "-ExpectedRunAttempt 1");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("ExpectedRunId is required");
-        result.CombinedOutput.Should().Contain("stale hosted artifacts or human checklists");
+        result.NormalizedCombinedOutput.Should().Contain("ExpectedRunId is required");
+        result.NormalizedCombinedOutput.Should().Contain("stale hosted artifacts or human checklists");
     }
 
     [Fact]
@@ -149,8 +149,8 @@ public sealed class MacOsPublicPreviewPromotionPreflightTests
             "-ExpectedRunId 42 -ExpectedRunAttempt 1");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("Completed macOS public-preview human checklist for osx-x64 was not found");
-        result.CombinedOutput.Should().Contain("completed-macos-public-preview-checklist-osx-x64.md");
+        result.NormalizedCombinedOutput.Should().Contain("Completed macOS public-preview human checklist for osx-x64 was not found");
+        result.NormalizedCombinedOutput.Should().Contain("completed-macos-public-preview-checklist-osx-x64.md");
     }
 
     private static PowerShellResult RunPromotionPreflight(

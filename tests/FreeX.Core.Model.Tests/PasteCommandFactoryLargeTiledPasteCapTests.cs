@@ -23,6 +23,7 @@ public sealed class PasteCommandFactoryLargeTiledPasteCapTests
     [Fact]
     public void CreateInternalPasteCommand_RejectsTiledPasteWhoseDestinationExceedsTheSizeCap_InsteadOfAllocatingTheFullRectangle()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new TestCommandContext(wb);

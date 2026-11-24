@@ -947,12 +947,14 @@ public sealed class ChartRenderPlannerTests
     [InlineData(1.2345, "1.23")]
     public void FormatAxisValue_MatchesRendererContract(double value, string expected)
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         ChartRenderPlanner.FormatAxisValue(value).Should().Be(expected);
     }
 
     [Fact]
     public void FormatAxisLabelValue_DoesNotAbbreviateGeneralThousands()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         ChartRenderPlanner.FormatAxisLabelValue(8000, "General").Should().Be("8000");
         ChartRenderPlanner.FormatAxisLabelValue(1200, null).Should().Be("1.2K");
     }
@@ -1080,9 +1082,22 @@ public sealed class ChartRenderPlannerTests
     [Fact]
     public void FormatWithCode_UnsupportedFormatFallsBackWithoutThrowing()
     {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
         var act = () => ChartRenderPlanner.FormatWithCode(1200, "unsupported text");
 
         act.Should().NotThrow().Which.Should().Be("1.2K");
+    }
+
+    [Theory]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void ScaledAxisLabelsAndUnsupportedFormatFallback_UseCurrentCulture(string cultureName)
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture(cultureName);
+        ChartRenderPlanner.FormatAxisValue(1200).Should().Be("1,2K");
+        ChartRenderPlanner.FormatAxisLabelValue(1200, null).Should().Be("1,2K");
+        ChartRenderPlanner.FormatWithCode(1200, "unsupported text").Should().Be("1,2K");
+        ChartRenderPlanner.FormatAxisLabelValue(1200, "General").Should().Be("1200");
     }
 
     [Fact]

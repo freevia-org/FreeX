@@ -47,6 +47,7 @@ public sealed class TrendlineAnnotationFormatterTests
     [Fact]
     public void ShowTrendlineRSquared_perfect_fit_reports_R_squared_of_one()
     {
+        using var cultureScope = TestCultureScope.InvariantCurrentCulture();
         var chart = new ChartModel
         {
             ShowTrendlineRSquared = true,
@@ -59,6 +60,26 @@ public sealed class TrendlineAnnotationFormatterTests
 
         lines.Should().ContainSingle();
         lines[0].Should().Be("R² = 1.0000");
+    }
+
+    [Theory]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void Annotation_numbers_follow_the_current_decimal_comma_culture(string cultureName)
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture(cultureName);
+        var chart = new ChartModel
+        {
+            ShowTrendlineEquation = true,
+            ShowTrendlineRSquared = true,
+            TrendlineType = ChartTrendlineType.Linear,
+        };
+        var source = Points((0, 1.25), (1, 3.75), (2, 6.25));
+        var trend = Points((0, 1.25), (2, 6.25));
+
+        var lines = TrendlineAnnotationFormatter.BuildAnnotationLines(chart, source, trend);
+
+        lines.Should().Equal("y = 2,5x + 1,25", "R² = 1,0000");
     }
 
     [Fact]

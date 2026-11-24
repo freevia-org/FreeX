@@ -28,7 +28,7 @@ public sealed class GitHubWorkflowPreflightTests
         workflow.Should().Contain("contents: read");
         workflow.Should().NotContain("contents: write");
         workflow.Should().NotContain("pull_request_target");
-        workflow.Should().Contain("runs-on: ${{ matrix.runner }}");
+        workflow.Should().Contain("runs-on: ${{ inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'windows' && 'freex-i5-windows' || inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'linux' && 'freex-i5-linux' || matrix.runner }}");
         workflow.Should().Contain("timeout-minutes: 45");
         workflow.Should().Contain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
         workflow.Should().Contain("persist-credentials: false");
@@ -212,7 +212,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.NormalizedCombinedOutput.Should().Contain("workflow must use workflow_dispatch only; automatic triggers are not allowed (manual-only policy): push.");
-        result.CombinedOutput.Should().Contain("automatic.yml");
+        result.NormalizedCombinedOutput.Should().Contain("automatic.yml");
     }
 
     [Fact]
@@ -477,8 +477,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("must declare timeout-minutes");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("must declare timeout-minutes");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -514,8 +514,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("actions/upload-artifact steps must set if-no-files-found to error or warn");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -553,12 +553,12 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
-    public void GitHubWorkflowPreflight_FailsWhenWorkflowUsesSelfHostedRunner()
+    public void GitHubWorkflowPreflight_FailsWhenWorkflowRequiresGenericSelfHostedLabel()
     {
         using var temp = new TestTemporaryDirectory();
 
@@ -587,8 +587,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must not use self-hosted runners");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("runs-on must use the exact registered FreeX custom label without requiring the self-hosted label");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -621,8 +621,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Theory]
@@ -657,8 +657,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Theory]
@@ -695,8 +695,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Theory]
@@ -736,8 +736,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("workflow must not use the privileged pull_request_target event");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -769,8 +769,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("workflow must not request write-all permissions");
-        result.CombinedOutput.Should().Contain("broken.yml");
+        result.NormalizedCombinedOutput.Should().Contain("workflow must not request write-all permissions");
+        result.NormalizedCombinedOutput.Should().Contain("broken.yml");
     }
 
     [Fact]
@@ -802,8 +802,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("must declare an explicit shell");
-        result.CombinedOutput.Should().Contain("Missing shell");
+        result.NormalizedCombinedOutput.Should().Contain("must declare an explicit shell");
+        result.NormalizedCombinedOutput.Should().Contain("Missing shell");
     }
 
     [Fact]
@@ -834,8 +834,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("must stay within the workflow workspace");
-        result.CombinedOutput.Should().Contain("./../outside-action");
+        result.NormalizedCombinedOutput.Should().Contain("must stay within the workflow workspace");
+        result.NormalizedCombinedOutput.Should().Contain("./../outside-action");
     }
 
     [Fact]
@@ -866,8 +866,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("GitHub workflow validation failed");
-        result.CombinedOutput.Should().Contain("actions/checkout@main");
+        result.NormalizedCombinedOutput.Should().Contain("GitHub workflow validation failed");
+        result.NormalizedCombinedOutput.Should().Contain("actions/checkout@main");
     }
 
     [Fact]
@@ -902,8 +902,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("actions/checkout@v99");
-        result.CombinedOutput.Should().Contain("must be pinned to an approved full 40-character commit SHA");
+        result.NormalizedCombinedOutput.Should().Contain("actions/checkout@v99");
+        result.NormalizedCombinedOutput.Should().Contain("must be pinned to an approved full 40-character commit SHA");
     }
 
     [Fact]
@@ -938,7 +938,7 @@ public sealed class GitHubWorkflowPreflightTests
 
         result.ExitCode.Should().NotBe(0);
         result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation must declare a workflow_dispatch validate_macos_tfm boolean input defaulting to false");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -957,8 +957,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must be gated to workflow_dispatch validate_macos_tfm runs");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -982,7 +982,7 @@ public sealed class GitHubWorkflowPreflightTests
         result.ExitCode.Should().NotBe(0);
         result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must install the pinned macOS workload set");
         result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must build FreeX.App.Avalonia with -p:EnableMacOsTargetFramework=true, -p:ApplicationId=io.github.tony-xmelon.freex, -p:ILLinkTreatWarningsAsErrors=false, -p:NoWarn=IL2026, --framework net10.0-macos, and --runtime");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1007,11 +1007,11 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS TFM validation job must not run dotnet publish");
-        result.CombinedOutput.Should().Contain("macOS TFM validation job must not invoke GitHub release publication");
-        result.CombinedOutput.Should().Contain("macOS TFM validation artifact upload must be evidence-only");
-        result.CombinedOutput.Should().Contain("macOS TFM validation job must not upload app or release artifacts");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must not run dotnet publish");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must not invoke GitHub release publication");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation artifact upload must be evidence-only");
+        result.NormalizedCombinedOutput.Should().Contain("macOS TFM validation job must not upload app or release artifacts");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1030,8 +1030,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication job must be gated to workflow_dispatch distribution-candidate runs");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1053,9 +1053,9 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication job must declare actions: read");
-        result.CombinedOutput.Should().Contain("macOS release publication must be the only workflow scope requesting contents: write");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication job must declare actions: read");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication must be the only workflow scope requesting contents: write");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1074,8 +1074,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication job must use non-canceling concurrency with cancel-in-progress: false");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication job must use non-canceling concurrency with cancel-in-progress: false");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1097,10 +1097,10 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with");
         result.NormalizedCombinedOutput.Should().Contain("macOS release publication checkout must use the approved full-SHA actions/checkout pin with persist-credentials: false");
-        result.CombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("actions/checkout steps must set persist-credentials: false");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1121,7 +1121,7 @@ public sealed class GitHubWorkflowPreflightTests
         result.ExitCode.Should().NotBe(0);
         result.NormalizedCombinedOutput.Should().Contain("macOS app workflow focused test filter is missing 'FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests'");
         result.NormalizedCombinedOutput.Should().Contain("macOS app workflow has unexpected focused test filter 'FreeX.App.Services.Tests.RenamedMacOsLaunchSmokeReportTests'");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1140,9 +1140,9 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS app hosted test command must not run broad test target 'FreeX.DefaultTests.slnx'");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app hosted test command must not run broad test target 'FreeX.DefaultTests.slnx'");
         result.NormalizedCombinedOutput.Should().Contain("macOS app workflow must run exactly one focused dotnet test command for tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1167,8 +1167,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication job must not run dotnet test");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication job must not run dotnet test");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1187,9 +1187,9 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS app workflow is missing hosted runner/toolchain evidence marker");
-        result.CombinedOutput.Should().Contain("github_run_id=${GITHUB_RUN_ID}");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app workflow is missing hosted runner/toolchain evidence marker");
+        result.NormalizedCombinedOutput.Should().Contain("github_run_id=${GITHUB_RUN_ID}");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1214,10 +1214,10 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS app artifact upload name must include github.run_id, github.run_attempt");
-        result.CombinedOutput.Should().Contain("macOS diagnostics artifact upload name must include github.run_id, github.run_attempt");
-        result.CombinedOutput.Should().Contain("macOS release publication must download app artifacts using the current run id and run attempt");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app artifact upload name must include github.run_id, github.run_attempt");
+        result.NormalizedCombinedOutput.Should().Contain("macOS diagnostics artifact upload name must include github.run_id, github.run_attempt");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication must download app artifacts using the current run id and run attempt");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1236,9 +1236,9 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS app artifact upload must set retention-days: 14");
-        result.CombinedOutput.Should().Contain("macOS diagnostics artifact upload must set retention-days: 14");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app artifact upload must set retention-days: 14");
+        result.NormalizedCombinedOutput.Should().Contain("macOS diagnostics artifact upload must set retention-days: 14");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1257,8 +1257,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS release publication must validate downloaded evidence run identity against the current run");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     [Fact]
@@ -1280,8 +1280,8 @@ public sealed class GitHubWorkflowPreflightTests
             $"-WorkflowDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step 'Publish app bundle'");
-        result.CombinedOutput.Should().Contain("macos-app.yml");
+        result.NormalizedCombinedOutput.Should().Contain("macOS app workflow must run focused hosted tests before package/upload step 'Publish app bundle'");
+        result.NormalizedCombinedOutput.Should().Contain("macos-app.yml");
     }
 
     private static string ReadMacOsAppWorkflow()

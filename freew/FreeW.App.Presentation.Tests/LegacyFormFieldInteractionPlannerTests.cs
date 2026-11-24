@@ -161,9 +161,13 @@ public sealed class LegacyFormFieldInteractionPlannerTests
         model.TryBuild(out _, out _).Should().BeFalse();
     }
 
-    [Fact]
-    public void OptionsModel_EditsDropDownItemsAndCheckBoxSize()
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void OptionsModel_EditsDropDownItemsAndCheckBoxSize(string cultureName)
     {
+        using var scope = TestCultureScope.CurrentCulture(cultureName);
         var list = new LegacyFormFieldOptionsModel(
             LegacyFormField.CreateDefault(LegacyFormFieldKind.DropDown) with { DropDownEntries = ["One", "Two"], DropDownResult = 1 });
         list.TryAddItem("Three").Should().BeTrue();
@@ -176,12 +180,14 @@ public sealed class LegacyFormFieldInteractionPlannerTests
         var box = new LegacyFormFieldOptionsModel(LegacyFormField.CreateDefault(LegacyFormFieldKind.CheckBox))
         {
             CheckBoxAutoSize = false,
-            CheckBoxSizeText = "12.5",
+            CheckBoxSizeText = 12.5m.ToString(CultureInfo.CurrentCulture),
             DefaultChecked = true,
         };
         box.TryBuild(out var sized, out _).Should().BeTrue();
         sized.CheckBoxSizeHalfPoints.Should().Be(25);
         sized.IsChecked.Should().BeTrue();
+        var reopened = new LegacyFormFieldOptionsModel(sized);
+        reopened.CheckBoxSizeText.Should().Be(12.5m.ToString(CultureInfo.CurrentCulture));
         box.CheckBoxSizeText = "5000";
         box.TryBuild(out _, out _).Should().BeFalse();
     }

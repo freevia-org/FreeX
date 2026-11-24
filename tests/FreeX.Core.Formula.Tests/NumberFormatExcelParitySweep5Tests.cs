@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using FluentAssertions;
@@ -12,8 +14,16 @@ namespace FreeX.Core.Formula.Tests;
 /// approximation), "#." decimal point, sign suppression, fill + negative values and
 /// [condition] sections that only hold negatives.
 /// </summary>
-public sealed class NumberFormatExcelParitySweep5Tests
+public sealed class NumberFormatExcelParitySweep5Tests : IDisposable
 {
+    private readonly CultureInfo _savedCulture = CultureInfo.CurrentCulture;
+
+    // The reference strings were measured with en-US regional settings. F800/F400 deliberately
+    // follow the current culture's long date/time patterns, including on Linux and macOS.
+    public NumberFormatExcelParitySweep5Tests() => CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+    public void Dispose() => CultureInfo.CurrentCulture = _savedCulture;
+
     private static string F(double value, string format) =>
         NumberFormatter.Format(new NumberValue(value), format);
 

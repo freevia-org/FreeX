@@ -1,5 +1,6 @@
 param(
-    [string]$ManifestPath = "eng/test-gates.json"
+    [string]$ManifestPath = "eng/test-gates.json",
+    [switch]$HangDiagnosticsOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +15,74 @@ if (-not (Test-Path -LiteralPath $manifestFullPath -PathType Leaf)) {
 $manifest = Get-Content -LiteralPath $manifestFullPath -Raw | ConvertFrom-Json
 if ($manifest.schemaVersion -ne 1) {
     throw "Unsupported test-gate schema version '$($manifest.schemaVersion)'."
+}
+
+function Assert-TestGateHangDiagnostics {
+    # Exercise the real runner without starting an SDK, testhost, or writing test artifacts.
+    # The function lives only in this probe's scope and wins command lookup over native dotnet.
+    $capturedDotnetCalls = [System.Collections.Generic.List[object]]::new()
+    function dotnet {
+        $capturedDotnetCalls.Add([string[]]$args)
+        $global:LASTEXITCODE = 0
+    }
+    if ((Get-Command dotnet).CommandType -ne 'Function') {
+        throw "The offline test-gate probe could not install its dotnet stub."
+    }
+
+    $savedGitHubActions = [Environment]::GetEnvironmentVariable('GITHUB_ACTIONS')
+    $savedExitCodeVariable = Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+    $hadExitCode = $null -ne $savedExitCodeVariable
+    $savedExitCode = if ($hadExitCode) { $savedExitCodeVariable.Value } else { $null }
+    try {
+        foreach ($case in @(
+            @{ Name = 'local without GITHUB_ACTIONS'; Hosted = $false; Value = $null },
+            @{ Name = 'local with GITHUB_ACTIONS=false'; Hosted = $false; Value = 'false' },
+            @{ Name = 'GitHub Actions'; Hosted = $true; Value = 'true' }
+        )) {
+            [Environment]::SetEnvironmentVariable('GITHUB_ACTIONS', $case.Value)
+            $capturedDotnetCalls.Clear()
+            & (Join-Path $PSScriptRoot 'Invoke-TestGate.ps1') `
+                -App FreeX -Platform windows -GateId freex-tools `
+                -NoBuild -NoRestore -HangTimeout 37s -ResultsDirectory '' | Out-Null
+
+            if ($capturedDotnetCalls.Count -ne 1) {
+                throw "$($case.Name): expected exactly one stubbed dotnet test call; got $($capturedDotnetCalls.Count)."
+            }
+            $call = [string[]]$capturedDotnetCalls[0]
+            if ($call[0] -ne 'test' -or $call[1] -ne (Join-Path $repoRoot 'tests/FreeX.Tools.Tests/FreeX.Tools.Tests.csproj') -or
+                $call -notcontains '--no-build' -or $call -notcontains '--no-restore') {
+                throw "$($case.Name): the offline probe did not capture the expected no-build/no-restore test invocation."
+            }
+            $timeoutIndex = [Array]::IndexOf($call, '--blame-hang-timeout')
+            if ($timeoutIndex -lt 0 -or $timeoutIndex + 1 -ge $call.Length -or $call[$timeoutIndex + 1] -ne '37s') {
+                throw "$($case.Name): the test-hang timeout must remain enabled with its requested value."
+            }
+            $dumpIndex = [Array]::IndexOf($call, '--blame-hang-dump-type')
+            if ($case.Hosted) {
+                if ($dumpIndex -ge 0) {
+                    throw "$($case.Name): hosted runs must retain their default hang-dump diagnostics."
+                }
+            }
+            elseif ($dumpIndex -lt 0 -or $dumpIndex + 1 -ge $call.Length -or $call[$dumpIndex + 1] -ne 'none') {
+                throw "$($case.Name): local hang protection must disable dump collection with --blame-hang-dump-type none."
+            }
+        }
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable('GITHUB_ACTIONS', $savedGitHubActions)
+        if ($hadExitCode) {
+            $global:LASTEXITCODE = $savedExitCode
+        }
+        else {
+            Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+if ($HangDiagnosticsOnly) {
+    Assert-TestGateHangDiagnostics
+    Write-Host 'Test-gate hang-diagnostics contract passed: two local cases and hosted diagnostics (dotnet stubbed).'
+    return
 }
 
 $errors = [System.Collections.Generic.List[string]]::new()
@@ -475,6 +544,13 @@ catch {
 # keep running everything.
 try {
     & (Join-Path $PSScriptRoot "Test-PreflightScopes.ps1") | Out-Host
+}
+catch {
+    $errors.Add($_.Exception.Message)
+}
+
+try {
+    Assert-TestGateHangDiagnostics
 }
 catch {
     $errors.Add($_.Exception.Message)

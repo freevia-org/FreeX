@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
@@ -705,23 +706,33 @@ public static partial class AvaloniaRibbonRenderer
         Action? afterExecute,
         AvaloniaRibbonPalette palette,
         IRibbonStateStore? stateStore,
-        AvaloniaRibbonRendererOptions options) => new()
+        AvaloniaRibbonRendererOptions options)
     {
-        Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
-        Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore, options),
-        Tag = tab.Id,
-    };
-
-    private static TabItem BuildFileTabItem(AvaloniaRibbonPalette palette) => new()
-    {
-        Header = BuildTabHeader("File", "F", palette),
-        Content = new Border
+        var item = new TabItem
         {
-            Background = palette.SurfaceBrush,
-            MinHeight = RibbonVisualMetrics.TabContentMinHeight,
-        },
-        Tag = FileRibbonTabId,
-    };
+            Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
+            Content = BuildTabContent(tab, registry, afterExecute, palette, stateStore, options),
+            Tag = tab.Id,
+        };
+        ApplyRibbonAutomationMetadata(item, tab.Header);
+        return item;
+    }
+
+    private static TabItem BuildFileTabItem(AvaloniaRibbonPalette palette)
+    {
+        var item = new TabItem
+        {
+            Header = BuildTabHeader("File", "F", palette),
+            Content = new Border
+            {
+                Background = palette.SurfaceBrush,
+                MinHeight = RibbonVisualMetrics.TabContentMinHeight,
+            },
+            Tag = FileRibbonTabId,
+        };
+        ApplyRibbonAutomationMetadata(item, "File");
+        return item;
+    }
 
     /// <summary>
     /// Builds a <see cref="TabControl"/> over a whole definition's tabs. When a
@@ -1747,6 +1758,7 @@ public static partial class AvaloniaRibbonRenderer
             };
             ToolTip.SetTip(launcherButton, BuildRibbonTooltipContent(launcher.TooltipTitle, launcher.TooltipDescription, RibbonKeyTipText.NormalizeOrEmpty(launcher.KeyTip)));
             ToolTip.SetShowDelay(launcherButton, 500);
+            ApplyRibbonAutomationMetadata(launcherButton, launcher.TooltipTitle, launcher.TooltipDescription);
             SetKeyTip(launcherButton, launcher.KeyTip);
             WireControl(launcherButton, launcherControl, registry, afterExecute, palette, attachMenu: false);
             Grid.SetColumn(launcherButton, 1);
@@ -2059,8 +2071,9 @@ public static partial class AvaloniaRibbonRenderer
 
         void Walk(Control target)
         {
-            if (target is Button or ComboBox or CheckBox)
+            if (target is Button or ToggleButton or ComboBox)
             {
+                ApplyRibbonAutomationMetadata(target, title, description);
                 if (ToolTip.GetTip(target) is null)
                 {
                     ToolTip.SetTip(target, BuildRibbonTooltipContent(title, description, keyTip));
@@ -2078,6 +2091,17 @@ public static partial class AvaloniaRibbonRenderer
         }
 
         Walk(element);
+    }
+
+    // Complex icon/caption visuals do not give Avalonia's content peers a usable name: their
+    // fallback is Content.ToString(), such as "Avalonia.Controls.StackPanel". Match the WPF
+    // tooltip seam by assigning the command's localized title without replacing authored metadata.
+    private static void ApplyRibbonAutomationMetadata(Control target, string? title, string? description = null)
+    {
+        if (!string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(AutomationProperties.GetName(target)))
+            AutomationProperties.SetName(target, title);
+        if (!string.IsNullOrWhiteSpace(description) && string.IsNullOrWhiteSpace(AutomationProperties.GetHelpText(target)))
+            AutomationProperties.SetHelpText(target, description);
     }
 
     /// <summary>
@@ -2447,8 +2471,20 @@ public static partial class AvaloniaRibbonRenderer
             ClipToBounds = false,
             Tag = combo.CommandId.Value,
         };
-        if (MacOsChromeParity)
-            box.TemplateApplied += (_, args) => CompactEditableComboParts(box, args.NameScope);
+        box.TemplateApplied += (_, args) =>
+        {
+            if (MacOsChromeParity)
+                CompactEditableComboParts(box, args.NameScope);
+            if (args.NameScope.Find<TextBox>("PART_EditableTextBox") is { } editor)
+            {
+                var title = AutomationProperties.GetName(box);
+                if (string.IsNullOrWhiteSpace(title))
+                    title = !string.IsNullOrEmpty(combo.TooltipTitle) ? combo.TooltipTitle : combo.Label;
+                var description = AutomationProperties.GetHelpText(box);
+                ApplyRibbonAutomationMetadata(editor, title,
+                    string.IsNullOrWhiteSpace(description) ? combo.TooltipDescription : description);
+            }
+        };
         if (combo.Choices.Count > 0)
         {
             if (combo.PresentationKind == RibbonComboBoxPresentationKind.Gallery)
@@ -3452,6 +3488,7 @@ public static partial class AvaloniaRibbonRenderer
             button.Flyout = flyout;
             SetKeyTip(button, _collapsedKeyTip);
             button.Classes.Add("free-ribbon-collapsed-group");
+            ApplyRibbonAutomationMetadata(button, _group.Header);
             return button;
         }
     }

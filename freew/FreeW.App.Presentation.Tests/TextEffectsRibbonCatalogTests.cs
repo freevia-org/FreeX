@@ -27,9 +27,13 @@ public sealed class TextEffectsRibbonCatalogTests
         TextEffectsRibbonCatalog.StylisticSets.Should().HaveCount(11);
     }
 
-    [Fact]
-    public void EveryEntry_HasAUniqueId_AndARealLabel()
+    [Theory]
+    [InlineData("en-US", "Weight: 2.25 pt")]
+    [InlineData("bg-BG", "Weight: 2,25 pt")]
+    [InlineData("de-DE", "Weight: 2,25 pt")]
+    public void EveryEntry_HasAUniqueId_AndARealLabel(string cultureName, string expectedWeightLabel)
     {
+        using var scope = TestCultureScope.CurrentCultureAndUICulture(cultureName, "en-US");
         var all = TextEffectsRibbonCatalog.All.ToList();
 
         all.Select(choice => choice.CommandId).Should().OnlyHaveUniqueItems();
@@ -37,7 +41,7 @@ public sealed class TextEffectsRibbonCatalogTests
         all.Should().OnlyContain(choice => choice.Label.Length > 0 && !choice.Label.StartsWith("[[", StringComparison.Ordinal));
         TextEffectsRibbonCatalog.Glow[1].Label.Should().Be("Glow: 5 point; Accent color 1");
         TextEffectsRibbonCatalog.Outline.Single(choice => choice.CommandId.EndsWith("weight-225", StringComparison.Ordinal))
-            .Label.Should().Be("Weight: 2.25 pt");
+            .Label.Should().Be(expectedWeightLabel);
     }
 
     [Fact]

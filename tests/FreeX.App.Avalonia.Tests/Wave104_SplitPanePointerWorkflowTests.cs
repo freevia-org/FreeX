@@ -144,7 +144,10 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
         sessionSource.Should().Contain("ResetSplitPaneOffsets();");
         windowSource.Should().Contain("SplitPanePointerPlanner.ResolveWheelTarget");
         windowSource.Should().Contain("CanScrollSplitPane(target.Region, target.Horizontal)");
-        windowSource.Should().Contain("PanViewport(rowDelta * step, colDelta * step)");
+        windowSource.Should().Contain("var changed = routesToSharedScrollbar");
+        windowSource.Should().Contain("? _session.PanViewport(");
+        windowSource.Should().Contain("(int)Math.Clamp((long)rowDelta * step, int.MinValue, int.MaxValue)");
+        windowSource.Should().Contain("(int)Math.Clamp((long)colDelta * step, int.MinValue, int.MaxValue)");
         windowSource.Should().NotContain("ScrollSplitPaneTopRight");
         windowSource.Should().NotContain("ScrollSplitPaneBottomLeft");
         windowSource.Should().Contain("InputElement.PointerWheelChangedEvent");

@@ -1,5 +1,6 @@
 using Avalonia.Input;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.App.Presentation.Shell;
@@ -208,6 +209,10 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
                     AssertSessionDisposed(
                         previousSession,
                         $"validation replacement {index + 1} must dispose its previous session immediately");
+                    // Home dispatch can complete synchronously. Give each simulated user action
+                    // its normal UI turn after proving disposal, rather than queuing 256 visual
+                    // rebuilds without draining any deferred layout or detach work.
+                    Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
                 }
 
                 AssertSessionDisposed(firstSession, "the first validation session was replaced");
