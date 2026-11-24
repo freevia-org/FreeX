@@ -172,7 +172,7 @@ public class WatermarkOptionsRoundTripTests
             var style = shape.Attribute("style")!.Value;
             shape.SetAttributeValue("style", style.Replace(
                 "width:468pt;height:117pt",
-                $"width:{widthPt:0.##}pt;height:{heightPt:0.##}pt",
+                FormattableString.Invariant($"width:{widthPt:0.##}pt;height:{heightPt:0.##}pt"),
                 StringComparison.Ordinal));
             entry.Delete();
             var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
@@ -571,9 +571,13 @@ public class WatermarkOptionsRoundTripTests
             "custom metadata without a source VML watermark must remain absent after save");
     }
 
-    [Fact]
-    public void NativeVmlTextWatermark_SupplementsFreeWMetadataWithVisibleShapeGeometry()
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void NativeVmlTextWatermark_SupplementsFreeWMetadataWithVisibleShapeGeometry(string cultureName)
     {
+        using var scope = TestCultureScope.CurrentCulture(cultureName);
         var document = new TextDocument();
         document.Page.WatermarkOptions = new WatermarkOptions("AUTHORITATIVE");
         var loaded = ReadWithMutatedVmlTextSize(document, widthPt: 512.5, heightPt: 240.25);
