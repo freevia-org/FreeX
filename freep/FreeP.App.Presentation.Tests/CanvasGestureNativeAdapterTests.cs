@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class CanvasGestureNativeAdapterTests
@@ -13,20 +15,6 @@ public sealed class CanvasGestureNativeAdapterTests
         CanvasGestureKey expected)
     {
         CanvasGestureNativeInputMapper.MapKeyName(keyName).Should().Be(expected);
-    }
-
-    [Fact]
-    public void MapModifiers_CombinesPortableFlags()
-    {
-        CanvasGestureNativeInputMapper.MapModifiers(
-                shift: true,
-                control: false,
-                alt: true,
-                meta: true)
-            .Should().Be(
-                CanvasGestureModifiers.Shift |
-                CanvasGestureModifiers.Alt |
-                CanvasGestureModifiers.Meta);
     }
 
     [Fact]

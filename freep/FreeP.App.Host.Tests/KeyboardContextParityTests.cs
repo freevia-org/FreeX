@@ -1,3 +1,4 @@
+using Free.Shared.Shell.Wpf;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -20,7 +21,7 @@ public sealed class KeyboardContextParityTests
                 .Select(gesture => (gesture.Key, gesture.Modifiers))
                 .ToArray();
             var expected = FreePKeyboardShortcutCatalog.All
-                .Select(shortcut => (ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers)))
+                .Select(shortcut => (ToWpfKey(shortcut.Key), WpfKeyModifiersMapper.ToWpf(shortcut.Modifiers)))
                 .ToArray();
 
             actual.Should().HaveCount(18);
@@ -216,16 +217,4 @@ public sealed class KeyboardContextParityTests
         ReusableFreePMainWindowSession.Run(assertion);
 
     private static Key ToWpfKey(FreePKeyboardKey key) => Enum.Parse<Key>(key.ToString());
-
-    private static ModifierKeys ToWpfModifiers(FreePKeyboardModifiers modifiers)
-    {
-        var result = ModifierKeys.None;
-        if ((modifiers & FreePKeyboardModifiers.Control) != 0)
-            result |= ModifierKeys.Control;
-        if ((modifiers & FreePKeyboardModifiers.Shift) != 0)
-            result |= ModifierKeys.Shift;
-        if ((modifiers & FreePKeyboardModifiers.Alt) != 0)
-            result |= ModifierKeys.Alt;
-        return result;
-    }
 }

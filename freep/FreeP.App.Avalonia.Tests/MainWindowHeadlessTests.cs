@@ -7006,11 +7006,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
             addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,
-                SmartArtTextPaneShortcutModifiers.None,
+                FreeKeyModifiers.None,
                 "n1");
             addChild = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,
-                SmartArtTextPaneShortcutModifiers.Control,
+                FreeKeyModifiers.Control,
                 "n2");
             window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveUp, "n2")!.Applied.Should().BeTrue();
             window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.MoveDown, "n2")!.Applied.Should().BeTrue();
@@ -7018,7 +7018,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
             window.ApplySmartArtTextPaneEditForTests(SmartArtNodeEditKind.Demote, "freep-smartart-node-3")!.Applied.Should().BeTrue();
             var delete = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Delete,
-                SmartArtTextPaneShortcutModifiers.None,
+                FreeKeyModifiers.None,
                 "freep-smartart-node-3");
             delete!.Applied.Should().BeTrue();
             delete.Kind.Should().Be(SmartArtNodeEditKind.Remove);

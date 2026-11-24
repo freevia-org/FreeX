@@ -15,21 +15,5 @@ public static class CanvasGestureNativeInputMapper
         _ => CanvasGestureKey.None,
     };
 
-    public static CanvasGestureModifiers MapModifiers(
-        bool shift,
-        bool control,
-        bool alt,
-        bool meta)
-    {
-        var modifiers = CanvasGestureModifiers.None;
-        if (shift)
-            modifiers |= CanvasGestureModifiers.Shift;
-        if (control)
-            modifiers |= CanvasGestureModifiers.Control;
-        if (alt)
-            modifiers |= CanvasGestureModifiers.Alt;
-        if (meta)
-            modifiers |= CanvasGestureModifiers.Meta;
-        return modifiers;
-    }
+
 }

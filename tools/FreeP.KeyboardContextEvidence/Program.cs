@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Text;
 using Free.Shared.Ribbon;
 using Free.ToolsShared;
@@ -102,11 +103,11 @@ static void AppendMenu(
 static string FormatGesture(FreePKeyboardShortcut shortcut)
 {
     var parts = new List<string>();
-    if (shortcut.Modifiers.HasFlag(FreePKeyboardModifiers.Control))
+    if (shortcut.Modifiers.HasFlag(FreeKeyModifiers.Control))
         parts.Add("Ctrl");
-    if (shortcut.Modifiers.HasFlag(FreePKeyboardModifiers.Shift))
+    if (shortcut.Modifiers.HasFlag(FreeKeyModifiers.Shift))
         parts.Add("Shift");
-    if (shortcut.Modifiers.HasFlag(FreePKeyboardModifiers.Alt))
+    if (shortcut.Modifiers.HasFlag(FreeKeyModifiers.Alt))
         parts.Add("Alt");
     parts.Add(shortcut.Key.ToString());
     return string.Join('+', parts);

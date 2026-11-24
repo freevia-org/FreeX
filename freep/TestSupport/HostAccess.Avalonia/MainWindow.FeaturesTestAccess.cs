@@ -142,7 +142,7 @@ public sealed partial class MainWindow
 
     internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         string? modelId = null)
     {
         if (modelId is not null)

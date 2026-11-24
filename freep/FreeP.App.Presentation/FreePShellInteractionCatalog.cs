@@ -3,15 +3,6 @@ using Free.Shared.Shell;
 
 namespace FreeP.App.Compositor;
 
-[Flags]
-public enum FreePKeyboardModifiers
-{
-    None = 0,
-    Control = 1,
-    Shift = 2,
-    Alt = 4,
-}
-
 public enum FreePKeyboardKey
 {
     A,
@@ -58,7 +49,7 @@ public enum FreePKeyboardCommand
 public readonly record struct FreePKeyboardShortcut(
     FreePKeyboardCommand Command,
     FreePKeyboardKey Key,
-    FreePKeyboardModifiers Modifiers);
+    FreeKeyModifiers Modifiers);
 
 /// <summary>
 /// Host-neutral main-window shortcut contract shared by the WPF and Avalonia shells.
@@ -68,34 +59,34 @@ public static class FreePKeyboardShortcutCatalog
 {
     private static readonly FreePKeyboardShortcut[] Shortcuts =
     [
-        new(FreePKeyboardCommand.NewPresentation, FreePKeyboardKey.N, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.OpenPresentation, FreePKeyboardKey.O, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.SavePresentation, FreePKeyboardKey.S, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.SavePresentationAs, FreePKeyboardKey.S, FreePKeyboardModifiers.Control | FreePKeyboardModifiers.Shift),
-        new(FreePKeyboardCommand.PrintPresentation, FreePKeyboardKey.P, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Undo, FreePKeyboardKey.Z, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Redo, FreePKeyboardKey.Y, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Redo, FreePKeyboardKey.Z, FreePKeyboardModifiers.Control | FreePKeyboardModifiers.Shift),
-        new(FreePKeyboardCommand.DeleteSelectedShapes, FreePKeyboardKey.Delete, FreePKeyboardModifiers.None),
-        new(FreePKeyboardCommand.DuplicateCurrentSlide, FreePKeyboardKey.D, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.StartSlideShowFromBeginning, FreePKeyboardKey.F5, FreePKeyboardModifiers.None),
-        new(FreePKeyboardCommand.StartSlideShowFromCurrentSlide, FreePKeyboardKey.F5, FreePKeyboardModifiers.Shift),
-        new(FreePKeyboardCommand.Copy, FreePKeyboardKey.C, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Cut, FreePKeyboardKey.X, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Paste, FreePKeyboardKey.V, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Find, FreePKeyboardKey.F, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.Replace, FreePKeyboardKey.H, FreePKeyboardModifiers.Control),
-        new(FreePKeyboardCommand.SelectAll, FreePKeyboardKey.A, FreePKeyboardModifiers.Control),
+        new(FreePKeyboardCommand.NewPresentation, FreePKeyboardKey.N, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.OpenPresentation, FreePKeyboardKey.O, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.SavePresentation, FreePKeyboardKey.S, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.SavePresentationAs, FreePKeyboardKey.S, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        new(FreePKeyboardCommand.PrintPresentation, FreePKeyboardKey.P, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Undo, FreePKeyboardKey.Z, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Redo, FreePKeyboardKey.Y, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Redo, FreePKeyboardKey.Z, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        new(FreePKeyboardCommand.DeleteSelectedShapes, FreePKeyboardKey.Delete, FreeKeyModifiers.None),
+        new(FreePKeyboardCommand.DuplicateCurrentSlide, FreePKeyboardKey.D, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.StartSlideShowFromBeginning, FreePKeyboardKey.F5, FreeKeyModifiers.None),
+        new(FreePKeyboardCommand.StartSlideShowFromCurrentSlide, FreePKeyboardKey.F5, FreeKeyModifiers.Shift),
+        new(FreePKeyboardCommand.Copy, FreePKeyboardKey.C, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Cut, FreePKeyboardKey.X, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Paste, FreePKeyboardKey.V, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Find, FreePKeyboardKey.F, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.Replace, FreePKeyboardKey.H, FreeKeyModifiers.Control),
+        new(FreePKeyboardCommand.SelectAll, FreePKeyboardKey.A, FreeKeyModifiers.Control),
     ];
 
     private static readonly ApplicationKeyboardShortcutCatalog<
         FreePKeyboardCommand,
         FreePKeyboardKey,
-        FreePKeyboardModifiers> Resolver = new(
+        FreeKeyModifiers> Resolver = new(
             Shortcuts.Select(shortcut => new ApplicationKeyboardShortcut<
                 FreePKeyboardCommand,
                 FreePKeyboardKey,
-                FreePKeyboardModifiers>(
+                FreeKeyModifiers>(
                     shortcut.Command,
                     shortcut.Key,
                     shortcut.Modifiers)));
@@ -104,12 +95,12 @@ public static class FreePKeyboardShortcutCatalog
 
     public static FreePKeyboardCommand? Resolve(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         Resolver.Resolve(key, modifiers);
 
     public static bool TryDispatch(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers,
+        FreeKeyModifiers modifiers,
         Action<FreePKeyboardCommand> dispatch) =>
         Resolver.TryDispatch(key, modifiers, dispatch);
 }
@@ -193,14 +184,14 @@ public static class FreePContextMenuCatalog
 
     public static bool IsKeyboardInvocation(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers) =>
-        key == FreePKeyboardKey.Apps && modifiers == FreePKeyboardModifiers.None ||
-        key == FreePKeyboardKey.F10 && modifiers == FreePKeyboardModifiers.Shift;
+        FreeKeyModifiers modifiers) =>
+        key == FreePKeyboardKey.Apps && modifiers == FreeKeyModifiers.None ||
+        key == FreePKeyboardKey.F10 && modifiers == FreeKeyModifiers.Shift;
 
     public static bool IsKeyboardDismissal(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers) =>
-        key == FreePKeyboardKey.Escape && modifiers == FreePKeyboardModifiers.None;
+        FreeKeyModifiers modifiers) =>
+        key == FreePKeyboardKey.Escape && modifiers == FreeKeyModifiers.None;
 
     private static FreePContextMenuEntryPlan Command(
         FreePContextMenuCommand command,

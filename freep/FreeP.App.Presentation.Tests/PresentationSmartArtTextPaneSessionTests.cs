@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Text;
 
 namespace FreeP.App.Compositor.Tests;
@@ -61,7 +62,7 @@ public sealed class PresentationSmartArtTextPaneSessionTests
         session.SelectModel("n1");
         var keyboard = session.ApplyKeyboardRoute(
             SmartArtTextPaneShortcutKey.Enter,
-            SmartArtTextPaneShortcutModifiers.None);
+            FreeKeyModifiers.None);
 
         keyboard!.Applied.Should().BeTrue(keyboard.Message);
         session.LastKeyboardRoute!.RouteId.Should().Be("smartart.text-pane.enter.add-sibling-after");

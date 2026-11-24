@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -956,7 +957,7 @@ public sealed partial class MainWindow : Window
         {
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],
-                new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
+                new KeyGesture(ToWpfKey(shortcut.Key), WpfKeyModifiersMapper.ToWpf(shortcut.Modifiers))));
         }
     }
 
@@ -1075,17 +1076,7 @@ public sealed partial class MainWindow : Window
         _ => throw new ArgumentOutOfRangeException(nameof(key), key, null),
     };
 
-    private static ModifierKeys ToWpfModifiers(FreeWKeyboardModifiers modifiers)
-    {
-        var result = ModifierKeys.None;
-        if ((modifiers & FreeWKeyboardModifiers.Control) != 0)
-            result |= ModifierKeys.Control;
-        if ((modifiers & FreeWKeyboardModifiers.Shift) != 0)
-            result |= ModifierKeys.Shift;
-        if ((modifiers & FreeWKeyboardModifiers.Alt) != 0)
-            result |= ModifierKeys.Alt;
-        return result;
-    }
+
 
     // Show the Word-style Backstage (File screen) over the document.
     private void ShowBackstage()
