@@ -27,7 +27,7 @@ public sealed class R164_ScriptRunnerTimeoutTests
 
         var stopwatch = Stopwatch.StartNew();
         var act = () => TestProcessRunner.Run(
-            "powershell.exe",
+            PowerShellScriptRunner.DefaultExecutable,
             $"-NoProfile -ExecutionPolicy Bypass -File \"{scriptPath}\"",
             directory.Path,
             TimeSpan.FromSeconds(3));
@@ -58,6 +58,25 @@ public sealed class R164_ScriptRunnerTimeoutTests
     {
         // Pins the intent: this bound exists to catch a stall, not to police slow machines.
         TestProcessRunner.ScriptTimeout.Should().BeGreaterThanOrEqualTo(TimeSpan.FromMinutes(5));
+    }
+}
+
+public sealed class PowerShellResultDiagnosticTests
+{
+    [Theory]
+    [InlineData("Validation failed: exact commit abc123.\r\n", "Validation failed: exact commit abc123. ")]
+    [InlineData("     | Validation failed: exact\n     | commit abc123.\n", "Validation failed: exact commit abc123. ")]
+    [InlineData("     | Validation failed: exact\r\n     | commit abc123.\r\n", "Validation failed: exact commit abc123. ")]
+    [InlineData("     | Expected runner windows | linux.\n", "Expected runner windows | linux. ")]
+    public void NormalizedCombinedOutput_PreservesDiagnosticTextAcrossPowerShellRenderers(string error, string expected)
+    {
+        const string output = "validation started\n";
+        var result = new PowerShellResult(1, output, error);
+
+        result.NormalizedCombinedOutput.Should().Be("validation started " + expected);
+        result.Output.Should().Be(output);
+        result.Error.Should().Be(error);
+        result.CombinedOutput.Should().Be(output + error);
     }
 }
 

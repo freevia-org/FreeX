@@ -92,7 +92,7 @@ public sealed class UserTestPublishScriptTests
             $"-PublishMode Msix -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
+        result.NormalizedCombinedOutput.Should().Contain("MSIX packages require MsixCertificatePath; pass -AllowUnsignedMsix only for local packaging validation.");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
@@ -106,7 +106,7 @@ public sealed class UserTestPublishScriptTests
             $"-PublishMode Msix -MsixCertificatePassword \"placeholder\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("MSIX signing options require MsixCertificatePath");
+        result.NormalizedCombinedOutput.Should().Contain("MSIX signing options require MsixCertificatePath");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
@@ -124,7 +124,7 @@ public sealed class UserTestPublishScriptTests
             $"-PublishMode Msix -MsixCertificatePath \"{certificateDirectory}\" -Version 0.8.0 -OutputRoot \"{outputDirectory}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("MsixCertificatePath must reference an existing certificate file");
+        result.NormalizedCombinedOutput.Should().Contain("MsixCertificatePath must reference an existing certificate file");
         Directory.GetFileSystemEntries(outputDirectory).Should().BeEmpty();
     }
 
@@ -138,7 +138,7 @@ public sealed class UserTestPublishScriptTests
             $"-PublishMode Msix -MsixTimestampUrl \"file:///local/timestamp\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
+        result.NormalizedCombinedOutput.Should().Contain("MsixTimestampUrl must be an absolute http or https URL");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 
@@ -152,8 +152,8 @@ public sealed class UserTestPublishScriptTests
             $"-RuntimeIdentifier \"..\\outside\" -Version 0.8.0 -OutputRoot \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
-        result.CombinedOutput.Should().Contain("path separators");
+        result.NormalizedCombinedOutput.Should().Contain("RuntimeIdentifier must contain only letters, numbers, dots, and hyphens");
+        result.NormalizedCombinedOutput.Should().Contain("path separators");
         Directory.GetFileSystemEntries(temp.Path).Should().BeEmpty();
     }
 

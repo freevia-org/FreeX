@@ -357,9 +357,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path, "-DistributionCandidate");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("codesign_mode=developer-id");
-        result.CombinedOutput.Should().Contain("notarization_status=accepted");
-        result.CombinedOutput.Should().Contain("stapler_validated=true");
+        result.NormalizedCombinedOutput.Should().Contain("codesign_mode=developer-id");
+        result.NormalizedCombinedOutput.Should().Contain("notarization_status=accepted");
+        result.NormalizedCombinedOutput.Should().Contain("stapler_validated=true");
     }
 
     [Fact]
@@ -393,10 +393,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path, "-DistributionCandidate");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("gatekeeper_assessment_exit_code=0");
-        result.CombinedOutput.Should().Contain("gatekeeper_assessment_status=accepted");
-        result.CombinedOutput.Should().Contain("gatekeeper_assessment_source");
-        result.CombinedOutput.Should().Contain("Notarized");
+        result.NormalizedCombinedOutput.Should().Contain("gatekeeper_assessment_exit_code=0");
+        result.NormalizedCombinedOutput.Should().Contain("gatekeeper_assessment_status=accepted");
+        result.NormalizedCombinedOutput.Should().Contain("gatekeeper_assessment_source");
+        result.NormalizedCombinedOutput.Should().Contain("Notarized");
     }
 
     [Fact]
@@ -410,7 +410,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("gatekeeper_assessment_attempted=true");
+        result.NormalizedCombinedOutput.Should().Contain("gatekeeper_assessment_attempted=true");
     }
 
     [Fact]
@@ -423,10 +423,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path, "-DistributionCandidate");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("must not include internal-preview-only");
-        result.CombinedOutput.Should().Contain("guidance");
-        result.CombinedOutput.Should().Contain("For artifact_channel=internal-preview");
-        result.CombinedOutput.Should().Contain("Control-click or right-click > Open");
+        result.NormalizedCombinedOutput.Should().Contain("must not include internal-preview-only");
+        result.NormalizedCombinedOutput.Should().Contain("guidance");
+        result.NormalizedCombinedOutput.Should().Contain("For artifact_channel=internal-preview");
+        result.NormalizedCombinedOutput.Should().Contain("Control-click or right-click > Open");
     }
 
     [Fact]
@@ -439,8 +439,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path, "-DistributionCandidate -RequireReleasePublicationArtifact");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
-        result.CombinedOutput.Should().Contain("FreeX-latest-macos-distribution-candidate-instructions.md");
+        result.NormalizedCombinedOutput.Should().Contain("FreeX-latest-macos-distribution-candidate-manifest.json");
+        result.NormalizedCombinedOutput.Should().Contain("FreeX-latest-macos-distribution-candidate-instructions.md");
     }
 
     [Fact]
@@ -460,8 +460,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("format_cells_style_roundtrip_count");
-        result.CombinedOutput.Should().Contain("at least two Format Cells style roundtrip confirmations");
+        result.NormalizedCombinedOutput.Should().Contain("format_cells_style_roundtrip_count");
+        result.NormalizedCombinedOutput.Should().Contain("at least two Format Cells style roundtrip confirmations");
     }
 
     [Theory]
@@ -613,8 +613,8 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("checksum file hash must match");
-        result.CombinedOutput.Should().Contain("zip_sha256");
+        result.NormalizedCombinedOutput.Should().Contain("checksum file hash must match");
+        result.NormalizedCombinedOutput.Should().Contain("zip_sha256");
     }
 
     [Fact]
@@ -664,9 +664,9 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("osx-arm64 app artifact is incomplete");
-        result.CombinedOutput.Should().Contain("freex-osx-arm64-macos-evidence.txt");
-        result.CombinedOutput.Should().Contain("GitHub Actions artifact wrapper first");
+        result.NormalizedCombinedOutput.Should().Contain("osx-arm64 app artifact is incomplete");
+        result.NormalizedCombinedOutput.Should().Contain("freex-osx-arm64-macos-evidence.txt");
+        result.NormalizedCombinedOutput.Should().Contain("GitHub Actions artifact wrapper first");
     }
 
     [Fact]
@@ -680,12 +680,12 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("osx-arm64 has multiple downloaded macOS app artifact bundles");
-        result.CombinedOutput.Should().Contain("freex-41-1-osx-arm64-macos-app");
-        result.CombinedOutput.Should().Contain("freex-42-1-osx-arm64-macos-app");
-        result.CombinedOutput.Should().Contain("Remove stale");
-        result.CombinedOutput.Should().Contain("artifact");
-        result.CombinedOutput.Should().Contain("folders");
+        result.NormalizedCombinedOutput.Should().Contain("osx-arm64 has multiple downloaded macOS app artifact bundles");
+        result.NormalizedCombinedOutput.Should().Contain("freex-41-1-osx-arm64-macos-app");
+        result.NormalizedCombinedOutput.Should().Contain("freex-42-1-osx-arm64-macos-app");
+        result.NormalizedCombinedOutput.Should().Contain("Remove stale");
+        result.NormalizedCombinedOutput.Should().Contain("artifact");
+        result.NormalizedCombinedOutput.Should().Contain("folders");
     }
 
     [Fact]
@@ -716,10 +716,10 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         var result = RunPreflight(temp.Path);
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain("mixed GitHub Actions runs");
-        result.CombinedOutput.Should().Contain("osx-arm64 uses run 42");
-        result.CombinedOutput.Should().Contain("osx-x64 uses run 41");
-        result.CombinedOutput.Should().Contain("cleanup_action=remove_stale_artifact_folders");
+        result.NormalizedCombinedOutput.Should().Contain("mixed GitHub Actions runs");
+        result.NormalizedCombinedOutput.Should().Contain("osx-arm64 uses run 42");
+        result.NormalizedCombinedOutput.Should().Contain("osx-x64 uses run 41");
+        result.NormalizedCombinedOutput.Should().Contain("cleanup_action=remove_stale_artifact_folders");
     }
 
     private static PowerShellResult RunPreflight(string artifactRoot, string arguments = "")
@@ -1357,7 +1357,7 @@ public sealed class MacOsPublicPreviewReadinessPreflightTests
         result.ExitCode.Should().NotBe(0);
         foreach (var needle in expectedNeedles)
         {
-            result.CombinedOutput.Should().Contain(needle);
+            result.NormalizedCombinedOutput.Should().Contain(needle);
         }
     }
 

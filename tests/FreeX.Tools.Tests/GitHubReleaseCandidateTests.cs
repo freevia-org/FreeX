@@ -38,7 +38,7 @@ public sealed class GitHubReleaseCandidateTests
             $"-Repository owner/repo -CommitSha {CommitSha} -RunMetadataDirectory \"{temp.Path}\"");
 
         result.ExitCode.Should().NotBe(0);
-        result.CombinedOutput.Should().Contain(
+        result.NormalizedCombinedOutput.Should().Contain(
             $"No successful completed 'codeql.yml' run exists for exact commit {CommitSha}.");
     }
 
