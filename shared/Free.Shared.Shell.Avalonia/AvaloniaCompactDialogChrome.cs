@@ -250,6 +250,13 @@ public static class AvaloniaCompactDialogChrome
     public static IBrush? DefaultTextSelectionForegroundBrush { get; set; }
 
     /// <summary>
+    /// Product-wide ink for plain, unstyled body labels (TextBlocks). WPF dialogs leave those on the
+    /// system text colour while styled controls use the themed text brush, so a product whose WPF
+    /// labels are pure black sets this. Null keeps the themed text brush for labels too.
+    /// </summary>
+    public static IBrush? DefaultLabelForegroundBrush { get; set; }
+
+    /// <summary>
     /// Product-wide list row floor used when a chrome style leaves the shared token default in place
     /// and does not set <see cref="AvaloniaCompactDialogChromeStyle.KeepListRowMinHeight"/>.
     /// Null keeps the token for every caller.
@@ -383,7 +390,7 @@ public static class AvaloniaCompactDialogChrome
                 // brush here outranks the template's disabled/hover foreground, which left the
                 // caption of a disabled button painted in enabled ink.
                 if (!textBlock.IsSet(TextBlock.ForegroundProperty) && !IsPushButtonCaption(textBlock))
-                    textBlock.Foreground = ThemeTextBrush(style);
+                    textBlock.Foreground = DefaultLabelForegroundBrush ?? ThemeTextBrush(style);
             }
 
             switch (control)

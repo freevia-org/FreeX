@@ -27667,31 +27667,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             dialog,
             presentation.DialogAutomationId);
 
+        // Mirrors the WPF MergeCellsContentWarningDialog (ground truth): compact message, cell-text
+        // preview, then the button row, with the same 8/12/14 vertical rhythm.
         var root = new StackPanel
         {
-            Margin = new Thickness(18),
-            Spacing = 12
+            Margin = new Thickness(18)
         };
 
         root.Children.Add(new TextBlock
         {
             Text = presentation.PrimaryMessage,
-            FontWeight = FontWeight.SemiBold,
-            TextWrapping = TextWrapping.Wrap
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 8)
         });
 
         root.Children.Add(new TextBlock
         {
-            Text = presentation.DetailedGuidanceMessage,
-            TextWrapping = TextWrapping.Wrap
+            Text = presentation.CompactGuidanceMessage,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 12)
         });
 
-        if (presentation.EntryCountText is not null)
+        if (!string.IsNullOrWhiteSpace(presentation.PreviewText))
         {
             root.Children.Add(new TextBlock
             {
-                Text = presentation.EntryCountText,
-                Foreground = Brushes.DimGray
+                Text = presentation.PreviewText,
+                TextWrapping = TextWrapping.Wrap,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 0, 0, 14)
             });
         }
 
@@ -27699,8 +27703,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Spacing = 8,
-            Margin = new Thickness(0, 8, 0, 0)
+            Spacing = 8
         };
 
         var keepFirstButton = new Button

@@ -511,6 +511,8 @@ internal static class DialogWindowDefaults
         };
         AvaloniaCompactDialogChrome.DefaultTextSelectionBrush = TextSelection;
         AvaloniaCompactDialogChrome.DefaultTextSelectionForegroundBrush = DialogControlStyles.SelectionForegroundBrush;
+        // WPF FreeX dialogs draw plain body labels in pure black (only styled controls use #1F1F1F).
+        AvaloniaCompactDialogChrome.DefaultLabelForegroundBrush = Brushes.Black;
         AvaloniaCompactDialogChrome.DefaultListRowMinHeight = DialogListRowMinHeight;
         AvaloniaCompactDialogChrome.DefaultFocusedInputBorderBrush = FocusedTextBoxFrame;
         AvaloniaCompactDialogChrome.DefaultInactiveSelectedItemBackgroundBrush = InactiveListBoxRowFace;
