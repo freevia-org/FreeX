@@ -367,6 +367,7 @@ internal sealed class AvaloniaAutosaveCoordinator
 
     private readonly IDisposable _emergencySnapshotRegistration;
     private readonly AutosaveService _service;
+    private readonly MainWindow _mainWindow;
     private DispatcherTimer? _timer;
     private bool _closed;
 
@@ -375,6 +376,7 @@ internal sealed class AvaloniaAutosaveCoordinator
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(store);
 
+        _mainWindow = mainWindow;
         _service = new AutosaveService(store);
         _service.Attach(mainWindow, Guid.NewGuid());
         _emergencySnapshotRegistration = EmergencySnapshots.Register(this);
@@ -390,8 +392,16 @@ internal sealed class AvaloniaAutosaveCoordinator
         {
             Interval = AutosaveService.DefaultInterval
         };
-        _timer.Tick += (_, _) => _service.OnTimerTick();
+        _timer.Tick += (_, _) => OnTimerTick();
         _timer.Start();
+    }
+
+    internal void OnTimerTick()
+    {
+        if (_closed || _mainWindow.ShouldSkipAutosaveTickForSave)
+            return;
+
+        _service.OnTimerTick();
     }
 
     /// <summary>Attempts an emergency snapshot for every live workbook view.</summary>

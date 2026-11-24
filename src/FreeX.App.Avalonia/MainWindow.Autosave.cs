@@ -8,6 +8,10 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow : IAutosaveWorkbookSource
 {
+    // The saving window broadcasts this flag to every view of its shared workbook. Periodic
+    // autosave must not reconcile view state or serialize that workbook while a save reads it.
+    internal bool ShouldSkipAutosaveTickForSave => _isSaving;
+
     Workbook IAutosaveWorkbookSource.Workbook => _session.Workbook;
     string? IAutosaveWorkbookSource.CurrentFilePath => _session.CurrentFilePath;
     string IAutosaveWorkbookSource.DisplayName => _session.DisplayName;

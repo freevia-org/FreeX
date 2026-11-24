@@ -27,7 +27,9 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 public sealed class R66_ClipboardHtmlReadPasteTests
 {
-    private static readonly DataFormat<string> HtmlPlatformFormat = DataFormat.CreateStringPlatformFormat("text/html");
+    // The native macOS backend exposes public.html, while other platforms expose the MIME name.
+    private static readonly DataFormat<string> HtmlPlatformFormat = DataFormat.CreateStringPlatformFormat(
+        OperatingSystem.IsMacOS() ? "public.html" : "text/html");
     private static readonly DataFormat<string> HtmlWindowsPlatformFormat = DataFormat.CreateStringPlatformFormat("HTML Format");
 
     [Fact]

@@ -65,11 +65,14 @@ public sealed partial class MainWindow : Window
 
     internal void RefreshFromSharedWorkbook()
     {
+        // Hidden views still own recovery snapshots. A clean shared document must retire those
+        // snapshots too; only the visual refresh depends on whether this window is visible.
+        if (!_session.IsDirty)
+            _autosaveCoordinator?.NotifyAutosaveSaved();
+
         if (!IsVisible)
             return;
 
-        if (!_session.IsDirty)
-            _autosaveCoordinator?.NotifyAutosaveSaved();
         RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
     }
 

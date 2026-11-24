@@ -92,6 +92,48 @@ public sealed partial class MainWindow
             FormatCellReference(_session.ActiveCell)));
     }
 
+    private void ResolveContextThreadedComment(CellAddress address, bool resolved) =>
+        ApplyContextCellReviewCommand(
+            address,
+            target => new ResolveThreadedCommentCommand(target.Sheet, target, resolved),
+            UiText.Format(resolved ? "Comment_Resolved" : "Comment_Unresolved", FormatCellReference(address)),
+            UiText.Get("Comment_CommentFailed"));
+
+    private void ToggleContextCellNoteVisibility(CellAddress address) =>
+        ApplyContextCellReviewCommand(
+            address,
+            target => new ShowHideCommentCommand(target.Sheet, target),
+            UiText.Get("Comment_ToggledNoteVisibility"),
+            UiText.Get("Comment_NoNote"));
+
+    private void ApplyContextCellReviewCommand(
+        CellAddress address,
+        Func<CellAddress, IWorkbookCommand> createCommand,
+        string status,
+        string fallbackError)
+    {
+        if (_isOpening || _isSaving || address.Sheet != _session.ActiveSheet.Id || !TryCommitPendingFormulaEdit())
+            return;
+
+        // The menu belongs to the clicked cell, even inside a preserved multi-cell selection.
+        // Repeat Last follows the then-current selection, while the first execution uses that target.
+        var initialExecution = true;
+        var result = _session.ExecuteRepeatableCommandPreservingSelection(() =>
+        {
+            var target = initialExecution ? address : _session.SelectedRange.Start;
+            initialExecution = false;
+            return createCommand(target);
+        });
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? fallbackError);
+            return;
+        }
+
+        ApplyReviewRefreshPlan(
+            ReviewSessionController.CreateRefreshPlan(mutationApplied: !result.IsNoOp), status);
+    }
+
     private void ConvertNotesToComments()
     {
         if (_isOpening || _isSaving)

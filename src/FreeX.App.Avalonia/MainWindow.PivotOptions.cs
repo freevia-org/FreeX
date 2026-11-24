@@ -87,7 +87,17 @@ public sealed partial class MainWindow
         RunGuarded(() => OpenPivotTableOptionsDialogAsync(pivot!));
     }
 
-    private async Task OpenPivotTableOptionsDialogAsync(PivotTableModel pivot)
+    private void OpenPivotTableOptions(CellAddress address)
+    {
+        if (_isOpening || _isSaving || address.Sheet != _session.ActiveSheet.Id || !TryCommitPendingFormulaEdit())
+            return;
+
+        var pivot = PivotUiPlanner.FindPivotTableContainingCell(_session.ActiveSheet, address);
+        if (pivot is not null)
+            RunGuarded(() => OpenPivotTableOptionsDialogAsync(pivot, preserveSelection: true));
+    }
+
+    private async Task OpenPivotTableOptionsDialogAsync(PivotTableModel pivot, bool preserveSelection = false)
     {
         if (_isOpening || _isSaving)
             return;
@@ -473,11 +483,17 @@ public sealed partial class MainWindow
             errorValueText: errorValuesBox.Text,
             enableDrill: enableShowDetailsBox.IsChecked == true);
 
-        ApplyPivotApplicationPlan(
-            PivotApplication.PlanDialogOptions(
-                new PivotApplicationTarget(_session.ActiveSheet, pivot),
-                result),
-            "PivotTable options updated.");
+        var plan = PivotApplication.PlanDialogOptions(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot), result);
+        var application = preserveSelection ? CreatePivotApplicationSession(preserveSelection: true) : PivotApplication;
+        var outcome = application.Execute(plan);
+        if (!outcome.Success)
+        {
+            ShowPivotApplicationIssue(outcome.Message);
+            return;
+        }
+
+        ApplyPivotApplicationOutcome(outcome, "PivotTable options updated.");
     }
 
     // ── Pivot option control factories ────────────────────────────────────────
