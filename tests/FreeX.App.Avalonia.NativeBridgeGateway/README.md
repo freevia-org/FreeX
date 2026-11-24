@@ -10,7 +10,6 @@ Prerequisites:
   linked FreeX worktree on the external disk; keep outputs/cache separate from ordinary builds.
 - The exact reviewed Avalonia Grid package set required by the current pins, with the repository
   dependency bootstrap already provisioned. `AVALONIA_GRID_FEED` points to its verified nupkgs.
-  Distribution approval is separate; this README does not supply or authorize a publication URL.
 - `AVALONIA_SOURCE` points to the reused matching patched Avalonia source worktree, including the
   generated `native/Avalonia.Native/inc/avalonia-native.h`. Generate it through the matching
   review archive's reproduction recipe; do not mix official12.0.4 headers with new extension IDs.
