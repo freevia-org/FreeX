@@ -100,19 +100,19 @@ public sealed class DocumentViewPasteImageTextTests
         imageSurvivesUndo.Should().BeTrue("the earlier image paste is a separate undo step");
     }
 
-    // ── Sibling / no-regression: an equation-bearing paragraph must stay refused ─────────────────────
+    // ── Sibling: typing beside an equation preserves its structural run and one-step history ────────
 
     [Fact]
-    public async Task InsertText_into_a_paragraph_with_an_equation_still_no_ops()
+    public async Task InsertText_beside_an_equation_preserves_its_identity_and_undoes_only_text()
     {
-        string? plainTextAfter = null;
-
         var ran = await OnUiThread(() =>
         {
             var document = TextDocument.CreateEmpty();
             document.Blocks.Clear();
             var paragraph = new Paragraph();
-            paragraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Equation = Equation.FromText("x^2") });
+            var equation = Equation.FromText("x^2");
+            var equationRun = new Run(string.Empty, RunFormatting.Default) { Equation = equation };
+            paragraph.Runs.Add(equationRun);
             document.Blocks.Add(paragraph);
             var view = new DocumentView();
             view.LoadDocument(document);
@@ -121,13 +121,28 @@ public sealed class DocumentViewPasteImageTextTests
             view.MoveCaretToBlockForTest(0, 0);
             view.InsertText("hello");
 
-            plainTextAfter = view.Document.Paragraphs.Single().PlainText;
+            paragraph.PlainText.Should().Be("hello");
+            paragraph.Runs.First().Text.Should().Be("hello");
+            paragraph.Runs.Last().Should().BeSameAs(equationRun);
+            equationRun.Equation.Should().BeSameAs(equation);
+            equation.LinearText.Should().Be("x^2");
+            view.CaretOffsetForTest.Should().Be(5);
+            view.AutomationSnapshot().CaretOffset.Should().Be(5);
+
+            view.Undo();
+            paragraph.Runs.Should().ContainSingle().Which.Should().BeSameAs(equationRun);
+            equation.LinearText.Should().Be("x^2");
+            view.CaretOffsetForTest.Should().Be(0);
+            view.CanUndo.Should().BeFalse("the equation was fixture content, and typing is one edit");
+
+            view.Redo();
+            paragraph.PlainText.Should().Be("hello");
+            paragraph.Runs.Last().Should().BeSameAs(equationRun);
+            equation.LinearText.Should().Be("x^2");
+            view.CaretOffsetForTest.Should().Be(5);
         });
 
         if (!ran) return;
-        plainTextAfter.Should().Be(
-            string.Empty,
-            "a paragraph blocked by an equation (not merely an image) must keep the old silent-refusal behaviour");
     }
 
     // ── Sibling / no-regression: ordinary typing into a plain paragraph is unaffected ────────────────

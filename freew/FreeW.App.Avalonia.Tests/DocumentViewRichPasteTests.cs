@@ -118,6 +118,82 @@ public sealed class DocumentViewRichPasteTests
         view.Document.Paragraphs.Single().Runs.Should().ContainSingle();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Refused_rich_paste_restores_a_bookmarked_selection_and_history(bool reversed)
+    {
+        var paragraph = BookmarkedParagraph();
+        var view = LoadDocument(paragraph);
+        var runs = paragraph.Runs.ToArray();
+        var boundaries = paragraph.BookmarkBoundaries.ToArray();
+        view.SetBodySelectionForTest(0, reversed ? 2 : 1, 0, reversed ? 1 : 2);
+
+        view.PasteKeepSourceFormatting(ClipboardDocument()).Should().BeFalse();
+
+        paragraph.PlainText.Should().Be("abc");
+        paragraph.Runs.Should().Equal(runs);
+        paragraph.BookmarkNames.Should().ContainSingle().Which.Should().Be("selected-bookmark");
+        paragraph.BookmarkBoundaries.Should().Equal(boundaries);
+        view.SelectedText.Should().Be("b");
+        view.CaretOffsetForTest.Should().Be(reversed ? 1 : 2);
+        view.CanUndo.Should().BeFalse("a refused paste must not leave an applied deletion");
+        view.CanRedo.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Plain_fallback_after_refused_rich_paste_undoes_to_the_original_bookmarked_text(bool reversed)
+    {
+        var paragraph = BookmarkedParagraph();
+        var view = LoadDocument(paragraph);
+        var boundaries = paragraph.BookmarkBoundaries.ToArray();
+        view.SetBodySelectionForTest(0, reversed ? 2 : 1, 0, reversed ? 1 : 2);
+        view.PasteKeepSourceFormatting(ClipboardDocument()).Should().BeFalse();
+
+        view.PasteMergeFormatting("X").Should().BeTrue();
+        paragraph.PlainText.Should().Be("aXc");
+        view.Undo();
+
+        paragraph.PlainText.Should().Be("abc", "the rich-paste refusal must not strand its selection deletion");
+        paragraph.BookmarkBoundaries.Should().Equal(boundaries);
+        view.SelectedText.Should().Be("b");
+        view.CanUndo.Should().BeFalse("the plain fallback is exactly one undo unit");
+        view.Redo();
+        paragraph.PlainText.Should().Be("aXc");
+    }
+
+    [Fact]
+    public void Selected_rich_paste_in_an_existing_undo_group_declines_before_mutation()
+    {
+        var paragraph = BookmarkedParagraph();
+        var view = LoadDocument(paragraph);
+        var runs = paragraph.Runs.ToArray();
+        view.SetBodySelectionForTest(0, 1, 0, 2);
+        view.BeginFontUndoGroup();
+        try
+        {
+            view.PasteKeepSourceFormatting(ClipboardDocument()).Should().BeFalse();
+
+            paragraph.PlainText.Should().Be("abc");
+            paragraph.Runs.Should().Equal(runs);
+            view.SelectedText.Should().Be("b");
+            view.IsShapeEditPointUndoGroupOpenForTest.Should().BeTrue();
+            view.InsertText("Y");
+            view.CommitFontUndoGroup("Outer operation");
+            paragraph.PlainText.Should().Be("aYc");
+            view.Undo();
+            paragraph.PlainText.Should().Be("abc");
+            view.CanUndo.Should().BeFalse();
+        }
+        finally
+        {
+            if (view.IsShapeEditPointUndoGroupOpenForTest)
+                view.AbortFontUndoGroup();
+        }
+    }
+
     [Fact]
     public async Task A_copy_round_trip_through_the_shared_workflow_keeps_the_field()
     {
@@ -212,6 +288,15 @@ public sealed class DocumentViewRichPasteTests
         var paragraph = new Paragraph();
         if (text.Length > 0)
             paragraph.Runs.Add(new Run(text));
+        return paragraph;
+    }
+
+    private static Paragraph BookmarkedParagraph()
+    {
+        var paragraph = Paragraph("abc");
+        paragraph.BookmarkNames.Add("selected-bookmark");
+        paragraph.BookmarkBoundaries.Add(new("selected-pair", BookmarkBoundaryKind.Start, 0, "selected-bookmark"));
+        paragraph.BookmarkBoundaries.Add(new("selected-pair", BookmarkBoundaryKind.End, 1));
         return paragraph;
     }
 

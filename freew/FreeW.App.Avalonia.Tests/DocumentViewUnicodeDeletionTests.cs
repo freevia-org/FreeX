@@ -265,18 +265,34 @@ public sealed class DocumentViewUnicodeDeletionTests
         var (view, _, move) = CreateStory("body", "");
         var paragraph = StoryParagraph(view.Document, "body");
         paragraph.Runs.Clear();
-        paragraph.Runs.Add(new Run("e\u0301") { CommentId = 71 });
-        view.Document.Comments[71] = new Comment(71, "annotation", "reviewer", "R");
+        var anchor = new Run("e\u0301") { CommentId = 71 };
+        var reference = Run.CommentReference(71);
+        paragraph.Runs.AddRange([anchor, reference]);
+        paragraph.BookmarkNames.Add("annotation");
+        paragraph.BookmarkBoundaries.Add(new("annotation-pair", BookmarkBoundaryKind.Start, 0, "annotation"));
+        paragraph.BookmarkBoundaries.Add(new("annotation-pair", BookmarkBoundaryKind.End, 1));
+        var bookmarks = paragraph.BookmarkBoundaries.ToArray();
+        var comment = new Comment(71, "annotation", "reviewer", "R");
+        view.Document.Comments[71] = comment;
         view.LoadDocument(view.Document);
         move(2);
 
         view.BackspaceForTest();
 
-        view.Document.Comments.Should().ContainKey(71);
+        view.Document.Comments.Should().NotContainKey(71);
+        paragraph.Runs.Should().BeEmpty("the last real anchor and its dependent reference are removed together");
         view.Undo();
         StoryParagraph(view.Document, "body").PlainText.Should().Be("e\u0301");
-        StoryParagraph(view.Document, "body").Runs.Should().Contain(run => run.CommentId == 71);
-        view.Document.Comments.Should().ContainKey(71);
+        paragraph.Runs.Should().Equal(anchor, reference);
+        paragraph.BookmarkNames.Should().Equal("annotation");
+        paragraph.BookmarkBoundaries.Should().Equal(bookmarks);
+        view.Document.Comments[71].Should().BeSameAs(comment);
+        view.CaretOffsetForTest.Should().Be(2);
+        view.CanUndo.Should().BeFalse("comment cleanup belongs to the same single deletion history entry");
+        view.Redo();
+        view.Document.Comments.Should().NotContainKey(71);
+        paragraph.Runs.Should().BeEmpty();
+        view.CanRedo.Should().BeFalse();
     });
 
     private static (DocumentView View, Func<string> Text, Action<int> Move) CreateStory(string story, string content)

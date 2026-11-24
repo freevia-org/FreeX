@@ -75,8 +75,19 @@ public sealed partial class DocumentView
         {
             anchor = AccessibleDocumentLocation.Body(bodyAnchor.Block, bodyAnchor.Offset);
         }
-        return AccessibleDocumentSnapshotPlanner.Build(_doc, caret, anchor);
+        return AutomationBodySnapshot(caret, anchor);
     }
+
+    private AccessibleDocumentSnapshot AutomationBodySnapshot(
+        AccessibleDocumentLocation caret, AccessibleDocumentLocation? anchor = null) =>
+        AccessibleDocumentSnapshotPlanner.Build(_doc, caret, anchor, (location, paragraph) =>
+            KeyboardParagraphText(location.Region == AccessibleDocumentRegion.TableCell
+                ? new(paragraph, location.BlockIndex, location.Row, location.Column, location.ParagraphIndex)
+                : new(paragraph, location.BlockIndex)));
+
+    // ValuePattern continues to expose the complete body/table document even while a header or
+    // shape is active. Its text must nevertheless use the same resolved offsets as body ranges.
+    internal string AutomationValueText() => AutomationBodySnapshot(AccessibleDocumentLocation.Body(0, 0)).Text;
 
     internal DocumentAccessibilityTree AutomationSemanticTree() =>
         DocumentAccessibilityNodePlanner.Build(_doc);
@@ -124,6 +135,24 @@ public sealed partial class DocumentView
             return;
         }
 
+        // A semantic body/cell focus request changes the active story too. Leaving an
+        // old header or shape caret armed would route the next edit to that old story.
+        _hfCaret = null;
+        _hfSelectionAnchor = null;
+        _shapeCaret = null;
+        _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
+        _cellBlockAnchor = null;
+        _cellBlockFocus = null;
+        if (!IsAutomationDrawingNode(node.Kind))
+        {
+            _selectedFloating = null;
+            _selectedInlineObject = null;
+            _selectedFloatingGroupChild = null;
+            _selectedFloatingObjects.Clear();
+            RaiseFloatingSelectionChangedIfIdentityChanged();
+        }
+
         if (IsAutomationDrawingNode(node.Kind))
         {
             Focus();
@@ -168,13 +197,14 @@ public sealed partial class DocumentView
                 node.RowIndex,
                 node.ColumnIndex,
                 Math.Max(0, node.ParagraphIndex),
-                Math.Max(0, node.TextStart));
+                node.RunIndex >= 0 ? AutomationRunStartOffset(node) : Math.Max(0, node.TextStart));
         }
         else if (node.BlockIndex >= 0 && node.BlockIndex < _doc.Blocks.Count)
         {
             _cellCaret = null;
             _cellAnchor = null;
-            _caret = new DocPosition(node.BlockIndex, Math.Max(0, node.TextStart));
+            _caret = new DocPosition(node.BlockIndex,
+                node.RunIndex >= 0 ? AutomationRunStartOffset(node) : Math.Max(0, node.TextStart));
             _selectionAnchor = _caret;
             Focus();
             InvalidateVisual();
@@ -316,8 +346,19 @@ public sealed partial class DocumentView
             return 0;
         var offset = 0;
         for (var index = 0; index < Math.Min(node.RunIndex, paragraph.Runs.Count); index++)
-            offset += AutomationRunLayoutLength(paragraph.Runs[index]);
+            offset += AutomationResolvedRunLength(node, paragraph, index);
         return offset;
+    }
+
+    private int AutomationResolvedRunLength(DocumentAccessibilityNode node, Paragraph paragraph, int runIndex)
+    {
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body)
+            return AutomationRunLayoutLength(paragraph.Runs[runIndex]);
+        var single = new Paragraph();
+        single.Runs.Add(paragraph.Runs[runIndex]);
+        return KeyboardParagraphText(node.RowIndex >= 0
+            ? new(single, node.BlockIndex, node.RowIndex, node.ColumnIndex, Math.Max(0, node.ParagraphIndex))
+            : new(single, node.BlockIndex)).Length;
     }
 
     private static bool IsAutomationDrawingNode(DocumentAccessibilityNodeKind kind) =>
@@ -502,13 +543,16 @@ public sealed partial class DocumentView
 
     private (int Start, int Length) AutomationTextLayoutRange(DocumentAccessibilityNode node)
     {
-        if (node.Kind == DocumentAccessibilityNodeKind.TextRun)
+        if (node.Kind == DocumentAccessibilityNodeKind.TextRun && node.StoryKind != DocumentAccessibilityStoryKind.Body)
             return (Math.Max(0, node.TextStart), Math.Max(0, node.TextLength));
         if (AutomationNodeParagraph(node) is not { } paragraph)
             return (Math.Max(0, node.TextStart), Math.Max(0, node.TextLength));
         var start = 0;
         for (var index = 0; index < Math.Min(node.RunIndex, paragraph.Runs.Count); index++)
-            start += AutomationRunLayoutLength(paragraph.Runs[index]);
+            start += AutomationResolvedRunLength(node, paragraph, index);
+        if (node.Kind == DocumentAccessibilityNodeKind.TextRun)
+            return (start, node.RunIndex >= 0 && node.RunIndex < paragraph.Runs.Count
+                ? AutomationResolvedRunLength(node, paragraph, node.RunIndex) : 0);
         var length = 0;
         for (var index = Math.Max(0, node.RunIndex); index < paragraph.Runs.Count; index++)
         {
@@ -521,7 +565,7 @@ public sealed partial class DocumentView
                 : node.HelpText;
             if (!hasTarget || !string.Equals(run.HyperlinkTooltip, expectedTooltip, StringComparison.Ordinal))
                 break;
-            length += AutomationRunLayoutLength(run);
+            length += AutomationResolvedRunLength(node, paragraph, index);
         }
         return (start, length);
     }

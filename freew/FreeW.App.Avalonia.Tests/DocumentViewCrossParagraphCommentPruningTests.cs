@@ -5,33 +5,10 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia.Tests;
 
 /// <summary>
-/// r160 remediation, T1: <see cref="DocumentView.DeleteSelection"/>, <see cref="DocumentView.Backspace"/>
-/// and <see cref="DocumentView.DeleteForward"/> all try the shared
-/// <c>DocumentEditingSession.Body.TryApplyDeletion</c> fast path FIRST and return immediately once it
-/// succeeds -- so the orphaned-comment prune added to their local ParaCells fallback branches
-/// (<see cref="DocumentViewCommentPruningTests"/>) never ran for the ordinary case. That fallback is only
-/// reached when the shared session's portability gate (<c>DocumentEditingSession.IsPortableBodyTextParagraph</c>
-/// / <c>IsPortableBodyTextRun</c>) declines a paragraph -- which it only does when the paragraph itself holds
-/// the comment's textless <see cref="Run.IsCommentReference"/> run. It does NOT examine <see cref="Run.CommentId"/>
-/// on an ordinary anchored-text run, so a paragraph holding only a comment's highlighted text (no reference
-/// run) is portable and sails through the fast path untouched.
-///
-/// For a comment this app creates via <see cref="DocumentView.AddComment"/>, the anchor text and the
-/// reference run always land in the SAME paragraph (see <c>AddCommentCommand.MarkCommentRange</c>), which
-/// makes that paragraph non-portable and hides the gap -- every fast-path deletion of a commented paragraph
-/// in <see cref="DocumentViewCommentPruningTests"/> actually declines to the (already correct) fallback.
-/// A comment imported from a real Word .docx whose range crosses a paragraph boundary is different: DocxReader
-/// tracks the open comment range with a paragraph-local variable (see <c>DocxReader.ReadParagraph</c>'s
-/// <c>activeCommentId</c>), so it lands the anchored text in one paragraph and the reference run in the next.
-/// Deleting just the anchor paragraph is then fast-path-eligible and, before this fix, left the orphaned
-/// <see cref="TextDocument.Comments"/> entry lingering forever once nothing anywhere still carried its id.
-///
-/// Because the reference run's own paragraph is NEVER portable (i.e. never fast-path-eligible), it always
-/// declines to the (already-pruning) fallback -- so the only way to observe the comment becoming truly
-/// orphaned (no <see cref="Run.CommentId"/> anywhere) is to remove the reference run FIRST via that already
-/// -correct fallback, and only THEN delete the anchor paragraph through the fast path this gap is about. That
-/// two-step sequence is exactly what each test below does; it is also an entirely ordinary thing for a user
-/// to do (delete a stray trailing reference mark, then clean up the paragraph before it).
+/// A comment range and its textless reference may live in different paragraphs. Editing unrelated text
+/// beside the reference must preserve that exact marker. Removing the final substantive range anchor
+/// then removes the thread and its reference markers together, and Undo restores both paragraphs.
+/// Reference-only point comments that had no substantive anchor before an edit are a separate case.
 /// </summary>
 public sealed class DocumentViewCrossParagraphCommentPruningTests
 {
@@ -64,24 +41,19 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
     }
 
     /// <summary>
-    /// Removes paragraph 1's own trailing text via the SAME shared entry point (<see cref="DocumentView.TryDeleteSelection"/>).
-    /// Paragraph 1 is never portable (it holds the reference run), so this always declines the fast path and
-    /// goes through the already-correct local fallback, which prunes -- but the comment must still be
-    /// considered "used" afterward because paragraph 0's anchor run is untouched. This intentionally drops
-    /// the now-anchorless reference run from paragraph 1 (see <c>DocumentView.SetRuns</c>'s
-    /// "referencedComments" re-anchoring, which only re-emits a reference run when some surviving cell in
-    /// THAT paragraph still carries its id) -- leaving paragraph 0's anchor run as the comment's only
-    /// remaining anchor anywhere in the document, exactly as a real cross-paragraph import can end up after
-    /// an earlier, unrelated edit near the reference mark.
+    /// Removes only paragraph 1's trailing text, preserving the reference whose actual range is in
+    /// paragraph 0. The later last-anchor deletion must clean up this surviving external reference.
     /// </summary>
     private static void RemoveReferenceParagraphsTrailingText(DocumentView view)
     {
+        var reference = view.Document.Blocks.OfType<Paragraph>().ElementAt(1).Runs[0];
         view.SetSelectionRangePublic(1, 0, 1, "Trailing".Length);
         view.TryDeleteSelection().Should().BeTrue();
         view.Document.Comments.Should().ContainKey(1,
             "paragraph 0's anchor run is untouched, so the comment must still read as used");
-        view.Document.Blocks.OfType<Paragraph>().ElementAt(1).Runs.Should().BeEmpty(
-            "the reference run's own paragraph rebuild drops it once no cell in that paragraph anchors its id");
+        view.Document.Blocks.OfType<Paragraph>().ElementAt(1).Runs.Should().ContainSingle()
+            .Which.Should().BeSameAs(reference,
+                "editing unrelated trailing text must preserve the cross-paragraph reference marker");
     }
 
     // ── DeleteSelection ──────────────────────────────────────────────────────────────────────────────
@@ -91,15 +63,16 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
     {
         var view = BuildCrossParagraphComment(out var commentId);
         RemoveReferenceParagraphsTrailingText(view);
+        var before = CaptureCommentState(view, commentId);
 
-        // Now delete paragraph 0's anchor text. Paragraph 0 holds only a non-reference CommentId run, so
-        // DocumentEditingSession.IsPortableBodyTextParagraph accepts it and this goes through the shared
-        // fast path -- the exact call DeleteSelection() makes before ever reaching its local fallback.
+        // Delete the original range. Its reference in the other paragraph must be removed in the
+        // same undoable operation, regardless of which text editing route handles the gesture.
         view.SetSelectionRangePublic(0, 0, 0, "Anchor text".Length);
         view.TryDeleteSelection().Should().BeTrue();
 
         view.Document.Comments.ContainsKey(commentId).Should().BeFalse(
-            "no run anywhere still carries the comment's id, so the fast path must prune it just like the fallback would");
+            "the last original range anchor was removed");
+        AssertPrunedReferencesAndExactUndo(view, commentId, before);
     }
 
     // ── Backspace ────────────────────────────────────────────────────────────────────────────────────
@@ -109,15 +82,15 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
     {
         var view = BuildCrossParagraphComment(out var commentId);
         RemoveReferenceParagraphsTrailingText(view);
+        var before = CaptureCommentState(view, commentId);
 
-        // A selection is active, so Backspace's own TryApplyDeletion call (CurrentBodyTextRange returns
-        // the selection) deletes the whole selection through the shared fast path -- Backspace's own success
-        // branch, not DeleteSelection's.
+        // Backspace must apply the same lifecycle policy as the explicit selection-delete command.
         view.SetSelectionRangePublic(0, 0, 0, "Anchor text".Length);
         view.BackspacePublic();
 
         view.Document.Comments.ContainsKey(commentId).Should().BeFalse(
             "Backspace's own fast-path success branch must prune too, not just DeleteSelection's");
+        AssertPrunedReferencesAndExactUndo(view, commentId, before);
     }
 
     // ── DeleteForward ────────────────────────────────────────────────────────────────────────────────
@@ -127,28 +100,33 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
     {
         var view = BuildCrossParagraphComment(out var commentId);
         RemoveReferenceParagraphsTrailingText(view);
+        var before = CaptureCommentState(view, commentId);
 
         view.SetSelectionRangePublic(0, 0, 0, "Anchor text".Length);
         view.DeleteForwardPublic();
 
         view.Document.Comments.ContainsKey(commentId).Should().BeFalse(
             "DeleteForward's own fast-path success branch must prune too, not just DeleteSelection's");
+        AssertPrunedReferencesAndExactUndo(view, commentId, before);
     }
 
-    // ── Sibling / no-regression: a surviving anchor elsewhere must never be pruned away ─────────────────
+    // ── An untouched reference must not turn a removed text range into a new point comment ───────────
 
     [Fact]
-    public void DeleteSelection_ThroughSharedFastPath_LeavesCommentAloneWhileTheReferenceParagraphStillAnchorsIt()
+    public void DeleteSelection_PrunesTheExternalReferenceWhenItsLastOriginalRangeAnchorIsGone()
     {
         var view = BuildCrossParagraphComment(out var commentId);
+        var before = CaptureCommentState(view, commentId);
 
-        // Delete paragraph 0's anchor text WITHOUT first touching paragraph 1 -- the reference run is still
-        // out there, so the comment must be read as used even though the fast path's new prune call runs.
+        // Paragraph 1's marker refers to the original text range; it was not a point comment before
+        // the edit. Its unrelated trailing text must remain when the range and marker are removed.
         view.SetSelectionRangePublic(0, 0, 0, "Anchor text".Length);
         view.TryDeleteSelection().Should().BeTrue();
 
-        view.Document.Comments.ContainsKey(commentId).Should().BeTrue(
-            "paragraph 1's reference run still anchors the comment, so the new prune call must be a no-op here");
+        view.Document.Comments.ContainsKey(commentId).Should().BeFalse(
+            "a reference to a removed text range must not convert that range into a new point comment");
+        view.Document.Blocks.OfType<Paragraph>().ElementAt(1).PlainText.Should().Be("Trailing");
+        AssertPrunedReferencesAndExactUndo(view, commentId, before);
     }
 
     /// <summary>
@@ -163,6 +141,7 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
     {
         var view = BuildCrossParagraphComment(out var commentId);
         RemoveReferenceParagraphsTrailingText(view);
+        var before = CaptureCommentState(view, commentId);
 
         view.SetSelectionRangePublic(0, 0, 0, "Anchor text".Length);
         view.SimulateTextInputForTest("x");
@@ -170,6 +149,8 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
         view.Document.Comments.ContainsKey(commentId).Should().BeFalse(
             "replacing the last run that carried the comment's id leaves nothing anchored, so the "
             + "comment must be pruned exactly as it is when the same range is deleted");
+        view.Document.Blocks.OfType<Paragraph>().First().Runs.Should().OnlyContain(run => run.CommentId == null);
+        AssertPrunedReferencesAndExactUndo(view, commentId, before);
     }
 
     // ── Sibling / no-regression: ordinary deletion with no notes/comments at all is unaffected ─────────
@@ -190,5 +171,23 @@ public sealed class DocumentViewCrossParagraphCommentPruningTests
         view.Document.Comments.Should().BeEmpty();
         view.Document.Footnotes.Should().BeEmpty();
         view.Document.Endnotes.Should().BeEmpty();
+    }
+
+    private static (Run[] AnchorRuns, Run[] ReferenceRuns, Comment Thread) CaptureCommentState(DocumentView view, int id) =>
+        (((Paragraph)view.Document.Blocks[0]).Runs.ToArray(), ((Paragraph)view.Document.Blocks[1]).Runs.ToArray(), view.Document.Comments[id]);
+
+    private static void AssertPrunedReferencesAndExactUndo(DocumentView view, int id,
+        (Run[] AnchorRuns, Run[] ReferenceRuns, Comment Thread) before)
+    {
+        var anchor = (Paragraph)view.Document.Blocks[0];
+        var reference = (Paragraph)view.Document.Blocks[1];
+        reference.Runs.Should().NotContain(run => run.IsCommentReference && run.CommentId == id);
+        view.Undo();
+        view.Document.Comments[id].Should().BeSameAs(before.Thread);
+        anchor.Runs.Should().Equal(before.AnchorRuns);
+        reference.Runs.Should().Equal(before.ReferenceRuns);
+        view.Redo();
+        view.Document.Comments.Should().NotContainKey(id);
+        reference.Runs.Should().NotContain(run => run.IsCommentReference && run.CommentId == id);
     }
 }

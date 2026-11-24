@@ -3509,7 +3509,7 @@ public sealed partial class MainWindow : Window
         _scroller.Offset = new Vector(horizontal, target);
     }
 
-    private async Task<FreeWClipboardTransferResult> CopyAsync(DocumentView? source = null)
+    private async Task<FreeWClipboardTransferResult> CopyAsync(DocumentView? source = null, bool requireNativeDocument = false)
     {
         // shell-clipboard F2: unlike the WPF shell's native RichTextBox Copy/Cut (which places RTF
         // and an HTML/Xaml payload on the clipboard automatically), this editor is a custom control
@@ -3517,15 +3517,27 @@ public sealed partial class MainWindow : Window
         // Copy+Paste round trip silently drops all character formatting, even within this document.
         var editor = source ?? ResolveActiveDocumentEditor();
         var (document, ranges) = editor.GetSelectionRichSnapshot();
-        var richDocument = FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges);
+        TextDocument? richDocument = null;
         // ...and alongside it FreeW's own flavour, which keeps what RTF/HTML cannot express — a content
         // control, a tracked change's author, a comment anchor — for a paste back into FreeW.
-        var nativeDocument = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges);
+        TextDocument? nativeDocument = null;
+        if (editor.TryGetDisplaySelectionProjection(out var paragraph, out var projection))
+        {
+            var projected = FreeWDisplaySelectionClipboardBuilder.Build(document, paragraph, projection);
+            richDocument = projected.RichDocument;
+            nativeDocument = projected.NativeDocument;
+        }
+        else if (!editor.HasUnsupportedRichDisplaySelection())
+        {
+            richDocument = FreeWClipboardApplicationWorkflow.BuildSelectionRichDocument(document, ranges);
+            nativeDocument = FreeWClipboardApplicationWorkflow.BuildSelectionNativeDocument(document, ranges);
+        }
         var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
             _platformClipboard,
             editor.SelectedText,
             richDocument,
-            nativeDocument);
+            nativeDocument,
+            requireNativeDocument: requireNativeDocument);
         if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
             ApplyClipboardFeedback(result);
         return result;
@@ -3625,8 +3637,14 @@ public sealed partial class MainWindow : Window
     private async Task CutAsync()
     {
         var editor = ResolveActiveDocumentEditor();
-        var copy = await CopyAsync(editor);
-        if (copy.CanCommitCut)
+        if (editor.IsDisplaySelectionDeletionBlocked())
+            return;
+        var selection = editor.CaptureClipboardSelectionStamp();
+        var requireNativeDocument = editor.TryGetDisplaySelectionProjection(out _, out _);
+        var copy = await CopyAsync(editor, requireNativeDocument);
+        if ((copy.IsSuccess || !requireNativeDocument && copy.CanCommitCut)
+            && ReferenceEquals(editor, ResolveActiveDocumentEditor())
+            && editor.MatchesClipboardSelectionStamp(selection))
             editor.TryDeleteSelection();
     }
 

@@ -625,6 +625,7 @@ public sealed partial class DocumentView : Control
 
     public void LoadDocument(TextDocument document)
     {
+        _clipboardModelGeneration++;
         _editingSession.LoadDocument(document);
         ClearBitmapCache();
         if (_doc.Blocks.Count == 0)
@@ -664,6 +665,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     internal void RefreshFromSharedDocument()
     {
+        _clipboardModelGeneration++;
         ClearBitmapCache();
         InvalidateLayoutAndVisual();
     }
@@ -1381,7 +1383,7 @@ public sealed partial class DocumentView : Control
         if (_automationPeer is null)
             return;
 
-        var newValue = PlainText;
+        var newValue = AutomationValueText();
         if (!string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
         {
             var oldValue = _lastAutomationValue;
@@ -1430,7 +1432,7 @@ public sealed partial class DocumentView : Control
         var para = GetCellParagraph(tableBlockIndex, row, col, paraIdx);
         if (para == null)
             return;
-        var maxOffset = ParaCells(para).Count;
+        var maxOffset = KeyboardParagraphText(new(para, tableBlockIndex, row, col, paraIdx)).Length;
         offset = Math.Clamp(offset, 0, maxOffset);
         _cellCaret = (tableBlockIndex, row, col, paraIdx, offset);
         _cellAnchor = _cellCaret;
@@ -18832,6 +18834,10 @@ public sealed partial class DocumentView : Control
 
     public void InsertText(string text)
     {
+        if (SelectionNeedsDisplayProjection() && !TryResolveContentControlTextCaret(out _)
+            && TryReplaceDisplaySelection(text, out _))
+            return;
+
         // AV-CCEDIT: typing inside a content control is a form-field edit — it runs before the body
         // lock guard (that is what "Filling in Forms" protection allows) and before the body paths,
         // which reject any paragraph holding a control run outright.
@@ -18839,6 +18845,12 @@ public sealed partial class DocumentView : Control
             return;
 
         if (IsEditingLocked)
+            return;
+
+        if (TryInsertDisplayText(text))
+            return;
+
+        if (TryReplaceDisplaySelection(text, out _))
             return;
 
         if (CurrentShapeTextSelection is not null)
@@ -19497,7 +19509,8 @@ public sealed partial class DocumentView : Control
     /// The caret (and any selection) resolved onto one content control's run span: which paragraph runs
     /// the field owns, where its text starts in the paragraph, and the selected range relative to the
     /// field's own text. A field is a SPAN, not a single run — mixed formatting inside it is several runs
-    /// already, and a tracked edit adds an inserted/struck run beside the original.
+    /// already, and a tracked edit adds an inserted/struck run beside the original. SpanStart is
+    /// in displayed paragraph offsets; SpanLength, Start and Length are raw control-text offsets.
     /// </summary>
     private readonly record struct ContentControlTextCaret(
         ContentControlTarget Target,
@@ -19527,13 +19540,19 @@ public sealed partial class DocumentView : Control
         int selectionEnd;
         if (_cellCaret is { } cell)
         {
-            // Only a collapsed in-cell caret: a cross-cell or cross-paragraph selection is a body-level
-            // gesture, not a form-field edit.
-            if (_cellAnchor is { } cellAnchor && !cellAnchor.Equals(cell))
-                return false;
+            // A selection wholly inside one control remains a FormField edit. Cross-cell or
+            // cross-paragraph ranges require the structural selection path instead.
             paragraph = GetCellParagraph(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx);
             selectionStart = cell.Offset;
             selectionEnd = cell.Offset;
+            if (_cellAnchor is { } cellAnchor && !cellAnchor.Equals(cell))
+            {
+                if (cellAnchor.TableBlock != cell.TableBlock || cellAnchor.Row != cell.Row
+                    || cellAnchor.Col != cell.Col || cellAnchor.ParaIdx != cell.ParaIdx)
+                    return false;
+                selectionStart = Math.Min(cellAnchor.Offset, cell.Offset);
+                selectionEnd = Math.Max(cellAnchor.Offset, cell.Offset);
+            }
         }
         else
         {
@@ -19559,7 +19578,7 @@ public sealed partial class DocumentView : Control
         if (paragraph is null)
             return false;
 
-        foreach (var span in ContentControlCaretSpans(paragraph))
+        foreach (var span in ContentControlDisplaySpans(ContentControlParagraphAddress(paragraph)))
         {
             // The whole caret/selection must lie within this field's own text — an edit must never spill
             // into the body text around it.
@@ -19581,69 +19600,19 @@ public sealed partial class DocumentView : Control
                 paragraph.Runs[span.FirstRunIndex].Control!,
                 paragraph.Runs[span.FirstRunIndex + span.RunCount - 1].Formatting,
                 span.Start,
-                span.Length,
-                selectionStart - span.Start,
-                selectionEnd - selectionStart);
+                span.ModelLength,
+                span.ModelBoundaries[selectionStart - span.Start],
+                span.ModelBoundaries[selectionEnd - span.Start] - span.ModelBoundaries[selectionStart - span.Start]);
             return true;
         }
 
         return false;
     }
 
-    /// <summary>
-    /// The paragraph's content-control spans expressed in the CARET's offset space, which is not always
-    /// the model's: a paragraph holding a page-number field, a note mark or an equation lays out from
-    /// <see cref="DisplayCells"/>, where a run occupies its RESOLVED text rather than its stored text, so
-    /// model offsets would address the wrong characters. When every run renders verbatim the two spaces
-    /// coincide and the model walk answers directly (it also sees an emptied field, which has no glyphs
-    /// at all); otherwise the placed glyphs — whose offsets ARE the caret space, and which now carry
-    /// their control — give the field's extent without re-deriving any of the layout's transformations.
-    /// A field's own text is identical in both spaces (a check box's substituted glyph is one char for
-    /// one char), so an offset within the field needs no translation either way.
-    /// </summary>
+    /// <summary>Content-control extents in the active body's or cell's displayed caret space.</summary>
     private IEnumerable<(int FirstRunIndex, int RunCount, int Start, int Length)> ContentControlCaretSpans(
-        Paragraph paragraph)
-    {
-        if (_cellCaret is not null || HasVerbatimRunText(paragraph))
-            return ContentControlSpans(paragraph);
-
-        return PlacedContentControlSpans(paragraph);
-    }
-
-    private List<(int FirstRunIndex, int RunCount, int Start, int Length)> PlacedContentControlSpans(
-        Paragraph paragraph)
-    {
-        var spans = new List<(int FirstRunIndex, int RunCount, int Start, int Length)>();
-        if (_laidOutWidth < 0)
-            Relayout(FallbackWidth);
-
-        foreach (var span in ContentControlSpans(paragraph))
-        {
-            var control = paragraph.Runs[span.FirstRunIndex].Control;
-            var start = int.MaxValue;
-            var end = int.MinValue;
-            foreach (var placed in _placed)
-            {
-                if (placed.Sentinel
-                    || placed.Block != _caret.Block
-                    || placed.IsCell
-                    || !ReferenceEquals(placed.Control, control))
-                {
-                    continue;
-                }
-
-                start = Math.Min(start, placed.Offset);
-                end = Math.Max(end, placed.Offset + 1);
-            }
-
-            // A field with no glyphs on this layout (empty, or hidden by the review view) cannot be
-            // addressed by the caret, so it is not offered as an edit target.
-            if (start <= end && start != int.MaxValue)
-                spans.Add((span.FirstRunIndex, span.RunCount, start, end - start));
-        }
-
-        return spans;
-    }
+        Paragraph paragraph) => ContentControlDisplaySpans(ContentControlParagraphAddress(paragraph))
+            .Select(span => (span.FirstRunIndex, span.RunCount, span.Start, span.Length));
 
     /// <summary>
     /// The paragraph's content-control run spans, in document order: each maximal run of consecutive runs
@@ -19674,16 +19643,6 @@ public sealed partial class DocumentView : Control
             yield return (first, index - first, start, offset - start);
         }
     }
-
-    /// <summary>
-    /// Whether every run renders its own text verbatim, so a caret offset in layout (display) space is
-    /// also an offset in model-text space. A field, equation or note mark displays something other than
-    /// its run text (see <see cref="DisplayCells"/>) and would shift that mapping.
-    /// </summary>
-    private static bool HasVerbatimRunText(Paragraph paragraph) =>
-        paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
-            && r.ComplexField is null && r.FootnoteId is null && r.EndnoteId is null
-            && !IsFloatingDrawingRun(r));
 
     /// <summary>
     /// Whether the caret sits strictly between the first and last character of a content control — the
@@ -19797,7 +19756,8 @@ public sealed partial class DocumentView : Control
 
         void AddStops(Paragraph paragraph, int block, int row, int column, int paragraphIndex)
         {
-            foreach (var span in ContentControlSpans(paragraph))
+            var address = new KeyboardParagraph(paragraph, block, row, column, paragraphIndex);
+            foreach (var span in ContentControlDisplaySpans(address))
             {
                 if (ContentControlInteractionPlanner.CanEditContentControlText(
                         paragraph.Runs[span.FirstRunIndex],
@@ -19981,9 +19941,9 @@ public sealed partial class DocumentView : Control
         }
 
         var replacement = rebuilt.Runs.ToList();
-        var contentOffset = caret.SpanStart
-            + Math.Clamp(caretOffset, 0, replacement.Sum(run => run.Text.Length));
         var target = caret.Target;
+        var contentOffset = caret.SpanStart
+            + ControlDisplayOffsetForModel(replacement, caretOffset, target.Row is not null);
         if (target.Row is { } row
             && target.Column is { } column
             && target.ParagraphIndex is { } paragraphIndex)
@@ -20081,11 +20041,23 @@ public sealed partial class DocumentView : Control
 
     internal void Backspace()
     {
+        if (SelectionNeedsDisplayProjection() && !TryResolveContentControlTextCaret(out _)
+            && TryDeleteDisplaySelection(out _))
+            return;
+
         // AV-CCEDIT: deleting inside a content control is a form-field edit (see InsertText).
         if (TryBackspaceContentControlText())
             return;
 
         if (IsEditingLocked)
+            return;
+
+        if (TryDeleteDisplaySelection(out _))
+            return;
+
+        if (TryMergePreservedBodyBoundary(backward: true))
+            return;
+        if (TryDeleteDisplayTextElement(backward: true))
             return;
 
         if (TryDeleteUnicodeTextElement(backward: true))
@@ -20229,11 +20201,23 @@ public sealed partial class DocumentView : Control
 
     private void DeleteForward()
     {
+        if (SelectionNeedsDisplayProjection() && !TryResolveContentControlTextCaret(out _)
+            && TryDeleteDisplaySelection(out _))
+            return;
+
         // AV-CCEDIT: deleting inside a content control is a form-field edit (see InsertText).
         if (TryDeleteForwardContentControlText())
             return;
 
         if (IsEditingLocked)
+            return;
+
+        if (TryDeleteDisplaySelection(out _))
+            return;
+
+        if (TryMergePreservedBodyBoundary(backward: false))
+            return;
+        if (TryDeleteDisplayTextElement(backward: false))
             return;
 
         if (TryDeleteUnicodeTextElement(backward: false))
@@ -20390,6 +20374,11 @@ public sealed partial class DocumentView : Control
 
     private void InsertParagraphBreak()
     {
+        if (TrySplitBookmarkedBodyParagraph())
+            return;
+        if (SelectionNeedsStructuralPreservation())
+            return;
+
         if (IsEditingLocked)
             return;
 
@@ -20616,55 +20605,7 @@ public sealed partial class DocumentView : Control
         _selectionAnchor = _caret;
     }
 
-    private void MergeWithPrevious()
-    {
-        var block = _caret.Block;
-        var prev = PreviousEditableBlock(block);
-        if (prev < 0 || _doc.Blocks[prev] is not Paragraph prevPara || _doc.Blocks[block] is not Paragraph curPara)
-            return;
-        // AV-CCEDIT: the merge removes the current block, so a body-level region that only wraps it (a
-        // w:sdt with Word's sdtLocked) would disappear with it.
-        if (!ReferenceEquals(curPara.BlockContentControl, prevPara.BlockContentControl)
-            && !ContentControlInteractionPlanner.CanDeleteBlockContentControl(curPara.BlockContentControl))
-        {
-            return;
-        }
-
-        var prevCells = ParaCells(prevPara);
-        var prevLen = prevCells.Count;
-        var prevRunCount = prevPara.Runs.Count;
-        var merged = CarryBlockRegion(
-            new Paragraph { Formatting = prevPara.Formatting, StyleId = prevPara.StyleId },
-            prevPara);
-        prevCells.AddRange(ParaCells(curPara));
-        SetRuns(merged, prevCells);
-        // AV-BOOKMARK: this is the shared session's CanRestructureAllowingSectionBreak decline path (a
-        // bookmark on either side), so carry both paragraphs' bookmarks onto the merged paragraph instead
-        // of silently discarding them -- see freew-bookmark-lifecycle F1. curPara's boundaries are shifted
-        // past prevPara's original run count so they still land in roughly the same text position.
-        CarryMergedBookmarks(merged, prevPara, curPara, prevRunCount);
-        _bus.Execute(new ReplaceBlocksCommand(prev, block - prev + 1, new Block[] { merged }));
-        _caret = new DocPosition(prev, prevLen);
-        _selectionAnchor = _caret;
-    }
-
-    // AV-BOOKMARK: shared by MergeWithPrevious (Backspace-merge fallback) to keep bookmarks that lived on
-    // either side of a paragraph merge instead of dropping them when the merged paragraph's Runs are
-    // rebuilt from the concatenated cell stream (see SetRuns).
-    private static void CarryMergedBookmarks(Paragraph merged, Paragraph prevPara, Paragraph curPara, int prevRunCount)
-    {
-        if (prevPara.BookmarkNames.Count == 0 && curPara.BookmarkNames.Count == 0
-            && prevPara.BookmarkBoundaries.Count == 0 && curPara.BookmarkBoundaries.Count == 0)
-        {
-            return;
-        }
-
-        merged.BookmarkNames.AddRange(prevPara.BookmarkNames);
-        merged.BookmarkNames.AddRange(curPara.BookmarkNames);
-        merged.BookmarkBoundaries.AddRange(prevPara.BookmarkBoundaries);
-        merged.BookmarkBoundaries.AddRange(curPara.BookmarkBoundaries
-            .Select(boundary => boundary with { RunIndex = boundary.RunIndex + prevRunCount }));
-    }
+    private void MergeWithPrevious() => TryMergePreservedBodyBoundary(backward: true);
 
     // AV-TBL-DELETE: Word's RichTextBox selection editor deletes text across paragraph and cell
     // boundaries without deleting the table structure. A rectangular cell selection is a separate
@@ -20680,6 +20621,9 @@ public sealed partial class DocumentView : Control
     {
         if (SelectedCellRange is not null)
             return DeleteSelectedCellBlock(beginUndoGroup);
+
+        if (TryDeleteDisplaySelection(out _))
+            return true;
 
         if (_cellAnchor is not { } anchor
             || anchor.TableBlock != cc.TableBlock
@@ -20800,6 +20744,9 @@ public sealed partial class DocumentView : Control
         endParaIndex = Math.Clamp(endParaIndex, startParaIndex, cell.Paragraphs.Count - 1);
         startOffset = Math.Clamp(startOffset, 0, ParaCells(cell.Paragraphs[startParaIndex]).Count);
         endOffset = Math.Clamp(endOffset, 0, ParaCells(cell.Paragraphs[endParaIndex]).Count);
+
+        if (TryDeleteSameCellBookmarkRange(entry, startParaIndex, startOffset, endParaIndex, endOffset))
+            return true;
 
         if (TrackChangesEnabled)
         {
@@ -20987,6 +20934,9 @@ public sealed partial class DocumentView : Control
     private void DeleteSelection()
     {
         if (IsEditingLocked)
+            return;
+
+        if (TryDeleteDisplaySelection(out _))
             return;
 
         if (NormalizedSelection() is not { } sel)
@@ -25412,13 +25362,21 @@ public sealed partial class DocumentView : Control
     /// Each command still applies immediately. Must be followed by
     /// <see cref="CommitFontUndoGroup"/> or <see cref="AbortFontUndoGroup"/>.
     /// </summary>
-    public void BeginFontUndoGroup() => _bus.BeginUndoGroup();
+    public void BeginFontUndoGroup()
+    {
+        _clipboardModelGeneration++;
+        _bus.BeginUndoGroup();
+    }
 
     /// <summary>Commits the current undo group as a single undo step labelled <paramref name="label"/>.</summary>
     public void CommitFontUndoGroup(string label) => _bus.CommitUndoGroup(label);
 
     /// <summary>Discards the current undo group without pushing onto the undo stack.</summary>
-    public void AbortFontUndoGroup() => _bus.AbortUndoGroup();
+    public void AbortFontUndoGroup()
+    {
+        _clipboardModelGeneration++;
+        _bus.AbortUndoGroup();
+    }
 
     /// <summary>Text spanning the current selection (empty when there is no selection).</summary>
     public string SelectedText
@@ -25429,6 +25387,8 @@ public sealed partial class DocumentView : Control
                 return ShapeKeyboardSelectedText();
             if (_hfCaret is not null)
                 return HeaderFooterSelectedText();
+            if (TryGetDisplaySelectionText(out var displayText))
+                return displayText;
             if (HasCellTextSelection())
                 return CellTextSelectionText();
             return NormalizedSelection() is null
@@ -25469,6 +25429,9 @@ public sealed partial class DocumentView : Control
 
         if (_hfCaret is not null)
             return TryDeleteHfSelection();
+
+        if (TryDeleteDisplaySelection(out var deleted))
+            return deleted;
 
         if (NormalizedSelection() is null)
             return false;
@@ -25520,47 +25483,65 @@ public sealed partial class DocumentView : Control
             return false;
         }
 
-        // AV-CLIP: pasting over a selection replaces it, as in Word — the delete and the insert are one
-        // undo unit. DeleteSelection enforces the content-control locks, so a selection it refuses to
-        // remove leaves the paste refused too.
-        var ownsUndoGroup = NormalizedSelection() is not null && !_bus.IsUndoGroupOpen;
-        if (ownsUndoGroup)
+        var hasSelection = NormalizedSelection() is not null;
+        // A failed rich insertion must restore the deletion before a plain-text fallback.
+        // An outer group has no savepoint, so decline this replacement before touching it.
+        if (hasSelection && _bus.IsUndoGroupOpen)
+            return false;
+        var before = CaptureTextCaretState();
+        var pendingFormatting = _pendingRunFmt;
+        if (hasSelection)
             _bus.BeginUndoGroup();
-        if (NormalizedSelection() is not null)
+        try
         {
-            DeleteSelection();
-            if (NormalizedSelection() is not null)
+            if (hasSelection)
             {
-                if (ownsUndoGroup)
-                    _bus.AbortUndoGroup();
+                DeleteSelection();
+                if (NormalizedSelection() is not null)
+                {
+                    RollbackPaste();
+                    return false;
+                }
+            }
+
+            if (!_editingSession.TryInsertDocumentAtBodyCaret(
+                    new DocumentTextPosition(_caret.Block, _caret.Offset),
+                    source,
+                    out var insertion,
+                    TrackChangesEnabled))
+            {
+                if (hasSelection)
+                    RollbackPaste();
                 return false;
             }
-        }
 
-        // The paste lands AT the caret, splicing the clipboard's first and last paragraphs into this
-        // one — it used to require an empty destination paragraph, which meant a rich paste anywhere in
-        // real text silently degraded to plain text.
-        if (!_editingSession.TryInsertDocumentAtBodyCaret(
-                new DocumentTextPosition(_caret.Block, _caret.Offset),
-                source,
-                out var insertion,
-                TrackChangesEnabled))
+            _caret = new DocPosition(insertion.Caret.BlockIndex, insertion.Caret.Offset);
+            _selectionAnchor = _caret;
+            _pendingRunFmt = null;
+            InvalidateLayoutAndVisual();
+            if (hasSelection)
+                _bus.CommitUndoGroup("Paste");
+            CaretMoved?.Invoke();
+            Focus();
+            return true;
+        }
+        catch
         {
-            if (ownsUndoGroup)
-                _bus.AbortUndoGroup();
-            return false;
+            if (hasSelection && _bus.IsUndoGroupOpen)
+                RollbackPaste();
+            throw;
         }
 
-        if (ownsUndoGroup)
-            _bus.CommitUndoGroup("Paste");
-
-        _caret = new DocPosition(insertion.Caret.BlockIndex, insertion.Caret.Offset);
-        _selectionAnchor = _caret;
-        _pendingRunFmt = null;
-        InvalidateLayoutAndVisual();
-        CaretMoved?.Invoke();
-        Focus();
-        return true;
+        void RollbackPaste()
+        {
+            var failures = _bus.RollbackUndoGroup();
+            RestoreTextCaretState(before);
+            _pendingRunFmt = pendingFormatting;
+            try { PublishTextHistorySelection(); }
+            finally { CaretMoved?.Invoke(); }
+            if (failures.Count > 0)
+                throw new AggregateException(failures);
+        }
     }
 
     /// <summary>
@@ -25586,6 +25567,9 @@ public sealed partial class DocumentView : Control
 
         var plan = _editingSession.Interaction.PlanPasteText(clipboardText, kind);
         if (!plan.HasText)
+            return false;
+
+        if (plan.Lines.Count > 1 && SelectionNeedsStructuralPreservation())
             return false;
 
         _bus.BeginUndoGroup();
@@ -26447,6 +26431,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void InvalidateAfterExternalMutation()
     {
+        _clipboardModelGeneration++;
         ClampCaret();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
@@ -26464,6 +26449,7 @@ public sealed partial class DocumentView : Control
 
     private void OnModelChanged()
     {
+        _clipboardModelGeneration++;
         RebindHeaderFooterCaretOwner();
         ClearBitmapCache();
         InvalidateLayoutAndVisual();

@@ -41,9 +41,9 @@ namespace FreeW.App.Avalonia.Editing;
 /// Reports <see cref="AutomationControlType.Document"/> (the same control type WPF's
 /// <c>TextAutomationPeer</c> would report for a <c>RichTextBox</c>) and implements
 /// <see cref="IValueProvider"/> — the only pattern Avalonia has for exposing bulk text content —
-/// with <see cref="Value"/> returning the full document plain text
-/// (<see cref="DocumentView.PlainText"/>, itself <c>TextDocument.PlainText</c>, which already
-/// joins every paragraph/table cell's runs). This covers "document text exposure".
+/// with <see cref="Value"/> returning the complete resolved body/table text in the
+/// renderer's caret-offset space. Fields and cell CRLF use the same projection as
+/// navigation and editing. This covers "document text exposure".
 /// </description></item>
 /// <item><description>
 /// Reports caret and selection context through both ItemStatus and HelpText. The renderer only
@@ -117,7 +117,7 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
     // (Avalonia 12.0.4 has no ITextProvider/ITextRangeProvider). Read-only: see class remarks.
     public bool IsReadOnly => true;
 
-    public string? Value => _owner.PlainText;
+    public string? Value => _owner.AutomationValueText();
 
     public void SetValue(string? value) =>
         throw new System.NotSupportedException(
