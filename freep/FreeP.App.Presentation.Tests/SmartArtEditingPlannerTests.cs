@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
@@ -1640,16 +1641,16 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Theory]
-    [InlineData(SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.None, SmartArtNodeEditKind.AddSiblingAfter, "smartart.text-pane.enter.add-sibling-after")]
-    [InlineData(SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.Control, SmartArtNodeEditKind.AddChild, "smartart.text-pane.ctrl-enter.add-child")]
-    [InlineData(SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.None, SmartArtNodeEditKind.Demote, "smartart.text-pane.tab.demote")]
-    [InlineData(SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.Promote, "smartart.text-pane.shift-tab.promote")]
-    [InlineData(SmartArtTextPaneShortcutKey.Up, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.MoveUp, "smartart.text-pane.alt-shift-up.move-up")]
-    [InlineData(SmartArtTextPaneShortcutKey.Down, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.MoveDown, "smartart.text-pane.alt-shift-down.move-down")]
-    [InlineData(SmartArtTextPaneShortcutKey.Delete, SmartArtTextPaneShortcutModifiers.None, SmartArtNodeEditKind.Remove, "smartart.text-pane.delete.remove")]
+    [InlineData(SmartArtTextPaneShortcutKey.Enter, FreeKeyModifiers.None, SmartArtNodeEditKind.AddSiblingAfter, "smartart.text-pane.enter.add-sibling-after")]
+    [InlineData(SmartArtTextPaneShortcutKey.Enter, FreeKeyModifiers.Control, SmartArtNodeEditKind.AddChild, "smartart.text-pane.ctrl-enter.add-child")]
+    [InlineData(SmartArtTextPaneShortcutKey.Tab, FreeKeyModifiers.None, SmartArtNodeEditKind.Demote, "smartart.text-pane.tab.demote")]
+    [InlineData(SmartArtTextPaneShortcutKey.Tab, FreeKeyModifiers.Shift, SmartArtNodeEditKind.Promote, "smartart.text-pane.shift-tab.promote")]
+    [InlineData(SmartArtTextPaneShortcutKey.Up, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift, SmartArtNodeEditKind.MoveUp, "smartart.text-pane.alt-shift-up.move-up")]
+    [InlineData(SmartArtTextPaneShortcutKey.Down, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift, SmartArtNodeEditKind.MoveDown, "smartart.text-pane.alt-shift-down.move-down")]
+    [InlineData(SmartArtTextPaneShortcutKey.Delete, FreeKeyModifiers.None, SmartArtNodeEditKind.Remove, "smartart.text-pane.delete.remove")]
     public void PlanTextPaneKeyboardRoute_MapsSharedChordsToEditIntents(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         SmartArtNodeEditKind expectedKind,
         string expectedRouteId)
     {
@@ -1668,14 +1669,14 @@ public sealed class SmartArtEditingPlannerTests
     {
         SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
                 SmartArtTextPaneShortcutKey.Up,
-                SmartArtTextPaneShortcutModifiers.None,
+                FreeKeyModifiers.None,
                 "manager")
             .Should()
             .BeNull();
 
         SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
                 SmartArtTextPaneShortcutKey.Tab,
-                SmartArtTextPaneShortcutModifiers.None,
+                FreeKeyModifiers.None,
                 "  ")
             .Should()
             .BeNull();
@@ -1688,19 +1689,19 @@ public sealed class SmartArtEditingPlannerTests
 
         var addChild = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
             SmartArtTextPaneShortcutKey.Enter,
-            SmartArtTextPaneShortcutModifiers.Control,
+            FreeKeyModifiers.Control,
             "manager");
         SmartArtEditingPlanner.Apply(data, addChild!.Intent).Applied.Should().BeTrue();
 
         var moveDown = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
             SmartArtTextPaneShortcutKey.Down,
-            SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift,
+            FreeKeyModifiers.Alt | FreeKeyModifiers.Shift,
             "peer");
         SmartArtEditingPlanner.Apply(data, moveDown!.Intent).Applied.Should().BeTrue();
 
         var demote = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
             SmartArtTextPaneShortcutKey.Tab,
-            SmartArtTextPaneShortcutModifiers.None,
+            FreeKeyModifiers.None,
             "peer");
         SmartArtEditingPlanner.Apply(data, demote!.Intent).Applied.Should().BeTrue();
 

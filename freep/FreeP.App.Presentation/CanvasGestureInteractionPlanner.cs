@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -21,7 +22,7 @@ public static class CanvasGestureInteractionPlanner
         SlideTransformCore transform,
         SelectionAdornerProjectionPlan selection,
         int clickCount,
-        CanvasGestureModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool editPointsEnabled,
         bool canNotifyChartPointDoubleClick)
     {
