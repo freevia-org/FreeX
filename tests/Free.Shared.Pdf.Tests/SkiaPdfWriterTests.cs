@@ -509,11 +509,39 @@ public sealed class SkiaPdfWriterTests
             PdfFontFace.Italic,
             PdfFontFace.BoldItalic,
         };
+        // The platform default can have only upright fonts. Exercise legacy system-family
+        // resolution with an installed family that actually contains all four physical styles.
+        var completeFamily = SKFontManager.Default.FontFamilies
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(family => family, StringComparer.OrdinalIgnoreCase)
+            .Select(family => new
+            {
+                Family = family,
+                Faces = faces.Select(face => ReadSystemFace(family, face)).ToArray(),
+            })
+            .FirstOrDefault(candidate => candidate.Faces.All(face => face.HasValue)
+                && candidate.Faces.Select(face => face!.Value).Select((face, index) =>
+                    string.Equals(face.Family, candidate.Family, StringComparison.OrdinalIgnoreCase)
+                    && face.Weight == (index is 1 or 3 ? (int)SKFontStyleWeight.Bold : (int)SKFontStyleWeight.Normal)
+                    && face.Width == (int)SKFontStyleWidth.Normal
+                    && (index < 2 ? face.Slant == SKFontStyleSlant.Upright : face.Slant != SKFontStyleSlant.Upright))
+                    .All(matches => matches)
+                && candidate.Faces.Select(face => face!.Value.NameTableHash).Distinct(StringComparer.Ordinal).Count() == 4);
+        completeFamily.Should().NotBeNull("the Skia test environment must install a family with four distinct regular/bold/italic/bold-italic faces");
+        var actualFaces = completeFamily!.Faces.Select(face => face!.Value).ToArray();
+        actualFaces.Select(face => face.Family).Should().OnlyContain(family =>
+            string.Equals(family, completeFamily.Family, StringComparison.OrdinalIgnoreCase));
+        actualFaces.Select(face => face.Weight).Should().Equal(400, 700, 400, 700);
+        actualFaces.Select(face => face.Width).Should().OnlyContain(width => width == (int)SKFontStyleWidth.Normal);
+        actualFaces.Take(2).Should().OnlyContain(face => face.Slant == SKFontStyleSlant.Upright);
+        actualFaces.Skip(2).Should().OnlyContain(face => face.Slant != SKFontStyleSlant.Upright);
+        actualFaces.Select(face => face.NameTableHash).Should().OnlyHaveUniqueItems("four different physical font faces must be available, without synthesized slants");
+
         var pages = faces
             .Select(face => new PdfContentPage(
                 180,
                 70,
-                [new PdfText(12, 28, 30, face, PdfColor.Black, "Styled text")]))
+                [new PdfText(12, 28, 30, face, PdfColor.Black, "Styled text", completeFamily.Family)]))
             .ToArray();
 
         var pngs = SkiaPdfWriter.RenderPagesToPng(new PdfContentDocument(pages));
@@ -521,6 +549,19 @@ public sealed class SkiaPdfWriterTests
         pngs.Should().HaveCount(4);
         pngs[2].Should().NotEqual(pngs[0], "italic text must not use the upright regular face");
         pngs[3].Should().NotEqual(pngs[1], "bold italic text must not use the upright bold face");
+
+        static (string Family, int Weight, int Width, SKFontStyleSlant Slant, string NameTableHash)?
+            ReadSystemFace(string family, PdfFontFace face)
+        {
+            var weight = face is PdfFontFace.Bold or PdfFontFace.BoldItalic ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
+            var slant = face is PdfFontFace.Italic or PdfFontFace.BoldItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+            using var typeface = SKTypeface.FromFamilyName(family, weight, SKFontStyleWidth.Normal, slant);
+            if (typeface is null || typeface.GetTableData(0x6E616D65) is not { Length: > 0 } nameTable)
+                return null; // OpenType 'name' includes the physical face/PostScript identity.
+            using var style = typeface.FontStyle;
+            return (typeface.FamilyName, style.Weight, style.Width, style.Slant,
+                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(nameTable)));
+        }
     }
 
     [Fact]
