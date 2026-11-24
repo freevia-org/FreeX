@@ -31,6 +31,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 
@@ -76,35 +77,21 @@ function Start-ValidationRun {
     param([Parameter(Mandatory = $true)][ValidateSet("success", "failure")][string]$Mode)
     $runRoot = Join-Path $resolvedOutputRoot $Mode
     New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
-    $arguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Host", "Validation", "-Port", "$Port",
-        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
-        "-MemoryLimit", $MemoryLimit, "-OutputDir", $runRoot,
-        "-CupsDryRun", "-CupsDryRunMode", $Mode,
+    $extraArguments = @(
+        "-Host", "Validation", "-CupsDryRun", "-CupsDryRunMode", $Mode,
         "-AppArgument", "--physical-validation=/work/physical-validation"
     )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $arguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $arguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $arguments += "-SkipImageBuild" }
-    if ($Replace) { $arguments += "-Replace" }
 
     $started = $false
     try {
-        Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $arguments -WorkingDirectory $repoRoot -OutputToHost
+        Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $runRoot `
+            -ExtraArguments $extraArguments -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace -OutputToHost
         $started = $true
         $run = Read-RunManifest -RunRoot $runRoot
         Assert-Manifest -Run $run -ExpectedCupsMode $Mode
         return $run
     } finally {
-        if ($started) {
-            try {
-                Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                    "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
-                    "-OutputDir", $runRoot) -WorkingDirectory $repoRoot -OutputToHost
-            } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
-        }
+        Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $runRoot -Started $started -WarningPrefix "Could not stop harness-owned FreeP container" -OutputToHost
     }
 }
 

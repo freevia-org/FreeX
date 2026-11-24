@@ -31,6 +31,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 
@@ -38,19 +39,8 @@ New-Item -ItemType Directory -Path $resolvedOutputRoot -Force | Out-Null
 $containerName = "freex-linux-interactive-freep-$Port"
 $started = $false
 try {
-    $startArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Host", "Validation", "-Port", "$Port",
-        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
-        "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot,
-        "-AppArgument", "--accessibility-validation=/work/accessibility-validation"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
-    if ($Replace) { $startArguments += "-Replace" }
-
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot `
+        -ExtraArguments @("-Host", "Validation", "-AppArgument", "--accessibility-validation=/work/accessibility-validation") -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace -OutputToHost
     $started = $true
 
     # Copy the branch-local probe into the running container so a cached app image
@@ -181,12 +171,5 @@ try {
     Write-Host "Report: $reportPath"
 }
 finally {
-    if ($started) {
-        try {
-            Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", "FreeP", "-Port", "$Port",
-                "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot -OutputToHost
-        } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
-    }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot -Started $started -WarningPrefix "Could not stop harness-owned FreeP container" -OutputToHost
 }

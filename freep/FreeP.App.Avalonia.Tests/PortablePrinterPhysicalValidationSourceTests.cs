@@ -80,7 +80,7 @@ public sealed class PortablePrinterPhysicalValidationSourceTests
         runner.Should().Contain("/tmp/freex-cups-dry-run/lp");
         runner.Should().Contain("freex-linux-interactive-freep-$Port");
         runner.Should().Contain("Assert-ManifestContract");
-        runner.Should().Contain("-Action", "Stop");
+        runner.Should().Contain("Stop-PhysicalValidationRunnerSessionSafely");
         runner.Should().Contain("freep-portable-printer-wave105-validation.schema.json");
         runner.Should().NotContain("FreeX");
         runner.Should().NotContain("FreeW");

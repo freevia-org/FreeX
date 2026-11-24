@@ -121,10 +121,7 @@ function Assert-ToolSourceCentralization {
     }
 
     $sharedProcessScripts = @(
-        "Run-FreePMultiSelectionX11Validation.ps1",
-        "Run-FreePPortablePrinterValidation.ps1",
-        "Run-FreeWFieldShortcutValidation.ps1",
-        "Run-FreeWTablePaginationValidation.ps1"
+        "Run-FreeWFieldShortcutValidation.ps1"
     )
     foreach ($scriptName in $sharedProcessScripts) {
         $script = Get-Content -LiteralPath (Join-Path $ToolRoot $scriptName) -Raw
@@ -133,7 +130,6 @@ function Assert-ToolSourceCentralization {
         }
     }
 
-    $compatibilityAdapterFound = $false
     foreach ($scriptFile in Get-ChildItem -LiteralPath $ToolRoot -Filter "*.ps1" -File -Recurse) {
         $tokens = $null
         $parseErrors = $null
@@ -147,17 +143,7 @@ function Assert-ToolSourceCentralization {
             continue
         }
 
-        if ($scriptFile.Name -eq "Run-FreePMultiSelectionX11Validation.ps1" -and
-            $externalDeclarations.Count -eq 1 -and
-            $externalDeclarations[0].Extent.Text.Contains("Invoke-ToolProcess")) {
-            $compatibilityAdapterFound = $true
-            continue
-        }
-
         throw "$($scriptFile.Name) redeclares process invocation owned by ToolScriptSupport.ps1."
-    }
-    if (-not $compatibilityAdapterFound) {
-        throw "Run-FreePMultiSelectionX11Validation.ps1 must retain its source-contract adapter to Invoke-ToolProcess."
     }
 
     $repoRoot = Split-Path -Parent $ToolRoot
@@ -336,17 +322,8 @@ function Assert-ToolSourceCentralization {
     }
 
     $visualEvidenceRunnerNames = @(
-        "Run-FamilyLinuxInteractionValidation.ps1",
-        "Run-FreePAccessibilityValidation.ps1",
-        "Run-FreePClipboardShortcutValidation.ps1",
-        "Run-FreePFileSlideshowShortcutValidation.ps1",
-        "Run-FreePNativePickerX11Validation.ps1",
-        "Run-FreePPhysicalLinuxValidation.ps1",
-        "Run-FreePRichTextShortcutValidation.ps1",
         "Run-FreePRotatedShapeTextEditValidation.ps1",
-        "Run-FreePSmartArtAuthoringValidation.ps1",
-        "Run-FreePTransformedTableCellEditValidation.ps1",
-        "Run-FreeWForegroundPrintValidation.ps1"
+        "Run-FreePTransformedTableCellEditValidation.ps1"
     )
     foreach ($runnerName in $visualEvidenceRunnerNames) {
         $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
@@ -418,6 +395,169 @@ function Assert-ToolSourceCentralization {
     }
     finally {
         Remove-ToolTemporaryDirectory -Path $harnessProbeRoot
+    }
+
+    # The runner-session lifecycle used by the dedicated FreeP/FreeW physical validation runners (build the
+    # Start arguments, start, stop with warn-only cleanup, read the session metadata, run the docker probe)
+    # also lives once in PhysicalValidationScriptSupport.ps1. Prove its behavior with a stub generic runner.
+    $sessionStartExpected = "-NoProfile|-ExecutionPolicy|Bypass|-File|R|-Action|Start|-App|FreeP|-Port|6001|-Width|1280|-Height|820|-Dpi|96|-MemoryLimit|4g|-OutputDir|O|-DocumentPath|D|-Host|Validation|-AppArgument|--x|-PublishDir|P|-SkipPublish|-SkipImageBuild|-Replace"
+    $sessionStartActual = (Get-PhysicalValidationRunnerStartArguments -RunnerPath "R" -App FreeP -Port 6001 -Width 1280 -Height 820 -Dpi 96 -MemoryLimit 4g -OutputDir "O" -DocumentPath "D" -ExtraArguments @("-Host", "Validation", "-AppArgument", "--x") -PublishDir "P" -SkipPublish -SkipImageBuild -Replace) -join "|"
+    if ($sessionStartActual -ne $sessionStartExpected) {
+        throw "Get-PhysicalValidationRunnerStartArguments must build the full Start argument list; received '$sessionStartActual'."
+    }
+    $sessionMinimalExpected = "-NoProfile|-ExecutionPolicy|Bypass|-File|R|-Action|Start|-App|FreeW|-Port|6002|-Width|1|-Height|2|-Dpi|3|-MemoryLimit|2g|-OutputDir|O"
+    $sessionMinimalActual = (Get-PhysicalValidationRunnerStartArguments -RunnerPath "R" -App FreeW -Port 6002 -Width 1 -Height 2 -Dpi 3 -MemoryLimit 2g -OutputDir "O" -PublishDir "  ") -join "|"
+    if ($sessionMinimalActual -ne $sessionMinimalExpected) {
+        throw "Get-PhysicalValidationRunnerStartArguments must omit absent DocumentPath/extra/blank PublishDir/unset switches; received '$sessionMinimalActual'."
+    }
+
+    $sessionProbeRoot = New-ToolTemporaryDirectory -Prefix "freex-physical-session-"
+    try {
+        $sessionProbeLog = Join-Path $sessionProbeRoot "calls.txt"
+        $sessionStub = Join-Path $sessionProbeRoot "Run-LinuxInteractiveDocker.ps1"
+        Set-Content -LiteralPath $sessionStub -Encoding ascii -Value @(
+            'param([string]$Action, [string]$App, [int]$Port, [int]$Width, [int]$Height, [int]$Dpi, [string]$MemoryLimit, [string]$OutputDir, [string]$DocumentPath, [Alias(''Host'')][string]$HostMode, [string]$AppArgument, [string]$PublishDir, [switch]$SkipPublish, [switch]$SkipImageBuild, [switch]$Replace)',
+            'Add-Content -LiteralPath $env:FREEX_PHYSICAL_SESSION_LOG -Value "$Action|$App|$Port|$Width|$Height|$Dpi|$MemoryLimit|$OutputDir|$DocumentPath|$HostMode|$AppArgument|$PublishDir|$([bool]$SkipPublish)|$([bool]$SkipImageBuild)|$([bool]$Replace)"',
+            'if ($env:FREEX_PHYSICAL_SESSION_FAIL -eq "1") { exit 3 }')
+        $env:FREEX_PHYSICAL_SESSION_LOG = $sessionProbeLog
+        $env:FREEX_PHYSICAL_SESSION_FAIL = "0"
+        try {
+            Start-PhysicalValidationRunnerSession -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -Width 1280 -Height 820 -Dpi 96 -MemoryLimit 4g -OutputDir "out" -DocumentPath "doc.pptx" -ExtraArguments @("-Host", "Validation", "-AppArgument", "--probe") -PublishDir "pub" -SkipPublish:$true -SkipImageBuild:$false -Replace:$true | Out-Null
+            Stop-PhysicalValidationRunnerSession -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" | Out-Null
+            Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" -Started $false -WarningPrefix "unused" | Out-Null
+            Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" -Started $true -KeepContainer -WarningPrefix "unused" | Out-Null
+            $sessionCalls = @(Get-Content -LiteralPath $sessionProbeLog)
+            if ($sessionCalls.Count -ne 2 -or
+                $sessionCalls[0] -ne "Start|FreeP|6003|1280|820|96|4g|out|doc.pptx|Validation|--probe|pub|True|False|True" -or
+                $sessionCalls[1] -ne "Stop|FreeP|6003|0|0|0||out|||||False|False|False") {
+                throw "Runner-session helpers must forward every Start parameter and stop only a started, non-retained container; received '$($sessionCalls -join ';')'."
+            }
+
+            $retainedMessages = @(Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" -Started $true -KeepContainer -AnnounceRetained -WarningPrefix "unused" 6>&1 | ForEach-Object { "$_" })
+            if ($retainedMessages.Count -ne 1 -or $retainedMessages[0] -ne "Container retained by request on port 6003.") {
+                throw "Stop-PhysicalValidationRunnerSessionSafely -AnnounceRetained must report a retained container; received '$($retainedMessages -join ';')'."
+            }
+
+            $env:FREEX_PHYSICAL_SESSION_FAIL = "1"
+            $sessionWarnings = @()
+            Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" -Started $true -WarningPrefix "Could not stop prefix" -WarningVariable sessionWarnings -WarningAction SilentlyContinue | Out-Null
+            if ($sessionWarnings.Count -ne 1 -or -not "$($sessionWarnings[0])".StartsWith("Could not stop prefix: ") -or -not "$($sessionWarnings[0])".Contains("exited with code 3")) {
+                throw "Stop-PhysicalValidationRunnerSessionSafely must turn a failed stop into one '<prefix>: <error>' warning; received '$($sessionWarnings -join ';')'."
+            }
+            $sessionWarnings = @()
+            Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" -Started $true -WarningPrefix "Could not stop prefix" -OmitExceptionDetail -WarningVariable sessionWarnings -WarningAction SilentlyContinue | Out-Null
+            if ($sessionWarnings.Count -ne 1 -or "$($sessionWarnings[0])" -ne "Could not stop prefix.") {
+                throw "Stop-PhysicalValidationRunnerSessionSafely -OmitExceptionDetail must emit '<prefix>.' only; received '$($sessionWarnings -join ';')'."
+            }
+            $sessionStopThrew = $false
+            try { Stop-PhysicalValidationRunnerSession -RunnerPath $sessionStub -RepoRoot $sessionProbeRoot -App FreeP -Port 6003 -OutputDir "out" | Out-Null } catch { $sessionStopThrew = $true }
+            if (-not $sessionStopThrew) {
+                throw "Stop-PhysicalValidationRunnerSession (the mid-run form) must throw when the stop fails."
+            }
+        }
+        finally {
+            Remove-Item Env:\FREEX_PHYSICAL_SESSION_LOG, Env:\FREEX_PHYSICAL_SESSION_FAIL -ErrorAction SilentlyContinue
+        }
+
+        # Session metadata: missing file, missing directory, default and recorded window identity.
+        $contextOutput = Join-Path $sessionProbeRoot "context"
+        $contextMissingMessage = ""
+        try { Get-PhysicalValidationSessionContext -OutputRoot $contextOutput -AppFolder "freep" -DefaultWindowTitle "FreeP x" | Out-Null } catch { $contextMissingMessage = $_.Exception.Message }
+        if ($contextMissingMessage -ne "Generic runner did not write current session metadata: $(Join-Path $contextOutput 'freep/current-session.json')") {
+            throw "Get-PhysicalValidationSessionContext must name the missing session metadata file; received '$contextMissingMessage'."
+        }
+        New-Item -ItemType Directory -Path (Join-Path $contextOutput "freep") -Force | Out-Null
+        $contextSessionDirectory = Join-Path $sessionProbeRoot "context-session"
+        [IO.File]::WriteAllText((Join-Path $contextOutput "freep/current-session.json"), ('{"sessionDirectory":"' + $contextSessionDirectory.Replace("\", "\\") + '","containerName":"c1"}'))
+        $contextMissingDirectoryMessage = ""
+        try { Get-PhysicalValidationSessionContext -OutputRoot $contextOutput -AppFolder "freep" -DefaultWindowTitle "FreeP x" | Out-Null } catch { $contextMissingDirectoryMessage = $_.Exception.Message }
+        if ($contextMissingDirectoryMessage -ne "Session directory does not exist: $contextSessionDirectory") {
+            throw "Get-PhysicalValidationSessionContext must name the missing session directory; received '$contextMissingDirectoryMessage'."
+        }
+        New-Item -ItemType Directory -Path $contextSessionDirectory -Force | Out-Null
+        $context = Get-PhysicalValidationSessionContext -OutputRoot $contextOutput -AppFolder "freep" -DefaultWindowTitle "FreeP x"
+        if ($context.Session.containerName -ne "c1" -or $context.SessionDirectory -ne $contextSessionDirectory -or $context.Ready.windowTitle -ne "FreeP x" -or $context.Ready.windowId -ne "") {
+            throw "Get-PhysicalValidationSessionContext must default the window identity when ready.json is absent."
+        }
+        [IO.File]::WriteAllText((Join-Path $contextSessionDirectory "ready.json"), '{"windowId":"w9","windowTitle":"FreeP real"}')
+        $context = Get-PhysicalValidationSessionContext -OutputRoot $contextOutput -AppFolder "freep" -DefaultWindowTitle "FreeP x"
+        if ($context.Ready.windowId -ne "w9" -or $context.Ready.windowTitle -ne "FreeP real") {
+            throw "Get-PhysicalValidationSessionContext must return the recorded ready.json window identity."
+        }
+
+        # Docker probe capture: exit code, log content and the empty-output message, from the given directory.
+        function docker {
+            if ($env:FREEX_PHYSICAL_DOCKER_EMPTY -ne "1") { "probe-line-1" }
+            "cwd=$((Get-Location).Path)" | Set-Content -LiteralPath $env:FREEX_PHYSICAL_DOCKER_CWD -Encoding ascii
+            $global:LASTEXITCODE = 7
+        }
+        $env:FREEX_PHYSICAL_DOCKER_CWD = Join-Path $sessionProbeRoot "docker-cwd.txt"
+        try {
+            $dockerLog = Join-Path $sessionProbeRoot "probe.log"
+            $env:FREEX_PHYSICAL_DOCKER_EMPTY = "0"
+            $dockerProbe = Invoke-PhysicalValidationDockerProbe -DockerArguments @("exec", "c1") -WorkingDirectory $sessionProbeRoot -LogPath $dockerLog -EmptyOutputMessage "nothing"
+            if ($dockerProbe.ExitCode -ne 7 -or @($dockerProbe.Output).Count -ne 1 -or "$(@($dockerProbe.Output)[0])" -ne "probe-line-1" -or ((Get-Content -LiteralPath $dockerLog -Raw).Trim()) -ne "probe-line-1") {
+                throw "Invoke-PhysicalValidationDockerProbe must capture output, exit code and the log."
+            }
+            if ((Get-Content -LiteralPath $env:FREEX_PHYSICAL_DOCKER_CWD -Raw).Trim() -ne "cwd=$((Resolve-Path -LiteralPath $sessionProbeRoot).Path)") {
+                throw "Invoke-PhysicalValidationDockerProbe must run docker from the requested working directory."
+            }
+            $env:FREEX_PHYSICAL_DOCKER_EMPTY = "1"
+            $dockerProbe = Invoke-PhysicalValidationDockerProbe -DockerArguments @("exec", "c1") -WorkingDirectory $sessionProbeRoot -LogPath $dockerLog -EmptyOutputMessage "nothing"
+            if (@($dockerProbe.Output).Count -ne 0 -or ((Get-Content -LiteralPath $dockerLog -Raw).Trim()) -ne "nothing") {
+                throw "Invoke-PhysicalValidationDockerProbe must write the empty-output message when docker printed nothing."
+            }
+        }
+        finally {
+            Remove-Item Function:\docker -ErrorAction SilentlyContinue
+            Remove-Item Env:\FREEX_PHYSICAL_DOCKER_EMPTY, Env:\FREEX_PHYSICAL_DOCKER_CWD -ErrorAction SilentlyContinue
+        }
+    }
+    finally {
+        Remove-ToolTemporaryDirectory -Path $sessionProbeRoot
+    }
+
+    # Source-centralization guard: these runners own no inline Start/Stop skeleton; they must go through the
+    # shared runner-session helpers. Run-FreeWReadAloudPauseValidation.ps1 is the only validation runner
+    # that keeps its own lifecycle (no -ExecutionPolicy Bypass, no publish/replace switches, and
+    # -FailureMessage text on both calls).
+    $runnerLifecycleScripts = [ordered]@{
+        "Run-FamilyLinuxInteractionValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePAccessibilityValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePClipboardShortcutValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePFileSlideshowShortcutValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePMultiSelectionX11Validation.ps1" = "ToolScriptSupport.ps1"
+        "Run-FreePNativePickerX11Validation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePPhysicalLinuxValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePPortablePrinterValidation.ps1" = "ToolScriptSupport.ps1"
+        "Run-FreePRichTextShortcutValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePRotatedShapeTextEditValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePSmartArtAuthoringValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreePTransformedTableCellEditValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreeWFieldShortcutValidation.ps1" = "ToolScriptSupport.ps1"
+        "Run-FreeWForegroundPrintValidation.ps1" = "VisualEvidenceScriptSupport.ps1"
+        "Run-FreeWTablePaginationValidation.ps1" = "ToolScriptSupport.ps1"
+    }
+    foreach ($lifecycleEntry in $runnerLifecycleScripts.GetEnumerator()) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $lifecycleEntry.Key) -Raw
+        foreach ($required in @($lifecycleEntry.Value, "PhysicalValidationScriptSupport.ps1", "Start-PhysicalValidationRunnerSession", "Stop-PhysicalValidationRunnerSession")) {
+            if (-not $runner.Contains($required)) {
+                throw "$($lifecycleEntry.Key) must use the shared runner-session lifecycle ('$required' is missing)."
+            }
+        }
+        foreach ($forbidden in @('"-Action", "Start"', '"-Action", "Stop"', '"-ExecutionPolicy", "Bypass"', '$startArguments +=', '$startArgs +=')) {
+            if ($runner.Contains($forbidden)) {
+                throw "$($lifecycleEntry.Key) re-inlines the runner-session lifecycle ('$forbidden'); use PhysicalValidationScriptSupport.ps1."
+            }
+        }
+    }
+    foreach ($validationRunner in Get-ChildItem -LiteralPath $ToolRoot -Filter "Run-*Validation.ps1" -File) {
+        if ($validationRunner.Name -eq "Run-FreeWReadAloudPauseValidation.ps1" -or $runnerLifecycleScripts.Contains($validationRunner.Name)) {
+            continue
+        }
+        if ((Get-Content -LiteralPath $validationRunner.FullName -Raw) -match '"-Action",\s*"(Start|Stop)"') {
+            throw "$($validationRunner.Name) builds its own Run-LinuxInteractiveDocker.ps1 Start/Stop arguments; use the shared runner-session helpers in PhysicalValidationScriptSupport.ps1."
+        }
     }
 
     foreach ($runnerName in @(

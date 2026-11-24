@@ -30,6 +30,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-portable-printer-probe.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-portable-printer-wave105-validation.schema.json"
@@ -104,19 +105,8 @@ $manifestPath = $null
 $probeExitCode = 1
 $session = $null
 try {
-    $startArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port",
-        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
-        "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot,
-        "-CupsDryRun", "-CupsDryRunMode", "success",
-        "-AppEnvironment", "FREEP_PORTABLE_PRINTER_OUTPUT=/work/portable-printer"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
-    if ($Replace) { $startArguments += "-Replace" }
-    Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot -OutputToHost
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot `
+        -ExtraArguments @("-CupsDryRun", "-CupsDryRunMode", "success", "-AppEnvironment", "FREEP_PORTABLE_PRINTER_OUTPUT=/work/portable-printer") -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace -OutputToHost
     $started = $true
 
     $sessionPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
@@ -153,11 +143,6 @@ try {
     Write-Host "Evidence: $evidenceDirectory"
     if ($probeExitCode -ne 0) { throw "Portable printer probe exited with code $probeExitCode." }
 } finally {
-    if ($started) {
-        try {
-            Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot -OutputToHost
-        } catch { Write-Warning "Could not stop harness-owned FreeP container '$($session.containerName)': $($_.Exception.Message)" }
-    }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot -Started $started `
+        -WarningPrefix "Could not stop harness-owned FreeP container '$($session.containerName)'" -OutputToHost
 }

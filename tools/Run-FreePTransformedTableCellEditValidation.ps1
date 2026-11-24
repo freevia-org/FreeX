@@ -20,6 +20,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $resolvedOutputRoot "transformed-table-cell-fixture.pptx"
 $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/05-table.pptx"
@@ -83,10 +84,7 @@ New-Item -ItemType Directory -Path $resolvedOutputRoot -Force | Out-Null
 
 $started = $false; $sessionDirectory = $null; $manifestPath = $null; $probeExitCode = 1
 try {
-    $startArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $fixturePath)
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }; if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }; if ($Replace) { $startArguments += "-Replace" }
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot; $started = $true
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot -DocumentPath $fixturePath -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace; $started = $true
     $session = Get-Content -LiteralPath (Join-Path $resolvedOutputRoot "freep/current-session.json") -Raw | ConvertFrom-Json
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $probeInWork = Join-Path $sessionDirectory "freep-transformed-table-cell-edit-probe.sh"
@@ -95,10 +93,10 @@ try {
     $evidenceDirectory = Split-Path -Parent $manifestPath
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/transformed-table-cell-fixture.pptx", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=transformed-table-cell-fixture.pptx", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-transformed-table-cell-edit-probe.sh", "/work/freep-transformed-table-cell-edit-validation")
-    Push-Location $repoRoot; try { $probeOutput = @(& docker @dockerArguments 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
+    $probeResult = Invoke-PhysicalValidationDockerProbe -DockerArguments $dockerArguments -WorkingDirectory $repoRoot; $probeOutput = @($probeResult.Output); $probeExitCode = $probeResult.ExitCode
     $probeOutput | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8
     Invoke-VisualEvidenceProcess -FilePath "docker" -Arguments @("cp", "$($session.containerName):/work/freep-transformed-table-cell-edit-validation/.", $evidenceDirectory) -WorkingDirectory $repoRoot
-    if ($started -and -not $KeepContainer) { Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot; $started = $false }
+    if ($started -and -not $KeepContainer) { Stop-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot; $started = $false }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write manifest: $manifestPath" }
     Wait-ForManifestEvidence -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
     $manifest = Read-ManifestContract -ManifestPath $manifestPath -SchemaPath $schemaPath
@@ -124,5 +122,5 @@ try {
     Write-Host "Manifest contract validation: passed"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Evidence: $evidenceDirectory"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -ne 0) { throw "FreeP transformed table-cell physical validation failed with probe exit code $probeExitCode." }
 } finally {
-    if ($started -and -not $KeepContainer) { try { Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)" } }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot -Started $started -KeepContainer:$KeepContainer -WarningPrefix "Could not stop harness-owned FreeP container on port ${Port}"
 }

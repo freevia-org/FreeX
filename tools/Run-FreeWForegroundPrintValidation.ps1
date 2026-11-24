@@ -30,6 +30,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freew-foreground-print-probe.sh"
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
@@ -37,18 +38,8 @@ $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $Ou
 $sessionDirectory = $null
 $started = $false
 try {
-    $startArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeW", "-Port", "$Port",
-        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
-        "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot,
-        "-CupsDryRun"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
-    if ($Replace) { $startArguments += "-Replace" }
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeW -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot `
+        -ExtraArguments @("-CupsDryRun") -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "freew/current-session.json"
@@ -70,13 +61,5 @@ try {
     Write-Host "Probe log: $probeLog"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -ne 0) { throw "FreeW foreground print validation failed; evidence retained at $manifestPath" }
 } finally {
-    if ($started) {
-        try {
-            Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", "FreeW", "-Port", "$Port",
-                "-OutputDir", $resolvedOutputRoot
-            ) -WorkingDirectory $repoRoot
-        } catch { Write-Warning "Could not stop harness-owned FreeW container: $($_.Exception.Message)" }
-    }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeW -Port $Port -OutputDir $resolvedOutputRoot -Started $started -WarningPrefix "Could not stop harness-owned FreeW container"
 }
