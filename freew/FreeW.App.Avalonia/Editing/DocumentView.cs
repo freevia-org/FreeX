@@ -8766,11 +8766,12 @@ public sealed partial class DocumentView : Control
             for (var c = 0; c < nextCells.Count; c++)
             {
                 var decision = reviewPolicy.RevisionDecision(nextCells[c].Revision);
-                if (!decision.IsTextVisible) continue;
-                var ft = BuildForLayout(nextCells[c].Ch.ToString(), nextCells[c].Fmt);
-                nextMeasured[c] = ft.WidthIncludingTrailingWhitespace;
-                nextHeights[c] = ft.Height;
+                if (!decision.IsTextVisible || IsTextHiddenInCurrentView(nextCells[c].Fmt)) continue;
+                var metrics = MeasureBodyTextCell(nextCells[c].Ch, nextCells[c].Fmt);
+                nextMeasured[c] = metrics.Width;
+                nextHeights[c] = metrics.Height;
             }
+            ApplyCharacterSpacingAdvances(nextCells, nextMeasured);
             var nextAutomaticHyphenationText = new string(nextCells.Select(cell =>
                 !IsTextHiddenInCurrentView(cell.Fmt) && reviewPolicy.RevisionDecision(cell.Revision).IsTextVisible
                     ? cell.Ch
@@ -8806,8 +8807,9 @@ public sealed partial class DocumentView : Control
             if (IsTextHiddenInCurrentView(cell.Fmt)) continue;
             if (!CurrentReviewDisplayPolicy.RevisionDecision(cell.Revision).IsTextVisible) continue;
             sawVisibleText = true;
-            var h = BuildForLayout(cell.Ch.ToString(), cell.Fmt).Height;
+            var h = MeasureBodyTextCell(cell.Ch, cell.Fmt).Height;
             if (h > firstLineNaturalH) firstLineNaturalH = h;
+            if (IsBodySoftLineBreak(cell.Ch)) break;
         }
         if (!sawVisibleText && nextCells.Count > 0)
             return 0.0; // fully hidden next paragraph carries no visible line to keep with
@@ -8857,6 +8859,8 @@ public sealed partial class DocumentView : Control
         void AddLine(int from, int to)
         {
             var naturalHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+            if (from == to && from > 0 && IsBodySoftLineBreak(cells[from - 1].Ch))
+                naturalHeight = Math.Max(naturalHeight, heights[from - 1]);
             for (var index = from; index < to; index++)
                 naturalHeight = Math.Max(naturalHeight, heights[index]);
             lineHeights.Add(ApplyLineSpacing(naturalHeight * naturalLineHeightScale, pf));
@@ -8864,6 +8868,18 @@ public sealed partial class DocumentView : Control
 
         for (var index = 0; index < cells.Count; index++)
         {
+            if (IsBodySoftLineBreak(cells[index].Ch) && heights[index] > 0)
+            {
+                var breakEnd = BodySoftLineBreakEnd(cells, heights, index);
+                AddLine(lineStart, breakEnd);
+                lineStart = breakEnd;
+                lineWidth = 0;
+                lastBreak = -1;
+                consecutiveAutomaticHyphenLines = 0;
+                index = breakEnd - 1;
+                continue;
+            }
+
             if (cells[index].Ch == ' ')
                 lastBreak = index;
 
@@ -9118,7 +9134,7 @@ public sealed partial class DocumentView : Control
             if (IsTextHiddenInCurrentView(effectiveFormatting)) continue;
             foreach (var ch in run.Text)
             {
-                var h = BuildForLayout(ch.ToString(), effectiveFormatting).Height;
+                var h = MeasureBodyTextCell(ch, effectiveFormatting).Height;
                 if (h > firstLineNaturalH) firstLineNaturalH = h;
                 // VV1: do NOT break — scan all chars across ALL text runs (max over all cells).
             }
@@ -9209,13 +9225,14 @@ public sealed partial class DocumentView : Control
                 var decision = reviewPolicy.RevisionDecision(cells[c].Revision);
                 if (decision.IsTextVisible)
                 {
-                    var ft = BuildForLayout(cells[c].Ch.ToString(), cells[c].Fmt);
-                    measured[c] = ft.WidthIncludingTrailingWhitespace;
-                    heights[c] = ft.Height;
+                    var metrics = MeasureBodyTextCell(cells[c].Ch, cells[c].Fmt);
+                    measured[c] = metrics.Width;
+                    heights[c] = metrics.Height;
                 }
             }
         }
 
+        ApplyCharacterSpacingAdvances(cells, measured);
         var automaticHyphenationText = new string(cells.Select(cell =>
             !cell.IsPageBreak
             && !cell.IsColumnBreak
@@ -9363,6 +9380,29 @@ public sealed partial class DocumentView : Control
                                  (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
             lineExtraInset += DropCapLineInset(lineIndex);
 
+            if (IsBodySoftLineBreak(cells[i].Ch) && heights[i] > 0)
+            {
+                var breakEnd = BodySoftLineBreakEnd(cells, heights, i);
+                var breakLineAlignWidth = Math.Max(20, availableWidth - lineExtraInset);
+                var breakLineHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+                for (var c = lineStart; c < breakEnd; c++)
+                    breakLineHeight = Math.Max(breakLineHeight, heights[c]);
+                if (_wrapExclusions.Count > 0)
+                    AdvancePastTopAndBottomExclusions(breakLineHeight, breakLineAlignWidth);
+                BreakForWidowOrphanPlan(lineIndex, widowBreakBeforeLine);
+                EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakEnd, alignment,
+                    breakLineAlignWidth, paraLeftInset + lineExtraInset, pf,
+                    naturalLineHeightScale: naturalLineHeightScale,
+                    inlineFlowPlan: flowBreakPlan);
+                lineIndex++;
+                i = breakEnd;
+                lineStart = breakEnd;
+                lineWidth = 0;
+                lastBreak = -1;
+                consecutiveAutomaticHyphenLines = 0;
+                continue;
+            }
+
             // AV-TAB: resolve tab advance lazily at the wrapping loop so measured[] reflects the
             // actual pen position at the time each tab is encountered on its line.
             // BP1 fix: pass pen position from the MARGIN (lineWidth + full indent) so tab stops
@@ -9491,6 +9531,8 @@ public sealed partial class DocumentView : Control
         double lineWidth = automaticHyphenWidth;
         // Natural line height: use the tallest glyph but also respect line-spacing rule.
         double naturalHeight = DefaultFontSizePt * PxPerPoint * 1.3;
+        if (from == to && from > 0 && IsBodySoftLineBreak(cells[from - 1].Ch))
+            naturalHeight = Math.Max(naturalHeight, heights[from - 1]);
         for (var c = from; c < to; c++)
         {
             lineWidth += measured[c];
@@ -9518,7 +9560,7 @@ public sealed partial class DocumentView : Control
             // Find the index of the last non-space cell in [from, to).
             for (var c = to - 1; c >= from; c--)
             {
-                if (cells[c].Ch != ' ')
+                if (cells[c].Ch != ' ' && !IsBodySoftLineBreak(cells[c].Ch))
                 {
                     lastNonSpaceIdx = c;
                     break;
@@ -9684,6 +9726,19 @@ public sealed partial class DocumentView : Control
             if (usesSplitFloatFragments && c == splitAt)
                 x = splitSecondStartX;
 
+            // A line control owns a source offset and a caret slot, but no drawable glyph.
+            // In particular, do not let raw LF reach the formatter during painting either.
+            if (IsBodySoftLineBreak(cells[c].Ch))
+            {
+                // The LF half of CRLF is not an independent caret stop or visual line.
+                if (c > from && cells[c].Ch == '\n' && cells[c - 1].Ch == '\r'
+                    && heights[c - 1] > 0 && heights[c] > 0)
+                    continue;
+                _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, 0,
+                    lineHeight, cells[c].Fmt, '\0', Sentinel: true));
+                continue;
+            }
+
             if (!reviewPolicy.IsRevisionTextVisible(cells[c].Revision))
             {
                 _placed.Add(new PlacedChar(blockIndex, SourceOffsetAt(c), x, pageSpaceY, 0, lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, RevisionAuthor: cells[c].RevisionAuthor, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, FormatRevisionAuthor: cells[c].FormatRevision?.Author, Control: cells[c].Control));
@@ -9848,12 +9903,24 @@ public sealed partial class DocumentView : Control
         var heights = new double[cells.Count];
         for (var c = 0; c < cells.Count; c++)
         {
-            var ft = BuildForLayout(cells[c].Ch.ToString(), cells[c].Fmt);
-            measured[c] = ft.WidthIncludingTrailingWhitespace;
-            heights[c] = ft.Height;
+            var metrics = MeasureBodyTextCell(cells[c].Ch, cells[c].Fmt);
+            measured[c] = metrics.Width;
+            heights[c] = metrics.Height;
         }
 
-        EmitLinePaged(blockIndex, cells, measured, heights, 0, cells.Count, TextAlignment.Left, textWidth, 0, ParagraphFormatting.Default, isLast: true);
+        ApplyCharacterSpacingAdvances(cells, measured);
+        var lineStart = 0;
+        for (var index = 0; index < cells.Count; index++)
+        {
+            if (!IsBodySoftLineBreak(cells[index].Ch)) continue;
+            var breakEnd = BodySoftLineBreakEnd(cells, heights, index);
+            EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakEnd,
+                TextAlignment.Left, textWidth, 0, ParagraphFormatting.Default);
+            lineStart = breakEnd;
+            index = breakEnd - 1;
+        }
+        EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count,
+            TextAlignment.Left, textWidth, 0, ParagraphFormatting.Default, isLast: true);
     }
 
     private static string TablePlainText(Table table) =>
@@ -11157,10 +11224,7 @@ public sealed partial class DocumentView : Control
                 var cell = row.Cells[cellIndex];
                 var contentWidth = cell.Paragraphs.Count == 0
                     ? 0
-                    : cell.Paragraphs.Max(paragraph => paragraph.Runs.Sum(run =>
-                        string.IsNullOrEmpty(run.Text)
-                            ? 0
-                            : BuildForLayout(run.Text, ResolveRunFmt(run, paragraph)).WidthIncludingTrailingWhitespace));
+                    : cell.Paragraphs.Max(MeasureContentAutoFitParagraphWidth);
                 measurements.Add(new TableCellContentMeasurement(rowIndex, cellIndex, contentWidth));
             }
         }
@@ -11233,6 +11297,7 @@ public sealed partial class DocumentView : Control
             }
         }
 
+        ApplyTableCharacterSpacing(paragraph, items);
         if (items.Count == 0)
         {
             result.Add(new CellWrappedLine(lineHeight, [], 0));
