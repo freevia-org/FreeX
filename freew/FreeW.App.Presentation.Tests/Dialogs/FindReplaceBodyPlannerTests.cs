@@ -305,15 +305,45 @@ public sealed class FindReplaceBodyPlannerTests
 
     }
 
+    // A flat wall-clock ceiling for this operation failed under machine load (the same replace
+    // measured ~1 s alone and 2-4 s while other sessions were building). What this test must prove
+    // is the SHAPE of the cost: one linear pass, not a per-match loop. So the same Replace All is
+    // timed at N and 4N paragraphs (after a warm-up, best of several attempts to shed scheduling
+    // noise) and the growth ratio is asserted: linear work grows ~4x, a quadratic per-match
+    // rescan grows ~16x, and load slows both sizes alike. The absolute ceiling is only a hang guard.
+    private static TimeSpan TimeParagraphJoins(int paragraphCount, int attempts)
+    {
+        var best = TimeSpan.MaxValue;
+        for (var attempt = 0; attempt < attempts; attempt++)
+        {
+            var joined = Doc(Enumerable.Range(0, paragraphCount).Select(index => (Block)new Paragraph($"p{index}")).ToArray());
+            var watch = Stopwatch.StartNew();
+            var command = Replace(joined, Request("^p", " "));
+            watch.Stop();
+
+            command.ReplacedCount.Should().Be(paragraphCount - 1);
+            joined.Blocks.Should().HaveCount(1);
+            if (watch.Elapsed < best)
+                best = watch.Elapsed;
+        }
+
+        return best;
+    }
+
     [Fact]
     public void FiveThousandParagraphJoins_AreOnePass()
     {
-        var watch = new Stopwatch();
-        var joined = Doc(Enumerable.Range(0, 5_001).Select(index => (Block)new Paragraph($"p{index}")).ToArray());
-        watch.Restart();
-        Replace(joined, Request("^p", " ")).ReplacedCount.Should().Be(5_000);
-        watch.Stop();
-        joined.Blocks.Should().HaveCount(1);
-        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2));
+        const int Small = 1_251;
+        const int Large = 5_001;
+
+        TimeParagraphJoins(300, attempts: 1); // warm-up: JIT and first-use costs out of the measurement.
+        var small = TimeParagraphJoins(Small, attempts: 3);
+        var large = TimeParagraphJoins(Large, attempts: 3);
+
+        large.Should().BeLessThan(TimeSpan.FromSeconds(20), "this is only a hang guard; the growth ratio below is the real check");
+        var ratio = large.TotalMilliseconds / Math.Max(small.TotalMilliseconds, 1d);
+        ratio.Should().BeLessThan(
+            9d,
+            "4x the paragraphs should cost ~4x (one pass); a per-replacement rescan is quadratic (~16x)");
     }
 }
