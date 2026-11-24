@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Input;
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Avalonia.Editing;
 
@@ -79,42 +80,15 @@ public sealed partial class DocumentView
 
     private void ExecuteTextEditWithCaretHistory(IDocumentCommand command, Action placeEditedCaret)
     {
-        _bus.Execute(new CaretHistoryCommand(this, command, CaptureTextCaretState(), placeEditedCaret));
-        CaretMoved?.Invoke();
-    }
-
-    // Restore the story and both selection endpoints before the bus publishes Changed.
-    // Observers (including the shell and accessibility peer) must see one coherent edit.
-    private sealed class CaretHistoryCommand(
-        DocumentView owner,
-        IDocumentCommand command,
-        TextCaretState before,
-        Action placeEditedCaret) : IDocumentCommand
-    {
-        private TextCaretState? _after;
-
-        public string Label => command.Label;
-        public int EstimatedBytes => command.EstimatedBytes + 256;
-        public DocumentCommandMutationKind MutationKind => command.MutationKind;
-        public bool HasEffect(IDocumentCommandContext context) => command.HasEffect(context);
-
-        public void Apply(IDocumentCommandContext context)
-        {
-            command.Apply(context);
-            if (_after is { } after)
+        // Restore the story and both selection endpoints before the bus publishes Changed.
+        // Observer notifications remain in the outer host history path.
+        _bus.Execute(new StateRestoringDocumentCommand<TextCaretState>(
+            command, CaptureTextCaretState(), CaptureTextCaretState, RestoreTextCaretState,
+            () =>
             {
-                owner.RestoreTextCaretState(after);
-                return;
-            }
-            owner.InvalidateLayoutAndVisual();
-            placeEditedCaret();
-            _after = owner.CaptureTextCaretState();
-        }
-
-        public void Revert(IDocumentCommandContext context)
-        {
-            command.Revert(context);
-            owner.RestoreTextCaretState(before);
-        }
+                InvalidateLayoutAndVisual();
+                placeEditedCaret();
+            }, estimatedStateBytes: 256));
+        CaretMoved?.Invoke();
     }
 }
