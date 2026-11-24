@@ -3117,7 +3117,7 @@ function Test-SourceWiring {
                 "public static class WorkbookViewportScrollPlanner",
                 "public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)",
                 "sheet.FrozenRows,",
-                "sheet.FrozenCols);",
+                "ScrollbarValueToWorksheetIndex(horizontalScrollValue, sheet.FrozenCols, CellAddress.MaxCol)",
                 "CountVisibleScrollableRows(viewport, frozenRows)",
                 "CountVisibleScrollableColumns(viewport, frozenColumns)",
                 "public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(",
