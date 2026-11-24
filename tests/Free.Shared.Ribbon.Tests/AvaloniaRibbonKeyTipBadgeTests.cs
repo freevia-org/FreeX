@@ -11,13 +11,9 @@ using Free.Shared.Ribbon.Avalonia;
 
 namespace Free.Shared.Ribbon.Tests;
 
-public sealed class RibbonHeadlessApp : Application
+public sealed class RibbonHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
-
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<RibbonHeadlessApp>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+    public static AppBuilder BuildAvaloniaApp() => ConfigureHeadless<RibbonHeadlessApp>();
 }
 
 public sealed class AvaloniaRibbonKeyTipBadgeTests

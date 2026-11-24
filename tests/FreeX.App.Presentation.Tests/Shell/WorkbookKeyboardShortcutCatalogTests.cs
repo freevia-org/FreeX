@@ -213,61 +213,61 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     }
 
     [Theory]
-    [InlineData(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
-    [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenBackstage)]
-    [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
-    [InlineData(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.SaveWorkbook)]
-    [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SaveWorkbook)]
-    [InlineData(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.PrintWorkbook)]
-    [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.PrintWorkbook)]
-    [InlineData(WorkbookShortcutKey.F2, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.PrintWorkbook)]
-    [InlineData(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Copy)]
-    [InlineData(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Copy)]
-    [InlineData(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Cut)]
-    [InlineData(WorkbookShortcutKey.Delete, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.Cut)]
-    [InlineData(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Paste)]
-    [InlineData(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.Paste)]
-    [InlineData(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt, WorkbookShortcutRoute.PasteSpecial)]
-    [InlineData(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Undo)]
-    [InlineData(WorkbookShortcutKey.Back, WorkbookShortcutModifiers.Alt, WorkbookShortcutRoute.Undo)]
-    [InlineData(WorkbookShortcutKey.Y, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Redo)]
-    [InlineData(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.Redo)]
-    [InlineData(WorkbookShortcutKey.B, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleBold)]
-    [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleBold)]
-    [InlineData(WorkbookShortcutKey.I, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleItalic)]
-    [InlineData(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleItalic)]
-    [InlineData(WorkbookShortcutKey.U, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleUnderline)]
-    [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleUnderline)]
-    [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleStrikethrough)]
-    [InlineData(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FillDown)]
-    [InlineData(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FillRight)]
-    [InlineData(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FlashFill)]
-    [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleShowFormulas)]
-    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ActivatePreviousSheet)]
-    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ActivateNextSheet)]
-    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectPreviousSheetGroup)]
-    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectNextSheetGroup)]
-    [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenFormatCells)]
-    [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
-    [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
-    [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]
-    [InlineData(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatDate)]
-    [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
-    [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
-    [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
-    [InlineData(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
-    [InlineData(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
-    [InlineData(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Find)]
-    [InlineData(WorkbookShortcutKey.H, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Replace)]
-    [InlineData(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.GoTo)]
-    [InlineData(WorkbookShortcutKey.F5, WorkbookShortcutModifiers.None, WorkbookShortcutRoute.GoTo)]
-    [InlineData(WorkbookShortcutKey.F3, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.InsertFunction)]
-    [InlineData(WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Alt, WorkbookShortcutRoute.AutoSum)]
-    [InlineData(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.WorkbookStatistics)]
-    [InlineData(WorkbookShortcutKey.F11, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.InsertWorksheet)]
+    [InlineData(WorkbookShortcutKey.N, FreeKeyModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
+    [InlineData(WorkbookShortcutKey.O, FreeKeyModifiers.Control, WorkbookShortcutRoute.OpenBackstage)]
+    [InlineData(WorkbookShortcutKey.F12, FreeKeyModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
+    [InlineData(WorkbookShortcutKey.S, FreeKeyModifiers.Control, WorkbookShortcutRoute.SaveWorkbook)]
+    [InlineData(WorkbookShortcutKey.F12, FreeKeyModifiers.Shift, WorkbookShortcutRoute.SaveWorkbook)]
+    [InlineData(WorkbookShortcutKey.P, FreeKeyModifiers.Control, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.F12, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.F2, FreeKeyModifiers.Control, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.C, FreeKeyModifiers.Control, WorkbookShortcutRoute.Copy)]
+    [InlineData(WorkbookShortcutKey.Insert, FreeKeyModifiers.Control, WorkbookShortcutRoute.Copy)]
+    [InlineData(WorkbookShortcutKey.X, FreeKeyModifiers.Control, WorkbookShortcutRoute.Cut)]
+    [InlineData(WorkbookShortcutKey.Delete, FreeKeyModifiers.Shift, WorkbookShortcutRoute.Cut)]
+    [InlineData(WorkbookShortcutKey.V, FreeKeyModifiers.Control, WorkbookShortcutRoute.Paste)]
+    [InlineData(WorkbookShortcutKey.Insert, FreeKeyModifiers.Shift, WorkbookShortcutRoute.Paste)]
+    [InlineData(WorkbookShortcutKey.V, FreeKeyModifiers.Control | FreeKeyModifiers.Alt, WorkbookShortcutRoute.PasteSpecial)]
+    [InlineData(WorkbookShortcutKey.Z, FreeKeyModifiers.Control, WorkbookShortcutRoute.Undo)]
+    [InlineData(WorkbookShortcutKey.Back, FreeKeyModifiers.Alt, WorkbookShortcutRoute.Undo)]
+    [InlineData(WorkbookShortcutKey.Y, FreeKeyModifiers.Control, WorkbookShortcutRoute.Redo)]
+    [InlineData(WorkbookShortcutKey.Z, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.Redo)]
+    [InlineData(WorkbookShortcutKey.B, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleBold)]
+    [InlineData(WorkbookShortcutKey.D2, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleBold)]
+    [InlineData(WorkbookShortcutKey.I, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleItalic)]
+    [InlineData(WorkbookShortcutKey.D3, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleItalic)]
+    [InlineData(WorkbookShortcutKey.U, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleUnderline)]
+    [InlineData(WorkbookShortcutKey.D4, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleUnderline)]
+    [InlineData(WorkbookShortcutKey.D5, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleStrikethrough)]
+    [InlineData(WorkbookShortcutKey.D, FreeKeyModifiers.Control, WorkbookShortcutRoute.FillDown)]
+    [InlineData(WorkbookShortcutKey.R, FreeKeyModifiers.Control, WorkbookShortcutRoute.FillRight)]
+    [InlineData(WorkbookShortcutKey.E, FreeKeyModifiers.Control, WorkbookShortcutRoute.FlashFill)]
+    [InlineData(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Control, WorkbookShortcutRoute.ToggleShowFormulas)]
+    [InlineData(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Control, WorkbookShortcutRoute.ActivatePreviousSheet)]
+    [InlineData(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Control, WorkbookShortcutRoute.ActivateNextSheet)]
+    [InlineData(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.SelectPreviousSheetGroup)]
+    [InlineData(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.SelectNextSheetGroup)]
+    [InlineData(WorkbookShortcutKey.D1, FreeKeyModifiers.Control, WorkbookShortcutRoute.OpenFormatCells)]
+    [InlineData(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
+    [InlineData(WorkbookShortcutKey.D1, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
+    [InlineData(WorkbookShortcutKey.D2, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]
+    [InlineData(WorkbookShortcutKey.D3, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatDate)]
+    [InlineData(WorkbookShortcutKey.D4, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
+    [InlineData(WorkbookShortcutKey.D5, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
+    [InlineData(WorkbookShortcutKey.D6, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
+    [InlineData(WorkbookShortcutKey.D7, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.OemMinus, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.F, FreeKeyModifiers.Control, WorkbookShortcutRoute.Find)]
+    [InlineData(WorkbookShortcutKey.H, FreeKeyModifiers.Control, WorkbookShortcutRoute.Replace)]
+    [InlineData(WorkbookShortcutKey.G, FreeKeyModifiers.Control, WorkbookShortcutRoute.GoTo)]
+    [InlineData(WorkbookShortcutKey.F5, FreeKeyModifiers.None, WorkbookShortcutRoute.GoTo)]
+    [InlineData(WorkbookShortcutKey.F3, FreeKeyModifiers.Shift, WorkbookShortcutRoute.InsertFunction)]
+    [InlineData(WorkbookShortcutKey.OemPlus, FreeKeyModifiers.Alt, WorkbookShortcutRoute.AutoSum)]
+    [InlineData(WorkbookShortcutKey.G, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, WorkbookShortcutRoute.WorkbookStatistics)]
+    [InlineData(WorkbookShortcutKey.F11, FreeKeyModifiers.Shift, WorkbookShortcutRoute.InsertWorksheet)]
     public void TryGetWindowsRoute_ResolvesSharedWorkbookShortcutRoutes(
         WorkbookShortcutKey key,
-        WorkbookShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         WorkbookShortcutRoute expected)
     {
         WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out var route)
@@ -277,28 +277,28 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     }
 
     [Theory]
-    [InlineData(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.PrintWorkbook)]
-    [InlineData(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FillDown)]
-    [InlineData(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FillRight)]
-    [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
-    [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
-    [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]
-    [InlineData(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatDate)]
-    [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
-    [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
-    [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
-    [InlineData(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
-    [InlineData(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
-    [InlineData(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ToggleStrikethrough)]
-    [InlineData(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.FlashFill)]
-    [InlineData(WorkbookShortcutKey.T, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.AutoSum)]
-    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.ActivatePreviousSheet)]
-    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.ActivateNextSheet)]
-    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectPreviousSheetGroup)]
-    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectNextSheetGroup)]
+    [InlineData(WorkbookShortcutKey.P, FreeKeyModifiers.Meta, WorkbookShortcutRoute.PrintWorkbook)]
+    [InlineData(WorkbookShortcutKey.D, FreeKeyModifiers.Meta, WorkbookShortcutRoute.FillDown)]
+    [InlineData(WorkbookShortcutKey.R, FreeKeyModifiers.Meta, WorkbookShortcutRoute.FillRight)]
+    [InlineData(WorkbookShortcutKey.Oem3, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
+    [InlineData(WorkbookShortcutKey.D1, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
+    [InlineData(WorkbookShortcutKey.D2, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]
+    [InlineData(WorkbookShortcutKey.D3, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatDate)]
+    [InlineData(WorkbookShortcutKey.D4, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
+    [InlineData(WorkbookShortcutKey.D5, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
+    [InlineData(WorkbookShortcutKey.D6, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
+    [InlineData(WorkbookShortcutKey.D7, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.OemMinus, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.X, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.ToggleStrikethrough)]
+    [InlineData(WorkbookShortcutKey.E, FreeKeyModifiers.Meta, WorkbookShortcutRoute.FlashFill)]
+    [InlineData(WorkbookShortcutKey.T, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.AutoSum)]
+    [InlineData(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Meta, WorkbookShortcutRoute.ActivatePreviousSheet)]
+    [InlineData(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Meta, WorkbookShortcutRoute.ActivateNextSheet)]
+    [InlineData(WorkbookShortcutKey.PageUp, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.SelectPreviousSheetGroup)]
+    [InlineData(WorkbookShortcutKey.PageDown, FreeKeyModifiers.Meta | FreeKeyModifiers.Shift, WorkbookShortcutRoute.SelectNextSheetGroup)]
     public void TryGetNativeMenuRoute_ResolvesSharedMacShortcutRoutes(
         WorkbookShortcutKey key,
-        WorkbookShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         WorkbookShortcutRoute expected)
     {
         WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out var route)
@@ -312,12 +312,12 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     {
         WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
                 WorkbookShortcutKey.N,
-                WorkbookShortcutModifiers.Meta,
+                FreeKeyModifiers.Meta,
                 out _)
             .Should().BeFalse();
         WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(
                 WorkbookShortcutKey.F12,
-                WorkbookShortcutModifiers.Control,
+                FreeKeyModifiers.Control,
                 out _)
             .Should().BeFalse();
     }

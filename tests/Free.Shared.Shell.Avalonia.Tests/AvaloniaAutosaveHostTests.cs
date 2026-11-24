@@ -32,16 +32,15 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
         WriteSnapshot: WriteDocument,
         ReadSnapshot: ReadDocument);
 
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(),
-        "AvaloniaAutosaveHostTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("AvaloniaAutosaveHostTests_");
+
+    private string _directory => _temporaryDirectory.Path;
 
     private readonly AutosaveSnapshotStore _store;
     private readonly List<AvaloniaAutosaveHost<HostTestDocument>> _hosts = [];
 
     public AvaloniaAutosaveHostTests()
     {
-        Directory.CreateDirectory(_directory);
         _store = new AutosaveSnapshotStore(_directory);
     }
 
@@ -50,8 +49,7 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
         foreach (var host in _hosts)
             host.Dispose(); // releases the snapshot ownership lock file
 
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
+        _temporaryDirectory.Dispose();
     }
 
     [Fact]
@@ -78,6 +76,29 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
             1,
             AutosaveRecoveryPromptMode.StartupQuotedDisplayName).Prompt);
         _store.EnumerateCandidates().Should().BeEmpty("an accepted, restored candidate is deleted");
+    });
+
+    [Fact]
+    public Task StartupOffer_WithoutQuotedDisplayName_UsesTheUnquotedStartupWording() => OnUiThread(async owner =>
+    {
+        var candidate = CreateCandidate("unquoted", "Alpha");
+        var prompts = new List<string>();
+        var host = NewHost(
+            hasExplicitDocument: false,
+            restore: AutosaveRecoveryRestore<HostTestDocument>.FromDocument((_, _) => { }),
+            promptOverride: message =>
+            {
+                prompts.Add(message);
+                return true;
+            },
+            quoteStartupDisplayName: false);
+
+        (await host.OfferRecoveryAsync(owner)).Should().BeTrue();
+
+        prompts.Should().Equal(Recovery.CreateOffer(
+            new AutosaveRecoveryPlan(candidate, "Alpha"),
+            1,
+            AutosaveRecoveryPromptMode.Startup).Prompt);
     });
 
     [Fact]
@@ -265,7 +286,8 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
         Func<string, bool?>? promptOverride = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null,
         Func<Task<bool>>? confirmDiscardOrSaveAsync = null,
-        Action<AutosaveApplicationSession<HostTestDocument>>? onSessionCreated = null)
+        Action<AutosaveApplicationSession<HostTestDocument>>? onSessionCreated = null,
+        bool quoteStartupDisplayName = true)
     {
         var ports = new AutosaveDocumentPorts<HostTestDocument>(
             GetOriginalFilePath: () => null,
@@ -289,7 +311,8 @@ public sealed class AvaloniaAutosaveHostTests : IDisposable
                 var session = new AutosaveApplicationSession<HostTestDocument>(Profile, sessionPorts, _store);
                 onSessionCreated?.Invoke(session);
                 return session;
-            });
+            },
+            quoteStartupDisplayName: quoteStartupDisplayName);
         _hosts.Add(host);
         return host;
     }

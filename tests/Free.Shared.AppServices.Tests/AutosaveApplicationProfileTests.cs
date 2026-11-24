@@ -25,17 +25,11 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
         WriteSnapshot: WriteDocument,
         ReadSnapshot: ReadDocument);
 
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(),
-        "SharedAutosaveApplicationProfileTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("SharedAutosaveApplicationProfileTests_");
 
-    public AutosaveApplicationProfileTests() => Directory.CreateDirectory(_directory);
+    private string _directory => _temporaryDirectory.Path;
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void Constructor_RejectsBlankProductNounAndFallback()

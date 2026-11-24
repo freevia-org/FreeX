@@ -2492,7 +2492,7 @@ public static partial class AvaloniaRibbonRenderer
                 // WPF RibbonGalleryComboBox: rich rows (preview glyph, label, description) in a
                 // wide popup while the editable box still shows only the choice label.
                 box.ItemTemplate = AvaloniaRibbonGalleryRow.CreateItemTemplate(RibbonFontFamily);
-                TextSearch.SetTextBinding(box, new Binding(nameof(RibbonComboBoxChoice.Label)));
+                global::Avalonia.Controls.Primitives.TextSearch.SetTextBinding(box, new Binding(nameof(RibbonComboBoxChoice.Label)));
                 box.MaxDropDownHeight = 640;
                 // WPF gallery popup is a white panel with a #5C5C5C 1px frame.
                 box.Resources["ComboBoxDropDownBackground"] = Brushes.White;

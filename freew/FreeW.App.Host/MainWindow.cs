@@ -882,32 +882,31 @@ public sealed partial class MainWindow : Window
         // (already-proven-safe) window-creation pattern below.
         if (startupFilePaths is { Count: > 0 })
         {
-            // shared-startup-args F2: a path can appear more than once in argv (multi-selecting the
-            // same file and dragging it onto the taskbar icon delivers one launch with the path
-            // duplicated) -- collapse those duplicates to a single occurrence BEFORE splitting into
-            // "primary window" + "additional windows" below, the same guard FreeX/FreeP get for free
-            // from the shared StartupFileOpenPlanner's seenPaths HashSet. Without this, a duplicated
-            // path opened a second, unsynchronized window on the same file with no "already open"
-            // warning.
-            var distinctStartupFilePaths = DeduplicateStartupFilePaths(startupFilePaths);
-            _file.OpenPath(distinctStartupFilePaths[0]);
-            if (distinctStartupFilePaths.Length > 1)
+            // Route the arguments through the shared startup-file planner (the same one the Avalonia
+            // host and FreeX/FreeP use): missing/unsupported paths are skipped and a path repeated in
+            // argv (multi-selecting one file and dragging it onto the taskbar icon) collapses to one
+            // window, so no unsynchronized second window opens on the same file.
+            var startupPlan = _file.PlanStartupDocuments(startupFilePaths);
+            if (startupPlan.Entries.Count == 0)
             {
-                var additionalStartupFilePaths = distinctStartupFilePaths.Skip(1).ToArray();
-                Loaded += (_, _) => _ = OpenAdditionalStartupFiles(additionalStartupFilePaths);
+                // Nothing openable: still report the first argument through OpenPath's error dialog
+                // (missing file / unrecognized type) and keep the sample document, as before.
+                _file.OpenPath(startupFilePaths[0]);
+            }
+            else
+            {
+                _file.OpenPath(startupPlan.Entries[0].Path);
+                if (startupPlan.Entries.Count > 1)
+                {
+                    var additionalStartupFilePaths = startupPlan.Entries.Skip(1).Select(entry => entry.Path).ToArray();
+                    Loaded += (_, _) => _ = OpenAdditionalStartupFiles(additionalStartupFilePaths);
+                }
             }
         }
 
         // Print Layout (the default view) opens on pages, as in Word.
         SyncPrintLayoutSurface();
     }
-
-    // shared-startup-args F2: the same PlatformPathIdentityComparer the shared StartupFileOpenPlanner
-    // uses for its own seenPaths guard (shared/Free.Shared.AppServices/StartupFileOpenPlanner.cs),
-    // applied here because FreeW's WPF host does not route startup arguments through that planner.
-    // Order-preserving so the first occurrence of a duplicated path still becomes the primary window.
-    internal static string[] DeduplicateStartupFilePaths(IReadOnlyList<string> startupFilePaths) =>
-        startupFilePaths.Distinct(PlatformPathIdentityComparer.Current).ToArray();
 
     private void MainWindow_DragOver(object sender, DragEventArgs e)
     {

@@ -2,11 +2,9 @@ namespace Free.Shared.AppServices.Tests;
 
 public sealed class AutosaveRecoveryWorkflowCoreTests : IDisposable
 {
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(),
-        "SharedAutosaveRecoveryWorkflowTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("SharedAutosaveRecoveryWorkflowTests_");
 
-    public AutosaveRecoveryWorkflowCoreTests() => Directory.CreateDirectory(_directory);
+    private string _directory => _temporaryDirectory.Path;
 
     [Fact]
     public async Task RunAsync_SequencesOffersAndUsesCurrentWindowOnlyForFirstAcceptance()
@@ -83,11 +81,7 @@ public sealed class AutosaveRecoveryWorkflowCoreTests : IDisposable
             .Should().Be(expected);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private TestPlan Plan(string displayName, bool createFiles = false)
     {

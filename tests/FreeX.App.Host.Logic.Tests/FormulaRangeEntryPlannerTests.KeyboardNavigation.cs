@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -38,7 +39,7 @@ public sealed partial class FormulaRangeEntryPlannerTests
 
         FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
-                FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift,
+                FreeKeyModifiers.Control | FreeKeyModifiers.Shift,
                 CellAddress.Parse("B2", sheet.Id),
                 sheet,
                 rowPageSize: 20,
@@ -56,7 +57,7 @@ public sealed partial class FormulaRangeEntryPlannerTests
 
         FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
-                FormulaEditorModifiers.Shift,
+                FreeKeyModifiers.Shift,
                 current,
                 sheet: null,
                 rowPageSize: 20,
@@ -77,7 +78,7 @@ public sealed partial class FormulaRangeEntryPlannerTests
     {
         FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,
-                FormulaEditorModifiers.None,
+                FreeKeyModifiers.None,
                 CellAddress.Parse("B2", SheetId),
                 sheet: null,
                 rowPageSize: 20,
@@ -87,13 +88,13 @@ public sealed partial class FormulaRangeEntryPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None, FormulaEditorModifiers.Alt)]
-    [InlineData(FormulaEditorKey.System, FormulaEditorKey.Right, FormulaEditorModifiers.Alt)]
-    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None, FormulaEditorModifiers.Control | FormulaEditorModifiers.Alt)]
+    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None, FreeKeyModifiers.Alt)]
+    [InlineData(FormulaEditorKey.System, FormulaEditorKey.Right, FreeKeyModifiers.Alt)]
+    [InlineData(FormulaEditorKey.Right, FormulaEditorKey.None, FreeKeyModifiers.Control | FreeKeyModifiers.Alt)]
     public void GetKeyboardSelectionTarget_IgnoresUnsupportedAltNavigationChords(
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
-        FormulaEditorModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(key,
                 systemKey,

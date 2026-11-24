@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -264,19 +265,8 @@ public sealed partial class MainWindow
             _ => null
         };
 
-    private static DrawingObjectNudgeModifiers ToDrawingObjectNudgeModifiers(KeyModifiers modifiers)
-    {
-        var result = DrawingObjectNudgeModifiers.None;
-        if ((modifiers & KeyModifiers.Control) != 0)
-            result |= DrawingObjectNudgeModifiers.Control;
-        if ((modifiers & KeyModifiers.Shift) != 0)
-            result |= DrawingObjectNudgeModifiers.Shift;
-        if ((modifiers & KeyModifiers.Alt) != 0)
-            result |= DrawingObjectNudgeModifiers.Alt;
-        if ((modifiers & KeyModifiers.Meta) != 0)
-            result |= DrawingObjectNudgeModifiers.Meta;
-        return result;
-    }
+    private static FreeKeyModifiers ToDrawingObjectNudgeModifiers(KeyModifiers modifiers) =>
+        Free.Shared.Shell.Avalonia.AvaloniaKeyModifiersMapper.FromAvalonia(modifiers);
 
     private async Task ResizeSelectedChartObjectAsync()
     {

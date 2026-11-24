@@ -23,9 +23,8 @@ try {
         Out-File -LiteralPath (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
     $before = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect" -ArtifactPath $fixturePath
 
-    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") `
-        -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath `
-        -Replace
+    Start-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port `
+        -OutputDir $resolvedOutput -DocumentPath $fixturePath
     $started = $true
 
     $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
@@ -91,11 +90,6 @@ try {
 } finally {
     if ($started) {
         # A failed container stop must not mask the real validation error in flight.
-        try {
-            & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
-            if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
-        } catch {
-            Write-Warning "Could not stop harness-owned FreeW container on port ${Port}: $($_.Exception.Message)"
-        }
+        Stop-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port -WarnOnFailure
     }
 }

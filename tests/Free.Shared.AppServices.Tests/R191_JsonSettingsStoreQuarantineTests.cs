@@ -21,27 +21,13 @@ public sealed class R191_JsonSettingsStoreQuarantineTests : IDisposable
         public List<string> Items { get; set; } = [];
     }
 
-    private readonly string _dir = Path.Combine(
-        Path.GetTempPath(),
-        "freex-r191-" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("freex-r191-");
 
-    private string StorePath => Path.Combine(_dir, "settings.json");
+    private string StorePath => Path.Combine(_temporaryDirectory.Path, "settings.json");
 
     private string QuarantinePath => StorePath + ".unreadable";
 
-    public R191_JsonSettingsStoreQuarantineTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose()
-    {
-        try
-        {
-            Directory.Delete(_dir, recursive: true);
-        }
-        catch
-        {
-            // Test cleanup only.
-        }
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]
     public void Save_AfterAnUnreadableLoad_KeepsTheOriginalFileAside()

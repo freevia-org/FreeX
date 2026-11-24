@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -482,13 +483,13 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
         KeyModifiers modifiers,
         KeyboardCommandShortcut shortcut) => [key, modifiers, shortcut];
 
-    private static KeyModifiers ToAvaloniaModifiers(WorkbookShortcutModifiers modifiers)
+    private static KeyModifiers ToAvaloniaModifiers(FreeKeyModifiers modifiers)
     {
         var result = KeyModifiers.None;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control)) result |= KeyModifiers.Control;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) result |= KeyModifiers.Meta;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) result |= KeyModifiers.Alt;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) result |= KeyModifiers.Shift;
+        if (modifiers.HasFlag(FreeKeyModifiers.Control)) result |= KeyModifiers.Control;
+        if (modifiers.HasFlag(FreeKeyModifiers.Meta)) result |= KeyModifiers.Meta;
+        if (modifiers.HasFlag(FreeKeyModifiers.Alt)) result |= KeyModifiers.Alt;
+        if (modifiers.HasFlag(FreeKeyModifiers.Shift)) result |= KeyModifiers.Shift;
         return result;
     }
 

@@ -106,8 +106,9 @@ public sealed class PresentationAccessibilityCheckerSessionTests
     {
         var sessionSource = ReadWorkspaceFile(
             "freep", "FreeP.App.Presentation", "PresentationReviewWorkflowSession.cs");
-        var wpfSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
-        var avaloniaSource = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "MainWindow.cs");
+        var facadeSource = ReadWorkspaceFile("freep", "RendererShared", "MainWindow.ReviewFacade.cs");
+        var wpfSource = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs") + facadeSource;
+        var avaloniaSource = ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "MainWindow.cs") + facadeSource;
 
         sessionSource.Should().Contain("RefreshAccessibilityCheckerPlans()");
         sessionSource.Should().Contain("ApplyAccessibilityCheckerNavigation(");

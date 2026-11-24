@@ -39,7 +39,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("VerticalScrollBarVisibility = windowPlan.ShowBrowseScrollbars");
         source.Should().Contain("_runtime.StartRendererSession();");
         source.Should().Contain("_runtime.HandleKioskRestartElapsed();");
-        source.Should().Contain("ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();");
+        RendererContractsSource().Should().Contain("ISlideShowDisplayRenderer.RequestKioskRestart() => _runtime.RestartKioskShow();");
         source.Should().NotContain("private void StartKioskRestartTimer()");
         source.Should().NotContain("_presentation.ShowBrowseScrollbar");
         source.Should().NotContain("SlideShowKioskRestartPlanner");
@@ -143,7 +143,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("case SlideShowPointerClickIntentKind.");
         source.Should().NotContain("if (e.Key == Key.P");
         source.Should().NotContain("if (hlink.IsExternal)");
-        source.Should().Contain("SlideShowTransitionPlaybackCoordinator.Play(_presentation, slide, t, this);");
+        RendererContractsSource().Should().Contain("SlideShowTransitionPlaybackCoordinator.Play(_presentation, slide, t, this);");
         source.Should().Contain("ISlideShowTransitionPlaybackRenderer");
         source.Should().Contain("PlaySplitTransition(");
         source.Should().Contain("PlayBlindsTransition(");
@@ -164,7 +164,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowMorphPlanner.BuildRendererPlan(");
         source.Should().NotContain("SlideShowMorphPlanner.Plan(");
         source.Should().NotContain("MorphTokenScreenRect(");
-        source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayPerspective(");
+        RendererContractsSource().Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayPerspective(");
         source.Should().Contain("PlayPerspectiveTransition(");
         source.Should().Contain("SlideShowPerspectiveTransitionPlan perspective");
         source.Should().NotContain("SlideShowPerspectiveTransitionPlanner.Plan(");
@@ -172,7 +172,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("PlayCubeTransition(");
         source.Should().NotContain("PlayRotateTransition(");
         source.Should().Contain("BuildPerspectiveMatrix(");
-        source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayPolygonClip(");
+        RendererContractsSource().Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayPolygonClip(");
         source.Should().Contain("PlayPolygonClipTransition(");
         source.Should().Contain("BuildPolygonClipGeometry(");
         source.Should().Contain("SlideShowPolygonClipTransitionPlanner.ResolveFrameProgress(");
@@ -190,7 +190,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowTransformTransitionPlan transformPlan");
         source.Should().Contain("transformPlan.ResolveIncoming(");
         source.Should().Contain("transformPlan.ResolveOutgoing(");
-        source.Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayMorph");
+        RendererContractsSource().Should().Contain("ISlideShowTransitionPlaybackRenderer.PlayMorph");
         source.Should().Contain("PlayDissolveTransition(");
         source.Should().Contain("PlayFlashTransition(");
         source.Should().Contain("PlayBoxTransition(");
@@ -490,4 +490,10 @@ public sealed class SlideShowHostPolicySourceTests
         framePlannerSource.Should().Contain("plan.Deceleration");
     }
 
+    private static string RendererContractsSource() =>
+        File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "RendererShared",
+            "SlideShowWindow.RendererContracts.cs"));
 }

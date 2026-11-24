@@ -32,6 +32,8 @@
   <ItemGroup>
     <Compile Include="../SharedTestInfrastructure/Ribbon/RibbonDefinitionValidator.cs"
              Link="TestSupport/RibbonDefinitionValidator.cs" />
+    <Compile Include="../SharedTestInfrastructure/Avalonia/HeadlessFluentApplication.cs"
+             Link="TestSupport/HeadlessFluentApplication.cs" />
   </ItemGroup>
 
   <ItemGroup>

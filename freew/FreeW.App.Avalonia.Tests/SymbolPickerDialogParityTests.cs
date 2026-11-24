@@ -18,7 +18,8 @@ public sealed class SymbolPickerDialogParityTests
     {
         var source = File.ReadAllText(RepoFile("freew", "FreeW.App.Avalonia", "SymbolPickerDialog.cs"));
 
-        source.Should().Contain("FreeWSymbolPickerDialogPlanner.Glyphs");
+        source.Should().Contain("FreeWSymbolPickerDialogPlanner.GetGlyphs(");
+        source.Should().Contain("FreeWSymbolPickerDialogPlanner.GetSubsetNames()");
         source.Should().Contain("ApplyGlyphButtonChrome(grid)");
         source.Should().Contain("button.Height = FreeWSymbolPickerDialogPlanner.ButtonSize;");
         source.Should().Contain("button.MaxHeight = FreeWSymbolPickerDialogPlanner.ButtonSize;");
@@ -64,6 +65,27 @@ public sealed class SymbolPickerDialogParityTests
             global::Avalonia.Automation.AutomationProperties.GetAutomationId(cancel)
                 .Should().Be(FreeWSymbolPickerDialogPlanner.CancelAutomationId);
             dialog.SelectGlyphForTest("\u03a9").Should().Be("\u03a9");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Dialog_SubsetSelectionSwapsTheGlyphGridToTheSharedCatalogSubset()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new SymbolPickerDialog();
+
+            dialog.SelectSubsetForTest("Currency Symbols");
+
+            var expected = FreeWSymbolPickerDialogPlanner.GetGlyphs("Currency Symbols");
+            dialog.GlyphButtonsForTest.Select(button => (string)button.Content!).Should().Equal(expected);
+            expected.Should().Contain("€").And.HaveCountGreaterThan(5);
+            dialog.GlyphButtonsForTest.Should().OnlyContain(button =>
+                button.MinWidth == FreeWSymbolPickerDialogPlanner.ButtonSize
+                && button.Height == FreeWSymbolPickerDialogPlanner.ButtonSize
+                && button.Template != null);
+            dialog.SelectGlyphForTest("€").Should().Be("€");
+            return true;
         }, CancellationToken.None);
     }
 

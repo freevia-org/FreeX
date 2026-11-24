@@ -56,7 +56,10 @@ public sealed class CustomDialogChromeOwnershipTests
     [Fact]
     public void WpfRibbonModalRoutesFlowThroughTheSharedWindowBase()
     {
-        var source = ReadSource("FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        // The author editor dialog lives in its own partial file (FreeWRibbonCommands.AuthorEditorDialog.cs);
+        // the modal routes are counted across both files of the partial class.
+        var source = ReadSource("FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs") +
+            ReadSource("FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.AuthorEditorDialog.cs");
 
         source.Should().NotContain("new Window", "ribbon modal routes must not bypass shared WPF dialog chrome");
         Count(source, "new FreeWDialogWindow").Should().Be(

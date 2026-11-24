@@ -209,8 +209,13 @@ public sealed class FreeWBehaviorSourceGuardTests
 
         var dictionaryStore = ReadSource(
             "freew", "FreeW.App.Presentation", "Proofing", "CustomDictionaryStore.cs");
-        dictionaryStore.Should().Contain("AtomicLineSetStore");
+        dictionaryStore.Should().Contain(": CustomDictionaryFileStore");
         dictionaryStore.Should().NotContain("AtomicFileWriter.WriteAllText(");
+
+        var sharedFileStore = ReadSource(
+            "shared", "Free.Shared.AppServices", "CustomDictionaryFileStore.cs");
+        sharedFileStore.Should().Contain("AtomicLineSetStore");
+        sharedFileStore.Should().NotContain("AtomicFileWriter.WriteAllText(");
 
         var sharedLineSetStore = ReadSource(
             "shared", "Free.Shared.AppServices", "AtomicLineSetStore.cs");

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Avalonia.Input;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -99,14 +100,14 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
         interactions.Should().NotContain(item =>
             item.Interaction.Steps.Count == 1 &&
             item.Interaction.Steps[0] == new ShortcutGestureStep("F12"));
-        interactions.Should().Contain(item => Is(item.Interaction, "E", ShortcutModifierKeys.Control));
-        interactions.Should().Contain(item => Is(item.Interaction, "F12", ShortcutModifierKeys.Control));
-        interactions.Should().Contain(item => Is(item.Interaction, "F12", ShortcutModifierKeys.Shift));
-        interactions.Should().Contain(item => Is(item.Interaction, "F12", ShortcutModifierKeys.Control | ShortcutModifierKeys.Shift));
-        interactions.Should().Contain(item => Is(item.Interaction, "Backspace", ShortcutModifierKeys.None));
-        interactions.Should().Contain(item => Is(item.Interaction, "Backspace", ShortcutModifierKeys.Shift));
+        interactions.Should().Contain(item => Is(item.Interaction, "E", FreeKeyModifiers.Control));
+        interactions.Should().Contain(item => Is(item.Interaction, "F12", FreeKeyModifiers.Control));
+        interactions.Should().Contain(item => Is(item.Interaction, "F12", FreeKeyModifiers.Shift));
+        interactions.Should().Contain(item => Is(item.Interaction, "F12", FreeKeyModifiers.Control | FreeKeyModifiers.Shift));
+        interactions.Should().Contain(item => Is(item.Interaction, "Backspace", FreeKeyModifiers.None));
+        interactions.Should().Contain(item => Is(item.Interaction, "Backspace", FreeKeyModifiers.Shift));
         interactions.Should().Contain(item =>
-            item.Interaction.Steps.Any(step => step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)));
+            item.Interaction.Steps.Any(step => step.Modifiers.HasFlag(FreeKeyModifiers.Meta)));
     }
 
     [Fact]
@@ -305,17 +306,17 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
     private static bool Is(
         ShortcutInteractionDescriptor interaction,
         string key,
-        ShortcutModifierKeys modifiers) =>
+        FreeKeyModifiers modifiers) =>
         interaction.Steps.Count == 1 &&
         interaction.Steps[0] == new ShortcutGestureStep(key, modifiers);
 
-    private static KeyModifiers ToAvaloniaModifiers(WorkbookShortcutModifiers modifiers)
+    private static KeyModifiers ToAvaloniaModifiers(FreeKeyModifiers modifiers)
     {
         var result = KeyModifiers.None;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control)) result |= KeyModifiers.Control;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) result |= KeyModifiers.Meta;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) result |= KeyModifiers.Alt;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) result |= KeyModifiers.Shift;
+        if (modifiers.HasFlag(FreeKeyModifiers.Control)) result |= KeyModifiers.Control;
+        if (modifiers.HasFlag(FreeKeyModifiers.Meta)) result |= KeyModifiers.Meta;
+        if (modifiers.HasFlag(FreeKeyModifiers.Alt)) result |= KeyModifiers.Alt;
+        if (modifiers.HasFlag(FreeKeyModifiers.Shift)) result |= KeyModifiers.Shift;
         return result;
     }
 
@@ -357,10 +358,10 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
             return null;
 
         var modifiers = KeyModifiers.None;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= KeyModifiers.Control;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= KeyModifiers.Shift;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= KeyModifiers.Alt;
-        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= KeyModifiers.Meta;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Control)) modifiers |= KeyModifiers.Control;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Shift)) modifiers |= KeyModifiers.Shift;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Alt)) modifiers |= KeyModifiers.Alt;
+        if (step.Modifiers.HasFlag(FreeKeyModifiers.Meta)) modifiers |= KeyModifiers.Meta;
         return (key, modifiers);
     }
 }

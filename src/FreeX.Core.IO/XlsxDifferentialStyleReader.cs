@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using FreeX.Core.Model;
 using System.Globalization;
 using System.IO.Compression;
@@ -167,8 +168,8 @@ internal static class XlsxDifferentialStyleReader
             var diagBorder = ReadBorder(border.Element(workbookNs + "diagonal"), workbookNs, theme, indexedColors);
             if (diagBorder.Style != BorderStyle.None)
             {
-                style.BorderDiagonalDown = border.Attribute("diagonalDown")?.Value is "1" or "true" ? diagBorder : default;
-                style.BorderDiagonalUp = border.Attribute("diagonalUp")?.Value is "1" or "true" ? diagBorder : default;
+                style.BorderDiagonalDown = OoxmlBooleanLexical.IsTrue(border.Attribute("diagonalDown")?.Value) ? diagBorder : default;
+                style.BorderDiagonalUp = OoxmlBooleanLexical.IsTrue(border.Attribute("diagonalUp")?.Value) ? diagBorder : default;
             }
         }
 

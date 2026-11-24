@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Runtime.InteropServices;
 
 using Avalonia.Controls;
@@ -223,10 +224,10 @@ public sealed partial class MainWindow
                     SelectCurrentRegionOrAll();
                     break;
                 case AvaloniaLocalShortcut.ToggleExtendSelection:
-                    ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers.None);
+                    ToggleKeyboardSelectionMode(FreeKeyModifiers.None);
                     break;
                 case AvaloniaLocalShortcut.ToggleAddSelection:
-                    ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers.Shift);
+                    ToggleKeyboardSelectionMode(FreeKeyModifiers.Shift);
                     break;
                 case AvaloniaLocalShortcut.InsertCells:
                     await ShowInsertCellsDialogAsync();
@@ -484,7 +485,7 @@ public sealed partial class MainWindow
         return args.Handled;
     }
 
-    private void ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers modifiers)
+    private void ToggleKeyboardSelectionMode(FreeKeyModifiers modifiers)
     {
         if (!ExcelSelectionModePlanner.TryToggle(
                 ExcelSelectionKey.F8,

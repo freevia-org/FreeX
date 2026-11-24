@@ -5,7 +5,11 @@ public sealed record FreeWSymbolPickerSemantic(
     string AutomationName,
     string CodePointLabel);
 
-/// <summary>Shared content and code-point labels for FreeW's compact Symbol dialog.</summary>
+/// <summary>
+/// Shared content and code-point labels for FreeW's compact Symbol dialog. The glyph catalog (Unicode subsets)
+/// is the shared <see cref="SymbolPickerCatalogPlanner"/> FreeX's Insert Symbol dialog also uses; the dialog opens on the
+/// curated <see cref="CommonSubsetName"/> set and lets the user switch to any catalog subset.
+/// </summary>
 public static class FreeWSymbolPickerDialogPlanner
 {
     public const string Title = "Symbol";
@@ -19,6 +23,10 @@ public static class FreeWSymbolPickerDialogPlanner
     public const int FooterButtonMinWidth = 72;
     public const string DialogAutomationId = "SymbolPickerDialog";
     public const string CancelAutomationId = "SymbolPickerCancelButton";
+    public const string CommonSubsetName = "Common";
+    public const string SubsetAutomationId = "SymbolPickerSubsetComboBox";
+    public const string SubsetAutomationName = "Subset";
+    public const int GridMaxHeight = 320;
 
     public static readonly IReadOnlyList<string> Glyphs =
     [
@@ -29,6 +37,16 @@ public static class FreeWSymbolPickerDialogPlanner
         "\u00a5", "\u00a2", "\u00bd", "\u00bc", "\u00be", "\u2030",
         "\u03b1", "\u03b2", "\u03b3", "\u03c0", "\u03a3", "\u03a9",
     ];
+
+    /// <summary>The picker's subset choices: the curated common set first, then every shared catalog subset.</summary>
+    public static IReadOnlyList<string> GetSubsetNames() =>
+        [CommonSubsetName, .. SymbolPickerCatalogPlanner.GetSubsetNames()];
+
+    /// <summary>The glyphs shown for a subset; an unknown/blank name falls back to the common set.</summary>
+    public static IReadOnlyList<string> GetGlyphs(string? subset) =>
+        string.IsNullOrWhiteSpace(subset) || string.Equals(subset, CommonSubsetName, StringComparison.Ordinal)
+            ? Glyphs
+            : SymbolPickerCatalogPlanner.GetSymbolsForSubset(subset);
 
     public static string BuildCodePointLabel(string glyph)
     {

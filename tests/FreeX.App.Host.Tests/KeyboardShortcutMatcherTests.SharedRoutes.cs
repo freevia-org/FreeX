@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.App.Presentation.Shell;
@@ -124,14 +125,14 @@ public sealed partial class KeyboardShortcutMatcherTests
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
         };
 
-    private static ModifierKeys ToWpfModifiers(WorkbookShortcutModifiers modifiers)
+    private static ModifierKeys ToWpfModifiers(FreeKeyModifiers modifiers)
     {
         var result = ModifierKeys.None;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control))
+        if (modifiers.HasFlag(FreeKeyModifiers.Control))
             result |= ModifierKeys.Control;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt))
+        if (modifiers.HasFlag(FreeKeyModifiers.Alt))
             result |= ModifierKeys.Alt;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift))
+        if (modifiers.HasFlag(FreeKeyModifiers.Shift))
             result |= ModifierKeys.Shift;
         return result;
     }

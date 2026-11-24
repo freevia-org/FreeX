@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Avalonia.Input;
 using FluentAssertions;
 using FreeX.App.Presentation.Shell;
@@ -53,8 +54,8 @@ public sealed class MacOsExcelShortcutAliasTests
             .Should().BeTrue();
         WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
                 WorkbookShortcutKey.F3,
-                (modifiers.HasFlag(KeyModifiers.Control) ? WorkbookShortcutModifiers.Control : 0) |
-                (modifiers.HasFlag(KeyModifiers.Shift) ? WorkbookShortcutModifiers.Shift : 0),
+                (modifiers.HasFlag(KeyModifiers.Control) ? FreeKeyModifiers.Control : 0) |
+                (modifiers.HasFlag(KeyModifiers.Shift) ? FreeKeyModifiers.Shift : 0),
                 out var command)
             .Should().BeTrue();
         key.Should().Be(Key.F3);
@@ -65,13 +66,13 @@ public sealed class MacOsExcelShortcutAliasTests
     public void ControlQAndControlShiftU_AreTheMacExcelChordsAlreadyInTheCatalog_AndCmdQIsNotQuickAnalysis()
     {
         WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
-                WorkbookShortcutKey.Q, WorkbookShortcutModifiers.Control, out var quick).Should().BeTrue();
+                WorkbookShortcutKey.Q, FreeKeyModifiers.Control, out var quick).Should().BeTrue();
         quick.Should().Be(KeyboardCommandShortcut.QuickAnalysis);
         WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
-                WorkbookShortcutKey.U, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, out var formulaBar)
+                WorkbookShortcutKey.U, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, out var formulaBar)
             .Should().BeTrue();
         formulaBar.Should().Be(KeyboardCommandShortcut.ToggleFormulaBarExpansion);
         WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
-                WorkbookShortcutKey.Q, WorkbookShortcutModifiers.Meta, out _).Should().BeFalse("Cmd+Q is Quit");
+                WorkbookShortcutKey.Q, FreeKeyModifiers.Meta, out _).Should().BeFalse("Cmd+Q is Quit");
     }
 }

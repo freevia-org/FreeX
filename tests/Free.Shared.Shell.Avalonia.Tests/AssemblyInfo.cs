@@ -7,11 +7,7 @@ using Avalonia.Themes.Fluent;
 
 namespace Free.Shared.Shell.Avalonia.Tests;
 
-public sealed class ShellHeadlessApp : Application
+public sealed class ShellHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
-
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<ShellHeadlessApp>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+    public static AppBuilder BuildAvaloniaApp() => ConfigureHeadless<ShellHeadlessApp>();
 }

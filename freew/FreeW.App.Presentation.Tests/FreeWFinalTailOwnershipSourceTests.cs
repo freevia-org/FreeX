@@ -86,7 +86,9 @@ public sealed class FreeWFinalTailOwnershipSourceTests
     {
         var wpfTable = Read("freew", "FreeW.App.Host", "TablePropertiesDialog.cs");
         var avaloniaTable = Read("freew", "FreeW.App.Avalonia", "TableDialogs.cs");
-        var wpfReferences = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var wpfReferences =
+            Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs")
+            + Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.AuthorEditorDialog.cs");
         var avaloniaReferences = Read("freew", "FreeW.App.Avalonia", "ReferencesDialogs.cs");
 
         foreach (var source in new[] { wpfTable, avaloniaTable })

@@ -32,16 +32,15 @@ internal static class XlsxWorkbookThemeWriter
     {
         XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(drawingNs + "theme",
-                new XAttribute(XNamespace.Xmlns + "a", drawingNs),
-                new XAttribute("name", theme.Name),
-                new XElement(drawingNs + "themeElements",
-                    CreateColorSchemeElement(theme, drawingNs),
-                    CreateFontSchemeElement(theme, drawingNs),
-                    CreateFormatSchemeElement(theme, drawingNs)),
-                CreateThemeSupplementElements(theme, drawingNs)));
+        // The a:theme scaffold is the shared DrawingMlThemeXml; the native-preserving choices (verbatim
+        // native colour/font/format scheme, supplement elements) stay this writer's.
+        return DrawingMlThemeXml.CreateThemeDocument(
+            theme.Name,
+            CreateColorSchemeElement(theme, drawingNs),
+            CreateFontSchemeElement(theme, drawingNs),
+            CreateFormatSchemeElement(theme, drawingNs),
+            CreateThemeSupplementElements(theme, drawingNs),
+            new XDeclaration("1.0", "UTF-8", "yes"));
     }
 
     private static XElement CreateColorSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
@@ -49,12 +48,12 @@ internal static class XlsxWorkbookThemeWriter
         if (TryCreateNativeThemeElement(theme.NativeColorSchemeXml, drawingNs + "clrScheme") is { } colorScheme)
             return colorScheme;
 
-        return new XElement(drawingNs + "clrScheme",
-            new XAttribute("name", $"{theme.Name} Colors"),
+        return DrawingMlThemeXml.CreateColorScheme(
+            $"{theme.Name} Colors",
             XlsxWorkbookThemeReader.ColorElements.Select(color =>
-                new XElement(drawingNs + color.ElementName,
-                    new XElement(drawingNs + "srgbClr",
-                        new XAttribute("val", XlsxDrawingColorWriter.FormatRgb(theme.GetColor(color.Slot)))))));
+                new KeyValuePair<string, string>(
+                    color.ElementName,
+                    XlsxDrawingColorWriter.FormatRgb(theme.GetColor(color.Slot)))));
     }
 
     private static XElement CreateFontSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
@@ -67,20 +66,14 @@ internal static class XlsxWorkbookThemeWriter
             return fontScheme;
         }
 
-        return new XElement(drawingNs + "fontScheme",
-            new XAttribute("name", $"{theme.Name} Fonts"),
-            CreateFontCollectionElement("majorFont", theme.MajorFontName, drawingNs),
-            CreateFontCollectionElement("minorFont", theme.MinorFontName, drawingNs));
+        // CT_FontCollection requires latin, ea and cs children (in that order); the shared generated
+        // font scheme writes the east-asian/complex-script faces empty (inherit), matching Office's
+        // built-in theme. Omitting them makes the part schema-invalid and Excel refuses the workbook.
+        return DrawingMlThemeXml.CreateFontScheme(
+            $"{theme.Name} Fonts",
+            XlsxFontNameSanitizer.NormalizeFontName(theme.MajorFontName),
+            XlsxFontNameSanitizer.NormalizeFontName(theme.MinorFontName));
     }
-
-    // CT_FontCollection requires latin, ea and cs children (in that order). The east-asian/complex-
-    // script faces default to empty (inherit), matching Office's built-in theme; omitting them makes
-    // the theme part schema-invalid and Excel refuses to open the whole workbook.
-    private static XElement CreateFontCollectionElement(string collectionName, string latinTypeface, XNamespace drawingNs) =>
-        new(drawingNs + collectionName,
-            new XElement(drawingNs + "latin", new XAttribute("typeface", XlsxFontNameSanitizer.NormalizeFontName(latinTypeface))),
-            new XElement(drawingNs + "ea", new XAttribute("typeface", string.Empty)),
-            new XElement(drawingNs + "cs", new XAttribute("typeface", string.Empty)));
 
     private static XElement CreateFormatSchemeElement(WorkbookTheme theme, XNamespace drawingNs)
     {
@@ -91,27 +84,16 @@ internal static class XlsxWorkbookThemeWriter
         // bgFillStyleLst, each with at least three entries. An empty fmtScheme is schema-invalid and
         // makes Excel reject the workbook, so emit a minimal complete style matrix using phClr
         // placeholder colours (the standard theme convention).
-        XElement SolidPhClrFill() =>
-            new(drawingNs + "solidFill", new XElement(drawingNs + "schemeClr", new XAttribute("val", "phClr")));
-
-        XElement Line(int widthEmu) =>
-            new(drawingNs + "ln",
-                new XAttribute("w", widthEmu),
-                new XAttribute("cap", "flat"),
-                new XAttribute("cmpd", "sng"),
-                new XAttribute("algn", "ctr"),
-                SolidPhClrFill(),
-                new XElement(drawingNs + "prstDash", new XAttribute("val", "solid")));
-
-        XElement EffectStyle() =>
-            new(drawingNs + "effectStyle", new XElement(drawingNs + "effectLst"));
-
-        return new XElement(drawingNs + "fmtScheme",
-            new XAttribute("name", theme.EffectsName),
-            new XElement(drawingNs + "fillStyleLst", SolidPhClrFill(), SolidPhClrFill(), SolidPhClrFill()),
-            new XElement(drawingNs + "lnStyleLst", Line((int)(DrawingMlCoordinateUnits.EmuPerPoint / 2)), Line((int)DrawingMlCoordinateUnits.EmuPerPoint), Line((int)(DrawingMlCoordinateUnits.EmuPerPoint * 3 / 2))),
-            new XElement(drawingNs + "effectStyleLst", EffectStyle(), EffectStyle(), EffectStyle()),
-            new XElement(drawingNs + "bgFillStyleLst", SolidPhClrFill(), SolidPhClrFill(), SolidPhClrFill()));
+        return DrawingMlThemeXml.CreateFormatScheme(
+            theme.EffectsName,
+            [DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill()],
+            [
+                DrawingMlThemeXml.CreateLineStyle((int)(DrawingMlCoordinateUnits.EmuPerPoint / 2), includeCapCompoundAlign: true),
+                DrawingMlThemeXml.CreateLineStyle((int)DrawingMlCoordinateUnits.EmuPerPoint, includeCapCompoundAlign: true),
+                DrawingMlThemeXml.CreateLineStyle((int)(DrawingMlCoordinateUnits.EmuPerPoint * 3 / 2), includeCapCompoundAlign: true),
+            ],
+            [DrawingMlThemeXml.CreateEmptyEffectStyle(), DrawingMlThemeXml.CreateEmptyEffectStyle(), DrawingMlThemeXml.CreateEmptyEffectStyle()],
+            [DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill(), DrawingMlThemeXml.CreateSolidPhClrFill()]);
     }
 
     private static IEnumerable<XElement> CreateThemeSupplementElements(WorkbookTheme theme, XNamespace drawingNs)
@@ -184,14 +166,14 @@ internal static class XlsxWorkbookThemeWriter
         if (TryCreateNativeThemeElement(scheme.NativeColorSchemeXml, drawingNs + "clrScheme") is { } colorScheme)
             return colorScheme;
 
-        return new XElement(drawingNs + "clrScheme",
-            new XAttribute("name", string.IsNullOrWhiteSpace(scheme.Name) ? "Alternate Colors" : scheme.Name),
+        return DrawingMlThemeXml.CreateColorScheme(
+            string.IsNullOrWhiteSpace(scheme.Name) ? "Alternate Colors" : scheme.Name,
             XlsxWorkbookThemeReader.ColorElements
                 .Where(color => scheme.Colors.ContainsKey(color.Slot))
                 .Select(color =>
-                    new XElement(drawingNs + color.ElementName,
-                        new XElement(drawingNs + "srgbClr",
-                            new XAttribute("val", XlsxDrawingColorWriter.FormatRgb(scheme.Colors[color.Slot]))))));
+                    new KeyValuePair<string, string>(
+                        color.ElementName,
+                        XlsxDrawingColorWriter.FormatRgb(scheme.Colors[color.Slot]))));
     }
 
     private static IEnumerable<XElement> CreateObjectDefaultsElement(

@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
@@ -181,7 +182,7 @@ public sealed class FormulaRangeEditingSession
 
     public bool ShouldCycleReference(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         FormulaEditorKey systemKey = FormulaEditorKey.None) =>
         ExcelEditKeyPlanner.ShouldCycleFormulaReference(key, modifiers, systemKey);
 
@@ -201,7 +202,7 @@ public sealed class FormulaRangeEditingSession
     public ExcelEditKeyIntent PlanEditKey(
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         CellAddress current,
         int pageSize,
         string? text,
@@ -328,12 +329,12 @@ public sealed class FormulaRangeEditingSession
 
     public bool TryToggleSelectionMode(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers)
+        FreeKeyModifiers modifiers)
         => TryToggleSelectionMode(key, modifiers, out _);
 
     public bool TryToggleSelectionMode(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         out FormulaRangeSelectionModeChangePlan plan)
     {
         if (!FormulaRangeEntryPlanner.TryToggleKeyboardSelectionMode(
@@ -385,7 +386,7 @@ public sealed class FormulaRangeEditingSession
         CellAddress? fallbackCursor,
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         Sheet? sheet,
         int rowPageSize,
         int columnPageSize)
@@ -415,13 +416,13 @@ public sealed class FormulaRangeEditingSession
             selectedRange,
             SelectionCursor ?? fallbackCursor);
 
-    public bool ShouldExtendKeyboardSelection(FormulaEditorModifiers modifiers) =>
+    public bool ShouldExtendKeyboardSelection(FreeKeyModifiers modifiers) =>
         SelectionMode == ExcelSelectionMode.Extend ||
-        modifiers.HasFlag(FormulaEditorModifiers.Shift);
+        modifiers.HasFlag(FreeKeyModifiers.Shift);
 
-    public bool ShouldAppendDisjointReference(FormulaEditorModifiers modifiers) =>
-        modifiers.HasFlag(FormulaEditorModifiers.Control) ||
-        modifiers.HasFlag(FormulaEditorModifiers.Meta);
+    public bool ShouldAppendDisjointReference(FreeKeyModifiers modifiers) =>
+        modifiers.HasFlag(FreeKeyModifiers.Control) ||
+        modifiers.HasFlag(FreeKeyModifiers.Meta);
 
     public bool TryPlanRangeSelectionEdit(
         FormulaRangeEditorSnapshot editor,
