@@ -1489,6 +1489,7 @@ function Assert-FidelityCorpusDownloaderBehavior {
         @(
             "id,file,source,license,url",
             "local-present,local/present.docx,local,Private,local://local/present.docx",
+            "local-manifest-relative,files/review/present.docx,local,Private,local://files/review/present.docx",
             "local-missing,local/missing.docx,local,Private,local://local/missing.docx",
             "existing,existing.xlsx,synthetic,MIT,https://example.invalid/existing.xlsx",
             "download,nested/downloaded.xlsx,synthetic,MIT,https://example.invalid/downloaded.xlsx",
@@ -1499,6 +1500,9 @@ function Assert-FidelityCorpusDownloaderBehavior {
         $localPresent = Join-Path $filesDirectory "local/present.docx"
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $localPresent) | Out-Null
         [System.IO.File]::WriteAllText($localPresent, "private")
+        $manifestLocalPresent = Join-Path $tempRoot 'files/review/present.docx'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $manifestLocalPresent) | Out-Null
+        [System.IO.File]::WriteAllText($manifestLocalPresent, 'manifest-local')
         [System.IO.File]::WriteAllText((Join-Path $filesDirectory "existing.xlsx"), "existing")
 
         $downloadAction = {
@@ -1516,12 +1520,37 @@ function Assert-FidelityCorpusDownloaderBehavior {
             -FilesDirectory $filesDirectory `
             -CorpusLabel "Synthetic fidelity corpus" `
             -LocalDirectoryLabel "synthetic/files/" `
+            -WarningVariable downloaderWarnings `
             -DownloadAction $downloadAction
 
         if ($result.Downloaded -ne 2 -or $result.Skipped -ne 1 -or
-            $result.LocalSkipped -ne 2 -or $result.Failed -ne 1 -or
-            $result.RowCount -ne 6 -or $result.ExitCode -ne 1) {
+            $result.LocalSkipped -ne 3 -or $result.Failed -ne 1 -or
+            $result.RowCount -ne 7 -or $result.ExitCode -ne 1) {
             throw "Synthetic fidelity downloader counters were not preserved: $($result | ConvertTo-Json -Compress)"
+        }
+
+        if (@($downloaderWarnings).Count -ne 2 -or
+            @($downloaderWarnings | Where-Object { $_ -like '*local-manifest-relative*' -or $_ -like '*files/review/present.docx*' }).Count -ne 0 -or
+            (Get-Content -LiteralPath $manifestLocalPresent -Raw) -cne 'manifest-local') {
+            throw 'Synthetic fidelity downloader did not recognize and preserve the manifest-relative local fixture.'
+        }
+
+        Push-Location -LiteralPath $tempRoot
+        try {
+            $relativeResult = Invoke-FidelityCorpusDownload `
+                -ManifestPath 'manifest.csv' `
+                -FilesDirectory $filesDirectory `
+                -CorpusLabel 'Relative local fixture manifest' `
+                -LocalDirectoryLabel 'synthetic/files/' `
+                -Source 'local' `
+                -WarningVariable relativeWarnings `
+                -DownloadAction $downloadAction
+            if ($relativeResult.LocalSkipped -ne 3 -or @($relativeWarnings).Count -ne 1) {
+                throw 'Synthetic fidelity downloader did not resolve local fixtures from a relative manifest path.'
+            }
+        }
+        finally {
+            Pop-Location
         }
 
         $downloadedPath = Join-Path $filesDirectory "nested/downloaded.xlsx"

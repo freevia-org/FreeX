@@ -883,6 +883,7 @@ function Invoke-FidelityCorpusDownload {
         New-Item -ItemType Directory -Path $FilesDirectory -Force | Out-Null
     }
 
+    $manifestDirectory = Split-Path -Parent (Resolve-Path -LiteralPath $ManifestPath).Path
     $rows = @(Import-Csv -LiteralPath $ManifestPath)
     if (-not [string]::IsNullOrWhiteSpace($Source)) {
         $rows = @($rows | Where-Object { $_.source -eq $Source })
@@ -907,7 +908,14 @@ function Invoke-FidelityCorpusDownload {
 
         $target = Join-Path $FilesDirectory $row.file
         if ($row.url -like 'local://*' -or $row.source -eq 'local') {
-            if (Test-Path -LiteralPath $target) {
+            # Local provenance paths are relative to the manifest (for example,
+            # local://files/review/example.docx), rather than to the download folder.
+            # Retain support for older manifests that name a file within FilesDirectory.
+            $localManifestTarget = Join-Path $manifestDirectory $row.file
+            if (Test-Path -LiteralPath $localManifestTarget -PathType Leaf) {
+                $target = $localManifestTarget
+            }
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
                 Write-Host "[local ] $($row.file) (present)"
             }
             else {
