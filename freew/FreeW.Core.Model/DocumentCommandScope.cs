@@ -3,13 +3,41 @@ namespace FreeW.Core.Model;
 public sealed partial class DocumentCommandBus
 {
     private CommandScope? _commandScope;
+    private int _commandScopeCallbackDepth;
 
     /// <summary>
     /// Collects an already-applied gesture without publishing intermediate changes. This does not
     /// open an undo group: existing group ownership and refusal policies retain their meaning.
     /// The optional callback refreshes caller-owned model caches after each source command and rollback.
+    /// It may read this bus, but may not execute commands, alter groups or scopes, or change history.
     /// </summary>
-    public CommandScope BeginCommandScope(Action? commandApplied = null) => new(this, commandApplied);
+    public CommandScope BeginCommandScope(Action? commandApplied = null)
+    {
+        EnsureOutsideCommandScopeCallback();
+        return new(this, commandApplied);
+    }
+
+    private void EnsureOutsideCommandScopeCallback()
+    {
+        if (_commandScopeCallbackDepth > 0)
+            throw new InvalidOperationException("Command-scope cache callbacks cannot mutate command history.");
+    }
+
+    private void EnsureHistoryTransitionIsAllowed()
+    {
+        EnsureOutsideCommandScopeCallback();
+        if (_commandScope is not null)
+            throw new InvalidOperationException("Undo and redo cannot run inside an active command scope.");
+    }
+
+    private void InvokeCommandScopeCallback(Action? callback)
+    {
+        if (callback is null)
+            return;
+        _commandScopeCallbackDepth++;
+        try { callback(); }
+        finally { _commandScopeCallbackDepth--; }
+    }
 
     public sealed class CommandScope : IDisposable
     {
@@ -58,6 +86,7 @@ public sealed partial class DocumentCommandBus
         /// </summary>
         public bool Commit(string label, Func<IDocumentCommand, IDocumentCommand>? decorate = null)
         {
+            _owner.EnsureOutsideCommandScopeCallback();
             EnsureCurrent();
             IDocumentCommand command;
             try
@@ -91,6 +120,7 @@ public sealed partial class DocumentCommandBus
         /// <summary>Reverts only this scope's commands, retaining preceding outer-group edits.</summary>
         public IReadOnlyList<Exception> Rollback()
         {
+            _owner.EnsureOutsideCommandScopeCallback();
             EnsureCurrent();
             var commands = Gather(requireBalancedGroup: false);
             RemoveParentTail();
@@ -106,7 +136,7 @@ public sealed partial class DocumentCommandBus
             {
                 for (CommandScope? scope = this; scope is not null; scope = scope.ParentScope)
                 {
-                    try { scope.CommandApplied?.Invoke(); }
+                    try { _owner.InvokeCommandScopeCallback(scope.CommandApplied); }
                     catch (Exception exception) { failures.Add(exception); }
                 }
             }

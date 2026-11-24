@@ -2,6 +2,235 @@ namespace FreeW.Core.Model.Tests;
 
 public sealed class DocumentCommandScopeTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void HistoryTransitionsCannotInterleaveWithAnUncommittedScope(bool redo, bool fromCallback)
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        if (redo) bus.Undo();
+        Exception? rejected = null;
+        using var scope = bus.BeginCommandScope(() =>
+        {
+            if (fromCallback) rejected = Record.Exception(Transition);
+        });
+        bus.Execute(new InsertParagraphCommand(document.Blocks.Count, new Paragraph("B")));
+        if (!fromCallback) rejected = Record.Exception(Transition);
+
+        rejected.Should().BeOfType<InvalidOperationException>();
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal(redo ? new[] { "B" } : new[] { "A", "B" });
+        bus.CanUndo.Should().Be(!redo);
+        bus.CanRedo.Should().Be(redo);
+        scope.Commit("B");
+        bus.Undo();
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal(redo ? Array.Empty<string>() : new[] { "A" });
+        if (!redo) bus.Undo();
+        document.Blocks.Should().BeEmpty();
+
+        void Transition()
+        {
+            if (redo) bus.Redo(); else bus.Undo();
+        }
+    }
+
+    [Theory]
+    [InlineData("Begin")]
+    [InlineData("Commit")]
+    [InlineData("Rollback")]
+    [InlineData("Abort")]
+    public void CacheCallbacksCannotAlterLegacyGroupOwnershipOrRevertOuterCommands(string operation)
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        var outerGroup = operation != "Begin";
+        if (outerGroup)
+        {
+            bus.BeginUndoGroup();
+            bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        }
+        Exception? rejected = null;
+        var attempted = false;
+        using var scope = bus.BeginCommandScope(() =>
+        {
+            if (attempted) return;
+            attempted = true;
+            rejected = Record.Exception(() =>
+            {
+                switch (operation)
+                {
+                    case "Begin": bus.BeginUndoGroup(); break;
+                    case "Commit": bus.CommitUndoGroup("early"); break;
+                    case "Rollback": bus.RollbackUndoGroup(); break;
+                    default: bus.AbortUndoGroup(); break;
+                }
+            });
+        });
+        bus.Execute(new InsertParagraphCommand(document.Blocks.Count, new Paragraph("B")));
+
+        rejected.Should().BeOfType<InvalidOperationException>().Which.Message.Should()
+            .Be("Command-scope cache callbacks cannot mutate command history.");
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal(outerGroup ? new[] { "A", "B" } : new[] { "B" });
+        bus.IsUndoGroupOpen.Should().Be(outerGroup);
+        scope.Commit("B");
+        if (outerGroup) bus.CommitUndoGroup("Outer");
+        bus.Undo();
+        document.Blocks.Should().BeEmpty();
+        bus.Redo();
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal(outerGroup ? new[] { "A", "B" } : new[] { "B" });
+    }
+
+    [Theory]
+    [InlineData("Execute")]
+    [InlineData("BeginScope")]
+    [InlineData("CommitScope")]
+    [InlineData("RollbackScope")]
+    [InlineData("DisposeScope")]
+    public void CacheCallbacksCannotReenterCommandOrScopeMutation(string operation)
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        Exception? rejected = null;
+        var attempted = false;
+        DocumentCommandBus.CommandScope? scope = null;
+        scope = bus.BeginCommandScope(() =>
+        {
+            if (attempted) return;
+            attempted = true;
+            rejected = Record.Exception(() =>
+            {
+                switch (operation)
+                {
+                    case "Execute": bus.Execute(new InsertParagraphCommand(1, new Paragraph("extra"))); break;
+                    case "BeginScope": bus.BeginCommandScope(); break;
+                    case "CommitScope": scope!.Commit("early"); break;
+                    case "RollbackScope": scope!.Rollback(); break;
+                    default: scope!.Dispose(); break;
+                }
+            });
+        });
+        using (scope)
+        {
+            bus.Execute(new InsertParagraphCommand(0, new Paragraph("B")));
+            rejected.Should().BeOfType<InvalidOperationException>().Which.Message.Should()
+                .Be("Command-scope cache callbacks cannot mutate command history.");
+            scope.IsCompleted.Should().BeFalse();
+            document.PlainText.Should().Be("B");
+            scope.Commit("B");
+        }
+        bus.Undo();
+        document.Blocks.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RollbackCacheCallbacksRemainReadOnlyAfterTheScopeHasClosed(bool redo)
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        if (redo) bus.Undo();
+        var rollingBack = false;
+        Exception? rejected = null;
+        using var scope = bus.BeginCommandScope(() =>
+        {
+            if (!rollingBack) return;
+            rejected = Record.Exception(() => { if (redo) bus.Redo(); else bus.Undo(); });
+        });
+        bus.Execute(new InsertParagraphCommand(document.Blocks.Count, new Paragraph("B")));
+        rollingBack = true;
+
+        scope.Rollback().Should().BeEmpty();
+
+        rejected.Should().BeOfType<InvalidOperationException>();
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal(redo ? Array.Empty<string>() : new[] { "A" });
+        bus.CanUndo.Should().Be(!redo);
+        bus.CanRedo.Should().Be(redo);
+    }
+
+    [Fact]
+    public void AThrowingCacheCallbackAlwaysReleasesTheReadOnlyGuard()
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        var calls = 0;
+        using var scope = bus.BeginCommandScope(() =>
+        {
+            if (++calls == 1) throw new InvalidOperationException("cache failure");
+        });
+        Action execute = () => bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        execute.Should().Throw<InvalidOperationException>().WithMessage("cache failure");
+
+        bus.BeginUndoGroup();
+        bus.Execute(new InsertParagraphCommand(1, new Paragraph("B")));
+        bus.CommitUndoGroup("Legacy group after callback");
+        scope.Commit("Gesture");
+
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal("A", "B");
+        bus.Undo();
+        document.Blocks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DecoratorRollbackRetainsCacheAndObserverFailuresWithoutChangingEarlierHistory()
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("A")));
+        var rollingBack = false;
+        using var scope = bus.BeginCommandScope(() =>
+        {
+            if (rollingBack) bus.Undo();
+        });
+        bus.Execute(new InsertParagraphCommand(1, new Paragraph("B")));
+        rollingBack = true;
+        Action observer = () => throw new InvalidOperationException("observer");
+        bus.Changed += observer;
+
+        Action commit = () => scope.Commit("Gesture", _ => throw new InvalidOperationException("decorator"));
+        var failure = commit.Should().Throw<AggregateException>().Which;
+
+        failure.InnerExceptions.Select(exception => exception.Message).Should().Equal("decorator",
+            "Command-scope cache callbacks cannot mutate command history.", "observer");
+        document.PlainText.Should().Be("A");
+        bus.CanUndo.Should().BeTrue();
+        bus.CanRedo.Should().BeFalse();
+        scope.IsCompleted.Should().BeTrue();
+        scope.IsCommitted.Should().BeFalse();
+        bus.Changed -= observer;
+        bus.Undo();
+        document.Blocks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ChangedAfterCommitCanLegitimatelyExecuteANewIndependentEdit()
+    {
+        var document = new TextDocument();
+        var bus = new DocumentCommandBus(new Context(document));
+        using var scope = bus.BeginCommandScope();
+        var reentered = false;
+        bus.Changed += () =>
+        {
+            if (reentered) return;
+            reentered = true;
+            scope.IsCommitted.Should().BeTrue();
+            bus.Execute(new InsertParagraphCommand(1, new Paragraph("later")));
+        };
+        bus.Execute(new InsertParagraphCommand(0, new Paragraph("gesture")));
+
+        scope.Commit("Gesture");
+
+        document.Paragraphs.Select(p => p.PlainText).Should().Equal("gesture", "later");
+        bus.Undo();
+        document.PlainText.Should().Be("gesture");
+        bus.Undo();
+        document.Blocks.Should().BeEmpty();
+    }
+
     [Fact]
     public void QuietScopeRetainsLegacyGroupOwnershipAndPublishesOnlyTheCompletedGesture()
     {

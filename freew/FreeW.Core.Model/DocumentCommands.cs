@@ -206,6 +206,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
 
     public void Execute(IDocumentCommand command)
     {
+        EnsureOutsideCommandScopeCallback();
         // Skip no-op commands entirely so they don't create an empty undo entry or clear
         // a pending redo (Push() below always invalidates redo — see UndoRedoStack.Push).
         if (!command.HasEffect(_context))
@@ -225,7 +226,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
         }
         RecordAppliedCommand(command);
         for (var scope = _commandScope; scope is not null; scope = scope.ParentScope)
-            scope.CommandApplied?.Invoke();
+            InvokeCommandScopeCallback(scope.CommandApplied);
     }
 
     private void RecordAppliedCommand(IDocumentCommand command)
@@ -262,6 +263,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
     /// </param>
     public void BeginUndoGroup(bool notifyOnEachExecute = false)
     {
+        EnsureOutsideCommandScopeCallback();
         if (_batch is not null)
             throw new InvalidOperationException("An undo group is already open.");
         _batch = new List<IDocumentCommand>();
@@ -275,6 +277,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
     /// </summary>
     public void CommitUndoGroup(string label)
     {
+        EnsureOutsideCommandScopeCallback();
         var batch = _batch ?? throw new InvalidOperationException("No undo group is open.");
         _batch = null;
         if (batch.Count == 0)
@@ -290,6 +293,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
     /// </summary>
     public void AbortUndoGroup()
     {
+        EnsureOutsideCommandScopeCallback();
         if (_batch is { Count: > 0 } && _commandScope is not null)
             _commandScope.PreserveAbortedGroup(_batch);
         _batch = null;
@@ -309,6 +313,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
     /// </summary>
     public IReadOnlyList<Exception> RollbackUndoGroup()
     {
+        EnsureOutsideCommandScopeCallback();
         var batch = _batch ?? throw new InvalidOperationException("No undo group is open.");
         _batch = null;
         var failures = new List<Exception>();
@@ -350,6 +355,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
 
     public bool Undo()
     {
+        EnsureHistoryTransitionIsAllowed();
         if (!_stack.CanUndo)
             return false;
         var entry = _stack.PopUndo();
@@ -376,6 +382,7 @@ public sealed partial class DocumentCommandBus(IDocumentCommandContext context)
 
     public bool Redo()
     {
+        EnsureHistoryTransitionIsAllowed();
         if (!_stack.CanRedo)
             return false;
         var entry = _stack.PopRedo();
