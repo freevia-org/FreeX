@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Presentation.Tests;
@@ -19,9 +20,9 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     [Fact]
     public void F7_checks_spelling_and_grammar_and_ShiftF7_stays_the_thesaurus()
     {
-        FreeWKeyboardShortcutCatalog.Resolve(FreeWKeyboardKey.F7, FreeWKeyboardModifiers.None)
+        FreeWKeyboardShortcutCatalog.Resolve(FreeWKeyboardKey.F7, FreeKeyModifiers.None)
             .Should().Be(FreeWKeyboardCommand.SpellingAndGrammar);
-        FreeWKeyboardShortcutCatalog.Resolve(FreeWKeyboardKey.F7, FreeWKeyboardModifiers.Shift)
+        FreeWKeyboardShortcutCatalog.Resolve(FreeWKeyboardKey.F7, FreeKeyModifiers.Shift)
             .Should().Be(FreeWKeyboardCommand.Thesaurus);
     }
 
@@ -31,7 +32,7 @@ public sealed class FreeWKeyboardShortcutCatalogTests
         FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
             shortcut.Command == FreeWKeyboardCommand.ToggleCurrentFieldCode &&
             shortcut.Key == FreeWKeyboardKey.F9 &&
-            shortcut.Modifiers == FreeWKeyboardModifiers.Shift);
+            shortcut.Modifiers == FreeKeyModifiers.Shift);
     }
 
     [Fact]
@@ -40,16 +41,16 @@ public sealed class FreeWKeyboardShortcutCatalogTests
         FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
             shortcut.Command == FreeWKeyboardCommand.UnlinkCurrentField &&
             shortcut.Key == FreeWKeyboardKey.F9 &&
-            shortcut.Modifiers == (FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift));
+            shortcut.Modifiers == (FreeKeyModifiers.Control | FreeKeyModifiers.Shift));
     }
 
     [Theory]
-    [InlineData(FreeWKeyboardCommand.LockCurrentField, FreeWKeyboardModifiers.Control)]
+    [InlineData(FreeWKeyboardCommand.LockCurrentField, FreeKeyModifiers.Control)]
     [InlineData(FreeWKeyboardCommand.UnlockCurrentField,
-        FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift)]
+        FreeKeyModifiers.Control | FreeKeyModifiers.Shift)]
     public void F11_field_lock_gestures_are_shared(
         FreeWKeyboardCommand command,
-        FreeWKeyboardModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
             shortcut.Command == command &&
@@ -63,7 +64,7 @@ public sealed class FreeWKeyboardShortcutCatalogTests
         FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
             shortcut.Command == FreeWKeyboardCommand.UpdateCurrentField &&
             shortcut.Key == FreeWKeyboardKey.F9 &&
-            shortcut.Modifiers == FreeWKeyboardModifiers.None);
+            shortcut.Modifiers == FreeKeyModifiers.None);
     }
 
     [Fact]
@@ -72,7 +73,7 @@ public sealed class FreeWKeyboardShortcutCatalogTests
         FreeWKeyboardShortcutCatalog.All.Should().ContainSingle(shortcut =>
             shortcut.Command == FreeWKeyboardCommand.PrintDocument &&
             shortcut.Key == FreeWKeyboardKey.P &&
-            shortcut.Modifiers == FreeWKeyboardModifiers.Control);
+            shortcut.Modifiers == FreeKeyModifiers.Control);
     }
 
     [Fact]
@@ -93,12 +94,12 @@ public sealed class FreeWKeyboardShortcutCatalogTests
     }
 
     [Theory]
-    [InlineData(FreeWKeyboardKey.F, FreeWKeyboardModifiers.None)]
-    [InlineData(FreeWKeyboardKey.F1, FreeWKeyboardModifiers.Control)]
-    [InlineData(FreeWKeyboardKey.Z, FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift)]
+    [InlineData(FreeWKeyboardKey.F, FreeKeyModifiers.None)]
+    [InlineData(FreeWKeyboardKey.F1, FreeKeyModifiers.Control)]
+    [InlineData(FreeWKeyboardKey.Z, FreeKeyModifiers.Control | FreeKeyModifiers.Shift)]
     public void UnmappedGesturesAreNotConsumed(
         FreeWKeyboardKey key,
-        FreeWKeyboardModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         var dispatched = false;
 

@@ -1,16 +1,8 @@
+using Free.Shared.Shell;
 using System.Text;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Editing;
-
-[Flags]
-public enum DocumentEditorInputModifiers
-{
-    None = 0,
-    Control = 1,
-    Shift = 2,
-    Alt = 4,
-}
 
 public enum DocumentEditorInputKey
 {
@@ -474,10 +466,10 @@ public sealed class DocumentEditorInteractionSession
 
     public static DocumentEditorInputPlan PlanBodyKey(
         DocumentEditorInputKey key,
-        DocumentEditorInputModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
-        var control = (modifiers & DocumentEditorInputModifiers.Control) != 0;
-        var shift = (modifiers & DocumentEditorInputModifiers.Shift) != 0;
+        var control = (modifiers & FreeKeyModifiers.Control) != 0;
+        var shift = (modifiers & FreeKeyModifiers.Shift) != 0;
         return (key, control) switch
         {
             (DocumentEditorInputKey.Z, true) => Mutation(DocumentEditorInputIntent.Undo),

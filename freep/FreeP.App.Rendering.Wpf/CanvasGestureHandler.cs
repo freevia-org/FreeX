@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+using Free.Shared.Shell.Wpf;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -191,7 +193,7 @@ public sealed partial class CanvasGestureHandler : IDisposable
         SlideTransform transform,
         Slide slide,
         int clickCount,
-        CanvasGestureModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         var coreTransform = ToCoreTransform(transform);
         var projection = SelectionAdornerGeometry.BuildProjection(
@@ -259,7 +261,7 @@ public sealed partial class CanvasGestureHandler : IDisposable
     private void CompleteGesture(
         Point point,
         SlideTransform transform,
-        CanvasGestureModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         _gestureRouter.CompletePointer(
             ToGesturePoint(point),
@@ -425,12 +427,9 @@ public sealed partial class CanvasGestureHandler : IDisposable
     private static CanvasGestureKey ToGestureKey(Key key) =>
         CanvasGestureNativeInputMapper.MapKeyName(key.ToString());
 
-    private static CanvasGestureModifiers ToGestureModifiers(ModifierKeys modifiers) =>
-        CanvasGestureNativeInputMapper.MapModifiers(
-            modifiers.HasFlag(ModifierKeys.Shift),
-            modifiers.HasFlag(ModifierKeys.Control),
-            modifiers.HasFlag(ModifierKeys.Alt),
-            modifiers.HasFlag(ModifierKeys.Windows));
+    // Meta policy: Keep. The Windows key stays visible to the gesture planner (additive-selection modifier).
+    private static FreeKeyModifiers ToGestureModifiers(ModifierKeys modifiers) =>
+        WpfKeyModifiersMapper.FromWpf(modifiers, KeyModifierMetaPolicy.Keep);
 
     private static SlideTransformCore ToCoreTransform(SlideTransform xf)
         => xf.Core;

@@ -1,17 +1,8 @@
+using Free.Shared.Shell;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
-
-[Flags]
-public enum CanvasGestureModifiers
-{
-    None = 0,
-    Shift = 1 << 0,
-    Control = 1 << 1,
-    Alt = 1 << 2,
-    Meta = 1 << 3,
-}
 
 public enum CanvasGestureKey
 {
@@ -43,7 +34,7 @@ public readonly record struct CanvasGesturePressRequest(
     CanvasGesturePoint ScreenPoint,
     CanvasGesturePoint SlidePoint,
     int ClickCount,
-    CanvasGestureModifiers Modifiers,
+    FreeKeyModifiers Modifiers,
     CanvasGestureHandleKind SelectionHandle,
     string? GeometryHandle,
     bool HasSingleSelectionFrame,
@@ -418,7 +409,7 @@ public sealed class CanvasGestureRouter
     public CanvasGesturePreviewPlan PreviewPointer(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         ArgumentNullException.ThrowIfNull(transform);
         var slide = _editor.CurrentSlide;
@@ -520,7 +511,7 @@ public sealed class CanvasGestureRouter
     public bool CompletePointer(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         ArgumentNullException.ThrowIfNull(transform);
         if (!_session.IsActive)
@@ -591,7 +582,7 @@ public sealed class CanvasGestureRouter
 
     public CanvasGestureKeyboardPlan HandleKeyDown(
         CanvasGestureKey key,
-        CanvasGestureModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         if (key == CanvasGestureKey.Escape)
         {
@@ -622,7 +613,7 @@ public sealed class CanvasGestureRouter
         }
 
         long step = CanvasGesturePlanner.ResolveNudgeStep(
-            (modifiers & CanvasGestureModifiers.Shift) != 0);
+            (modifiers & FreeKeyModifiers.Shift) != 0);
         switch (key)
         {
             case CanvasGestureKey.Left:
@@ -673,37 +664,37 @@ public sealed class CanvasGestureRouter
     public CanvasResizeBounds PlanResize(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _session.PlanResize(
             currentScreen,
             transform,
             _editor.CurrentSlide,
             SnapToGrid,
             SnapToShapes,
-            (modifiers & CanvasGestureModifiers.Alt) != 0);
+            (modifiers & FreeKeyModifiers.Alt) != 0);
 
     public double PlanRotation(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _session.PlanRotation(
             currentScreen,
             transform,
-            (modifiers & CanvasGestureModifiers.Shift) != 0);
+            (modifiers & FreeKeyModifiers.Shift) != 0);
 
     public void Cancel() => _session.Clear();
 
     private CanvasMovePlan PlanMove(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _session.PlanMove(
             currentScreen,
             transform,
             _editor.CurrentSlide,
             SnapToGrid,
             SnapToShapes,
-            (modifiers & CanvasGestureModifiers.Alt) != 0);
+            (modifiers & FreeKeyModifiers.Alt) != 0);
 
     /// <summary>
     /// Converts a screen-space pointer into the un-rotated local slide frame that
@@ -740,23 +731,23 @@ public sealed class CanvasGestureRouter
     private CanvasMultiTransformPlan PlanMultiResize(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _session.PlanMultiResize(
             currentScreen,
             transform,
             _editor.CurrentSlide,
             SnapToGrid,
             SnapToShapes,
-            (modifiers & CanvasGestureModifiers.Alt) != 0);
+            (modifiers & FreeKeyModifiers.Alt) != 0);
 
     private CanvasMultiTransformPlan PlanMultiRotate(
         CanvasGesturePoint currentScreen,
         SlideTransformCore transform,
-        CanvasGestureModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _session.PlanMultiRotate(
             currentScreen,
             transform,
-            (modifiers & CanvasGestureModifiers.Shift) != 0);
+            (modifiers & FreeKeyModifiers.Shift) != 0);
 
     private void CommitMarquee(CanvasGesturePoint currentScreen, SlideTransformCore transform)
     {
@@ -814,11 +805,11 @@ public sealed class CanvasGestureRouter
         null,
         null);
 
-    private static bool HasAdditiveSelectionModifier(CanvasGestureModifiers modifiers) =>
+    private static bool HasAdditiveSelectionModifier(FreeKeyModifiers modifiers) =>
         (modifiers & (
-            CanvasGestureModifiers.Control |
-            CanvasGestureModifiers.Shift |
-            CanvasGestureModifiers.Meta)) != 0;
+            FreeKeyModifiers.Control |
+            FreeKeyModifiers.Shift |
+            FreeKeyModifiers.Meta)) != 0;
 
     private static bool IsResizeHandle(CanvasGestureHandleKind handle) =>
         handle is not CanvasGestureHandleKind.None

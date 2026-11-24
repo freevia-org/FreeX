@@ -2,15 +2,6 @@ using Free.Shared.Shell;
 
 namespace FreeW.App.Presentation.Shell;
 
-[Flags]
-public enum FreeWKeyboardModifiers
-{
-    None = 0,
-    Control = 1,
-    Shift = 2,
-    Alt = 4,
-}
-
 public enum FreeWKeyboardKey
 {
     A,
@@ -61,7 +52,7 @@ public enum FreeWKeyboardCommand
 public readonly record struct FreeWKeyboardShortcut(
     FreeWKeyboardCommand Command,
     FreeWKeyboardKey Key,
-    FreeWKeyboardModifiers Modifiers);
+    FreeKeyModifiers Modifiers);
 
 /// <summary>
 /// Host-neutral keyboard contract shared by the WPF and Avalonia FreeW shells.
@@ -71,41 +62,41 @@ public static class FreeWKeyboardShortcutCatalog
 {
     private static readonly FreeWKeyboardShortcut[] Shortcuts =
     [
-        new(FreeWKeyboardCommand.NewDocument, FreeWKeyboardKey.N, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.OpenDocument, FreeWKeyboardKey.O, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.SaveDocument, FreeWKeyboardKey.S, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.SaveDocumentAs, FreeWKeyboardKey.S, FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift),
-        new(FreeWKeyboardCommand.PrintDocument, FreeWKeyboardKey.P, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Find, FreeWKeyboardKey.F, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Replace, FreeWKeyboardKey.H, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Cut, FreeWKeyboardKey.X, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Copy, FreeWKeyboardKey.C, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Paste, FreeWKeyboardKey.V, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.PasteTextOnly, FreeWKeyboardKey.V, FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift),
-        new(FreeWKeyboardCommand.SelectAll, FreeWKeyboardKey.A, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Undo, FreeWKeyboardKey.Z, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.Redo, FreeWKeyboardKey.Y, FreeWKeyboardModifiers.Control),
-        new(FreeWKeyboardCommand.RevealFormatting, FreeWKeyboardKey.F1, FreeWKeyboardModifiers.Shift),
-        new(FreeWKeyboardCommand.SpellingAndGrammar, FreeWKeyboardKey.F7, FreeWKeyboardModifiers.None),
-        new(FreeWKeyboardCommand.Thesaurus, FreeWKeyboardKey.F7, FreeWKeyboardModifiers.Shift),
-        new(FreeWKeyboardCommand.LockCurrentField, FreeWKeyboardKey.F11, FreeWKeyboardModifiers.Control),
+        new(FreeWKeyboardCommand.NewDocument, FreeWKeyboardKey.N, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.OpenDocument, FreeWKeyboardKey.O, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.SaveDocument, FreeWKeyboardKey.S, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.SaveDocumentAs, FreeWKeyboardKey.S, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        new(FreeWKeyboardCommand.PrintDocument, FreeWKeyboardKey.P, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Find, FreeWKeyboardKey.F, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Replace, FreeWKeyboardKey.H, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Cut, FreeWKeyboardKey.X, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Copy, FreeWKeyboardKey.C, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Paste, FreeWKeyboardKey.V, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.PasteTextOnly, FreeWKeyboardKey.V, FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        new(FreeWKeyboardCommand.SelectAll, FreeWKeyboardKey.A, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Undo, FreeWKeyboardKey.Z, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.Redo, FreeWKeyboardKey.Y, FreeKeyModifiers.Control),
+        new(FreeWKeyboardCommand.RevealFormatting, FreeWKeyboardKey.F1, FreeKeyModifiers.Shift),
+        new(FreeWKeyboardCommand.SpellingAndGrammar, FreeWKeyboardKey.F7, FreeKeyModifiers.None),
+        new(FreeWKeyboardCommand.Thesaurus, FreeWKeyboardKey.F7, FreeKeyModifiers.Shift),
+        new(FreeWKeyboardCommand.LockCurrentField, FreeWKeyboardKey.F11, FreeKeyModifiers.Control),
         new(FreeWKeyboardCommand.UnlockCurrentField, FreeWKeyboardKey.F11,
-            FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift),
+            FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
         new(FreeWKeyboardCommand.UnlinkCurrentField, FreeWKeyboardKey.F9,
-            FreeWKeyboardModifiers.Control | FreeWKeyboardModifiers.Shift),
-        new(FreeWKeyboardCommand.ToggleCurrentFieldCode, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.Shift),
-        new(FreeWKeyboardCommand.ToggleFieldCodes, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.Alt),
-        new(FreeWKeyboardCommand.UpdateCurrentField, FreeWKeyboardKey.F9, FreeWKeyboardModifiers.None),
+            FreeKeyModifiers.Control | FreeKeyModifiers.Shift),
+        new(FreeWKeyboardCommand.ToggleCurrentFieldCode, FreeWKeyboardKey.F9, FreeKeyModifiers.Shift),
+        new(FreeWKeyboardCommand.ToggleFieldCodes, FreeWKeyboardKey.F9, FreeKeyModifiers.Alt),
+        new(FreeWKeyboardCommand.UpdateCurrentField, FreeWKeyboardKey.F9, FreeKeyModifiers.None),
     ];
 
     private static readonly ApplicationKeyboardShortcutCatalog<
         FreeWKeyboardCommand,
         FreeWKeyboardKey,
-        FreeWKeyboardModifiers> Resolver = new(
+        FreeKeyModifiers> Resolver = new(
             Shortcuts.Select(shortcut => new ApplicationKeyboardShortcut<
                 FreeWKeyboardCommand,
                 FreeWKeyboardKey,
-                FreeWKeyboardModifiers>(
+                FreeKeyModifiers>(
                     shortcut.Command,
                     shortcut.Key,
                     shortcut.Modifiers)));
@@ -114,12 +105,12 @@ public static class FreeWKeyboardShortcutCatalog
 
     public static FreeWKeyboardCommand? Resolve(
         FreeWKeyboardKey key,
-        FreeWKeyboardModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         Resolver.Resolve(key, modifiers);
 
     public static bool TryDispatch(
         FreeWKeyboardKey key,
-        FreeWKeyboardModifiers modifiers,
+        FreeKeyModifiers modifiers,
         Action<FreeWKeyboardCommand> dispatch) =>
         Resolver.TryDispatch(key, modifiers, dispatch);
 }

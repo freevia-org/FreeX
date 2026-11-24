@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows;
 using System.Windows.Input;
 using FreeP.App.Compositor;
@@ -29,7 +30,7 @@ public sealed partial class CanvasGestureHandler
         CompleteGesture(
             new Point(0, 0),
             SlideTransform.Identity,
-            CanvasGestureModifiers.None);
+            FreeKeyModifiers.None);
 
     internal void SeedTransientInteractionVisualsForTests()
     {
@@ -49,7 +50,7 @@ public sealed partial class CanvasGestureHandler
                 var preview = previewRouter.PreviewPointer(
                     new CanvasGesturePoint(4, 4),
                     ToCoreTransform(_canvas.CurrentTransform),
-                    CanvasGestureModifiers.None);
+                    FreeKeyModifiers.None);
                 if (preview.MultiTransform is { } transform)
                     _canvas.UpdateTransformPreview(transform);
             }
@@ -94,7 +95,7 @@ public sealed partial class CanvasGestureHandler
         CompleteGesture(
             currentScreen,
             _canvas.CurrentTransform,
-            CanvasGestureModifiers.None);
+            FreeKeyModifiers.None);
 }
 
 public sealed partial class SlideCanvas

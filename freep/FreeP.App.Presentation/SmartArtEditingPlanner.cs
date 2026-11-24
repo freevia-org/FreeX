@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Globalization;
 using System.Text;
 using System.Xml;
@@ -23,15 +24,6 @@ public enum SmartArtNodeEditKind
     Demote,
     AddAssistant,
     ToggleAssistant
-}
-
-[Flags]
-public enum SmartArtTextPaneShortcutModifiers
-{
-    None = 0,
-    Shift = 1,
-    Control = 2,
-    Alt = 4
 }
 
 public enum SmartArtTextPaneShortcutKey
@@ -142,7 +134,7 @@ public sealed record SmartArtTextPaneApplyResult(
 public sealed record SmartArtTextPaneKeyboardRoute(
     string RouteId,
     SmartArtTextPaneShortcutKey Key,
-    SmartArtTextPaneShortcutModifiers Modifiers,
+    FreeKeyModifiers Modifiers,
     SmartArtNodeEditIntent Intent,
     string Description);
 
@@ -162,7 +154,7 @@ public static class SmartArtEditingPlanner
 
     public static SmartArtTextPaneKeyboardRoute? PlanTextPaneKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         string? targetModelId)
     {
         var targetId = NormalizeModelId(targetModelId);
@@ -171,49 +163,49 @@ public static class SmartArtEditingPlanner
 
         return (key, modifiers) switch
         {
-            (SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.None) =>
+            (SmartArtTextPaneShortcutKey.Enter, FreeKeyModifiers.None) =>
                 Route(
                     "smartart.text-pane.enter.add-sibling-after",
                     key,
                     modifiers,
                     SmartArtNodeEditIntent.AddSiblingAfter(targetId, DefaultNewNodeText),
                     "Enter adds a sibling row after the selected SmartArt text-pane row."),
-            (SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.Control) =>
+            (SmartArtTextPaneShortcutKey.Enter, FreeKeyModifiers.Control) =>
                 Route(
                     "smartart.text-pane.ctrl-enter.add-child",
                     key,
                     modifiers,
                     SmartArtNodeEditIntent.AddChild(targetId, DefaultNewNodeText),
                     "Ctrl+Enter adds a child row below the selected SmartArt text-pane row."),
-            (SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.None) =>
+            (SmartArtTextPaneShortcutKey.Tab, FreeKeyModifiers.None) =>
                 Route(
                     "smartart.text-pane.tab.demote",
                     key,
                     modifiers,
                     SmartArtNodeEditIntent.Demote(targetId),
                     "Tab demotes the selected SmartArt text-pane row."),
-            (SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.Shift) =>
+            (SmartArtTextPaneShortcutKey.Tab, FreeKeyModifiers.Shift) =>
                 Route(
                     "smartart.text-pane.shift-tab.promote",
                     key,
                     modifiers,
                     SmartArtNodeEditIntent.Promote(targetId),
                     "Shift+Tab promotes the selected SmartArt text-pane row."),
-            (SmartArtTextPaneShortcutKey.Up, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift) =>
+            (SmartArtTextPaneShortcutKey.Up, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift) =>
                 Route(
                     "smartart.text-pane.alt-shift-up.move-up",
                     key,
                     modifiers,
                     SmartArtNodeEditIntent.MoveUp(targetId),
                     "Alt+Shift+Up moves the selected SmartArt text-pane row earlier."),
-            (SmartArtTextPaneShortcutKey.Down, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift) =>
+            (SmartArtTextPaneShortcutKey.Down, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift) =>
                 Route(
                     "smartart.text-pane.alt-shift-down.move-down",
                     key,
                     modifiers,
                     SmartArtNodeEditIntent.MoveDown(targetId),
                     "Alt+Shift+Down moves the selected SmartArt text-pane row later."),
-            (SmartArtTextPaneShortcutKey.Delete, SmartArtTextPaneShortcutModifiers.None) =>
+            (SmartArtTextPaneShortcutKey.Delete, FreeKeyModifiers.None) =>
                 Route(
                     "smartart.text-pane.delete.remove",
                     key,
@@ -1643,7 +1635,7 @@ public static class SmartArtEditingPlanner
     private static SmartArtTextPaneKeyboardRoute Route(
         string routeId,
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         SmartArtNodeEditIntent intent,
         string description) =>
         new(routeId, key, modifiers, intent, description);

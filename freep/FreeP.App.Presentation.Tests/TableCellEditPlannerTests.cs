@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 
@@ -170,40 +171,40 @@ public sealed class TableCellEditPlannerTests
     {
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.Escape,
-                TableCellEditKeyboardModifiers.Control)
+                FreeKeyModifiers.Control)
             .Action.Should().Be(TableCellEditKeyboardAction.Cancel);
 
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.Tab,
-                TableCellEditKeyboardModifiers.None)
+                FreeKeyModifiers.None)
             .Should().Be(new TableCellEditKeyboardPlan(
                 TableCellEditKeyboardAction.Navigate,
                 TableCellNavigationDirection.Next));
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.Tab,
-                TableCellEditKeyboardModifiers.Shift)
+                FreeKeyModifiers.Shift)
             .Should().Be(new TableCellEditKeyboardPlan(
                 TableCellEditKeyboardAction.Navigate,
                 TableCellNavigationDirection.Previous));
 
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.Tab,
-                TableCellEditKeyboardModifiers.Control)
+                FreeKeyModifiers.Control)
             .Action.Should().Be(TableCellEditKeyboardAction.None);
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.Tab,
-                TableCellEditKeyboardModifiers.Platform)
+                FreeKeyModifiers.Meta)
             .Action.Should().Be(TableCellEditKeyboardAction.None);
 
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.B,
-                TableCellEditKeyboardModifiers.Control | TableCellEditKeyboardModifiers.Shift)
+                FreeKeyModifiers.Control | FreeKeyModifiers.Shift)
             .Should().Be(new TableCellEditKeyboardPlan(
                 TableCellEditKeyboardAction.ToggleTextFormat,
                 TextFormatKind: TableCellTextFormatKind.Bold));
         TableCellEditPlanner.PlanKeyboard(
                 TableCellEditKeyboardKey.U,
-                TableCellEditKeyboardModifiers.None)
+                FreeKeyModifiers.None)
             .Action.Should().Be(TableCellEditKeyboardAction.None);
     }
 

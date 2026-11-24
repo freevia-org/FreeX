@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Presentation.Tests.Editing;
@@ -74,14 +75,14 @@ public sealed class DocumentEditorInteractionSessionTests
     }
 
     [Theory]
-    [InlineData(DocumentEditorInputKey.Z, DocumentEditorInputModifiers.Control, DocumentEditorInputIntent.Undo, false, true)]
-    [InlineData(DocumentEditorInputKey.B, DocumentEditorInputModifiers.Control, DocumentEditorInputIntent.ToggleBold, false, true)]
-    [InlineData(DocumentEditorInputKey.Left, DocumentEditorInputModifiers.Shift, DocumentEditorInputIntent.MovePrevious, true, false)]
-    [InlineData(DocumentEditorInputKey.Tab, DocumentEditorInputModifiers.Shift, DocumentEditorInputIntent.NavigateTab, true, true)]
-    [InlineData(DocumentEditorInputKey.Enter, DocumentEditorInputModifiers.None, DocumentEditorInputIntent.InsertParagraphBreak, false, true)]
+    [InlineData(DocumentEditorInputKey.Z, FreeKeyModifiers.Control, DocumentEditorInputIntent.Undo, false, true)]
+    [InlineData(DocumentEditorInputKey.B, FreeKeyModifiers.Control, DocumentEditorInputIntent.ToggleBold, false, true)]
+    [InlineData(DocumentEditorInputKey.Left, FreeKeyModifiers.Shift, DocumentEditorInputIntent.MovePrevious, true, false)]
+    [InlineData(DocumentEditorInputKey.Tab, FreeKeyModifiers.Shift, DocumentEditorInputIntent.NavigateTab, true, true)]
+    [InlineData(DocumentEditorInputKey.Enter, FreeKeyModifiers.None, DocumentEditorInputIntent.InsertParagraphBreak, false, true)]
     public void BodyKeyPlanProjectsPortableIntent(
         DocumentEditorInputKey key,
-        DocumentEditorInputModifiers modifiers,
+        FreeKeyModifiers modifiers,
         DocumentEditorInputIntent intent,
         bool extendsSelection,
         bool isMutation)
