@@ -165,7 +165,8 @@ public partial class MainWindow
             ShowHideNote = Handled<CellAddress>(ToggleContextCellNoteVisibility),
             ShowAllNotes = Handled(() => ToggleAllNotesVisibility()),
             OpenHyperlink = Handled<CellAddress>(async address => await OpenHyperlinkAsync(address)),
-            EditHyperlink = Handled(async () => await ShowInsertHyperlinkDialogAsync()),
+            EditHyperlink = Handled<WorkbookApplicationCommandInvocation>(async invocation =>
+                await ShowHyperlinkForTargetAsync(invocation.TargetAddress)),
             PivotTableOptions = Handled<CellAddress>(address => OpenPivotTableOptions(address)),
             ClearAll = Handled(() => ClearSelectedRangeAll()),
             ClearFormats = Handled(() => ClearSelectedRangeFormats()),

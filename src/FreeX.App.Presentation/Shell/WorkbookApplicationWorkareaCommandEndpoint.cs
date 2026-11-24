@@ -168,7 +168,7 @@ public sealed class WorkbookApplicationWorkareaCommandEndpointProfile
     public WorkbookApplicationWorkareaEndpoint<CellAddress>? ShowHideNote { get; init; }
     public WorkbookApplicationWorkareaEndpoint? ShowAllNotes { get; init; }
     public WorkbookApplicationWorkareaEndpoint<CellAddress>? OpenHyperlink { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? EditHyperlink { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? EditHyperlink { get; init; }
     public WorkbookApplicationWorkareaEndpoint<CellAddress>? PivotTableOptions { get; init; }
     public WorkbookApplicationWorkareaEndpoint? ClearAll { get; init; }
     public WorkbookApplicationWorkareaEndpoint? ClearFormats { get; init; }
@@ -316,7 +316,7 @@ public static class WorkbookApplicationWorkareaCommandDispatcher
             WorkbookApplicationCommandIntent.ShowAllNotes => Invoke(request, endpoints.ShowAllNotes),
             WorkbookApplicationCommandIntent.OpenHyperlink =>
                 Invoke(request, endpoints.OpenHyperlink, RequiredTarget(request)),
-            WorkbookApplicationCommandIntent.EditHyperlink => Invoke(request, endpoints.EditHyperlink),
+            WorkbookApplicationCommandIntent.EditHyperlink => Invoke(request, endpoints.EditHyperlink, request.Invocation),
             WorkbookApplicationCommandIntent.PivotTableOptions =>
                 Invoke(request, endpoints.PivotTableOptions, RequiredTarget(request)),
             WorkbookApplicationCommandIntent.ClearAll => Invoke(request, endpoints.ClearAll),

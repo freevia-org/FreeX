@@ -16179,33 +16179,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return true;
     }
 
-    private async Task ShowInsertHyperlinkDialogAsync()
-    {
-        if (_isOpening || _isSaving)
-            return;
-
-        if (!TryCommitPendingFormulaEdit())
-            return;
-
-        var plan = await ShowInsertHyperlinkInputDialogAsync();
-        if (plan is null)
-            return;
-
-        var rangeReference = FormatRangeReference(_session.SelectedRange);
-        var result = _session.SetSelectedRangeHyperlink(plan);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_InsertHyperlinkFailed"));
-            return;
-        }
-
-        RefreshShell(UiText.Format("MainLoc_InsertedHyperlinkFor", rangeReference));
-    }
+    private async Task ShowInsertHyperlinkDialogAsync() => await ShowHyperlinkForTargetAsync(null);
 
     private async Task<HyperlinkDialogPlan?> ShowInsertHyperlinkInputDialogAsync()
     {
-        HyperlinkDialogPlan? result = null;
         var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();
+        return await ShowHyperlinkInputDialogWithPrefillAsync(prefill);
+    }
+
+    private async Task<HyperlinkDialogPlan?> ShowHyperlinkInputDialogWithPrefillAsync(HyperlinkDialogPrefill prefill)
+    {
+        HyperlinkDialogPlan? result = null;
         var linkTypeChoices = CreateHyperlinkTypeChoices();
         var selectedLinkType = linkTypeChoices[0];
         foreach (var choice in linkTypeChoices)
