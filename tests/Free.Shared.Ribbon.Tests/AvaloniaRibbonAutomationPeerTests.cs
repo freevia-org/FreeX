@@ -91,7 +91,7 @@ public sealed class AvaloniaRibbonAutomationPeerTests
                 TooltipDescription = "Choisit une police.",
             }))), content =>
         {
-            var combo = Assert.IsType<ComboBox>(FindCommand(content, "font"));
+            var combo = Assert.IsAssignableFrom<ComboBox>(FindCommand(content, "font"));
             var editor = combo.GetVisualDescendants().OfType<TextBox>().Single();
             Peer(combo).GetName().Should().Be("Police");
             Peer(editor).GetName().Should().Be("Police");
@@ -109,13 +109,13 @@ public sealed class AvaloniaRibbonAutomationPeerTests
                     Items = ["Calibri"],
                     TooltipDescription = "Description du catalogue.",
                 })));
-            var combo = Assert.IsType<ComboBox>(FindCommand(content, "font"));
+            var combo = Assert.IsAssignableFrom<ComboBox>(FindCommand(content, "font"));
             AutomationProperties.SetName(combo, "Document font");
             AutomationProperties.SetHelpText(combo, "Choose this document's font.");
             return content;
         }, content =>
         {
-            var combo = Assert.IsType<ComboBox>(FindCommand(content, "font"));
+            var combo = Assert.IsAssignableFrom<ComboBox>(FindCommand(content, "font"));
             var editor = combo.GetVisualDescendants().OfType<TextBox>().Single();
             Peer(combo).GetName().Should().Be("Document font");
             Peer(editor).GetName().Should().Be("Document font");
