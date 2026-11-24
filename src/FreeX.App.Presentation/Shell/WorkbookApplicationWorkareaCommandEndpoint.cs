@@ -157,13 +157,13 @@ public sealed class WorkbookApplicationWorkareaCommandEndpointProfile
     public WorkbookApplicationWorkareaEndpoint? AutoFitColumnWidth { get; init; }
     public WorkbookApplicationWorkareaEndpoint? Group { get; init; }
     public WorkbookApplicationWorkareaEndpoint? Ungroup { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? NewThreadedComment { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? EditThreadedComment { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? NewThreadedComment { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? EditThreadedComment { get; init; }
     public WorkbookApplicationWorkareaEndpoint<CellAddress, bool>? SetThreadedCommentResolution { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? DeleteThreadedComment { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? NewNote { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? EditNote { get; init; }
-    public WorkbookApplicationWorkareaEndpoint? DeleteNote { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? DeleteThreadedComment { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? NewNote { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? EditNote { get; init; }
+    public WorkbookApplicationWorkareaEndpoint<WorkbookApplicationCommandInvocation>? DeleteNote { get; init; }
     public WorkbookApplicationWorkareaEndpoint? ShowNotes { get; init; }
     public WorkbookApplicationWorkareaEndpoint<CellAddress>? ShowHideNote { get; init; }
     public WorkbookApplicationWorkareaEndpoint? ShowAllNotes { get; init; }
@@ -296,8 +296,8 @@ public static class WorkbookApplicationWorkareaCommandDispatcher
             WorkbookApplicationCommandIntent.AutoFitColumnWidth => Invoke(request, endpoints.AutoFitColumnWidth),
             WorkbookApplicationCommandIntent.Group => Invoke(request, endpoints.Group),
             WorkbookApplicationCommandIntent.Ungroup => Invoke(request, endpoints.Ungroup),
-            WorkbookApplicationCommandIntent.NewThreadedComment => Invoke(request, endpoints.NewThreadedComment),
-            WorkbookApplicationCommandIntent.EditThreadedComment => Invoke(request, endpoints.EditThreadedComment),
+            WorkbookApplicationCommandIntent.NewThreadedComment => Invoke(request, endpoints.NewThreadedComment, request.Invocation),
+            WorkbookApplicationCommandIntent.EditThreadedComment => Invoke(request, endpoints.EditThreadedComment, request.Invocation),
             WorkbookApplicationCommandIntent.ResolveThreadedComment
                 or WorkbookApplicationCommandIntent.UnresolveThreadedComment =>
                 Invoke(
@@ -306,10 +306,10 @@ public static class WorkbookApplicationWorkareaCommandDispatcher
                     RequiredTarget(request),
                     request.State),
             WorkbookApplicationCommandIntent.DeleteThreadedComment =>
-                Invoke(request, endpoints.DeleteThreadedComment),
-            WorkbookApplicationCommandIntent.NewNote => Invoke(request, endpoints.NewNote),
-            WorkbookApplicationCommandIntent.EditNote => Invoke(request, endpoints.EditNote),
-            WorkbookApplicationCommandIntent.DeleteNote => Invoke(request, endpoints.DeleteNote),
+                Invoke(request, endpoints.DeleteThreadedComment, request.Invocation),
+            WorkbookApplicationCommandIntent.NewNote => Invoke(request, endpoints.NewNote, request.Invocation),
+            WorkbookApplicationCommandIntent.EditNote => Invoke(request, endpoints.EditNote, request.Invocation),
+            WorkbookApplicationCommandIntent.DeleteNote => Invoke(request, endpoints.DeleteNote, request.Invocation),
             WorkbookApplicationCommandIntent.ShowNotes => Invoke(request, endpoints.ShowNotes),
             WorkbookApplicationCommandIntent.ShowHideNote =>
                 Invoke(request, endpoints.ShowHideNote, RequiredTarget(request)),

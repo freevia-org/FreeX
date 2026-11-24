@@ -247,6 +247,32 @@ public sealed class WorkbookApplicationCommandRouterTests
                     .Select(property => property.Name));
     }
 
+    [Theory]
+    [InlineData(WorkbookApplicationCommandIntent.NewThreadedComment)]
+    [InlineData(WorkbookApplicationCommandIntent.EditThreadedComment)]
+    [InlineData(WorkbookApplicationCommandIntent.DeleteThreadedComment)]
+    [InlineData(WorkbookApplicationCommandIntent.NewNote)]
+    [InlineData(WorkbookApplicationCommandIntent.EditNote)]
+    [InlineData(WorkbookApplicationCommandIntent.DeleteNote)]
+    public async Task WorkareaBinder_RetainsReviewTargetAndNativeInvocation(WorkbookApplicationCommandIntent intent)
+    {
+        var calls = new List<EndpointCall>();
+        var bindings = CreateWorkareaBindings(calls);
+        var target = new CellAddress(new SheetId(Guid.NewGuid()), 2, 2);
+        var source = new object();
+        var eventArgs = new object();
+        var route = Route(intent, WorkbookApplicationCommandSource.WorksheetContextMenu);
+
+        (await bindings.TryExecuteAsync(route, target, source, eventArgs)).Handled.Should().BeTrue();
+
+        var invocation = calls.Should().ContainSingle().Which.Arguments.Should().ContainSingle().Which
+            .Should().BeOfType<WorkbookApplicationCommandInvocation>().Subject;
+        invocation.Route.Should().Be(route);
+        invocation.TargetAddress.Should().Be(target);
+        invocation.NativeSource.Should().BeSameAs(source);
+        invocation.NativeEventArgs.Should().BeSameAs(eventArgs);
+    }
+
     [Fact]
     public async Task WorkareaBinder_BuildsSourceTargetAndNavigationPolicy()
     {

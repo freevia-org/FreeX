@@ -884,7 +884,7 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        source.Should().Contain("NewThreadedComment = Handled(");
+        source.Should().Contain("NewThreadedComment = Handled<WorkbookApplicationCommandInvocation>(");
         source.Should().Contain("ReviewNewThreadedCommentBtn_Click(this, new RoutedEventArgs())");
     }
 
@@ -894,8 +894,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
         var reviewSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
 
-        source.Should().Contain("EditThreadedComment = Handled(");
-        source.Should().Contain("DeleteThreadedComment = Handled(");
+        source.Should().Contain("EditThreadedComment = Handled<WorkbookApplicationCommandInvocation>(");
+        source.Should().Contain("DeleteThreadedComment = Handled<WorkbookApplicationCommandInvocation>(");
         source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs())");
         reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
         // Commit 52ebe84d9f moved the actual DeleteThreadedCommentCommand construction into the
