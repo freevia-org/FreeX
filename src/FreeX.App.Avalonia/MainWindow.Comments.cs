@@ -151,12 +151,22 @@ public sealed partial class MainWindow
             UiText.Format(resolved ? "Comment_Resolved" : "Comment_Unresolved", FormatCellReference(address)),
             UiText.Get("Comment_CommentFailed"));
 
-    private void ToggleContextCellNoteVisibility(CellAddress address) =>
-        ApplyContextCellReviewCommand(
-            address,
-            target => new ShowHideCommentCommand(target.Sheet, target),
-            UiText.Get("Comment_ToggledNoteVisibility"),
-            UiText.Get("Comment_NoNote"));
+    private void ToggleContextCellNoteVisibility(CellAddress address)
+    {
+        if (_isOpening || _isSaving || address.Sheet != _session.ActiveSheet.Id || !TryCommitPendingFormulaEdit())
+            return;
+
+        // The menu belongs to the clicked cell, even inside a preserved multi-cell selection.
+        var result = CreateReviewSessionController(address, preserveSelection: true, repeatable: true)
+            .ToggleNoteVisibility(address);
+        if (!result.Success)
+        {
+            RefreshShell(result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+            return;
+        }
+
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("Comment_ToggledNoteVisibility"));
+    }
 
     private void ApplyContextCellReviewCommand(
         CellAddress address,

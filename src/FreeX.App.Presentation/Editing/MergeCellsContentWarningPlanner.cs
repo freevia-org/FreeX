@@ -11,9 +11,9 @@ public enum MergeCellsContentWarningAction
 }
 
 /// <summary>
-/// Portable presentation metadata for the merge-content warning. The compact and detailed messages
-/// preserve each renderer's established text while keeping all wording and action identity out of
-/// native control construction.
+/// Portable presentation metadata for the merge-content warning. Both renderers share the compact
+/// message and the cell-text preview (WPF is the ground truth), keeping all wording and action
+/// identity out of native control construction.
 /// </summary>
 public sealed class MergeCellsContentWarningPlan
 {
@@ -22,11 +22,9 @@ public sealed class MergeCellsContentWarningPlan
 
     internal MergeCellsContentWarningPlan(
         string previewText,
-        string? entryCountText,
         IReadOnlyList<DialogSurfaceActionPlan<MergeCellsContentWarningAction>> actions)
     {
         PreviewText = previewText;
-        EntryCountText = entryCountText;
         Actions = actions;
         _actions = actions.ToDictionary(action => action.Id);
     }
@@ -37,14 +35,9 @@ public sealed class MergeCellsContentWarningPlan
 
     public string CompactGuidanceMessage => "Choose how to handle the selected cell contents.";
 
-    public string DetailedGuidanceMessage =>
-        "Only the first cell is kept by default. Choose how FreeX should handle the other selected contents.";
-
     public string DialogAutomationId => FreeXAutomationIdCatalog.MergeCellsContentWarningDialog;
 
     public string PreviewText { get; }
-
-    public string? EntryCountText { get; }
 
     public IReadOnlyList<DialogSurfaceActionPlan<MergeCellsContentWarningAction>> Actions { get; }
 
@@ -86,10 +79,7 @@ public static class MergeCellsContentWarningPlanner
         var preview = string.Join(", ", entryDisplayTexts
             .Where(text => !string.IsNullOrWhiteSpace(text))
             .Take(4));
-        var countText = entryDisplayTexts.Count > 0
-            ? $"Non-empty cells: {entryDisplayTexts.Count}"
-            : null;
 
-        return new MergeCellsContentWarningPlan(preview, countText, Actions);
+        return new MergeCellsContentWarningPlan(preview, Actions);
     }
 }
