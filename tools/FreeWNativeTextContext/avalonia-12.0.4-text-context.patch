@@ -1,0 +1,56 @@
+diff --git a/native/Avalonia.Native/src/OSX/AvnView.mm b/native/Avalonia.Native/src/OSX/AvnView.mm
+--- a/native/Avalonia.Native/src/OSX/AvnView.mm
++++ b/native/Avalonia.Native/src/OSX/AvnView.mm
+@@ -8,6 +8,12 @@
+ #include "automation.h"
+ #import "WindowInterfaces.h"
+ #import "WindowImpl.h"
++
++// FreeW's package-local text-context safety contract. No COM interface changes.
++extern "C" __attribute__((visibility("default"))) int32_t FreeW_AvaloniaNative_TextContext_V1(void)
++{
++    return 1;
++}
+ 
+ @implementation AvnView
+ {
+@@ -804,13 +810,20 @@
+ 
+ - (NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(NSRangePointer)actualRange
+ {
+-    if(actualRange){
+-        range = *actualRange;
+-    }
+-    
+-    NSAttributedString* subString = [_text attributedSubstringFromRange:range];
+-    
+-    return subString;
++    if (actualRange)
++        *actualRange = NSMakeRange(NSNotFound, 0);
++
++    const NSUInteger textLength = [_text length];
++    // Validate before adding location and length: the proposed unsigned range may overflow.
++    if (range.location == NSNotFound || range.location > textLength
++        || (range.location == textLength && range.length != 0))
++        return nil;
++
++    const NSRange boundedRange = NSMakeRange(range.location,
++        MIN(range.length, textLength - range.location));
++    if (actualRange)
++        *actualRange = boundedRange;
++    return [_text attributedSubstringFromRange:boundedRange];
+ }
+ 
+ - (void)insertText:(id)string replacementRange:(NSRange)replacementRange
+@@ -1007,7 +1020,10 @@
+ }
+ 
+ - (void) setSelection:(int)start :(int)end{
+-    _selectedRange = NSMakeRange(start, end - start);
++    const NSUInteger textLength = [_text length];
++    const NSUInteger first = start < 0 ? 0 : MIN((NSUInteger)start, textLength);
++    const NSUInteger last = end < 0 ? 0 : MIN((NSUInteger)end, textLength);
++    _selectedRange = NSMakeRange(MIN(first, last), MAX(first, last) - MIN(first, last));
+ }
+ 
+ - (void) setCursorRect:(AvnRect)rect{

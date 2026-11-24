@@ -80,6 +80,10 @@
     <AvaloniaResource Include="Assets/Fonts/Carlito/*.ttf" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(FreeWNativeTextContextSha256)' != ''">
+    <AssemblyMetadata Include="FreeW.NativeTextContext.Sha256" Value="$(FreeWNativeTextContextSha256)" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
