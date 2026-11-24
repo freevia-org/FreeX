@@ -8317,8 +8317,8 @@ public static partial class DocxReader
         /// <summary>
         /// Resolves <see cref="ParagraphFormatting.ListStartOverride"/> for the next Number/MultiLevel
         /// paragraph in document order (numId/level as read off its <c>w:numPr</c>); null means "continue
-        /// the running counter" (including the very first list of its kind in the document — nothing has
-        /// counted yet, so the natural default is already correct and forcing an override there would only
+        /// the running counter" (including the very first list of its kind when its declared start is 1 —
+        /// the natural default is already correct and forcing an override there would only
         /// pollute a round-tripped document with a needless dedicated restart <c>w:num</c>, see
         /// <c>PreservedNumberingRoundTripTests.FreeWAuthoredLists_RoundTripUnchanged_WithNoPreservedNumbering</c>
         /// and <c>DocxRoundTripTests.NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride</c>). Mutates the
@@ -8349,10 +8349,19 @@ public static partial class DocxReader
 
             var key = (numId, level);
 
+            // The native renderers reset deeper levels when a parent item advances. Mirror that
+            // boundary here so the next child receives its declared/default or explicit start again.
+            for (var deeper = level + 1; deeper < MultiLevelListFormat.LevelCount; deeper++)
+            {
+                _instanceCounts.Remove((numId, deeper));
+                _consumedOverrides.Remove((numId, deeper));
+            }
+
             // An explicit startOverride restarts its numbering INSTANCE once, at the run's first paragraph.
             // The paragraphs after it continue that run and must read back as "continue" (null) — the model
             // convention the render layer and the writer's RestartNumbering both rely on — so the override is
-            // consumed on first use. Handing it to every paragraph on the numId would restart the counter on
+            // consumed on first use (and available again after a parent resets this level). Handing it
+            // to every paragraph on the numId would restart the counter on
             // each one (5, 5, 5 instead of 5, 6, 7) now that a restarted run's continuations correctly share
             // their anchor's numId.
             if (explicitStart is { } start && _consumedOverrides.Add(key))
@@ -8363,10 +8372,16 @@ public static partial class DocxReader
 
             if (previousNumId is null || previousNumId == numId)
             {
-                // No prior instance to conflict with, or continuing the same one uninterrupted — don't
-                // restart. Mirror the render layer's own running increment locally so a LATER interruption
-                // (by a different numId) followed by a return to this one can resume from the correct value.
-                _instanceCounts[key] = _instanceCounts.TryGetValue(key, out var running) ? running + 1 : 1;
+                // A level's first item uses its declared start even for the first list in the document.
+                // Only the normal start at 1 can rely on the renderer's implicit initial counter.
+                if (!_instanceCounts.TryGetValue(key, out var running))
+                {
+                    var initial = _defaultStarts.TryGetValue(key, out var initialStart) ? initialStart : 1;
+                    _instanceCounts[key] = initial;
+                    return initial == 1 ? null : initial;
+                }
+                // Mirror the running increment so returning after another instance resumes this count.
+                _instanceCounts[key] = running + 1;
                 return null;
             }
 
@@ -8421,6 +8436,19 @@ public static partial class DocxReader
             ? -DxaToPoints(hang.Value)
             : ind.Attribute(W + "firstLine") is { } fl ? DxaToPoints(fl.Value) : null;
         return (left, first);
+    }
+
+    // OOXML's omitted w:start defaults to zero. Keep malformed/negative explicit values on the
+    // existing safe fallback at 1; Word accepts nonnegative starts, including an explicit zero.
+    private static int ReadNumberingStart(XElement? element)
+    {
+        if (element is null)
+            return 0;
+        return int.TryParse(
+            element.Attribute(W + "val")?.Value,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var start) && start >= 0 ? start : 1;
     }
 
     /// <summary>
@@ -8519,13 +8547,7 @@ public static partial class DocxReader
             {
                 var ilvl = ParseInt(level.Attribute(W + "ilvl")?.Value);
                 levelIndents[ilvl] = ReadLevelIndent(level);
-                levelStarts[ilvl] = int.TryParse(
-                    level.Element(W + "start")?.Attribute(W + "val")?.Value,
-                    System.Globalization.NumberStyles.Integer,
-                    System.Globalization.CultureInfo.InvariantCulture,
-                    out var startVal)
-                    ? startVal
-                    : 1;
+                levelStarts[ilvl] = ReadNumberingStart(level.Element(W + "start"));
             }
             abstractLevelStarts[abstractNumId] = levelStarts;
         }
@@ -8607,13 +8629,13 @@ public static partial class DocxReader
                             overriddenLvl.Element(W + "numFmt")?.Attribute(W + "val")?.Value,
                             overriddenLvl.Element(W + "lvlText")?.Attribute(W + "val")?.Value);
                     }
-                    continue;
+                    // Word ignores w:start inside this overriding w:lvl, but a sibling
+                    // w:startOverride still applies and takes precedence over the abstract start.
                 }
                 var startOverrideEl = lvlOverride.Element(W + "startOverride");
                 if (startOverrideEl is null)
                     continue;
-                var startVal = ParseInt(startOverrideEl.Attribute(W + "val")?.Value);
-                startOverrides[(numId, level)] = startVal;
+                startOverrides[(numId, level)] = ReadNumberingStart(startOverrideEl);
             }
         }
         return (map, new NumberingRestartState(startOverrides, defaultStarts));

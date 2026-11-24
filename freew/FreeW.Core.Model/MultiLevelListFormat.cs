@@ -230,6 +230,7 @@ public sealed class MultiLevelListMarkerState
     private readonly IReadOnlyList<ListNumberFormat>? _numberFormats;
     private readonly IReadOnlyList<string?>? _levelTexts;
     private readonly int[] _counters = new int[MultiLevelListFormat.LevelCount];
+    private readonly bool[] _initialized = new bool[MultiLevelListFormat.LevelCount];
 
     public MultiLevelListMarkerState(
         IReadOnlyList<ListNumberFormat>? numberFormats = null,
@@ -242,10 +243,14 @@ public sealed class MultiLevelListMarkerState
     public string Advance(int rawLevel, int? startAt = null)
     {
         var level = Math.Clamp(rawLevel, 0, MultiLevelListFormat.LevelCount - 1);
-        _counters[level] = startAt.HasValue ? Math.Max(1, startAt.Value) : _counters[level] + 1;
+        _counters[level] = ListRestartCounter.NextCount(_counters[level], startAt);
+        _initialized[level] = true;
 
         for (var deeper = level + 1; deeper < MultiLevelListFormat.LevelCount; deeper++)
+        {
             _counters[deeper] = 0;
+            _initialized[deeper] = false;
+        }
 
         var pattern = level < (_levelTexts?.Count ?? 0) ? _levelTexts![level] : null;
         return pattern is not null ? FormatFromLevelText(pattern, level) : FormatDefaultDottedOutline(level);
@@ -295,12 +300,16 @@ public sealed class MultiLevelListMarkerState
 
     private string FormatAncestorValue(int ancestor)
     {
-        var value = _counters[ancestor] == 0 ? 1 : _counters[ancestor];
+        var value = _initialized[ancestor] ? _counters[ancestor] : 1;
         var format = ancestor < (_numberFormats?.Count ?? 0)
             ? _numberFormats![ancestor]
             : ListNumberFormat.Decimal;
         return MultiLevelListMarkerFormatter.FormatNumber(value, format);
     }
 
-    public void Reset() => Array.Clear(_counters, 0, _counters.Length);
+    public void Reset()
+    {
+        Array.Clear(_counters, 0, _counters.Length);
+        Array.Clear(_initialized, 0, _initialized.Length);
+    }
 }
