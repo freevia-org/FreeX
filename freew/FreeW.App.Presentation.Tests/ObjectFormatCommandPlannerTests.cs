@@ -172,9 +172,21 @@ public sealed class ObjectFormatCommandPlannerTests
     [InlineData("")]
     [InlineData("0")]
     [InlineData("-1")]
-    [InlineData("12,5")]
-    public void TryParseSizePoints_RejectsMissingNonPositiveOrLocaleFormattedValues(string? text)
+    public void TryParseSizePoints_RejectsMissingOrNonPositiveValues(string? text)
     {
         ObjectFormatCommandPlanner.TryParseSizePoints(text, out _).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("en-US", false)]
+    [InlineData("bg-BG", true)]
+    [InlineData("de-DE", true)]
+    public void TryParseSizePoints_CommaDecimalFollowsUserCulture(string cultureName, bool expectedSuccess)
+    {
+        using var scope = TestCultureScope.CurrentCulture(cultureName);
+
+        ObjectFormatCommandPlanner.TryParseSizePoints("12,5", out var points).Should().Be(expectedSuccess);
+        if (expectedSuccess)
+            points.Should().Be(12.5);
     }
 }
