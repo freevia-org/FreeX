@@ -307,6 +307,7 @@ public static class DocumentModelCloner
         StyleId = source.StyleId,
         RevisionAuthor = preserveRevisions ? source.RevisionAuthor : null,
         RevisionDateXml = preserveRevisions ? source.RevisionDateXml : null,
+        NestedRevision = preserveRevisions ? source.NestedRevision : null,
         MoveRevisionId = preserveRevisions ? source.MoveRevisionId : null,
         FormatRevision = preserveRevisions ? source.FormatRevision : null
     };
