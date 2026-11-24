@@ -83,6 +83,7 @@ public sealed partial class PivotTableRefreshServiceTests
     [Fact]
     public void Refresh_GroupsNumberRowFieldByHalf_LabelsUpperBoundGreaterThanOrEqualToLowerBound()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // R17-pivot-cache-deep-3: grouping by a fractional interval (0.5) over 0..1 must
         // label buckets "0-0.5" and "0.5-1" (the half-open upper bound), not the inclusive
         // "-1" integer form which yields a nonsensical "0--0.5" (end before start).

@@ -9,6 +9,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromMatchingConditionalFormat()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
         var address = new CellAddress(sheet.Id, 2, 2);
@@ -3374,6 +3375,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatComplexTextComparisonsAndSuffixes()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=$A1", "B1", "B2");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"1234+0.5i\"", "B4");
         AssertFormulaComplexFunctionContrastLocations("COMPLEX($C1,$D1,$E1)=\"-j\"", "B5");
@@ -3658,6 +3660,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatBaseToBaseOptionalPlacesAndCoercion()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2HEX($A1,$F1),\"0000000A\")", "B1");
         AssertFormulaBaseConversionFunctionContrastLocations("EXACT(BIN2OCT($A1,$F1),\"0012\")", "B4");
         AssertFormulaBaseConversionFunctionContrastLocations("EXACT(HEX2BIN($C1,$F1),\"00001010\")", "B1");
@@ -3823,6 +3826,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_UsesCanonicalFormulaConditionalFormatScalarFunctionOperandCoercionAndErrorSemantics()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaArithmeticContrastLocations("ABS($A1,1)>0");
         AssertFormulaArithmeticContrastLocations("ROUND($A1)>0");
         AssertFormulaArithmeticContrastLocations("ROUNDUP($A1)>0");
@@ -4110,6 +4114,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatTextNumberFormattingFunctionOperands()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaTextFunctionContrastLocations("TEXT($A1,\"0\")=\"100\"", "B2");
         AssertFormulaTextFunctionContrastLocations("TEXT($A1/100,\"0.0%\")=\"75.0%\"", "B1", "B3");
         AssertFormulaTextFunctionContrastLocations("TEXT(45292,\"m/d/yyyy\")=\"1/1/2024\"", FormulaTextFunctionAllLocations);
@@ -4419,6 +4424,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatValueFunctionOperands()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1)=99.5", "B1");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1)>=1000", "B2");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1)=0.5", "B3");
@@ -4430,6 +4436,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatValueFunctionWrappersPredicatesAndAggregates()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaValueFunctionContrastLocations("IF(VALUE($C1)>0,TRUE,FALSE)", "B1", "B2", "B3", "B7");
         AssertFormulaValueFunctionContrastLocations("AND(VALUE($C1)>0,$A1)", "B1", "B2", "B7");
         AssertFormulaValueFunctionContrastLocations("ISNUMBER(VALUE($C1))", "B1", "B2", "B3", "B4", "B7");
@@ -4440,6 +4447,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_UsesCanonicalFormulaConditionalFormatValueFunctionOperandCoercionAndErrorSemantics()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaValueFunctionContrastLocations("VALUE()>0");
         AssertFormulaValueFunctionContrastLocations("VALUE($C1,1)>0");
         AssertFormulaValueFunctionContrastLocations("VALUE($A1)>0");
@@ -4454,6 +4462,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumberValueFunctionOperands()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)=1234.56", "B1");
         AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1,$D1,$E1)=1234.56", "B1", "B2");
         AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE(\"1;25\",\";\")=1.25", FormulaNumberValueAllLocations);
@@ -4463,6 +4472,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatNumberValueFunctionPercentAccountingAndWhitespace()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)=0.5", "B3");
         AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)<0", "B4");
         AssertFormulaNumberValueFunctionContrastLocations("NUMBERVALUE($C1)=1234", "B5");
@@ -4511,6 +4521,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueFunctionOperands()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=1", "B1");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE($A1)=60", "B2", "B3");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("DATEVALUE(\"3/1/1900\")=61", FormulaDateValueTimeValueAllLocations);
@@ -4537,6 +4548,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueWrappersPredicatesAndAggregates()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("IF(DATEVALUE($A1)>60,TRUE,FALSE)", "B4", "B5", "B6", "B7");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("AND(DATEVALUE($A1)>60,$D1)", "B4", "B5", "B7");
         // Row 8 holds "12:00 PM": measured against Excel 16.0 (en-US), DATEVALUE of a time-only text is 0 (a number).
@@ -4552,6 +4564,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_FromFormulaConditionalFormatDateValueTimeValueErrorPredicates()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"12:00 PM\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(TIMEVALUE(\"2024-01-02\"))");
         AssertFormulaDateValueTimeValueFunctionContrastLocations("ISERROR(DATEVALUE(\"Open\"))", FormulaDateValueTimeValueAllLocations);
@@ -4897,6 +4910,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_UsesCanonicalFormulaConditionalFormatDateFunctionOperandCoercionAndErrorSemantics()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,2,30)=$A1");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,1.5,1)=$A1");
         AssertFormulaDateFunctionContrastLocations("DATE(2023,3)=$A1");

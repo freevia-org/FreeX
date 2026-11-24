@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using FluentAssertions;
 using FreeX.Core.Commands;
@@ -88,11 +89,12 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
             // Row heights, column widths and merges are exactly what the insert/delete commands
             // shift, so a snapshot of cell contents alone would let a revert lose them unnoticed --
             // the instrument has to reach the state the command under test actually touches.
+            // Snapshot numbers identify model state rather than localized display text.
             foreach (var (row, height) in sheet.RowHeights.OrderBy(pair => pair.Key))
-                builder.Append("  rowH ").Append(row).Append('=').Append(height).AppendLine();
+                builder.Append("  rowH ").Append(row).Append('=').Append(height.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
 
             foreach (var (col, width) in sheet.ColumnWidths.OrderBy(pair => pair.Key))
-                builder.Append("  colW ").Append(col).Append('=').Append(width).AppendLine();
+                builder.Append("  colW ").Append(col).Append('=').Append(width.ToString("R", CultureInfo.InvariantCulture)).AppendLine();
 
             foreach (var region in sheet.MergedRegions.OrderBy(r => r.ToString(), StringComparer.Ordinal))
                 builder.Append("  merge ").Append(region).AppendLine();
@@ -125,7 +127,9 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
             {
                 builder
                     .Append("  ").Append(address.Row).Append(',').Append(address.Col)
-                    .Append(" = ").Append(cell.Value?.ToString() ?? "<null>")
+                    .Append(" = ").Append(cell.Value is NumberValue number
+                        ? FormattableString.Invariant($"NumberValue {{ Value = {number.Value:R} }}")
+                        : cell.Value?.ToString() ?? "<null>")
                     .Append(" f=").Append(cell.FormulaText ?? "-")
                     .Append(" s=").Append(cell.StyleId)
                     .AppendLine();
@@ -157,16 +161,22 @@ public sealed class R405_WorkbookCommandUndoRestoresTests
     /// exactly the state a row or column edit is most likely to lose -- this suite has hit that
     /// failure in its own probes more than once.
     /// </summary>
-    [Fact]
-    public void TheSnapshotActuallyRecordsTheStateItClaimsTo()
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void TheSnapshotActuallyRecordsTheStateItClaimsTo(string cultureName)
     {
-        var (workbook, _, _) = Setup();
+        using var culture = TestCultureScope.CurrentCulture(cultureName);
+        var (workbook, sheet, _) = Setup();
+        sheet.SetCell(new CellAddress(sheet.Id, 8, 1), new NumberValue(1.25));
         var snapshot = Snapshot(workbook);
 
         snapshot.Should().Contain("rowH 3=42.5", "row heights must be part of the comparison");
         snapshot.Should().Contain("colW 3=17.25", "column widths must be part of the comparison");
         snapshot.Should().Contain("merge ", "merged regions must be part of the comparison");
         snapshot.Should().Contain("1,1 = ", "cell values must be part of the comparison");
+        snapshot.Should().Contain("8,1 = NumberValue { Value = 1.25 }", "numeric cell values must be invariant too");
         snapshot.Should().Contain("comment 1,1=first note", "comments must be part of the comparison");
         snapshot.Should().Contain("link 1,2=", "hyperlinks must be part of the comparison");
         snapshot.Should().Contain("validations=", "data validations must be part of the comparison");

@@ -21,6 +21,7 @@ public sealed class R149_AccessibilityCheckerFillOnlyConditionalFormatContrastTe
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_WhenFillOnlyConditionalFormatMatchesWhiteFontCell()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
         var address = new CellAddress(sheet.Id, 2, 2);

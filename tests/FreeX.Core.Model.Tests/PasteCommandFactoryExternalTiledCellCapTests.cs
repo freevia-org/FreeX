@@ -27,6 +27,7 @@ public sealed class PasteCommandFactoryExternalTiledCellCapTests
     [Fact]
     public void ExternalTextPaste_WholeSheetDestination_IsRejectedInsteadOfTilingBillionsOfCells()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var wholeSheet = new GridRange(
@@ -49,6 +50,7 @@ public sealed class PasteCommandFactoryExternalTiledCellCapTests
     [Fact]
     public void ExternalTextPaste_JustOverCapDestination_IsRejected()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // Pins the exact boundary with a destination small enough (2,001 x 2,001 = 4,004,001
         // cells) to safely exercise the pre-fix code path -- which built `edits` unconditionally --
         // without the OOM/hang risk of actually allocating the whole-sheet-scale list from the

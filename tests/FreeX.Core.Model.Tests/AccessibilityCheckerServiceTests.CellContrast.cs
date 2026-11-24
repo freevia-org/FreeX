@@ -9,6 +9,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_WithExplicitFontAndFill()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
         var address = new CellAddress(sheet.Id, 3, 2);
@@ -144,6 +145,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_WhenPatternForegroundIsLowContrast()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var workbook = new Workbook("Accessibility");
         var sheet = workbook.AddSheet("Sales");
         var address = new CellAddress(sheet.Id, 2, 2);
@@ -241,6 +243,7 @@ public sealed partial class AccessibilityCheckerServiceTests
     [Fact]
     public void FindIssues_FlagsLowContrastCellText_WhenGradientFillStopsAreLowContrast()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         // R131 (c): a cell with a gradient fill (FillColor/FillThemeColor both null, GradientFill
         // populated) previously fell through to a fabricated CellColor.White background regardless
         // of what the gradient actually contains. Here the font color is close in luminance to
