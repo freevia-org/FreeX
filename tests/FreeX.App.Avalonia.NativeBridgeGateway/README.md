@@ -3,6 +3,8 @@
 This helper accepts real worksheet peers from `WorksheetGridProviderTests` and checks the matched
 packaged managed/native bridge without launching a native application. Ordinary test builds do
 not reference it unless `FreeXGridNativeTestHelper` is supplied.
+It also compares native value-selector writability with the public cell/editor provider and
+attempts a readonly cell value assignment to verify it leaves the value unchanged.
 
 Prerequisites:
 

@@ -21,7 +21,7 @@ static bool SameArray(NSArray* native, IAvnAutomationPeerArray* peers)
 // No NSApplication/window is created. All owned inputs are consumed on every path.
 extern "C" __attribute__((visibility("default"))) int FreeXGridBridgeProbe(
     IAvnAutomationPeer* ownedGrid, IAvnAutomationPeer* ownedCell, IAvnAutomationPeer* ownedChild,
-    int rows,int columns,int row,int column,int focus,int press)
+    int rows,int columns,int row,int column,int focus,int press,int cellWritable,int childWritable)
 {
     ComPtr<IAvnAutomationPeer> grid(ownedGrid,true),cell(ownedCell,true),child(ownedChild,true);
     @autoreleasepool
@@ -41,6 +41,14 @@ extern "C" __attribute__((visibility("default"))) int FreeXGridBridgeProbe(
         NSAccessibilityElement* nativeCell=[elementClass acquire:cell];
         if([nativeGrid accessibilityRowCount]!=rows || [nativeGrid accessibilityColumnCount]!=columns) return 21;
         if([nativeCell accessibilityParent]!=nativeGrid) return 22;
+        if(cellWritable>=0 && [nativeCell isAccessibilitySelectorAllowed:@selector(setAccessibilityValue:)]!=(cellWritable!=0)) return 35;
+        if(cellWritable==0)
+        {
+            id beforeValue=[nativeCell accessibilityValue];
+            [nativeCell setAccessibilityValue:@"readonly native probe"];
+            id afterValue=[nativeCell accessibilityValue];
+            if(beforeValue!=afterValue && ![beforeValue isEqual:afterValue]) return 36;
+        }
         NSRange rowRange=row>=0?NSMakeRange(row,1):NSMakeRange(NSNotFound,0);
         NSRange columnRange=column>=0?NSMakeRange(column,1):NSMakeRange(NSNotFound,0);
         if(!NSEqualRanges([nativeCell accessibilityRowIndexRange],rowRange) || !NSEqualRanges([nativeCell accessibilityColumnIndexRange],columnRange)) return 23;
@@ -62,6 +70,7 @@ extern "C" __attribute__((visibility("default"))) int FreeXGridBridgeProbe(
         {
             NSAccessibilityElement* nativeChild=[elementClass acquire:child];
             if([nativeChild accessibilityParent]!=nativeCell) return 29;
+            if(childWritable>=0 && [nativeChild isAccessibilitySelectorAllowed:@selector(setAccessibilityValue:)]!=(childWritable!=0)) return 37;
             if(focus) { [nativeChild setAccessibilityFocused:YES]; if(![nativeChild isAccessibilityFocused]) return 30; }
             if(press && ![nativeChild accessibilityPerformPress]) return 31;
         }

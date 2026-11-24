@@ -57,7 +57,8 @@ public sealed class FreeXGridBridgeGateway : IDisposable
         var provider = _grid.GetProvider<IGridProvider>()!;
         var result = _probe(Owned(_grid), Owned(cell), child is null ? IntPtr.Zero : Owned(child),
             provider.RowCount, provider.ColumnCount, item.Row, item.Column,
-            focusChild ? 1 : 0, pressChild ? 1 : 0);
+            focusChild ? 1 : 0, pressChild ? 1 : 0,
+            ValueWritable(cell), child is null ? -1 : ValueWritable(child));
         Require(result == 0, "Actual FreeX peer/native selector failure code " + result);
         // Native array order is checked below against independently sorted public peer data,
         // not against a second native GUID definition.
@@ -82,6 +83,9 @@ public sealed class FreeXGridBridgeGateway : IDisposable
         if (!_seen.Add(peer)) return;
         foreach (var child in peer.GetChildren()) Remember(child);
     }
+    private static int ValueWritable(AutomationPeer peer) =>
+        peer.GetProvider<IValueProvider>() is { } value ? (value.IsReadOnly ? 0 : 1) :
+        peer.GetProvider<IRangeValueProvider>() is { } range ? (range.IsReadOnly ? 0 : 1) : -1;
     private static unsafe IntPtr Owned(AutomationPeer peer) => (IntPtr)MicroComRuntime.GetNativePointer<IAvnAutomationPeer>(AvnAutomationPeer.Wrap(peer)!, true);
     private static string RequiredPath(string name) => Environment.GetEnvironmentVariable(name) is { Length: > 0 } path && File.Exists(path)
         ? path : throw new InvalidOperationException("Missing isolated native test input: " + name);
@@ -110,5 +114,5 @@ public sealed class FreeXGridBridgeGateway : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate IntPtr NativeImagePath();
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate int Probe(IntPtr grid, IntPtr cell, IntPtr child, int rows, int columns, int row, int column, int focus, int press);
+    private delegate int Probe(IntPtr grid, IntPtr cell, IntPtr child, int rows, int columns, int row, int column, int focus, int press, int cellWritable, int childWritable);
 }
