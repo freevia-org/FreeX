@@ -237,26 +237,36 @@ public sealed class OutlineViewParityTests
 
         await OnUiThread(() =>
         {
-            var window = new MainWindow(Array.Empty<string>());
-            var callbacks = window.BuildBackstageCallbacks();
-            var heading = OutlineViewModel.Build(
-                    window.Editor.Document,
-                    OutlineViewModel.ShowAllLevels,
-                    firstLineOnly: false)
-                .First(row => row.IsHeading);
+            using var directory = new TestTemporaryDirectory("FreeW.OutlineView-");
+            var path = Path.Combine(directory.Path, "outline.docx");
+            FreeW.Core.IO.DocxWriter.Write(Sample(), path);
+            var window = new MainWindow([path]);
+            try
+            {
+                var callbacks = window.BuildBackstageCallbacks();
+                var heading = OutlineViewModel.Build(
+                        window.Editor.Document,
+                        OutlineViewModel.ShowAllLevels,
+                        firstLineOnly: false)
+                    .First(row => row.IsHeading);
 
-            dirtyBefore = callbacks.GetIsDirty();
-            window.ToggleOutlineViewForTests();
-            window.OutlineViewForTests.SelectBlockIndex(heading.BlockIndex);
-            window.OutlineViewForTests.ExecuteForTests(OutlineCommand.Collapse);
-            collapsed = window.Editor.IsHeadingCollapsed(heading.BlockIndex);
-            collapsedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
-            dirtyAfterCollapse = callbacks.GetIsDirty();
+                dirtyBefore = callbacks.GetIsDirty();
+                window.ToggleOutlineViewForTests();
+                window.OutlineViewForTests.SelectBlockIndex(heading.BlockIndex);
+                window.OutlineViewForTests.ExecuteForTests(OutlineCommand.Collapse);
+                collapsed = window.Editor.IsHeadingCollapsed(heading.BlockIndex);
+                collapsedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
+                dirtyAfterCollapse = callbacks.GetIsDirty();
 
-            window.OutlineViewForTests.ExecuteForTests(OutlineCommand.Expand);
-            expanded = !window.Editor.IsHeadingCollapsed(heading.BlockIndex);
-            expandedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
-            dirtyAfterExpand = callbacks.GetIsDirty();
+                window.OutlineViewForTests.ExecuteForTests(OutlineCommand.Expand);
+                expanded = !window.Editor.IsHeadingCollapsed(heading.BlockIndex);
+                expandedMarker = window.OutlineViewForTests.RowDisplayTextForTests(heading.BlockIndex);
+                dirtyAfterExpand = callbacks.GetIsDirty();
+            }
+            finally
+            {
+                window.Close();
+            }
         });
 
         dirtyBefore.Should().BeFalse();

@@ -178,12 +178,13 @@ public sealed class FreeWKeyboardAndKeyTipParityTests
             var window = new MainWindow([]);
             try
             {
+                window.Editor.InsertText("Select this document text");
                 window.Editor.SelectedText.Should().BeEmpty();
 
                 var shortcut = Press(window, Key.A, modifier);
 
                 shortcut.Handled.Should().BeTrue();
-                window.Editor.SelectedText.Should().NotBeEmpty();
+                window.Editor.SelectedText.Should().Be("Select this document text");
             }
             finally
             {

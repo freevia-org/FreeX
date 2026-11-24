@@ -21,6 +21,41 @@ public sealed class AsyncFileLifecycleHeadlessTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
 
+    [Fact]
+    public async Task StartupWithoutAFile_OpensACleanBlankDocumentAndFirstEditIsUndoable()
+    {
+        await RunOnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                [], new FreeWOptions(), new InMemoryApplicationOptionsStore<FreeWOptions>(),
+                promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.DontSave),
+                suppressStartupRecoveryOffer: true);
+            try
+            {
+                var callbacks = window.BuildBackstageCallbacks();
+                window.Editor.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Paragraph>();
+                window.Editor.PlainText.Should().BeEmpty();
+                callbacks.CurrentPath.Should().BeNull();
+                callbacks.GetIsDirty().Should().BeFalse();
+                window.Editor.CanUndo.Should().BeFalse();
+
+                window.Editor.InsertText("First sentence");
+                window.Editor.PlainText.Should().Be("First sentence");
+                callbacks.GetIsDirty().Should().BeTrue();
+                window.Editor.Undo();
+                window.Editor.PlainText.Should().BeEmpty();
+
+                (await window.NewDocumentAsyncForTests()).Should().BeTrue();
+                window.Editor.PlainText.Should().BeEmpty();
+                callbacks.GetIsDirty().Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     [Theory]
     [InlineData(true, "Ada Lovelace")]
     [InlineData(false, "stale author")]

@@ -480,7 +480,7 @@ public sealed partial class MainWindow : Window
             .Where(entry => entry.OpenInNewWindow)
             .ToArray();
         // r148-startup-fileopen: TryOpenStartupDocument returns null both when nothing was asked for
-        // (no startup arguments -- silently show the blank sample document, unchanged) and when a
+        // (no startup arguments -- show a clean blank document) and when a
         // requested file could not be opened (missing/locked/corrupt/unsupported -- WPF's equivalent
         // OpenPath already pops ShowError for this; Avalonia previously showed nothing at all). Only
         // the second case should alert, so gate on there having been an actual argument to try (NOT on
@@ -489,7 +489,7 @@ public sealed partial class MainWindow : Window
         _startupOpenFailed = startupDocument is null && startupArguments.Count > 0;
         _startupOpenFailurePath = startupArguments.Count > 0 ? startupArguments[0] : null;
         if (startupDocument is null)
-            LoadDocumentAsSaved(SampleDocument.Create(), path: null);
+            LoadDocumentAsSaved(TextDocument.CreateEmpty(), path: null);
         else
             ApplyOpenResult(startupDocument);
         AddHandler(
@@ -4330,7 +4330,7 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// r148-startup-fileopen: a command-line/file-association startup path that could not be opened
-    /// used to fall back to the blank sample document with no feedback anywhere -- the WPF host's
+    /// used to fall back to a starter document with no feedback anywhere -- the WPF host's
     /// equivalent (<c>FileCommands.OpenPath</c>, see the R133-wpf-startup-file-args constructor
     /// comment) already shows a modal ShowError for the identical gesture.
     /// <see cref="FreeWApplicationStartup.TryOpenStartupDocument"/> returns null uniformly for "no
