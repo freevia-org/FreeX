@@ -403,11 +403,54 @@ foreach ($workflow in $workflows) {
         $errors.Add("$($workflow.Name): must set the MSBUILDDISABLENODEREUSE environment variable so repeated MSBuild invocations in one job cannot lock each other's intermediate assemblies.")
     }
 
-    foreach ($match in [regex]::Matches($content, "(?ms)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")) {
-        $runnerBlock = (($match.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
-        if ($runnerBlock -match "(?i)(^|[\[\s,'`"-])self-hosted($|[\]\s,'`"])") {
-            $errors.Add("$($workflow.Name): workflow must not use self-hosted runners.")
+    $workflowJobs = @(Get-WorkflowJobBlocks -Lines $lines)
+    foreach ($jobBlock in $workflowJobs) {
+        $jobNameMatch = [regex]::Match($jobBlock, "(?m)^\s{2}(?<job>[A-Za-z0-9_-]+)\s*:")
+        if (-not $jobNameMatch.Success) {
+            continue
         }
+
+        $jobName = $jobNameMatch.Groups["job"].Value
+        $jobRunsOnMatch = [regex]::Match($jobBlock, "(?m)^\s*runs-on\s*:\s*(?<runner>[^\r\n]*(?:\r?\n\s+-\s+[^\r\n]+)*)")
+        if (-not $jobRunsOnMatch.Success) {
+            continue
+        }
+
+        $runnerBlock = (($jobRunsOnMatch.Value -split "\r?\n") | ForEach-Object { $_ -replace "#.*$", "" }) -join "`n"
+        $runnerValue = $jobRunsOnMatch.Groups["runner"].Value.Trim()
+        if ($runnerBlock -match '(?im)(\[\s*self-hosted\s*(?:,|\])|\[\s*"self-hosted"\s*(?:,|\])|\[\s*''self-hosted''\s*(?:,|\])|,\s*self-hosted\s*(?:,|\])|,\s*"self-hosted"\s*(?:,|\])|,\s*''self-hosted''\s*(?:,|\])|^\s*-\s*self-hosted\s*$|^\s*-\s*"self-hosted"\s*$|^\s*-\s*''self-hosted''\s*$)') {
+            $errors.Add("$($workflow.Name): runs-on must use the exact registered FreeX custom label without requiring the self-hosted label.")
+        }
+
+        if ($workflow.Name -in @("ci.yml", "release-readiness.yml")) {
+            $expectedJobName = if ($workflow.Name -eq "ci.yml") { "tests" } else { "gates" }
+            if ($jobName -eq $expectedJobName) {
+                $expectedRunner = '${{ inputs.runner_pool == ''self-hosted'' && matrix.app == ''FreeX'' && matrix.platform == ''windows'' && ''freex-i5-windows'' || inputs.runner_pool == ''self-hosted'' && matrix.app == ''FreeX'' && matrix.platform == ''linux'' && ''freex-i5-linux'' || matrix.runner }}'
+                if ($runnerValue -cne $expectedRunner) {
+                    $errors.Add("$($workflow.Name): the '$expectedJobName' job must use the exact FreeX Windows/Linux runner expression with matrix.runner as hosted fallback.")
+                }
+            }
+            elseif ($runnerValue -cne "ubuntu-latest") {
+                $errors.Add("$($workflow.Name): non-matrix job '$jobName' must remain on the GitHub-hosted ubuntu-latest runner.")
+            }
+        }
+    }
+
+    if ($workflow.Name -in @("ci.yml", "release-readiness.yml") -and $content.Contains("freex-i5-windows")) {
+        $workflowDispatchBlock = Get-IndentedYamlBlock `
+            -Lines $lines `
+            -Pattern "^(?<indent>\s*)workflow_dispatch\s*:\s*(?:#.*)?$"
+        $runnerPoolBlock = Get-IndentedYamlBlock `
+            -Lines ($workflowDispatchBlock -split "\r?\n") `
+            -Pattern "^(?<indent>\s*)runner_pool\s*:\s*(?:#.*)?$"
+        if ([string]::IsNullOrWhiteSpace($runnerPoolBlock) -or
+            $runnerPoolBlock -notmatch "(?m)^\s*type:\s*choice\s*$" -or
+            $runnerPoolBlock -notmatch "(?m)^\s*default:\s*self-hosted\s*$" -or
+            $runnerPoolBlock -notmatch "(?m)^\s*-\s+self-hosted\s*$" -or
+            $runnerPoolBlock -notmatch "(?m)^\s*-\s+hosted\s*$") {
+            $errors.Add("$($workflow.Name): the FreeX runner_pool input must be a self-hosted-default choice with an explicit hosted fallback.")
+        }
+
     }
 
     for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {

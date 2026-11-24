@@ -20,6 +20,14 @@ name: Release Readiness
 on:
   # Manual-only by policy: no schedule trigger.
   workflow_dispatch:
+    inputs:
+      runner_pool:
+        description: Use the FreeX I5 runners, or GitHub-hosted runners if local capacity is unavailable.
+        type: choice
+        options:
+          - self-hosted
+          - hosted
+        default: self-hosted
 
 permissions:
   contents: read
@@ -194,7 +202,9 @@ jobs:
   gates:
     name: ${{ matrix.app }} ${{ matrix.platform }} ${{ matrix.displayGateId }}
     needs: prepare
-    runs-on: ${{ matrix.runner }}
+    # Only FreeX's x64 Windows/Linux gates use the I5 pool. Other apps and platforms,
+    # including macOS, stay on the hosted runner recorded in the release-gate matrix.
+    runs-on: ${{ inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'windows' && 'freex-i5-windows' || inputs.runner_pool == 'self-hosted' && matrix.app == 'FreeX' && matrix.platform == 'linux' && 'freex-i5-linux' || matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
