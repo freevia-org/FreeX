@@ -121,6 +121,27 @@ public sealed class CrossReferenceDialogPlannerTests
     }
 
     [Fact]
+    public void SessionAcceptance_CommitsTheControlSelectionsReadAtOkTime()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("First") { StyleId = "Heading1" });
+        document.Blocks.Add(new Paragraph("Second") { StyleId = "Heading1" });
+        var session = new CrossReferenceDialogSession(document);
+
+        var accepted = session.PlanAcceptance(insertAsIndex: 1, targetIndex: 1, hyperlink: false);
+
+        accepted.IsAccepted.Should().BeTrue();
+        accepted.Result!.Target.Display.Should().Be("Second");
+        accepted.Result.InsertAs.Should().Be(CrossRefInsertAs.PageNumber);
+        accepted.Result.Hyperlink.Should().BeFalse();
+
+        var empty = new CrossReferenceDialogSession(TextDocument.CreateEmpty());
+        var rejected = empty.PlanAcceptance(0, 0, hyperlink: true);
+        rejected.IsAccepted.Should().BeFalse();
+        rejected.ValidationMessage.Should().Be(CrossReferenceDialogPlanner.MissingTargetMessage);
+    }
+    [Fact]
     public void TryCreateChoice_SelectsRequestedTargetIndexInsteadOfDefaultingToFirstHeading()
     {
         var document = TextDocument.CreateEmpty();

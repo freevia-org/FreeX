@@ -16,6 +16,7 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         TablePropertiesDialogPlanner.VisualMetrics;
 
     private readonly TablePropertiesDialogSession _session;
+    private readonly Dictionary<string, FrameworkElement> _controls = new(StringComparer.Ordinal);
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
@@ -154,15 +155,23 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
         _cellWrapText = Check(TablePropertiesDialogPlanner.WrapTextLabel, state.CellWrapText);
         _cellFitText = Check(TablePropertiesDialogPlanner.FitTextLabel, state.CellFitText);
         SetControlAutomationIds();
+        RegisterControls(
+            _preferredWidthOn, _preferredWidth, _alignment, _wrapping, _allowFloatingOverlap,
+            _floatingHorizontalAnchor, _floatingHorizontalMode, _floatingHorizontalOffset,
+            _floatingVerticalAnchor, _floatingVerticalMode, _floatingVerticalOffset,
+            _floatingDistanceTop, _floatingDistanceLeft, _floatingDistanceBottom, _floatingDistanceRight,
+            _indent, _cellMarginTop, _cellMarginLeft, _cellMarginBottom, _cellMarginRight,
+            _cellSpacingOn, _cellSpacing, _rowHeightOn, _rowHeight, _rowRule, _allowRowBreak, _repeatHeader,
+            _columnWidthOn, _columnWidth, _cellWidthOn, _cellWidth, _cellVAlign, _cellMarginsOn,
+            _cmTop, _cmLeft, _cmBottom, _cmRight, _cellWrapText, _cellFitText);
 
         var tabs = new TabControl
         {
             Margin = new Thickness(Layout.OuterInset, Layout.OuterInset, Layout.OuterInset, 0)
         };
-        tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.TableTabLabel, TablePropertiesDialogPlanner.TableTabAutomationId, BuildTableTab()));
-        tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));
-        tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.ColumnTabLabel, TablePropertiesDialogPlanner.ColumnTabAutomationId, BuildColumnTab()));
-        tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.CellTabLabel, TablePropertiesDialogPlanner.CellTabAutomationId, BuildCellTab()));
+        foreach (var tab in TablePropertiesSurfacePlanner.Tabs)
+            tabs.Items.Add(CreateTabItem(tab.Label, tab.AutomationId, BuildStack(tab.Content)));
+        UpdateFloatingPositionControls();
         tabs.SelectedIndex = (int)_session.InitialFocusPlan.Tab;
         AutomationProperties.SetAutomationId(tabs, TablePropertiesDialogPlanner.TabsAutomationId);
 
@@ -189,121 +198,67 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
             initialFocus.Focus();
     }
 
-    private UIElement BuildTableTab()
+    private void RegisterControls(params FrameworkElement[] controls)
     {
-        var grid = TwoColumnGrid(4);
-        AddRow(grid, 0, _preferredWidthOn, _preferredWidth);
-        AddRow(grid, 1, TablePropertiesDialogPlanner.AlignmentLabel, _alignment);
-        AddRow(grid, 2, TablePropertiesDialogPlanner.TextWrappingLabel, _wrapping);
-        AddRow(grid, 3, TablePropertiesDialogPlanner.IndentFromLeftLabel, _indent);
+        foreach (var control in controls)
+            _controls[AutomationProperties.GetAutomationId(control)] = control;
+    }
 
-        var marginsHeader = new TextBlock
-        {
-            Text = TablePropertiesDialogPlanner.DefaultCellMarginsLabel,
-            Margin = new Thickness(0, Layout.SectionHeaderTopInset, 0, Layout.SectionHeaderBottomInset),
-            FontWeight = FontWeights.SemiBold
-        };
-        var marginsGrid = TwoColumnGrid(4);
-        AddRow(marginsGrid, 0, TablePropertiesDialogPlanner.TopLabel, _cellMarginTop);
-        AddRow(marginsGrid, 1, TablePropertiesDialogPlanner.LeftLabel, _cellMarginLeft);
-        AddRow(marginsGrid, 2, TablePropertiesDialogPlanner.BottomLabel, _cellMarginBottom);
-        AddRow(marginsGrid, 3, TablePropertiesDialogPlanner.RightLabel, _cellMarginRight);
-
-        var spacingGrid = TwoColumnGrid(1);
-        AddRow(spacingGrid, 0, _cellSpacingOn, _cellSpacing);
-
-        var stack = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
-        stack.Children.Add(grid);
-        stack.Children.Add(marginsHeader);
-        stack.Children.Add(marginsGrid);
-        stack.Children.Add(spacingGrid);
+    private StackPanel BuildStack(IReadOnlyList<TablePropertiesSurfaceNode> nodes, double? inset = null)
+    {
+        var stack = new StackPanel { Margin = new Thickness(inset ?? Layout.ContentInset) };
+        foreach (var node in nodes)
+            stack.Children.Add(BuildNode(node));
         return stack;
     }
 
-    private UIElement BuildRowTab()
-    {
-        var grid = TwoColumnGrid(2);
-        AddRow(grid, 0, _rowHeightOn, _rowHeight);
-        AddRow(grid, 1, TablePropertiesDialogPlanner.RowHeightRuleLabel, _rowRule);
+    private UIElement BuildNode(TablePropertiesSurfaceNode node) =>
+        node switch
+        {
+            TablePropertiesFieldGridNode grid => BuildGrid(grid),
+            TablePropertiesHeaderNode header => new TextBlock
+            {
+                Text = header.Text,
+                Margin = new Thickness(
+                    0,
+                    header.IsSecondary ? Layout.SecondarySectionTopInset : Layout.SectionHeaderTopInset,
+                    0,
+                    Layout.SectionHeaderBottomInset),
+                FontWeight = FontWeights.SemiBold
+            },
+            TablePropertiesControlNode control => _controls[control.AutomationId],
+            TablePropertiesCheckStackNode checks => BuildCheckStack(checks),
+            TablePropertiesExpanderNode expander => new Expander
+            {
+                Header = expander.Header,
+                IsExpanded = true,
+                Content = BuildStack(expander.Content, Layout.ExpanderContentInset)
+            },
+            _ => throw new InvalidOperationException($"Unknown Table Properties surface node {node}."),
+        };
 
+    private Grid BuildGrid(TablePropertiesFieldGridNode node)
+    {
+        var grid = TwoColumnGrid(node.Rows.Count);
+        for (var row = 0; row < node.Rows.Count; row++)
+        {
+            var spec = node.Rows[row];
+            var field = _controls[spec.FieldAutomationId];
+            if (spec.ToggleAutomationId is { } toggle)
+                AddRow(grid, row, (CheckBox)_controls[toggle], field);
+            else
+                AddRow(grid, row, spec.Label!, field);
+        }
+
+        return grid;
+    }
+
+    private StackPanel BuildCheckStack(TablePropertiesCheckStackNode node)
+    {
         var checks = new StackPanel { Margin = new Thickness(0, Layout.SecondarySectionTopInset, 0, 0) };
-        checks.Children.Add(_allowRowBreak);
-        checks.Children.Add(_repeatHeader);
-
-        var stack = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
-        stack.Children.Add(grid);
-        stack.Children.Add(checks);
-        return stack;
-    }
-
-    private UIElement BuildColumnTab()
-    {
-        var grid = TwoColumnGrid(1);
-        AddRow(grid, 0, _columnWidthOn, _columnWidth);
-        return new StackPanel { Margin = new Thickness(Layout.ContentInset), Children = { grid } };
-    }
-
-    private UIElement BuildCellTab()
-    {
-        var grid = TwoColumnGrid(2);
-        AddRow(grid, 0, _cellWidthOn, _cellWidth);
-        AddRow(grid, 1, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _cellVAlign);
-
-        var marginsHeader = new TextBlock
-        {
-            Text = TablePropertiesDialogPlanner.CellMarginsLabel,
-            Margin = new Thickness(0, Layout.SectionHeaderTopInset, 0, Layout.SectionHeaderBottomInset),
-            FontWeight = FontWeights.SemiBold
-        };
-        var marginsGrid = TwoColumnGrid(4);
-        AddRow(marginsGrid, 0, TablePropertiesDialogPlanner.TopLabel, _cmTop);
-        AddRow(marginsGrid, 1, TablePropertiesDialogPlanner.LeftLabel, _cmLeft);
-        AddRow(marginsGrid, 2, TablePropertiesDialogPlanner.BottomLabel, _cmBottom);
-        AddRow(marginsGrid, 3, TablePropertiesDialogPlanner.RightLabel, _cmRight);
-
-        var stack = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
-        stack.Children.Add(grid);
-        stack.Children.Add(BuildFloatingPositioningPanel());
-        stack.Children.Add(_cellWrapText);
-        stack.Children.Add(_cellFitText);
-        stack.Children.Add(_cellMarginsOn);
-        stack.Children.Add(marginsHeader);
-        stack.Children.Add(marginsGrid);
-        return stack;
-    }
-
-    private UIElement BuildFloatingPositioningPanel()
-    {
-        var positionGrid = TwoColumnGrid(6);
-        AddRow(positionGrid, 0, TablePropertiesDialogPlanner.HorizontalRelativeToLabel, _floatingHorizontalAnchor);
-        AddRow(positionGrid, 1, TablePropertiesDialogPlanner.HorizontalAlignmentLabel, _floatingHorizontalMode);
-        AddRow(positionGrid, 2, TablePropertiesDialogPlanner.HorizontalPositionLabel, _floatingHorizontalOffset);
-        AddRow(positionGrid, 3, TablePropertiesDialogPlanner.VerticalRelativeToLabel, _floatingVerticalAnchor);
-        AddRow(positionGrid, 4, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _floatingVerticalMode);
-        AddRow(positionGrid, 5, TablePropertiesDialogPlanner.VerticalPositionLabel, _floatingVerticalOffset);
-
-        var distanceGrid = TwoColumnGrid(4);
-        AddRow(distanceGrid, 0, TablePropertiesDialogPlanner.TopLabel, _floatingDistanceTop);
-        AddRow(distanceGrid, 1, TablePropertiesDialogPlanner.LeftLabel, _floatingDistanceLeft);
-        AddRow(distanceGrid, 2, TablePropertiesDialogPlanner.BottomLabel, _floatingDistanceBottom);
-        AddRow(distanceGrid, 3, TablePropertiesDialogPlanner.RightLabel, _floatingDistanceRight);
-
-        var stack = new StackPanel { Margin = new Thickness(Layout.ExpanderContentInset) };
-        stack.Children.Add(positionGrid);
-        stack.Children.Add(new TextBlock
-        {
-            Text = TablePropertiesDialogPlanner.DistanceFromTextLabel,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(
-                0,
-                Layout.SecondarySectionTopInset,
-                0,
-                Layout.SectionHeaderBottomInset)
-        });
-        stack.Children.Add(distanceGrid);
-        stack.Children.Add(_allowFloatingOverlap);
-        UpdateFloatingPositionControls();
-        return new Expander { Header = TablePropertiesDialogPlanner.PositioningLabel, IsExpanded = true, Content = stack };
+        foreach (var id in node.AutomationIds)
+            checks.Children.Add(_controls[id]);
+        return checks;
     }
 
     private void UpdateFloatingPositionControls()
@@ -312,19 +267,9 @@ internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.Dia
             _wrapping.SelectedIndex,
             _floatingHorizontalMode.SelectedIndex,
             _floatingVerticalMode.SelectedIndex);
-        _allowFloatingOverlap.IsEnabled = state.FloatingControlsEnabled;
-        _floatingHorizontalAnchor.IsEnabled = state.FloatingControlsEnabled;
-        _floatingHorizontalMode.IsEnabled = state.FloatingControlsEnabled;
-        _floatingHorizontalOffset.IsEnabled = state.HorizontalOffsetEnabled;
-        _floatingVerticalAnchor.IsEnabled = state.FloatingControlsEnabled;
-        _floatingVerticalMode.IsEnabled = state.FloatingControlsEnabled;
-        _floatingVerticalOffset.IsEnabled = state.VerticalOffsetEnabled;
-        _floatingDistanceTop.IsEnabled = state.FloatingControlsEnabled;
-        _floatingDistanceLeft.IsEnabled = state.FloatingControlsEnabled;
-        _floatingDistanceBottom.IsEnabled = state.FloatingControlsEnabled;
-        _floatingDistanceRight.IsEnabled = state.FloatingControlsEnabled;
+        foreach (var (automationId, enabled) in TablePropertiesSurfacePlanner.ControlEnabledStates(state))
+            _controls[automationId].IsEnabled = enabled;
     }
-
     private void SetControlAutomationIds()
     {
         AutomationProperties.SetAutomationId(_preferredWidth, TablePropertiesDialogPlanner.PreferredWidthAutomationId);

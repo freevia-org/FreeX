@@ -180,10 +180,10 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
 
     private async Task AcceptAsync()
     {
-        _session.UpdateInsertAs(_insertAsList.SelectedIndex);
-        _session.UpdateTarget(_targetList.SelectedIndex);
-        _session.UpdateHyperlink(_hyperlinkBox.IsChecked == true);
-        var acceptance = _session.PlanAcceptance();
+        var acceptance = _session.PlanAcceptance(
+            _insertAsList.SelectedIndex,
+            _targetList.SelectedIndex,
+            _hyperlinkBox.IsChecked == true);
         if (!acceptance.IsAccepted)
         {
             await AvaloniaUserMessageDialog.ShowWarningAsync(

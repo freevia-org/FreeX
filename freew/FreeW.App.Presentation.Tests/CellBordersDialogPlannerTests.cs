@@ -97,6 +97,6 @@ public sealed class CellBordersDialogPlannerTests
                 .And.NotContain("ResolveEdgesForCell(");
         }
         foreach (var dialog in new[] { wpfDialog, avaloniaDialog })
-            dialog.Should().Contain("CellBordersDialogPlanner.TryBuildResult(");
+            dialog.Should().Contain("_session.PlanAcceptance(");
     }
 }
