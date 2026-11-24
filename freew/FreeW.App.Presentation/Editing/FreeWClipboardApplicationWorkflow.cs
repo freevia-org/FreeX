@@ -606,11 +606,15 @@ public static class FreeWClipboardApplicationWorkflow
         string? selectedText,
         TextDocument? richDocument = null,
         TextDocument? nativeDocument = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool requireNativeDocument = false)
     {
         ArgumentNullException.ThrowIfNull(clipboard);
         if (CreateWriteContent(selectedText, richDocument, nativeDocument) is not { } content)
             return Empty();
+
+        if (requireNativeDocument && !content.CustomData.Any(data => data.Format.Name == NativeDocumentFormat))
+            return Failed(FreeWClipboardTransferStatus.Unsupported, null, ClipboardUnsupportedMessage);
 
         var result = await clipboard.WriteAsync(content, cancellationToken);
         return result.Status switch
