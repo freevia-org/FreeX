@@ -26,6 +26,8 @@ internal sealed class WorksheetGridHost : ContentControl
     private bool _publishQueued;
     private bool _closed;
     private Matrix? _publishedTransform;
+    private double[] _publishedRowHeights = [];
+    private double[] _publishedColumnWidths = [];
 
     public WorksheetGridHost() => LayoutUpdated += (_, _) => PublishChanges();
 
@@ -137,10 +139,34 @@ internal sealed class WorksheetGridHost : ContentControl
         }, DispatcherPriority.Loaded);
     }
 
+    private bool CaptureLayoutGeometry()
+    {
+        if (_surface is not Grid grid)
+        {
+            var hadGeometry = _publishedRowHeights.Length > 0 || _publishedColumnWidths.Length > 0;
+            _publishedRowHeights = [];
+            _publishedColumnWidths = [];
+            return hadGeometry;
+        }
+        var changed = grid.RowDefinitions.Count != _publishedRowHeights.Length ||
+            grid.ColumnDefinitions.Count != _publishedColumnWidths.Length;
+        for (var i = 0; !changed && i < grid.RowDefinitions.Count; i++)
+            changed = grid.RowDefinitions[i].ActualHeight != _publishedRowHeights[i];
+        for (var i = 0; !changed && i < grid.ColumnDefinitions.Count; i++)
+            changed = grid.ColumnDefinitions[i].ActualWidth != _publishedColumnWidths[i];
+        if (changed)
+        {
+            _publishedRowHeights = grid.RowDefinitions.Select(definition => definition.ActualHeight).ToArray();
+            _publishedColumnWidths = grid.ColumnDefinitions.Select(definition => definition.ActualWidth).ToArray();
+        }
+        return changed;
+    }
+
     private void PublishChanges()
     {
         var transform = SurfaceTransform();
-        if (!_publishPending && transform == _publishedTransform)
+        var geometryChanged = CaptureLayoutGeometry();
+        if (!_publishPending && transform == _publishedTransform && !geometryChanged)
             return;
         _publishPending = false;
         _publishedTransform = transform;

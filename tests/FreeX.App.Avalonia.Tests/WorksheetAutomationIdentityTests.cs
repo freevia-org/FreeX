@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -56,6 +57,66 @@ public sealed class WorksheetAutomationIdentityTests
             .And.NotContain(ValuePatternIdentifiers.ValueProperty)
             .And.NotContain(AutomationElementIdentifiers.HelpTextProperty);
     });
+
+    [Theory]
+    [InlineData(false, 100)]
+    [InlineData(true, 100)]
+    [InlineData(false, 101)]
+    [InlineData(true, 101)]
+    public Task RenderedCells_ReportActualBoundsAfterScrollingAndSplitting(bool split, int zoomPercent) => Run(window =>
+    {
+        if (zoomPercent != 100)
+            window.Session.SetZoomPercent(zoomPercent).Success.Should().BeTrue();
+        if (split)
+            window.Session.SetSplitPanes(2, 2).Success.Should().BeTrue();
+        window.Session.SetViewportOrigin(40, 30);
+        Refresh(window);
+        var grid = GridPeer(window);
+        var cells = Cells(grid).ToDictionary(peer => peer.GetAutomationId()!);
+        var borders = window.SheetGridHostForTest.GetVisualDescendants().OfType<WorksheetCellBorder>().ToArray();
+        borders.Should().NotBeEmpty();
+        foreach (var border in borders)
+        {
+            var coordinate = border.AutomationCoordinate;
+            var id = $"Cell_{CellAddress.NumberToColumnName(coordinate.Column)}{coordinate.Row}";
+            var actual = RenderedBounds(border);
+            actual.Width.Should().BeGreaterThan(0);
+            actual.Height.Should().BeGreaterThan(0);
+            cells[id].GetBoundingRectangle().Should().Be(actual,
+                "accessibility must follow the arranged fixed-size Border, including Grid minima and pixel rounding");
+        }
+    });
+
+    [Fact]
+    public Task HeaderMinimumLayoutChange_PublishesActualBoundsWithoutRebuildingTheSnapshot() => Run(window =>
+    {
+        var grid = GridPeer(window);
+        var held = Cell(grid, "A1");
+        var surface = window.SheetGridHostForTest.GetVisualDescendants().OfType<WorksheetGridSurface>().Single();
+        var root = TopLevel.GetTopLevel(surface)!;
+        var transform = surface.TransformToVisual(root);
+        var before = held.GetBoundingRectangle();
+        var boundsChanges = 0;
+        held.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == AutomationElementIdentifiers.BoundingRectangleProperty)
+                boundsChanges++;
+        };
+
+        surface.ColumnDefinitions[0].MinWidth = surface.ColumnDefinitions[0].ActualWidth + 8;
+        Drain(window);
+
+        window.SheetGridHostForTest.GetVisualDescendants().OfType<WorksheetGridSurface>().Single().Should().BeSameAs(surface);
+        surface.TransformToVisual(root).Should().Be(transform, "only the internal Grid layout changed");
+        var border = surface.GetVisualDescendants().OfType<WorksheetCellBorder>()
+            .Single(border => border.AutomationCoordinate == (1u, 1u));
+        held.GetBoundingRectangle().Should().Be(RenderedBounds(border)).And.NotBe(before);
+        boundsChanges.Should().BeGreaterThan(0);
+        Cell(grid, "A1").Should().BeSameAs(held);
+    });
+
+    private static Rect RenderedBounds(Control control) =>
+        new Rect(control.Bounds.Size).TransformToAABB(control.TransformToVisual(TopLevel.GetTopLevel(control)!)!.Value);
 
     [Fact]
     public Task RetainedSelectionPeers_FollowRealKeyboardFocusWithoutChangingIdentity() => Run(async window =>

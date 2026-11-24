@@ -17,21 +17,23 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         var zoom = GetActiveZoomFactor();
         var showHeadings = _session.IsShowingHeadings;
-        var rowSlots = new Dictionary<uint, (double Offset, double Size)>();
-        var columnSlots = new Dictionary<uint, (double Offset, double Size)>();
+        var rowSlots = new Dictionary<uint, (int Index, double Offset, double Size)>();
+        var columnSlots = new Dictionary<uint, (int Index, double Offset, double Size)>();
         var top = showHeadings ? GetColumnHeaderHeight(viewport, zoom) : 0;
+        var rowIndex = showHeadings ? 1 : 0;
         foreach (var metric in rowMetrics)
         {
             var height = GetDisplayedRowHeight(metric, zoom);
-            rowSlots.TryAdd(metric.Row, (top, height));
+            rowSlots.TryAdd(metric.Row, (rowIndex++, top, height));
             top += height;
         }
 
         var left = showHeadings ? GetRowHeaderWidth(viewport, zoom) : 0;
+        var columnIndex = showHeadings ? 1 : 0;
         foreach (var metric in colMetrics)
         {
             var width = GetDisplayedColumnWidth(metric, zoom);
-            columnSlots.TryAdd(metric.Col, (left, width));
+            columnSlots.TryAdd(metric.Col, (columnIndex++, left, width));
             left += width;
         }
 
@@ -60,9 +62,35 @@ public sealed partial class MainWindow
             var hasRow = rowSlots.TryGetValue(row, out var rowSlot);
             var hasColumn = columnSlots.TryGetValue(column, out var columnSlot);
             var inViewport = hasRow && hasColumn;
-            var bounds = inViewport
-                ? new Rect(columnSlot.Offset, rowSlot.Offset, columnSlot.Size, rowSlot.Size)
-                : default;
+            // Control minima can make Grid slots larger than the requested metrics. Use
+            // their actual layout offsets while keeping literal merged members as unit slots.
+            var actualRow = hasRow && rowSlot.Index < surface.RowDefinitions.Count && surface.RowDefinitions[rowSlot.Index].ActualHeight > 0;
+            var actualColumn = hasColumn && columnSlot.Index < surface.ColumnDefinitions.Count && surface.ColumnDefinitions[columnSlot.Index].ActualWidth > 0;
+            var y = actualRow ? surface.RowDefinitions.Take(rowSlot.Index).Sum(definition => definition.ActualHeight) : rowSlot.Offset;
+            var x = actualColumn ? surface.ColumnDefinitions.Take(columnSlot.Index).Sum(definition => definition.ActualWidth) : columnSlot.Offset;
+            // Follow Layoutable.ArrangeCore: round the fixed Border size and available
+            // slot up before centering, then round the origin. Nearest-size rounding loses
+            // a pixel at fractional zoom (e.g. a 20.2px row arranges at 21px).
+            var height = rowSlot.Size;
+            var width = columnSlot.Size;
+            var slotHeight = actualRow ? surface.RowDefinitions[rowSlot.Index].ActualHeight : height;
+            var slotWidth = actualColumn ? surface.ColumnDefinitions[columnSlot.Index].ActualWidth : width;
+            var scale = global::Avalonia.Controls.TopLevel.GetTopLevel(surface)?.RenderScaling ?? 1;
+            if (surface.UseLayoutRounding)
+            {
+                width = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(width, scale);
+                height = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(height, scale);
+                slotWidth = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(slotWidth, scale);
+                slotHeight = global::Avalonia.Layout.LayoutHelper.RoundLayoutValueUp(slotHeight, scale);
+            }
+            x += (slotWidth - width) / 2;
+            y += (slotHeight - height) / 2;
+            if (surface.UseLayoutRounding)
+            {
+                x = global::Avalonia.Layout.LayoutHelper.RoundLayoutValue(x, scale);
+                y = global::Avalonia.Layout.LayoutHelper.RoundLayoutValue(y, scale);
+            }
+            var bounds = inViewport ? new Rect(x, y, width, height) : default;
             var cell = default(DisplayCell);
             var hasCell = inViewport && cellsByAddress.TryGetValue((row, column), out cell);
             var value = hasCell ? cell.DisplayText : "";
