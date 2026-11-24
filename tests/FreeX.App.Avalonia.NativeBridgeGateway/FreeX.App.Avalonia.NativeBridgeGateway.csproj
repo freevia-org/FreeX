@@ -4,6 +4,7 @@
     <AssemblyName>Avalonia.Native.UnitTests</AssemblyName>
     <SignAssembly>true</SignAssembly>
     <PublicSign>true</PublicSign>
+    <AvaloniaPublicSigningKey Condition="'$(AvaloniaPublicSigningKey)' == ''">$(MSBuildThisFileDirectory)Fixtures/Avalonia.Public.snk</AvaloniaPublicSigningKey>
     <AssemblyOriginatorKeyFile>$(AvaloniaPublicSigningKey)</AssemblyOriginatorKeyFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
@@ -12,7 +13,7 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Native" VersionOverride="12.0.5-freex.grid.3" />
   </ItemGroup>
-  <Target Name="RequireExplicitPublicTestSigningKey" BeforeTargets="CoreCompile">
-    <Error Condition="!Exists('$(AvaloniaPublicSigningKey)')" Text="Supply AvaloniaPublicSigningKey from the pinned official source build/avalonia.snk for this isolated test helper." />
+  <Target Name="RequirePublicTestSigningKey" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(AvaloniaPublicSigningKey)')" Text="The public test-signing fixture is missing; restore Fixtures/Avalonia.Public.snk or supply the matching AvaloniaPublicSigningKey." />
   </Target>
 </Project>

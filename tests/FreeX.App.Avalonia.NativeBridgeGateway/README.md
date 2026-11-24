@@ -16,13 +16,14 @@ Prerequisites:
   review archive's reproduction recipe; do not mix official12.0.4 headers with new extension IDs.
 - `FREEX_EXTERNAL_TMP` points to an external temporary directory owned by the caller.
 
-The helper uses the existing packaged `Avalonia.Native.UnitTests` friend identity. The upstream
-repository signing key is [build/avalonia.snk at12.0.4 commit a8dd6417fd8918570edefdbecd92d16ac7620069](https://github.com/AvaloniaUI/Avalonia/blob/a8dd6417fd8918570edefdbecd92d16ac7620069/build/avalonia.snk).
-Its SHA256 is `e11e9cc0585a0e0013a666be2c277b161179429f0ceb20bb4141768795ea8e91`.
-Use that already-cached file; no key, framework binary or generated header is vendored here.
-No FreeX production friend or private managed reflection is added. The bootstrap requires a
-project-local NuGet cache; these commands use the isolated worktree's normal ignored cache.
-That verified cache is reusable and is not part of the disposable QA scratch folder.
+The helper uses the existing packaged `Avalonia.Native.UnitTests` friend identity. Its default
+`Fixtures/Avalonia.Public.snk` contains only the160 public-key bytes extracted from the matched
+packaged `Avalonia.Native.dll`; SHA256 is `34d062cd8b0bbdf600f86c7857ec9c1a776bea9be9b94665ef9b6a939de4f518`. It contains no private key.
+The upstream identity comes from [Avalonia12.0.4 commit a8dd6417fd8918570edefdbecd92d16ac7620069](https://github.com/AvaloniaUI/Avalonia/tree/a8dd6417fd8918570edefdbecd92d16ac7620069).
+`PublicSign` records that test identity; no FreeX production friend or private managed reflection
+is added. `AvaloniaPublicSigningKey` may explicitly override the fixture with the same public key.
+The bootstrap requires a project-local NuGet cache; these commands use the isolated worktree's
+normal ignored cache, which remains reusable after disposable QA scratch is removed.
 
 From the isolated repository root, in a dedicated Bash session:
 
@@ -39,8 +40,8 @@ mkdir -p "$QA_ROOT"/{tmp,cli-home,manifests,production}
 export TMPDIR="$QA_ROOT/tmp" DOTNET_CLI_HOME="$QA_ROOT/cli-home" NUGET_PACKAGES="$repo/.dependencies/nuget-packages"
 export DOTNET_GENERATE_ASPNET_CERTIFICATE=false DOTNET_ADD_GLOBAL_TOOLS_TO_PATH=false
 export DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE=true
-key="$AVALONIA_SOURCE/build/avalonia.snk"
-printf '%s  %s\n' e11e9cc0585a0e0013a666be2c277b161179429f0ceb20bb4141768795ea8e91 "$key" | shasum -a256 -c -
+key="$repo/tests/FreeX.App.Avalonia.NativeBridgeGateway/Fixtures/Avalonia.Public.snk"
+printf '%s  %s\n' 34d062cd8b0bbdf600f86c7857ec9c1a776bea9be9b94665ef9b6a939de4f518 "$key" | shasum -a256 -c -
 
 pwsh -NoProfile -File tools/Invoke-Throttled.ps1 -Kind Build -- dotnet build \
   tests/FreeX.App.Avalonia.NativeBridgeGateway/FreeX.App.Avalonia.NativeBridgeGateway.csproj \

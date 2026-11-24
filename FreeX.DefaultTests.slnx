@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/tests/">
     <Project Path="tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Avalonia.NativeBridgeGateway/FreeX.App.Avalonia.NativeBridgeGateway.csproj" />
     <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.csproj" />
     <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj" />
     <Project Path="tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch3.csproj" />
