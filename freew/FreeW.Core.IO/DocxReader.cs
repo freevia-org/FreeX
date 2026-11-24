@@ -8447,6 +8447,9 @@ public static partial class DocxReader
         return (left, first);
     }
 
+    private static bool RequiresPreservedNumberingPolicy(XElement level) =>
+        level.Element(W + "lvlRestart") is not null || level.Element(W + "isLgl") is not null;
+
     // OOXML's omitted w:start defaults to zero. Keep malformed/negative explicit values on the
     // existing safe fallback at 1; Word accepts nonnegative starts, including an explicit zero.
     private static int ReadNumberingStart(XElement? element)
@@ -8521,12 +8524,15 @@ public static partial class DocxReader
         var abstractMarkerTexts = new Dictionary<int, string?>();
         var abstractNumberFormats = new Dictionary<int, ListNumberFormat>();
         var abstractLevelIndents = new Dictionary<int, Dictionary<int, (double? Left, double? FirstLine)>>();
+        var abstractPreservedPolicies = new HashSet<int>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
             var levels = abstractNum.Elements(W + "lvl")
                 .OrderBy(l => ParseInt(l.Attribute(W + "ilvl")?.Value))
                 .ToList();
+            if (levels.Any(RequiresPreservedNumberingPolicy))
+                abstractPreservedPolicies.Add(abstractNumId);
             // Evaluate IsMultiLevel before inspecting level-0's numFmt: a "fancy" multilevel template
             // whose level-0 happens to be a bullet (e.g. Word's List Bullet Multilevel style) is
             // MultiLevel, not Bullet — the deeper levels carry decimal/letter formats that the model
@@ -8573,6 +8579,24 @@ public static partial class DocxReader
             {
                 foreach (var (indentLevel, indent) in indentsForAbstract)
                     map.LevelIndents[(numId, indentLevel)] = indent;
+            }
+            // Layout also needs an instance's overridden indents when that instance stays on
+            // the preserved-numbering path below, so capture them before choosing the route.
+            foreach (var levelOverride in num.Elements(W + "lvlOverride"))
+            {
+                if (levelOverride.Element(W + "lvl") is { } overriddenLevel)
+                {
+                    var levelIndex = ParseInt(levelOverride.Attribute(W + "ilvl")?.Value);
+                    map.LevelIndents[(numId, levelIndex)] = ReadLevelIndent(overriddenLevel);
+                }
+            }
+            // Native lists have one shared outline definition and cannot express per-instance
+            // restart policies or legal-numbering formatting. Keep their complete definitions and
+            // paragraph references on the existing preserved path, whose shared planner renders them.
+            if (abstractPreservedPolicies.Contains(abstractNumId)
+                || num.Elements(W + "lvlOverride").Elements(W + "lvl").Any(RequiresPreservedNumberingPolicy))
+            {
+                continue;
             }
             if (abstractKinds.TryGetValue(abstractNumId, out var kind))
             {
@@ -8631,7 +8655,6 @@ public static partial class DocxReader
                 var level = ParseInt(lvlOverride.Attribute(W + "ilvl")?.Value);
                 if (lvlOverride.Element(W + "lvl") is { } overriddenLvl)
                 {
-                    map.LevelIndents[(numId, level)] = ReadLevelIndent(overriddenLvl);
                     if (level == 0 && kind is ListKind.Bullet or ListKind.Number)
                     {
                         (map.MarkerTextByNumId[numId], map.NumberFormatByNumId[numId]) = NormalizeFlatListMarker(

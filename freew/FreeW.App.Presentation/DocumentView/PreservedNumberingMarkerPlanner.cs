@@ -45,7 +45,7 @@ public static class PreservedNumberingMarkerPlanner
         if (definitions.Count == 0)
             return EmptyByParagraph;
 
-        var counters = new Dictionary<int, int[]>();
+        var counters = new Dictionary<int, NumberingCounterState>();
         var result = new Dictionary<Paragraph, PreservedNumberingMarkerPlan>();
         foreach (var paragraph in TextDocumentStoryTraversal.EnumerateBlockParagraphs(
                      document.Blocks,
@@ -63,11 +63,19 @@ public static class PreservedNumberingMarkerPlanner
                 continue;
 
             if (!counters.TryGetValue(preserved.NumId, out var state))
-                counters[preserved.NumId] = state = new int[LevelCount];
+                counters[preserved.NumId] = state = new NumberingCounterState();
 
-            state[level] = state[level] == 0 ? levelDefinition.StartAt : state[level] + 1;
+            state.Values[level] = state.Initialized[level] ? state.Values[level] + 1 : levelDefinition.StartAt;
+            state.Initialized[level] = true;
             for (var deeper = level + 1; deeper < LevelCount; deeper++)
-                state[deeper] = 0;
+            {
+                if (definition.Levels.TryGetValue(deeper, out var deeperDefinition)
+                    && ListLevelRestartPolicy.ShouldRestart(deeper, level, deeperDefinition.RestartAfterLevel))
+                {
+                    state.Values[deeper] = 0;
+                    state.Initialized[deeper] = false;
+                }
+            }
 
             var marker = FormatMarker(levelDefinition.LevelText, definition, state, level);
             if (!string.IsNullOrEmpty(marker))
@@ -139,21 +147,31 @@ public static class PreservedNumberingMarkerPlanner
             foreach (var overrideElement in number.Elements(W + "lvlOverride"))
             {
                 if (!TryReadInt(overrideElement.Attribute(W + "ilvl")?.Value, out var levelIndex)
-                    || levelIndex is < 0 or >= LevelCount
-                    || !levels.TryGetValue(levelIndex, out var baseLevel))
+                    || levelIndex is < 0 or >= LevelCount)
                 {
                     continue;
                 }
 
+                var baseLevel = levels.TryGetValue(levelIndex, out var inherited)
+                    ? inherited
+                    : new NumberingLevelDefinition(0, "decimal", "%" + (levelIndex + 1), null, null, false);
+                var effectiveLevel = baseLevel;
                 if (overrideElement.Element(W + "lvl") is { } overriddenLevel
                     && TryReadLevel(overriddenLevel, out _, out var replacement))
                 {
-                    levels[levelIndex] = replacement;
-                    continue;
+                    // Word ignores w:start nested inside a full level override. Its separate
+                    // startOverride takes precedence, including when both children are present.
+                    effectiveLevel = replacement with
+                    {
+                        StartAt = baseLevel.StartAt,
+                        // Word also ignores lvlRestart inside a full level override.
+                        RestartAfterLevel = baseLevel.RestartAfterLevel,
+                    };
                 }
 
-                if (TryReadInt(overrideElement.Element(W + "startOverride")?.Attribute(W + "val")?.Value, out var startAt))
-                    levels[levelIndex] = baseLevel with { StartAt = Math.Max(1, startAt) };
+                if (overrideElement.Element(W + "startOverride") is { } startOverride)
+                    effectiveLevel = effectiveLevel with { StartAt = ReadStartingValue(startOverride) };
+                levels[levelIndex] = effectiveLevel;
             }
 
             definitions[numId] = new NumberingDefinition(levels);
@@ -171,25 +189,43 @@ public static class PreservedNumberingMarkerPlanner
             return false;
         }
 
-        var startAt = TryReadInt(level.Element(W + "start")?.Attribute(W + "val")?.Value, out var start)
-            ? Math.Max(1, start)
-            : 1;
+        var startAt = ReadStartingValue(level.Element(W + "start"));
         var numberFormat = level.Element(W + "numFmt")?.Attribute(W + "val")?.Value ?? "decimal";
         var levelText = level.Element(W + "lvlText")?.Attribute(W + "val")?.Value ?? "%" + (levelIndex + 1);
         // The level's own run font (w:lvl/w:rPr/w:rFonts) draws the marker: a Symbol/Wingdings bullet is a
         // private-use code point (U+F0B7) that only that font maps to a glyph.
         var fonts = level.Element(W + "rPr")?.Element(W + "rFonts");
         var fontFamily = fonts?.Attribute(W + "ascii")?.Value ?? fonts?.Attribute(W + "hAnsi")?.Value;
-        definition = new NumberingLevelDefinition(startAt, numberFormat, levelText, string.IsNullOrWhiteSpace(fontFamily) ? null : fontFamily);
+        var restartAfterLevel = TryReadInt(level.Element(W + "lvlRestart")?.Attribute(W + "val")?.Value, out var restart)
+            ? restart : (int?)null;
+        var legal = level.Element(W + "isLgl") is { } isLegal
+            && isLegal.Attribute(W + "val")?.Value is not ("0" or "false" or "off");
+        definition = new NumberingLevelDefinition(startAt, numberFormat, levelText,
+            string.IsNullOrWhiteSpace(fontFamily) ? null : fontFamily, restartAfterLevel, legal);
         return true;
     }
 
     private static string FormatMarker(
         string template,
         NumberingDefinition definition,
-        IReadOnlyList<int> counters,
+        NumberingCounterState counters,
         int currentLevel)
     {
+        // Word treats bullet text literally, including any apparent %x placeholders.
+        if (definition.Levels[currentLevel].NumberFormat == "bullet")
+            return template;
+
+        // Word ignores the entire lvlText when it references a deeper level, rather than
+        // substituting a default counter for that placeholder (MS-OI29500 §2.1.283).
+        for (var index = 0; index + 1 < template.Length; index++)
+        {
+            if (template[index] == '%' && template[index + 1] is >= '1' and <= '9'
+                && template[index + 1] - '1' > currentLevel)
+            {
+                return string.Empty;
+            }
+        }
+
         var marker = template;
         for (var referencedLevel = 0; referencedLevel < LevelCount; referencedLevel++)
         {
@@ -199,22 +235,34 @@ public static class PreservedNumberingMarkerPlanner
 
             var level = definition.Levels.TryGetValue(referencedLevel, out var referencedDefinition)
                 ? referencedDefinition
-                : new NumberingLevelDefinition(1, "decimal", token, null);
-            var value = referencedLevel > currentLevel || counters[referencedLevel] == 0
+                : new NumberingLevelDefinition(1, "decimal", token, null, null, false);
+            var value = referencedLevel > currentLevel || !counters.Initialized[referencedLevel]
                 ? level.StartAt
-                : counters[referencedLevel];
-            marker = marker.Replace(token, FormatNumber(value, level.NumberFormat), StringComparison.Ordinal);
+                : counters.Values[referencedLevel];
+            var format = definition.Levels[currentLevel].IsLegal && level.NumberFormat != "none"
+                ? "decimal" : level.NumberFormat;
+            marker = marker.Replace(token, FormatNumber(value, format), StringComparison.Ordinal);
         }
 
         return marker;
     }
 
-    private static string FormatNumber(int value, string numberFormat) =>
-        string.Equals(numberFormat, "bullet", StringComparison.OrdinalIgnoreCase)
-            ? "•"
-            : MultiLevelListMarkerFormatter.FormatNumber(
-                value,
-                MultiLevelListMarkerFormatter.FromOoxmlToken(numberFormat));
+    private static string FormatNumber(int value, string numberFormat)
+    {
+        if (string.Equals(numberFormat, "none", StringComparison.OrdinalIgnoreCase))
+            return string.Empty;
+        if (string.Equals(numberFormat, "bullet", StringComparison.OrdinalIgnoreCase))
+            return "•";
+        return MultiLevelListMarkerFormatter.FormatNumber(
+            value, MultiLevelListMarkerFormatter.FromOoxmlToken(numberFormat));
+    }
+
+    private static int ReadStartingValue(XElement? element)
+    {
+        if (element is null)
+            return 0;
+        return TryReadInt(element.Attribute(W + "val")?.Value, out var value) && value >= 0 ? value : 1;
+    }
 
     private static bool TryReadInt(string? value, out int result) =>
         int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out result);
@@ -227,7 +275,14 @@ public static class PreservedNumberingMarkerPlanner
 
     private sealed record NumberingDefinition(IReadOnlyDictionary<int, NumberingLevelDefinition> Levels);
 
-    private readonly record struct NumberingLevelDefinition(int StartAt, string NumberFormat, string LevelText, string? FontFamily);
+    private readonly record struct NumberingLevelDefinition(
+        int StartAt, string NumberFormat, string LevelText, string? FontFamily, int? RestartAfterLevel, bool IsLegal);
+
+    private sealed class NumberingCounterState
+    {
+        public int[] Values { get; } = new int[LevelCount];
+        public bool[] Initialized { get; } = new bool[LevelCount];
+    }
 }
 
 /// <param name="FontFamily">The numbering level's own font (<c>w:lvl/w:rPr/w:rFonts</c>), or null to use the paragraph's.</param>
