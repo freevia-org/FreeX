@@ -74,7 +74,7 @@ public sealed class ChartClipboardGeometryTests
         visual!.Width.Should().Be(320);
         visual.Height.Should().Be(240);
         return visual.Children.OfType<Rectangle>()
-            .Where(rect => rect.Fill is SolidColorBrush brush && brush.Color == Color.FromRgb(17, 90, 150))
+            .Where(rect => rect.Fill is ISolidColorBrush brush && brush.Color == Color.FromRgb(17, 90, 150))
             .OrderBy(Canvas.GetLeft).ToArray();
     }
 }
