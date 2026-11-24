@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation.Shell;
 
@@ -66,7 +67,7 @@ public sealed class NativeMenuCatalogTests
             new NativeFileMenuItemPlan(
                 NativeFileMenuItemId.NewWorkbook,
                 "AvaloniaNativeMenu_NewWorkbook",
-                new NativeMenuGesturePlan(NativeMenuGestureKey.N, NativeMenuGestureModifiers.Meta)));
+                new NativeMenuGesturePlan(NativeMenuGestureKey.N, FreeKeyModifiers.Meta)));
 
         NativeMenuCatalog.GetFileMenuItem(NativeFileMenuItemId.OpenRecent)
             .Should()
@@ -80,12 +81,12 @@ public sealed class NativeMenuCatalogTests
             .Should()
             .Be(new NativeMenuGesturePlan(
                 NativeMenuGestureKey.G,
-                NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift));
+                FreeKeyModifiers.Control | FreeKeyModifiers.Shift));
 
         var quit = NativeMenuCatalog.GetFileMenuItem(NativeFileMenuItemId.Quit);
         quit.Label.Should().Be("Quit FreeX");
         quit.UsesResourceKey.Should().BeFalse();
-        quit.Gesture.Should().Be(new NativeMenuGesturePlan(NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta));
+        quit.Gesture.Should().Be(new NativeMenuGesturePlan(NativeMenuGestureKey.Q, FreeKeyModifiers.Meta));
     }
 
     [Fact]
@@ -342,18 +343,18 @@ public sealed class NativeMenuCatalogTests
             new NativeMenuItemPlan(
                 NativeMenuItemId.NewSheet,
                 "AvaloniaNativeMenu_NewSheet",
-                new NativeMenuGesturePlan(NativeMenuGestureKey.F11, NativeMenuGestureModifiers.Shift),
+                new NativeMenuGesturePlan(NativeMenuGestureKey.F11, FreeKeyModifiers.Shift),
                 UsesResourceKey: true));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.PasteSpecial).Gesture
             .Should()
             .Be(new NativeMenuGesturePlan(
                 NativeMenuGestureKey.V,
-                NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Alt));
+                FreeKeyModifiers.Meta | FreeKeyModifiers.Alt));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.FlashFill).Gesture
             .Should()
-            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Meta));
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.E, FreeKeyModifiers.Meta));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.PageSetup).Should().Be(
             new NativeMenuItemPlan(
@@ -364,23 +365,23 @@ public sealed class NativeMenuCatalogTests
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.InsertFunction).Gesture
             .Should()
-            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.F3, NativeMenuGestureModifiers.Shift));
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.F3, FreeKeyModifiers.Shift));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.AutoSumSum).Gesture
             .Should()
             .Be(new NativeMenuGesturePlan(
                 NativeMenuGestureKey.T,
-                NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift));
+                FreeKeyModifiers.Meta | FreeKeyModifiers.Shift));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.Strikethrough).Gesture
             .Should()
             .Be(new NativeMenuGesturePlan(
                 NativeMenuGestureKey.X,
-                NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift));
+                FreeKeyModifiers.Meta | FreeKeyModifiers.Shift));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.ShowFormulas).Gesture
             .Should()
-            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.Oem3, NativeMenuGestureModifiers.Control));
+            .Be(new NativeMenuGesturePlan(NativeMenuGestureKey.Oem3, FreeKeyModifiers.Control));
 
         NativeMenuCatalog.GetMenuItem(NativeMenuItemId.HelpOnline).Gesture
             .Should()
@@ -579,7 +580,7 @@ public sealed class NativeMenuCatalogTests
             IsShowingFormulas: true);
 
     private static NativeMenuGesturePlan ToNativeMenuGesturePlan(WorkbookShortcutChord chord) =>
-        new(ToNativeMenuGestureKey(chord.Key), ToNativeMenuGestureModifiers(chord.Modifiers));
+        new(ToNativeMenuGestureKey(chord.Key), chord.Modifiers);
 
     private static NativeMenuGestureKey ToNativeMenuGestureKey(WorkbookShortcutKey key) =>
         key switch
@@ -610,18 +611,4 @@ public sealed class NativeMenuCatalogTests
             WorkbookShortcutKey.Z => NativeMenuGestureKey.Z,
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
         };
-
-    private static NativeMenuGestureModifiers ToNativeMenuGestureModifiers(WorkbookShortcutModifiers modifiers)
-    {
-        var result = NativeMenuGestureModifiers.None;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control))
-            result |= NativeMenuGestureModifiers.Control;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt))
-            result |= NativeMenuGestureModifiers.Alt;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift))
-            result |= NativeMenuGestureModifiers.Shift;
-        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
-            result |= NativeMenuGestureModifiers.Meta;
-        return result;
-    }
 }

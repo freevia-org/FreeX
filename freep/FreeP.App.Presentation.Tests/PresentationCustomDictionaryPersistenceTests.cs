@@ -61,16 +61,19 @@ public sealed class PresentationCustomDictionaryPersistenceTests
     }
 
     [Fact]
-    public void Store_PreservesFreePOrdinalDuplicateAndBlankLineSemantics()
+    public void Store_MatchesCustomDictionariesCaseInsensitivelyAndIgnoresBlankLines()
     {
+        // Microsoft Office custom dictionaries (CUSTOM.DIC) ignore case, and FreeW already did; FreeP
+        // now shares that store, so "TEH"/"teh" are one entry and blank lines are dropped.
         var fs = new FakeDictionaryFileSystem();
         fs.Files[StorePath] = ["TEH", "TEH", "teh", "", " "];
 
         var store = new PresentationCustomDictionaryStore(StorePath, fs);
 
-        store.Words.Should().Equal("TEH", "teh", " ");
+        store.Words.Should().Equal("TEH");
         store.Add("TEH").Should().BeFalse();
-        store.Add("Teh").Should().BeTrue();
+        store.Add("Teh").Should().BeFalse();
+        store.Add("other").Should().BeTrue();
     }
 
     [Fact]

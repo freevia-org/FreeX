@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
@@ -1584,7 +1585,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
             return (false, null, null);
 
         static bool Flag(XElement element, string name) =>
-            element.Attribute(name)?.Value is "1" or "true";
+            OoxmlBooleanLexical.IsTrue(element.Attribute(name)?.Value);
 
         static bool? OptionalFlag(XElement element, string name) => element.Attribute(name) is null ? null : Flag(element, name);
         return (Flag(locks, "noChangeAspect"), OptionalFlag(locks, "noMove"), OptionalFlag(locks, "noResize"));
@@ -1608,7 +1609,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
         var raw = element.Descendants(drawing + locksName).FirstOrDefault()?.Attribute(flag)?.Value;
-        return raw is null ? null : raw is "1" or "true";
+        return raw is null ? null : OoxmlBooleanLexical.IsTrue(raw);
     }
 
     private static IReadOnlyDictionary<string, string>? ReadOtherDrawingLockAttributes(XElement element, string locksName, bool includeAspect)
@@ -1641,7 +1642,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         var raw = ReadFirstNonVisualAttribute(element, spreadsheetDrawingNs, "hidden");
-        return raw is "1" or "true";
+        return OoxmlBooleanLexical.IsTrue(raw);
     }
 
     private static string? ReadNonVisualTitle(XElement element)

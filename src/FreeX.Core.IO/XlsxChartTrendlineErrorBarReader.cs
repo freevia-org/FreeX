@@ -1,3 +1,4 @@
+using Free.Shared.Opc;
 using System.Globalization;
 using System.Linq;
 using System.Xml.Linq;
@@ -452,12 +453,7 @@ internal static class XlsxChartTrendlineErrorBarReader
         XlsxChartScalarReader.ReadOptionalDouble(value);
 
     private static bool? ReadNullableBool(string? value) =>
-        value switch
-        {
-            "1" or "true" => true,
-            "0" or "false" => false,
-            _ => null
-        };
+        OoxmlBooleanLexical.TryParse(value);
 
     private static string? ReadErrorBarRangeFormula(XElement? element)
     {

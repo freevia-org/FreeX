@@ -112,6 +112,8 @@ internal sealed partial class SymbolPickerDialog
 {
     internal IReadOnlyList<Button> GlyphButtonsForTest => _glyphButtons;
 
+    internal void SelectSubsetForTest(string subset) => _subsetChoice.SelectedItem = subset;
+
     internal string? SelectGlyphForTest(string glyph)
     {
         SelectGlyph(glyph, close: false);
@@ -258,6 +260,15 @@ public sealed partial class FindReplaceDialog
     internal FindReplaceOpenMode? FocusedFieldForTest =>
         _findBox.IsFocused ? FindReplaceOpenMode.Find :
         _replaceBox.IsFocused ? FindReplaceOpenMode.Replace : null;
+
+    internal void GoToForTest(FindReplaceGoToTargetKind kind)
+    {
+        PopulateGoToTargets();
+        _goToTarget.SelectedItem = _goToTarget.ItemsSource!
+            .Cast<FindReplaceGoToTarget>()
+            .First(target => target.Kind == kind);
+        GoTo();
+    }
 }
 
 internal sealed partial class MarkIndexEntryDialog

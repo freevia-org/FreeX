@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.Core.Model;
 
@@ -6,12 +7,12 @@ namespace FreeX.App.Presentation.Tests.FormulaBar;
 public sealed class FormulaRangeEntryPlannerDisjointAreaTests
 {
     [Theory]
-    [InlineData(FormulaEditorKey.F8, FormulaEditorModifiers.None, ExcelSelectionMode.Normal, ExcelSelectionMode.Extend)]
-    [InlineData(FormulaEditorKey.F8, FormulaEditorModifiers.Shift, ExcelSelectionMode.Normal, ExcelSelectionMode.Add)]
-    [InlineData(FormulaEditorKey.F8, FormulaEditorModifiers.Shift, ExcelSelectionMode.Add, ExcelSelectionMode.Normal)]
+    [InlineData(FormulaEditorKey.F8, FreeKeyModifiers.None, ExcelSelectionMode.Normal, ExcelSelectionMode.Extend)]
+    [InlineData(FormulaEditorKey.F8, FreeKeyModifiers.Shift, ExcelSelectionMode.Normal, ExcelSelectionMode.Add)]
+    [InlineData(FormulaEditorKey.F8, FreeKeyModifiers.Shift, ExcelSelectionMode.Add, ExcelSelectionMode.Normal)]
     public void KeyboardSelectionMode_UsesExcelF8AndShiftF8Semantics(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         ExcelSelectionMode current,
         ExcelSelectionMode expected)
     {

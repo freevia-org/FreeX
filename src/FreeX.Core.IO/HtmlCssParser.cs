@@ -33,7 +33,7 @@ internal static class HtmlCssParser
         var style = new CellStyle();
         bool any = false;
 
-        foreach (var (prop, value) in EnumerateDeclarations(css))
+        foreach (var (prop, value) in Free.Shared.IO.CssInlineDeclarations.Enumerate(css))
         {
             switch (prop)
             {
@@ -88,22 +88,8 @@ internal static class HtmlCssParser
 
     // ---- declaration scanning ---------------------------------------------------------------------
 
-    /// <summary>Split a CSS declaration block ("a:b;c:d") into lowercased (property, value) pairs.</summary>
-    private static IEnumerable<(string Prop, string Value)> EnumerateDeclarations(string css)
-    {
-        foreach (var part in css.Split(';'))
-        {
-            var decl = part.Trim();
-            if (decl.Length == 0)
-                continue;
-            int colon = decl.IndexOf(':');
-            if (colon <= 0 || colon == decl.Length - 1)
-                continue;
-            var prop = decl[..colon].Trim().ToLowerInvariant();
-            var value = decl[(colon + 1)..].Trim();
-            yield return (prop, value);
-        }
-    }
+    // The declaration scan itself ("a:b;c:d" into lowercased (property, value) pairs) is the shared
+    // Free.Shared.IO.CssInlineDeclarations.Enumerate, also used by FreeW's HTML adapter.
 
     // ---- value parsers ----------------------------------------------------------------------------
 

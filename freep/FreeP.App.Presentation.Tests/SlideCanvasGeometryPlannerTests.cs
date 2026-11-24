@@ -285,9 +285,13 @@ public sealed class SlideCanvasGeometryPlannerTests
 
         foreach (var source in new[] { wpfAdorner, avaloniaAdorner })
         {
-            source.Should().Contain("SlideCanvasGeometryPlanner.SnapGuideToScreenPosition");
+            source.Should().Contain("SnapGuideRenderPlanner.Plan(");
             source.Should().NotContain("g.Position * xf.Scale");
+            source.Should().NotContain("5000", "guides span the adorner's own extent, never a fixed +-5000");
         }
+
+        ReadWorkspaceFile("freep", "FreeP.App.Presentation", "SnapGuideRenderPlanner.cs")
+            .Should().Contain("SlideCanvasGeometryPlanner.SnapGuideToScreenPosition");
 
         var wpfCanvas = ReadWorkspaceFile(
             "freep",

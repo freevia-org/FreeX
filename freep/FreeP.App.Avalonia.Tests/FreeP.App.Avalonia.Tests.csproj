@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../../tests/SharedTestInfrastructure/Avalonia/HeadlessFluentApplication.cs"
+             Link="TestSupport/HeadlessFluentApplication.cs" />
     <Compile Include="../TestSupport/ShippingTestHookOwnershipAssertions.cs"
              Link="TestSupport/ShippingTestHookOwnershipAssertions.cs" />
     <Compile Include="../TestSupport/FreePRendererHostInfrastructureTestSupport.cs"

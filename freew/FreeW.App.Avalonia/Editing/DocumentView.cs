@@ -2907,6 +2907,31 @@ public sealed partial class DocumentView : Control
         _selectionAnchor = _caret;
     }
 
+    /// <summary>
+    /// Word's Go To "Document start" / "Document end": collapses the selection onto the first (or last)
+    /// paragraph's edge, as the WPF host does by setting the caret to ContentStart / ContentEnd, and
+    /// scrolls the caret into view. Returns false when the document has no paragraph block.
+    /// </summary>
+    internal bool MoveCaretToDocumentEdge(bool toEnd)
+    {
+        var count = _doc.Blocks.Count;
+        for (var step = 0; step < count; step++)
+        {
+            var block = toEnd ? count - 1 - step : step;
+            if (_doc.Blocks[block] is not Paragraph)
+                continue;
+
+            MoveCaretToBlock(block, toEnd ? BlockLength(block) : 0);
+            Focus();
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+            ScrollToCaretRequested?.Invoke();
+            return true;
+        }
+
+        return false;
+    }
+
     private ((int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) Start,
         (int BlockIndex, int RunIndex, int TextParagraphIndex, int TextRunIndex, int Offset) End)? CurrentShapeTextSelection
     {

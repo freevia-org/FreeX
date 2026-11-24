@@ -26,13 +26,9 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia.Tests;
 
 /// <summary>Minimal headless Avalonia app (Fluent theme + headless drawing) so DocumentView can lay out.</summary>
-public sealed class FreeWHeadlessApp : Application
+public sealed class FreeWHeadlessApp : HeadlessFluentApplication
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
-
-    public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<FreeWHeadlessApp>()
-            .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = true });
+    public static AppBuilder BuildAvaloniaApp() => ConfigureHeadless<FreeWHeadlessApp>();
 }
 
 /// <summary>

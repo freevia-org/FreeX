@@ -219,41 +219,34 @@ public sealed class InCanvasTableCellEditor
 
     private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
     {
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null) return;
+        if (_editor.CurrentSlide is null || _editor.Presentation is null) return;
 
         var xf      = _canvas.CurrentTransform;
         var pt      = e.GetPosition(_canvas);
         var slidePt = xf.ScreenToSlide(pt.X, pt.Y);
 
-        // Is the click on the currently selected table?
-        uint? hitId = ShapeHitTester.HitTest(slide, _editor.Presentation, slidePt.X, slidePt.Y);
-        if (!hitId.HasValue) { CommitCellEdit(); return; }
-
-        var shape = ShapeHitTester.FindShape(slide, hitId.Value);
-        if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
+        // The shared planner owns the click routing: off a table commits an open cell edit; a click
+        // on a cell sets the active cell; a double click opens the cell editor. (The shape itself is
+        // selected elsewhere by CanvasGestureHandler, which registered first.)
+        var plan = TableCellPointerPlanner.Plan(
+            _editor.CurrentSlide,
+            _editor.Presentation,
+            slidePt.X,
+            slidePt.Y,
+            e.ClickCount);
+        switch (plan.Action)
         {
-            // Clicked a non-table — commit any open cell edit.
-            CommitCellEdit();
-            return;
-        }
-
-        // Single click: set active cell.
-        var cellHit = TableCellHitTester.HitTest(shape, slidePt.X, slidePt.Y);
-        if (cellHit.HasValue)
-        {
-            // Only update the active cell if we own this shape (shape is being selected elsewhere
-            // by CanvasGestureHandler first, which fires before us because it registered first).
-            // We just set the active cell; the selection of the shape itself is handled by
-            // CanvasGestureHandler.
-            _editor.SetActiveTableCell(cellHit.Value.Row, cellHit.Value.Col);
-
-            // Double-click → activate cell editor.
-            if (e.ClickCount >= 2)
-            {
-                ActivateCellEdit(shape.Id, cellHit.Value.Row, cellHit.Value.Col);
+            case TableCellPointerAction.CommitCellEdit:
+                CommitCellEdit();
+                break;
+            case TableCellPointerAction.SelectCell:
+                _editor.SetActiveTableCell(plan.Row, plan.Col);
+                break;
+            case TableCellPointerAction.ActivateCellEdit:
+                _editor.SetActiveTableCell(plan.Row, plan.Col);
+                ActivateCellEdit(plan.ShapeId, plan.Row, plan.Col);
                 e.Handled = true;
-            }
+                break;
         }
     }
 
@@ -728,35 +721,23 @@ public sealed class InCanvasTableCellEditor
             _cellHighlight = null;
         }
 
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null) return;
-        var cellState = TableCellEditPlanner.PlanSelectedCell(
-            slide,
-            _editor.SelectedShapeIds,
-            _editor.ActiveTableCell);
-        if (!cellState.CanEditText || cellState.ShapeId is null || cellState.Row is null || cellState.Col is null)
+        if (TableCellPointerPlanner.PlanHighlight(
+                _editor.CurrentSlide,
+                _editor.SelectedShapeIds,
+                _editor.ActiveTableCell,
+                _canvas.CurrentTransform.Core) is not { } highlight)
+        {
             return;
+        }
 
-        var shape = slide.Shapes.FirstOrDefault(s => s.Id == cellState.ShapeId.Value);
-        if (shape?.Kind != SlideShapeKind.Table) return;
-
-        var cellRect = TableCellHitTester.GetCellRect(shape, cellState.Row.Value, cellState.Col.Value);
-        if (cellRect is null) return;
-
-        var placement = TableCellEditPlanner.PlanCellEditorPlacement(
-            shape,
-            cellRect.Value,
-            _canvas.CurrentTransform.Core,
-            minimumWidth: 0,
-            minimumHeight: 0);
-
+        var placement = highlight.Placement;
         _cellHighlight = new Rectangle
         {
             Width           = Math.Max(1, placement.Width),
             Height          = Math.Max(1, placement.Height),
-            Stroke          = new SolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)),
-            StrokeThickness = 2.0,
-            Fill            = new SolidColorBrush(Color.FromArgb(0x18, 0x21, 0x96, 0xF3)),
+            Stroke          = new SolidColorBrush(ToColor(highlight.StrokeArgb)),
+            StrokeThickness = highlight.StrokeThickness,
+            Fill            = new SolidColorBrush(ToColor(highlight.FillArgb)),
             IsHitTestVisible = false,
         };
 
@@ -765,6 +746,9 @@ public sealed class InCanvasTableCellEditor
         ApplyPlacementTransform(_cellHighlight, placement);
         _overlay.Children.Add(_cellHighlight);
     }
+
+    private static Color ToColor(uint argb) => Color.FromArgb(
+        (byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
 
     private static void ApplyPlacementTransform(
         FrameworkElement editor,

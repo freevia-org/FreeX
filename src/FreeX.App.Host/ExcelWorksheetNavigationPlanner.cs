@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.FormulaBar;
@@ -114,21 +115,8 @@ public static class ExcelWorksheetNavigationPlanner
             MapKey(key),
             shiftHeld);
 
-    internal static ExcelWorksheetNavigationModifiers MapModifiers(ModifierKeys modifiers)
-    {
-        var mapped = ExcelWorksheetNavigationModifiers.None;
-
-        if ((modifiers & ModifierKeys.Shift) != 0)
-            mapped |= ExcelWorksheetNavigationModifiers.Shift;
-        if ((modifiers & ModifierKeys.Control) != 0)
-            mapped |= ExcelWorksheetNavigationModifiers.Control;
-        if ((modifiers & ModifierKeys.Alt) != 0)
-            mapped |= ExcelWorksheetNavigationModifiers.Alt;
-        if ((modifiers & ModifierKeys.Windows) != 0)
-            mapped |= ExcelWorksheetNavigationModifiers.Windows;
-
-        return mapped;
-    }
+    internal static FreeKeyModifiers MapModifiers(ModifierKeys modifiers) =>
+        Free.Shared.Shell.Wpf.WpfKeyModifiersMapper.FromWpf(modifiers);
 
     private static ExcelWorksheetNavigationKey MapKey(Key key) =>
         key switch

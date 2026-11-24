@@ -29,6 +29,6 @@ public sealed class ReviewAuthorIdentityPlannerTests
                 " Ada Byron Lovelace ",
                 "Document Author",
                 "OS User")
-            .Should().Be(new CommentStampIdentity("Ada Byron Lovelace", "AL"));
+            .Should().Be(new CommentStampIdentity("Ada Byron Lovelace", "ABL"));
     }
 }

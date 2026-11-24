@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System;
 using System.Windows;
 using System.Windows.Controls;
@@ -474,19 +475,8 @@ public partial class MainWindow
             _ => null
         };
 
-    private static DrawingObjectNudgeModifiers ToDrawingObjectNudgeModifiers(ModifierKeys modifiers)
-    {
-        var result = DrawingObjectNudgeModifiers.None;
-        if ((modifiers & ModifierKeys.Control) != 0)
-            result |= DrawingObjectNudgeModifiers.Control;
-        if ((modifiers & ModifierKeys.Shift) != 0)
-            result |= DrawingObjectNudgeModifiers.Shift;
-        if ((modifiers & ModifierKeys.Alt) != 0)
-            result |= DrawingObjectNudgeModifiers.Alt;
-        if ((modifiers & ModifierKeys.Windows) != 0)
-            result |= DrawingObjectNudgeModifiers.Meta;
-        return result;
-    }
+    private static FreeKeyModifiers ToDrawingObjectNudgeModifiers(ModifierKeys modifiers) =>
+        Free.Shared.Shell.Wpf.WpfKeyModifiersMapper.FromWpf(modifiers);
 
     private static SelectionPaneObjectKind? ToSelectionPaneObjectKindIncludingChart(FreeX.App.UI.ObjectKind kind) =>
         kind switch

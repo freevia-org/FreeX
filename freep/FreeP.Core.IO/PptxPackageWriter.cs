@@ -3690,25 +3690,29 @@ public static class PptxPackageWriter
     private static XDocument BuildThemeXml(PresentationTheme theme)
     {
         var cs = theme.ColorScheme;
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(A + "theme", NsAttr("a", A), new XAttribute("name", theme.Name),
-                new XElement(A + "themeElements",
-                    new XElement(A + "clrScheme", new XAttribute("name", theme.Name),
-                        ColorSlot("dk1", cs[ThemeColorSlot.Dk1]),
-                        ColorSlot("lt1", cs[ThemeColorSlot.Lt1]),
-                        ColorSlot("dk2", cs[ThemeColorSlot.Dk2]),
-                        ColorSlot("lt2", cs[ThemeColorSlot.Lt2]),
-                        ColorSlot("accent1", cs[ThemeColorSlot.Accent1]),
-                        ColorSlot("accent2", cs[ThemeColorSlot.Accent2]),
-                        ColorSlot("accent3", cs[ThemeColorSlot.Accent3]),
-                        ColorSlot("accent4", cs[ThemeColorSlot.Accent4]),
-                        ColorSlot("accent5", cs[ThemeColorSlot.Accent5]),
-                        ColorSlot("accent6", cs[ThemeColorSlot.Accent6]),
-                        ColorSlot("hlink", cs[ThemeColorSlot.HLink]),
-                        ColorSlot("folHlink", cs[ThemeColorSlot.FolHLink])),
-                    BuildThemeFontSchemeXml(theme),
-                    BuildThemeFormatSchemeXml(theme))));
+        // The a:theme scaffold is the shared DrawingMlThemeXml; the native-preserving font scheme and
+        // the padded native format scheme below stay this writer's.
+        return DrawingMlThemeXml.CreateThemeDocument(
+            theme.Name,
+            DrawingMlThemeXml.CreateColorScheme(theme.Name,
+            [
+                new("dk1", FmtColor(cs[ThemeColorSlot.Dk1])),
+                new("lt1", FmtColor(cs[ThemeColorSlot.Lt1])),
+                new("dk2", FmtColor(cs[ThemeColorSlot.Dk2])),
+                new("lt2", FmtColor(cs[ThemeColorSlot.Lt2])),
+                new("accent1", FmtColor(cs[ThemeColorSlot.Accent1])),
+                new("accent2", FmtColor(cs[ThemeColorSlot.Accent2])),
+                new("accent3", FmtColor(cs[ThemeColorSlot.Accent3])),
+                new("accent4", FmtColor(cs[ThemeColorSlot.Accent4])),
+                new("accent5", FmtColor(cs[ThemeColorSlot.Accent5])),
+                new("accent6", FmtColor(cs[ThemeColorSlot.Accent6])),
+                new("hlink", FmtColor(cs[ThemeColorSlot.HLink])),
+                new("folHlink", FmtColor(cs[ThemeColorSlot.FolHLink])),
+            ]),
+            BuildThemeFontSchemeXml(theme),
+            BuildThemeFormatSchemeXml(theme),
+            supplementElements: [],
+            new XDeclaration("1.0", "UTF-8", "yes"));
     }
 
     // Round-trip fidelity: when this theme was read from a real .pptx, theme.NativeFontSchemeXml
@@ -3726,15 +3730,10 @@ public static class PptxPackageWriter
                 theme.FontScheme.MinorLatinFont) is { } patched)
             return patched;
 
-        return new XElement(A + "fontScheme", new XAttribute("name", theme.Name),
-            new XElement(A + "majorFont",
-                new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MajorLatinFont)),
-                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
-                new XElement(A + "cs", new XAttribute("typeface", string.Empty))),
-            new XElement(A + "minorFont",
-                new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)),
-                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
-                new XElement(A + "cs", new XAttribute("typeface", string.Empty))));
+        return DrawingMlThemeXml.CreateFontScheme(
+            theme.Name,
+            theme.FontScheme.MajorLatinFont,
+            theme.FontScheme.MinorLatinFont);
     }
 
     // Round-trip fidelity: when this theme was read from a real .pptx, theme.FillStyles /
@@ -3745,20 +3744,12 @@ public static class PptxPackageWriter
     // 3-slot placeholder fmtScheme, which silently discarded real effect styles on every save.
     private static XElement BuildThemeFormatSchemeXml(PresentationTheme theme)
     {
-        var fillStyleLst = new XElement(A + "fillStyleLst",
-            StyleListEntries(theme.FillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]));
-
-        var lnStyleLst = new XElement(A + "lnStyleLst",
-            StyleListEntries(theme.LineStyles, [LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)]));
-
-        var effectStyleLst = new XElement(A + "effectStyleLst",
-            StyleListEntries(theme.EffectStyles, [EffectStyle(), EffectStyle(), EffectStyle()]));
-
-        var bgFillStyleLst = new XElement(A + "bgFillStyleLst",
+        return DrawingMlThemeXml.CreateFormatScheme(
+            "Office",
+            StyleListEntries(theme.FillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]),
+            StyleListEntries(theme.LineStyles, [LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)]),
+            StyleListEntries(theme.EffectStyles, [EffectStyle(), EffectStyle(), EffectStyle()]),
             StyleListEntries(theme.BackgroundFillStyles, [SolidPhClr(), SolidPhClr(), SolidPhClr()]));
-
-        return new XElement(A + "fmtScheme", new XAttribute("name", "Office"),
-            fillStyleLst, lnStyleLst, effectStyleLst, bgFillStyleLst);
     }
 
     /// <summary>
@@ -3794,20 +3785,15 @@ public static class PptxPackageWriter
         return entries;
     }
 
-    private static XElement SolidPhClr() =>
-        new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
+    private static XElement SolidPhClr() => DrawingMlThemeXml.CreateSolidPhClrFill();
 
+    // FreeP's generated lines carry only w + fill + dash (no cap/cmpd/algn), unlike FreeX/FreeW.
     private static XElement LnStyle(double widthPt) =>
-        new XElement(A + "ln", new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(widthPt)),
-            new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
-            new XElement(A + "prstDash", new XAttribute("val", "solid")));
+        DrawingMlThemeXml.CreateLineStyle(
+            DrawingMlCoordinateUnits.PointsToEmu(widthPt),
+            includeCapCompoundAlign: false);
 
-    private static XElement EffectStyle() =>
-        new XElement(A + "effectStyle", new XElement(A + "effectLst"));
-
-    private static XElement ColorSlot(string name, SrgbColor color) =>
-        new XElement(A + name,
-            new XElement(A + "srgbClr", new XAttribute("val", FmtColor(color))));
+    private static XElement EffectStyle() => DrawingMlThemeXml.CreateEmptyEffectStyle();
 
     // ── Stub XML parts ────────────────────────────────────────────────────────────
 

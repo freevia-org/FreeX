@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
@@ -17,7 +18,7 @@ public static class FormulaRangeEntryPlanner
 
     public static bool TryToggleKeyboardSelectionMode(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         ExcelSelectionMode current,
         out ExcelSelectionMode next)
     {
@@ -25,7 +26,7 @@ public static class FormulaRangeEntryPlanner
         if (key != FormulaEditorKey.F8)
             return false;
 
-        if (modifiers == FormulaEditorModifiers.None)
+        if (modifiers == FreeKeyModifiers.None)
         {
             next = current == ExcelSelectionMode.Extend
                 ? ExcelSelectionMode.Normal
@@ -33,7 +34,7 @@ public static class FormulaRangeEntryPlanner
             return true;
         }
 
-        if (modifiers == FormulaEditorModifiers.Shift)
+        if (modifiers == FreeKeyModifiers.Shift)
         {
             next = current == ExcelSelectionMode.Add
                 ? ExcelSelectionMode.Normal
@@ -86,7 +87,7 @@ public static class FormulaRangeEntryPlanner
     public static CellAddress? GetKeyboardSelectionTarget(
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         CellAddress current,
         Sheet? sheet,
         int rowPageSize,
@@ -101,12 +102,12 @@ public static class FormulaRangeEntryPlanner
         if (horizontalPageTarget is { })
             return horizontalPageTarget;
 
-        if ((modifiers & ~(FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift)) != 0)
+        if ((modifiers & ~(FreeKeyModifiers.Control | FreeKeyModifiers.Shift)) != 0)
             return null;
 
         var effectiveKey = key is FormulaEditorKey.None or FormulaEditorKey.System ? systemKey : key;
         var useDataBoundary = ShouldUseDataBoundary(effectiveKey, modifiers, endMode: false);
-        var ctrlHeld = (modifiers & FormulaEditorModifiers.Control) != 0;
+        var ctrlHeld = (modifiers & FreeKeyModifiers.Control) != 0;
 
         return effectiveKey switch
         {
@@ -382,11 +383,11 @@ public static class FormulaRangeEntryPlanner
     private static CellAddress? GetHorizontalPageTarget(
         FormulaEditorKey key,
         FormulaEditorKey systemKey,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         CellAddress current,
         int pageSize)
     {
-        if (modifiers is not FormulaEditorModifiers.Alt and not (FormulaEditorModifiers.Alt | FormulaEditorModifiers.Shift))
+        if (modifiers is not FreeKeyModifiers.Alt and not (FreeKeyModifiers.Alt | FreeKeyModifiers.Shift))
             return null;
 
         var effectiveKey = key is FormulaEditorKey.None or FormulaEditorKey.System ? systemKey : key;
@@ -406,12 +407,12 @@ public static class FormulaRangeEntryPlanner
 
     private static bool ShouldUseDataBoundary(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool endMode) =>
         key is FormulaEditorKey.Up or FormulaEditorKey.Down or FormulaEditorKey.Left or FormulaEditorKey.Right &&
         (endMode
-            ? modifiers is FormulaEditorModifiers.None or FormulaEditorModifiers.Shift
-            : modifiers is FormulaEditorModifiers.Control or
-                (FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift));
+            ? modifiers is FreeKeyModifiers.None or FreeKeyModifiers.Shift
+            : modifiers is FreeKeyModifiers.Control or
+                (FreeKeyModifiers.Control | FreeKeyModifiers.Shift));
 
 }

@@ -250,27 +250,17 @@ public sealed class FreePOptionsRuntimeSession
     {
         ArgumentNullException.ThrowIfNull(persist);
 
-        var openTimeSnapshot = reloadFresh is null ? null : FreePOptionsPolicy.CaptureNormalized(LiveOptions).ToOptions();
-        var plan = Apply(editedOptions);
+        FreePOptionsApplyPlan? plan = null;
+        var persisted = OptionsReloadMergeCommit.Commit(
+            LiveOptions,
+            captureOpenTimeSnapshot: () => FreePOptionsPolicy.CaptureNormalized(LiveOptions).ToOptions(),
+            applyToLive: () => plan = Apply(editedOptions),
+            captureEdited: () => plan!.After.ToOptions(),
+            persist,
+            reloadFresh,
+            BasicApplicationOptionsMerge.MergeOntoFreshLoad,
+            (live, fresh) => FreePOptionsPolicy.ApplySnapshot(live, FreePOptionsPolicy.CaptureNormalized(fresh)));
 
-        if (!plan.ShouldPersist)
-            return new FreePOptionsCommitOutcome(plan, PersistenceAttempted: false, Persisted: true);
-
-        if (reloadFresh is null || openTimeSnapshot is null)
-        {
-            var persistedNoReload = persist(LiveOptions);
-            return new FreePOptionsCommitOutcome(plan, PersistenceAttempted: true, Persisted: persistedNoReload);
-        }
-
-        var fresh = reloadFresh();
-        fresh.Normalize();
-        var edited = plan.After.ToOptions();
-        BasicApplicationOptionsMerge.MergeOntoFreshLoad(fresh, openTimeSnapshot, edited);
-
-        var persisted = persist(fresh);
-        if (persisted)
-            FreePOptionsPolicy.ApplySnapshot(LiveOptions, FreePOptionsPolicy.CaptureNormalized(fresh));
-
-        return new FreePOptionsCommitOutcome(plan, PersistenceAttempted: true, Persisted: persisted);
+        return new FreePOptionsCommitOutcome(plan!, PersistenceAttempted: true, Persisted: persisted);
     }
 }

@@ -504,6 +504,8 @@ public sealed class LinuxFamilyInteractionToolTests
         support.Should().Contain("function Invoke-PhysicalValidationFixture")
             .And.Contain("function ConvertFrom-PhysicalValidationKeyValueLines")
             .And.Contain("function Read-PhysicalValidationFixtureValues")
+            .And.Contain("function Start-PhysicalValidationHarness")
+            .And.Contain("function Stop-PhysicalValidationHarness")
             .And.Contain("--configuration Release --no-restore");
 
         foreach (var runnerName in new[]
@@ -517,7 +519,11 @@ public sealed class LinuxFamilyInteractionToolTests
             var runner = File.ReadAllText(RepositoryFileLocator.Find("tools", runnerName));
             runner.Should().Contain("PhysicalValidationScriptSupport.ps1")
                 .And.NotContain("function Invoke-Fixture")
-                .And.NotContain("function Read-Geometry");
+                .And.NotContain("function Read-Geometry")
+                .And.Contain("Start-PhysicalValidationHarness")
+                .And.Contain("Stop-PhysicalValidationHarness")
+                .And.NotContain("-Action Start")
+                .And.NotContain("-Action Stop");
         }
 
         var powershell = ResolvePowerShellExecutable();

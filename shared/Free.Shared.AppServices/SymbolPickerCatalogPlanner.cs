@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace FreeX.App.Presentation.Dialogs;
+namespace Free.Shared.AppServices;
 
 public readonly record struct SymbolPickerCatalogEntry(string Symbol, string Name, string Subset, string CodeText)
 {

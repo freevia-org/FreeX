@@ -4,9 +4,9 @@ namespace Free.Shared.AppServices.Tests;
 
 public sealed class AtomicExportExecutorTests : IDisposable
 {
-    private readonly string _root = Path.Combine(
-        Path.GetTempPath(),
-        "atomic-export-tests-" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("atomic-export-tests-");
+
+    private string _root => _temporaryDirectory.Path;
 
     [Fact]
     public async Task ExecuteAsync_CreatesDestinationAndReturnsRendererArtifact()
@@ -408,11 +408,7 @@ public sealed class AtomicExportExecutorTests : IDisposable
         AssertCanceledAndPreserved(result, destination);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_root))
-            Directory.Delete(_root, recursive: true);
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private string CreateExistingDestination(string content)
     {

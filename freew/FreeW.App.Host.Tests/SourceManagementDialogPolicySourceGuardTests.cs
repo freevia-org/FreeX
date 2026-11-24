@@ -94,13 +94,14 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
 
     private static string ReadHostRibbonSource()
     {
-        var path = Path.Combine(
+        var ribbonDirectory = Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "freew",
             "FreeW.App.Host",
-            "Ribbon",
-            "FreeWRibbonCommands.cs");
-        return File.ReadAllText(path);
+            "Ribbon");
+        // The author editor dialog lives in its own partial file of the same class.
+        return File.ReadAllText(Path.Combine(ribbonDirectory, "FreeWRibbonCommands.cs"))
+            + File.ReadAllText(Path.Combine(ribbonDirectory, "FreeWRibbonCommands.AuthorEditorDialog.cs"));
     }
 
 }

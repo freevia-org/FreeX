@@ -21,8 +21,12 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private InlineImage? _result;
     private readonly IconPickerDialogSession _session;
     // Roving-tabindex keyboard focus: the flat index (into the current tile list, same order as
-    // _session's VisibleEntries) that arrow/Home/End keys move and Enter/Space selects.
-    private int _focusedIndex;
+    // _session's VisibleEntries) that arrow/Home/End keys move and Enter/Space selects. The focus
+    // rules live in the shared IconGridFocusSession; this dialog only applies them to its tiles.
+    private readonly IconGridFocusSession _focus = new();
+
+    /// <summary>The tile that currently owns the roving tab stop (read by the keyboard-navigation tests).</summary>
+    internal int FocusedIndex => _focus.FocusedIndex;
 
     // ── Controls ──────────────────────────────────────────────────────────────────────────────────
     private readonly ComboBox _categoryBox;
@@ -285,15 +289,15 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         if (MapNavigationKey(e.Key) is { } navigationKey)
         {
-            var nextIndex = IconGridNavigation.Move(_focusedIndex, navigationKey, tiles.Count, Surface.TilesPerRow);
-            MoveKeyboardFocus(tiles, nextIndex);
+            if (_focus.PlanNavigation(navigationKey, tiles.Count, Surface.TilesPerRow) is { } nextIndex)
+                MoveKeyboardFocus(tiles, nextIndex);
             e.Handled = true;
             return;
         }
 
         if (e.Key is Key.Enter or Key.Space)
         {
-            var index = Math.Clamp(_focusedIndex, 0, tiles.Count - 1);
+            var index = _focus.ActivationIndex(tiles.Count) ?? 0;
             if (tiles[index].Tag is IconPickerEntry entry)
                 SelectTile(tiles, index, entry);
             e.Handled = true;
@@ -315,7 +319,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private void ResetTileFocusState()
     {
         var tiles = _grid.Children.OfType<Border>().ToList();
-        _focusedIndex = 0;
+        _focus.Reset();
         for (var i = 0; i < tiles.Count; i++)
             KeyboardNavigation.SetIsTabStop(tiles[i], i == 0);
         ApplyFocusVisuals(tiles);
@@ -324,13 +328,12 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     /// <summary>Moves the roving tab stop and keyboard focus without changing the selection.</summary>
     private void MoveKeyboardFocus(IReadOnlyList<Border> tiles, int index)
     {
-        if (index < 0 || index >= tiles.Count)
+        if (!_focus.MoveTo(index, tiles.Count))
             return;
 
         for (var i = 0; i < tiles.Count; i++)
             KeyboardNavigation.SetIsTabStop(tiles[i], i == index);
 
-        _focusedIndex = index;
         ApplyFocusVisuals(tiles);
         tiles[index].Focus();
     }
@@ -352,7 +355,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         for (var i = 0; i < tiles.Count; i++)
         {
             var tile = tiles[i];
-            var isFocused = i == _focusedIndex;
+            var isFocused = i == _focus.FocusedIndex;
             var isSelected = tile.Tag is IconPickerEntry entry && Equals(selected, entry);
 
             tile.BorderThickness = new Thickness(isFocused ? Surface.TileBorderThickness + 1 : Surface.TileBorderThickness);

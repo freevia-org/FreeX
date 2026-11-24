@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeP.Core.Model;
 
@@ -2757,19 +2758,18 @@ internal static class PptxChartWriter
     // c:tx — and that is what the writer falls back to instead of emitting a c:f-less ref.
 
     /// <summary>Builds the numeric points shared by c:numCache and c:numLit (both CT_NumData).</summary>
-    private static IEnumerable<object> BuildNumericDataChildren(IReadOnlyList<double?> values) =>
-        new object[]
-        {
-            new XElement(C + "formatCode", "General"),
-            new XElement(C + "ptCount", new XAttribute("val", values.Count)),
-        }.Concat(values
-            .Select((v, vi) => v.HasValue
-                ? new XElement(C + "pt",
-                    new XAttribute("idx", vi),
-                    new XElement(C + "v", v.Value.ToString("G", CultureInfo.InvariantCulture)))
-                : null)
-            .Where(e => e is not null)
-            .Cast<object>());
+    private static XElement BuildNumericData(string elementName, IReadOnlyList<double?> values) =>
+        DrawingMlChartCache.CreateNumericData(
+            C,
+            elementName,
+            "General",
+            values.Count,
+            values
+                .Select((v, vi) => (Value: v, Index: vi))
+                .Where(entry => entry.Value.HasValue)
+                .Select(entry => new KeyValuePair<int, string>(
+                    entry.Index,
+                    DrawingMlChartCache.FormatNumber(entry.Value!.Value))));
 
     /// <summary>
     /// Builds a c:val/c:xVal/c:yVal/c:bubbleSize wrapper: c:numRef when a formula is available,
@@ -2781,18 +2781,19 @@ internal static class PptxChartWriter
         var formulaEl = BuildFormulaEl(formula);
         return new XElement(C + wrapperName,
             formulaEl is null
-                ? new XElement(C + "numLit", BuildNumericDataChildren(values))
+                ? BuildNumericData("numLit", values)
                 : new XElement(C + "numRef",
                     formulaEl,
-                    new XElement(C + "numCache", BuildNumericDataChildren(values))));
+                    BuildNumericData("numCache", values)));
     }
 
     /// <summary>Builds the string points shared by c:strCache and c:strLit (both CT_StrData).</summary>
-    private static IEnumerable<object> BuildStringDataChildren(IReadOnlyList<string> values) =>
-        new object[] { new XElement(C + "ptCount", new XAttribute("val", values.Count)) }
-            .Concat(values.Select((value, vi) => new XElement(C + "pt",
-                new XAttribute("idx", vi),
-                new XElement(C + "v", value))));
+    private static XElement BuildStringData(string elementName, IReadOnlyList<string> values) =>
+        DrawingMlChartCache.CreateStringData(
+            C,
+            elementName,
+            values.Count,
+            values.Select((value, vi) => new KeyValuePair<int, string>(vi, value)));
 
     /// <summary>Builds a c:cat wrapper: c:strRef when a formula is available, c:strLit otherwise.</summary>
     private static XElement BuildCategoryDataSourceEl(string? formula, IReadOnlyList<string> categories)
@@ -2800,10 +2801,10 @@ internal static class PptxChartWriter
         var formulaEl = BuildFormulaEl(formula);
         return new XElement(C + "cat",
             formulaEl is null
-                ? new XElement(C + "strLit", BuildStringDataChildren(categories))
+                ? BuildStringData("strLit", categories)
                 : new XElement(C + "strRef",
                     formulaEl,
-                    new XElement(C + "strCache", BuildStringDataChildren(categories))));
+                    BuildStringData("strCache", categories)));
     }
 
     /// <summary>
@@ -2818,7 +2819,7 @@ internal static class PptxChartWriter
                 ? new XElement(C + "v", name)
                 : new XElement(C + "strRef",
                     formulaEl,
-                    new XElement(C + "strCache", BuildStringDataChildren(new[] { name }))));
+                    BuildStringData("strCache", new[] { name })));
     }
 
     /// <summary>Builds a column c:f range from row 2 through <paramref name="lastRow"/>, e.g. "ChartData!$B$2:$B$4".</summary>
@@ -3127,18 +3128,14 @@ internal static class PptxChartWriter
         ChartShape chart,
         string workbookPath)
     {
-        using var workbookStream = new MemoryStream();
-        using (var workbookArchive = new ZipArchive(workbookStream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WriteEntry(workbookArchive, "[Content_Types].xml", BuildWorkbookContentTypes());
-            WriteEntry(workbookArchive, "_rels/.rels", BuildWorkbookRootRels());
-            WriteEntry(workbookArchive, "xl/workbook.xml", BuildWorkbookXml());
-            WriteEntry(workbookArchive, "xl/_rels/workbook.xml.rels", BuildWorkbookRels());
-            WriteEntry(workbookArchive, "xl/styles.xml", BuildWorkbookStylesXml());
-            WriteEntry(workbookArchive, "xl/worksheets/sheet1.xml", BuildWorksheetXml(chart));
-        }
-
-        WriteBytes(archive, workbookPath, workbookStream.ToArray());
+        // The package scaffolding is the shared EmbeddedChartWorkbookPackage (FreeP's workbook carries a
+        // minimal styles part); WriteEntry keeps this writer's XML-illegal-character sanitizing.
+        WriteBytes(archive, workbookPath, EmbeddedChartWorkbookPackage.Build(
+            BuildWorksheetXml(chart),
+            RegeneratedSheetName,
+            includeStyles: true,
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            WriteEntry));
     }
 
     private static void WriteRegeneratedWorkbookRelationship(
@@ -3160,108 +3157,10 @@ internal static class PptxChartWriter
             OpcRelationships.CreateDocument(new[] { relationship }));
     }
 
-    private static XDocument BuildWorkbookContentTypes()
-    {
-        var ct = OpcMediaTypes.ContentTypesNamespace;
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(ct + "Types",
-                new XElement(ct + "Default",
-                    new XAttribute("Extension", "rels"),
-                    new XAttribute("ContentType", OpcMediaTypes.RelationshipsContentType)),
-                new XElement(ct + "Default",
-                    new XAttribute("Extension", "xml"),
-                    new XAttribute("ContentType", "application/xml")),
-                new XElement(ct + "Override",
-                    new XAttribute("PartName", "/xl/workbook.xml"),
-                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml")),
-                new XElement(ct + "Override",
-                    new XAttribute("PartName", "/xl/worksheets/sheet1.xml"),
-                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml")),
-                new XElement(ct + "Override",
-                    new XAttribute("PartName", "/xl/styles.xml"),
-                    new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"))));
-    }
-
-    private static XDocument BuildWorkbookRootRels()
-    {
-        XNamespace rels = "http://schemas.openxmlformats.org/package/2006/relationships";
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(rels + "Relationships",
-                new XElement(rels + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"),
-                    new XAttribute("Target", "xl/workbook.xml"))));
-    }
-
-    private static XDocument BuildWorkbookXml()
-    {
-        XNamespace ss = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(ss + "workbook",
-                new XAttribute(XNamespace.Xmlns + "r", rel.NamespaceName),
-                new XElement(ss + "sheets",
-                    new XElement(ss + "sheet",
-                        new XAttribute("name", RegeneratedSheetName),
-                        new XAttribute("sheetId", "1"),
-                        new XAttribute(rel + "id", "rId1")))));
-    }
-
-    private static XDocument BuildWorkbookRels()
-    {
-        XNamespace rels = "http://schemas.openxmlformats.org/package/2006/relationships";
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(rels + "Relationships",
-                new XElement(rels + "Relationship",
-                    new XAttribute("Id", "rId1"),
-                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"),
-                    new XAttribute("Target", "worksheets/sheet1.xml")),
-                new XElement(rels + "Relationship",
-                    new XAttribute("Id", "rId2"),
-                    new XAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"),
-                    new XAttribute("Target", "styles.xml"))));
-    }
-
-    private static XDocument BuildWorkbookStylesXml()
-    {
-        XNamespace ss = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        return new XDocument(
-            new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(ss + "styleSheet",
-                new XElement(ss + "fonts",
-                    new XAttribute("count", "1"),
-                    new XElement(ss + "font")),
-                new XElement(ss + "fills",
-                    new XAttribute("count", "1"),
-                    new XElement(ss + "fill")),
-                new XElement(ss + "borders",
-                    new XAttribute("count", "1"),
-                    new XElement(ss + "border")),
-                new XElement(ss + "cellStyleXfs",
-                    new XAttribute("count", "1"),
-                    new XElement(ss + "xf",
-                        new XAttribute("numFmtId", "0"),
-                        new XAttribute("fontId", "0"),
-                        new XAttribute("fillId", "0"),
-                        new XAttribute("borderId", "0"))),
-                new XElement(ss + "cellXfs",
-                    new XAttribute("count", "1"),
-                    new XElement(ss + "xf",
-                        new XAttribute("numFmtId", "0"),
-                        new XAttribute("fontId", "0"),
-                        new XAttribute("fillId", "0"),
-                        new XAttribute("borderId", "0"),
-                        new XAttribute("xfId", "0")))));
-    }
-
     /// <summary>
     /// Regenerated-workbook sheet name. Must match the c:f ranges emitted by
     /// <see cref="BuildSeriesEl"/>/<see cref="BuildScatterSeriesEl"/> (ID2) and the
-    /// sheet name registered in <see cref="BuildWorkbookXml"/>.
+    /// sheet name registered in the shared <see cref="EmbeddedChartWorkbookPackage.WorkbookXml"/>.
     /// </summary>
     private const string RegeneratedSheetName = "ChartData";
 
@@ -3401,11 +3300,7 @@ internal static class PptxChartWriter
     }
 
     private static XElement InlineStringCell(XNamespace ss, int column, int row, string value) =>
-        new XElement(ss + "c",
-            new XAttribute("r", CellReference(column, row)),
-            new XAttribute("t", "inlineStr"),
-            new XElement(ss + "is",
-                new XElement(ss + "t", value)));
+        EmbeddedChartWorkbookPackage.InlineStringCell(CellReference(column, row), value);
 
     private static XElement NumberCell(XNamespace ss, int column, int row, double value) =>
         new XElement(ss + "c",
@@ -3417,19 +3312,8 @@ internal static class PptxChartWriter
 
     private static string BoolValue(bool value) => value ? "1" : "0";
 
-    private static string ColumnName(int oneBasedColumn)
-    {
-        var column = oneBasedColumn;
-        var name = string.Empty;
-        while (column > 0)
-        {
-            column--;
-            name = (char)('A' + column % 26) + name;
-            column /= 26;
-        }
-
-        return name;
-    }
+    private static string ColumnName(int oneBasedColumn) =>
+        EmbeddedChartWorkbookPackage.ColumnName(oneBasedColumn);
 
     private static void MergePreservedExternalData(
         XDocument chartDoc,

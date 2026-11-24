@@ -48,7 +48,7 @@ public sealed class R119_FileOperationCancelTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R119TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R119-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
             var format = new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true);
@@ -112,7 +112,7 @@ public sealed class R119_FileOperationCancelTests
     {
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R119TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R119-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
             var format = new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true);
@@ -162,7 +162,7 @@ public sealed class R119_FileOperationCancelTests
         // as before this fix, and the new Cancel affordance must not leak into the idle state.
         await Session.Dispatch(async () =>
         {
-            using var tempDir = new R119TempDirectory();
+            using var tempDir = new TestTemporaryDirectory("R119-");
             var path = Path.Combine(tempDir.Path, "Book1.xlsx");
             var adapter = new XlsxFileAdapter();
             var format = new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true);
@@ -209,38 +209,9 @@ public sealed class R119_FileOperationCancelTests
         adapter.Save(workbook, stream);
     }
 
-    private sealed class R119TempDirectory : IDisposable
-    {
-        public string Path { get; } =
-            System.IO.Path.Combine(System.IO.Path.GetTempPath(), "R119-" + Guid.NewGuid().ToString("N"));
-
-        public R119TempDirectory() => Directory.CreateDirectory(Path);
-
-        public void Dispose()
-        {
-            if (!Directory.Exists(Path))
-                return;
-
-            // R119-appservices-open-cancel-eager (WorkbookOpenService.LoadAsync) deliberately
-            // abandons -- rather than waits for -- its Inspecting/Parsing stage's background
-            // thread-pool work once cancellation is observed, so the file this directory holds can
-            // still be briefly open on another thread for a few milliseconds after
-            // OpenWorkbookFromTargetAsync's own await has already returned canceled. That is by
-            // design (an unresponsive/disconnected network path must not block Cancel from ever
-            // taking effect) and is not a defect in this fix -- retry the cleanup rather than
-            // asserting on it.
-            for (var attempt = 0; ; attempt++)
-            {
-                try
-                {
-                    Directory.Delete(Path, recursive: true);
-                    return;
-                }
-                catch (IOException) when (attempt < 20)
-                {
-                    Thread.Sleep(25);
-                }
-            }
-        }
-    }
+    // The temporary directories above use TestTemporaryDirectory, whose retrying cleanup matters here:
+    // R119-appservices-open-cancel-eager (WorkbookOpenService.LoadAsync) deliberately abandons -- rather
+    // than waits for -- its Inspecting/Parsing stage's background work once cancellation is observed, so
+    // the file a directory holds can still be briefly open on another thread after
+    // OpenWorkbookFromTargetAsync has already returned canceled.
 }

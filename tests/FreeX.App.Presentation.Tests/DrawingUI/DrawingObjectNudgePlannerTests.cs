@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
@@ -20,7 +21,7 @@ public sealed class DrawingObjectNudgePlannerTests
     {
         DrawingObjectNudgePlanner.TryPlan(
                 direction,
-                DrawingObjectNudgeModifiers.None,
+                FreeKeyModifiers.None,
                 SelectionPaneObjectKind.Shape,
                 ObjectId,
                 out var plan)
@@ -38,7 +39,7 @@ public sealed class DrawingObjectNudgePlannerTests
     {
         DrawingObjectNudgePlanner.TryPlan(
                 DrawingObjectNudgeDirection.Right,
-                DrawingObjectNudgeModifiers.Control,
+                FreeKeyModifiers.Control,
                 SelectionPaneObjectKind.Chart,
                 ObjectId,
                 out var plan)
@@ -49,12 +50,12 @@ public sealed class DrawingObjectNudgePlannerTests
     }
 
     [Theory]
-    [InlineData(DrawingObjectNudgeModifiers.Shift)]
-    [InlineData(DrawingObjectNudgeModifiers.Alt)]
-    [InlineData(DrawingObjectNudgeModifiers.Meta)]
-    [InlineData(DrawingObjectNudgeModifiers.Control | DrawingObjectNudgeModifiers.Shift)]
+    [InlineData(FreeKeyModifiers.Shift)]
+    [InlineData(FreeKeyModifiers.Alt)]
+    [InlineData(FreeKeyModifiers.Meta)]
+    [InlineData(FreeKeyModifiers.Control | FreeKeyModifiers.Shift)]
     public void TryPlan_RejectsModifierCombinationsOwnedByOtherInteractions(
-        DrawingObjectNudgeModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         DrawingObjectNudgePlanner.TryPlan(
                 DrawingObjectNudgeDirection.Left,
                 modifiers,
@@ -73,7 +74,7 @@ public sealed class DrawingObjectNudgePlannerTests
         string objectId) =>
         DrawingObjectNudgePlanner.TryPlan(
                 direction,
-                DrawingObjectNudgeModifiers.None,
+                FreeKeyModifiers.None,
                 kind,
                 Guid.Parse(objectId),
                 out _)

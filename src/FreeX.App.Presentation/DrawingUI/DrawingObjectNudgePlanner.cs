@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.DrawingUI;
@@ -8,16 +9,6 @@ public enum DrawingObjectNudgeDirection
     Down,
     Left,
     Right
-}
-
-[Flags]
-public enum DrawingObjectNudgeModifiers
-{
-    None = 0,
-    Control = 1,
-    Shift = 2,
-    Alt = 4,
-    Meta = 8
 }
 
 public readonly record struct DrawingObjectNudgePlan(
@@ -37,14 +28,14 @@ public static class DrawingObjectNudgePlanner
 
     public static bool TryPlan(
         DrawingObjectNudgeDirection? direction,
-        DrawingObjectNudgeModifiers modifiers,
+        FreeKeyModifiers modifiers,
         SelectionPaneObjectKind? selectedKind,
         Guid? selectedObjectId,
         out DrawingObjectNudgePlan plan)
     {
         plan = default;
         if (direction is null ||
-            modifiers is not (DrawingObjectNudgeModifiers.None or DrawingObjectNudgeModifiers.Control) ||
+            modifiers is not (FreeKeyModifiers.None or FreeKeyModifiers.Control) ||
             selectedKind is not (SelectionPaneObjectKind.Picture or
                 SelectionPaneObjectKind.Shape or
                 SelectionPaneObjectKind.TextBox or
@@ -55,7 +46,7 @@ public static class DrawingObjectNudgePlanner
             return false;
         }
 
-        var step = modifiers == DrawingObjectNudgeModifiers.Control ? FineStep : StandardStep;
+        var step = modifiers == FreeKeyModifiers.Control ? FineStep : StandardStep;
         var (deltaX, deltaY) = direction.Value switch
         {
             DrawingObjectNudgeDirection.Up => (0.0, -step),

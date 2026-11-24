@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.Core.Model;
@@ -7,11 +8,11 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ExcelEditKeyPlannerTests
 {
     [Theory]
-    [InlineData(FormulaEditorKey.Enter, FormulaEditorModifiers.None, 11, 5)]
-    [InlineData(FormulaEditorKey.Enter, FormulaEditorModifiers.Shift, 9, 5)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.None, 10, 6)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.Shift, 10, 4)]
-    public void GetIntent_CommitsEntryAndMovesLikeExcel(FormulaEditorKey key, FormulaEditorModifiers modifiers, uint expectedRow, uint expectedCol)
+    [InlineData(FormulaEditorKey.Enter, FreeKeyModifiers.None, 11, 5)]
+    [InlineData(FormulaEditorKey.Enter, FreeKeyModifiers.Shift, 9, 5)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.None, 10, 6)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.Shift, 10, 4)]
+    public void GetIntent_CommitsEntryAndMovesLikeExcel(FormulaEditorKey key, FreeKeyModifiers modifiers, uint expectedRow, uint expectedCol)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(key, modifiers, Current, pageSize: 20, allowFormulaBarNavigationKeys: false);
 
@@ -20,13 +21,13 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorEnterDirection.Right, FormulaEditorModifiers.None, 10, 6)]
-    [InlineData(FormulaEditorEnterDirection.Right, FormulaEditorModifiers.Shift, 10, 4)]
-    [InlineData(FormulaEditorEnterDirection.Up, FormulaEditorModifiers.None, 9, 5)]
-    [InlineData(FormulaEditorEnterDirection.Left, FormulaEditorModifiers.None, 10, 4)]
+    [InlineData(FormulaEditorEnterDirection.Right, FreeKeyModifiers.None, 10, 6)]
+    [InlineData(FormulaEditorEnterDirection.Right, FreeKeyModifiers.Shift, 10, 4)]
+    [InlineData(FormulaEditorEnterDirection.Up, FreeKeyModifiers.None, 9, 5)]
+    [InlineData(FormulaEditorEnterDirection.Left, FreeKeyModifiers.None, 10, 4)]
     public void GetIntent_UsesConfiguredEnterDirection(
         FormulaEditorEnterDirection direction,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         uint expectedRow,
         uint expectedCol)
     {
@@ -47,7 +48,7 @@ public sealed partial class ExcelEditKeyPlannerTests
     {
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaEditorKey.Enter,
-            FormulaEditorModifiers.None,
+            FreeKeyModifiers.None,
             Current,
             pageSize: 20,
             allowFormulaBarNavigationKeys: false,
@@ -58,13 +59,13 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorKey.Enter, FormulaEditorModifiers.Shift, 1, 1)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.Shift, 1, 1)]
-    [InlineData(FormulaEditorKey.Enter, FormulaEditorModifiers.None, CellAddress.MaxRow, CellAddress.MaxCol)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.None, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(FormulaEditorKey.Enter, FreeKeyModifiers.Shift, 1, 1)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.Shift, 1, 1)]
+    [InlineData(FormulaEditorKey.Enter, FreeKeyModifiers.None, CellAddress.MaxRow, CellAddress.MaxCol)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.None, CellAddress.MaxRow, CellAddress.MaxCol)]
     public void GetIntent_CommitMovementClampsAtWorksheetEdges(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         uint currentRow,
         uint currentCol)
     {
@@ -77,14 +78,14 @@ public sealed partial class ExcelEditKeyPlannerTests
     }
 
     [Theory]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.Control, FormulaEditorKey.None)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.Alt, FormulaEditorKey.None)]
-    [InlineData(FormulaEditorKey.System, FormulaEditorModifiers.Alt, FormulaEditorKey.Tab)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.Control | FormulaEditorModifiers.Shift, FormulaEditorKey.None)]
-    [InlineData(FormulaEditorKey.Tab, FormulaEditorModifiers.Alt | FormulaEditorModifiers.Shift, FormulaEditorKey.None)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.Control, FormulaEditorKey.None)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.Alt, FormulaEditorKey.None)]
+    [InlineData(FormulaEditorKey.System, FreeKeyModifiers.Alt, FormulaEditorKey.Tab)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.Control | FreeKeyModifiers.Shift, FormulaEditorKey.None)]
+    [InlineData(FormulaEditorKey.Tab, FreeKeyModifiers.Alt | FreeKeyModifiers.Shift, FormulaEditorKey.None)]
     public void GetIntent_DoesNotTreatExtraModifiedTabAsCommitAndMove(
         FormulaEditorKey key,
-        FormulaEditorModifiers modifiers,
+        FreeKeyModifiers modifiers,
         FormulaEditorKey systemKey)
     {
         var intent = ExcelEditKeyPlanner.GetIntent(

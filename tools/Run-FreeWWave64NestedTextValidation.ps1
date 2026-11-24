@@ -33,7 +33,7 @@ try {
     if ($before['child-text-direction'] -ne 'Horizontal') { throw "Unexpected fixture text direction: '$($before['child-text-direction'])'." }
     if ($before['child-text-alignment'] -ne 'Left') { throw "Unexpected fixture text alignment: '$($before['child-text-alignment'])'." }
 
-    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
+    Start-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
     $sessionDir = [string]$session.sessionDirectory
@@ -54,11 +54,11 @@ try {
     if ($after['outer-transform'] -ne $before['outer-transform'] -or $after['inner-transform'] -ne $before['inner-transform']) { throw "Nested group transforms changed during text editing." }
     if ($after['child-transform'] -ne $before['child-transform']) { throw "Nested leaf transform changed during text alignment." }
 
-    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
+    Stop-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port
     $started = $false
     New-Item -ItemType Directory -Path (Split-Path -Parent $reopenSourcePath) -Force | Out-Null
     Copy-Item -LiteralPath $savedDocumentPath -Destination $reopenSourcePath -Force
-    & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $reopenSourcePath -Replace
+    Start-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $reopenSourcePath
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
     $reopenSessionDir = [string]$session.sessionDirectory
@@ -132,11 +132,6 @@ try {
 finally {
     # A failed container stop must not mask the real validation error in flight.
     if ($started) {
-        try {
-            & $powerShellPath -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Stop -App FreeW -Port $Port
-            if ($LASTEXITCODE -ne 0) { throw "exit code $LASTEXITCODE" }
-        } catch {
-            Write-Warning "Could not stop harness-owned FreeW container on port ${Port}: $($_.Exception.Message)"
-        }
+        Stop-PhysicalValidationHarness -PowerShellPath $powerShellPath -RepoRoot $repoRoot -App FreeW -Port $Port -WarnOnFailure
     }
 }

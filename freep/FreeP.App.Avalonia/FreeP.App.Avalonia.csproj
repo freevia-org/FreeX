@@ -108,6 +108,10 @@
              Link="MainWindow.RibbonActionProfile.cs" />
     <Compile Include="../RendererShared/MainWindow.ChartDialogEndpoints.cs"
              Link="MainWindow.ChartDialogEndpoints.cs" />
+    <Compile Include="../RendererShared/MainWindow.ReviewFacade.cs"
+             Link="MainWindow.ReviewFacade.cs" />
+    <Compile Include="../RendererShared/SlideShowWindow.RendererContracts.cs"
+             Link="SlideShowWindow.RendererContracts.cs" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

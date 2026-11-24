@@ -17,7 +17,12 @@ public sealed class SymbolPickerDialogParityTests
         try
         {
             var panel = (StackPanel)dialog.Content;
-            var grid = (UniformGrid)panel.Children[0];
+            var subsetChoice = (ComboBox)panel.Children[0];
+            subsetChoice.ItemsSource.Cast<string>().Should().Equal(FreeWSymbolPickerDialogPlanner.GetSubsetNames());
+            AutomationProperties.GetAutomationId(subsetChoice).Should().Be(FreeWSymbolPickerDialogPlanner.SubsetAutomationId);
+            var scroller = (ScrollViewer)panel.Children[1];
+            scroller.MaxHeight.Should().Be(FreeWSymbolPickerDialogPlanner.GridMaxHeight);
+            var grid = (UniformGrid)scroller.Content;
             grid.Columns.Should().Be(FreeWSymbolPickerDialogPlanner.Columns);
             grid.Children.OfType<Button>().Select(button => button.Content)
                 .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs);
@@ -32,7 +37,7 @@ public sealed class SymbolPickerDialogParityTests
             grid.Children.OfType<Button>().Select(AutomationProperties.GetName)
                 .Should().Equal(FreeWSymbolPickerDialogPlanner.Glyphs);
 
-            var cancel = (Button)panel.Children[1];
+            var cancel = (Button)panel.Children[2];
             cancel.Content.Should().Be(FreeWSymbolPickerDialogPlanner.CancelText);
             cancel.MinWidth.Should().Be(FreeWSymbolPickerDialogPlanner.FooterButtonMinWidth);
             cancel.HorizontalAlignment.Should().Be(HorizontalAlignment.Right);
@@ -45,12 +50,36 @@ public sealed class SymbolPickerDialogParityTests
         }
     }
 
+    [StaFact]
+    public void Dialog_SubsetSelectionSwapsTheGlyphGridToTheSharedCatalogSubset()
+    {
+        var dialog = new SymbolPickerDialog(null);
+        try
+        {
+            var panel = (StackPanel)dialog.Content;
+            var subsetChoice = (ComboBox)panel.Children[0];
+            var grid = (UniformGrid)((ScrollViewer)panel.Children[1]).Content;
+            subsetChoice.SelectedItem = "Currency Symbols";
+
+            var shown = grid.Children.OfType<Button>().Select(button => (string)button.Content).ToArray();
+            shown.Should().Equal(FreeWSymbolPickerDialogPlanner.GetGlyphs("Currency Symbols"));
+            shown.Should().Contain("€").And.HaveCountGreaterThan(5);
+            grid.Children.OfType<Button>().Select(AutomationProperties.GetAutomationId)
+                .Should().Equal(shown.Select(glyph => FreeWSymbolPickerDialogPlanner.BuildSemantic(glyph).AutomationId));
+        }
+        finally
+        {
+            dialog.Close();
+        }
+    }
+
     [Fact]
     public void Dialog_SourceKeepsExplicitSelectionAndCancelResults()
     {
         var source = File.ReadAllText(RepoFile("freew", "FreeW.App.Host", "SymbolPickerDialog.cs"));
 
-        source.Should().Contain("FreeWSymbolPickerDialogPlanner.Glyphs");
+        source.Should().Contain("FreeWSymbolPickerDialogPlanner.GetGlyphs(");
+        source.Should().Contain("FreeWSymbolPickerDialogPlanner.GetSubsetNames()");
         source.Should().Contain("button.Click += (_, _) => { _result = glyph; DialogResult = true; }");
         source.Should().Contain("IsCancel = true");
         source.Should().Contain("dialog.ShowDialog() == true ? dialog._result : null");

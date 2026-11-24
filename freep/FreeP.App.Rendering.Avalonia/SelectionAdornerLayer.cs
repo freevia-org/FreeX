@@ -40,9 +40,8 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
     private static readonly IPen EditPointBorder;
     private static readonly IPen EditPointPreviewPen;
 
-    /// <summary>The PowerPoint-style selection accent, shared by the pens and the rotate-handle line.</summary>
-    private static readonly ImmutableSolidColorBrush AccentBrush =
-        new(Color.FromRgb(0x21, 0x96, 0xF3));
+    /// <summary>The rotate-handle stem, built once from the shared style table (immutable: no thread affinity).</summary>
+    private static readonly IPen RotateHandleStem = ToPen(SelectionAdornerStyle.RotateHandleStem);
 
     // Every one of these is IMMUTABLE on purpose. Pen, SolidColorBrush and DashStyle are all
     // AvaloniaObjects, so they carry thread affinity to whichever thread first ran this static
@@ -52,32 +51,28 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
     // touched the class first. The Immutable* variants have no affinity.
     static SelectionAdornerLayer()
     {
-        // Copied from Avalonia's own DashStyle.Dash rather than hardcoded, so the marquee keeps its
-        // exact pattern; the copy is what reaches the compositor.
-        var dash = new ImmutableDashStyle(DashStyle.Dash.Dashes, DashStyle.Dash.Offset);
-
-        SelectionPen       = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
-        PreviewPen         = new ImmutablePen(
-                                 new ImmutableSolidColorBrush(Color.FromArgb(0xCC, 0x21, 0x96, 0xF3)),
-                                 1.5,
-                                 new ImmutableDashStyle([4.0, 2.0], 0));
-        HandleFill         = new ImmutableSolidColorBrush(Colors.White);
-        HandleBorder       = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3)), 1.5);
-        RotateHandleFill   = new ImmutableSolidColorBrush(Color.FromRgb(0x21, 0x96, 0xF3));
-        RotateHandleBorder = new ImmutablePen(new ImmutableSolidColorBrush(Colors.White), 1.0);
-        MarqueePen         = new ImmutablePen(
-                                 new ImmutableSolidColorBrush(Color.FromArgb(0xBB, 0x21, 0x96, 0xF3)),
-                                 1.0,
-                                 dash);
-        MarqueeFill        = new ImmutableSolidColorBrush(Color.FromArgb(0x22, 0x21, 0x96, 0xF3));
-        SnapGuidePen       = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(0xCC, 0xE9, 0x1E, 0x63)), 1.0);
-        EditPointFill      = new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0xC1, 0x07));
-        EditPointBorder    = new ImmutablePen(new ImmutableSolidColorBrush(Colors.White), 1.0);
-        EditPointPreviewPen = new ImmutablePen(
-                                 new ImmutableSolidColorBrush(Color.FromRgb(0xFF, 0x98, 0x00)),
-                                 1.5,
-                                 dash);
+        SelectionPen       = ToPen(SelectionAdornerStyle.Selection);
+        PreviewPen         = ToPen(SelectionAdornerStyle.Preview);
+        HandleFill         = ToBrush(SelectionAdornerStyle.HandleFillArgb);
+        HandleBorder       = ToPen(SelectionAdornerStyle.HandleBorder);
+        RotateHandleFill   = ToBrush(SelectionAdornerStyle.RotateHandleFillArgb);
+        RotateHandleBorder = ToPen(SelectionAdornerStyle.RotateHandleBorder);
+        MarqueePen         = ToPen(SelectionAdornerStyle.Marquee);
+        MarqueeFill        = ToBrush(SelectionAdornerStyle.MarqueeFillArgb);
+        SnapGuidePen       = ToPen(SelectionAdornerStyle.SnapGuide);
+        EditPointFill      = ToBrush(SelectionAdornerStyle.EditPointFillArgb);
+        EditPointBorder    = ToPen(SelectionAdornerStyle.EditPointBorder);
+        EditPointPreviewPen = ToPen(SelectionAdornerStyle.EditPointPreview);
     }
+
+    private static ImmutableSolidColorBrush ToBrush(uint argb) =>
+        new(Color.FromUInt32(argb));
+
+    private static ImmutablePen ToPen(SelectionAdornerStroke stroke) =>
+        new(
+            ToBrush(stroke.Argb),
+            stroke.Width,
+            stroke.Dashes is { } dashes ? new ImmutableDashStyle([.. dashes], 0) : null);
 
     // ── State owned / updated by AvaloniaCanvasGestureHandler ──────────────────
 
@@ -104,58 +99,40 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
     {
         base.Render(dc);
 
-        // Snap guide lines (drawn first — behind selection rects).
-        if (State.SnapGuides is { Count: > 0 } snapGuides)
-            DrawSnapGuides(dc, snapGuides, State.SnapTransform);
-
-        // Marquee
-        if (State.MarqueeRect is { } marqueeRect)
-            dc.DrawRectangle(MarqueeFill, MarqueePen, ToAvaloniaRect(marqueeRect));
-
-        // Multi-selection uses one group box for handles; individual boxes remain visible
-        // without handles so the selected members are still discoverable.
-        if (State.Selections.Count == 1)
+        // The draw order (snap guides, marquee, selection boxes, geometry handles, previews) is the
+        // shared SelectionAdornerDrawPlanner's; this layer only maps each step onto Avalonia drawing.
+        foreach (var op in SelectionAdornerDrawPlanner.Plan(State))
         {
-            DrawSelectionRect(
-                dc,
-                ToAvaloniaRect(State.Selections[0].ScreenRect),
-                drawHandles: true);
+            switch (op.Kind)
+            {
+                case SelectionAdornerDrawOpKind.SnapGuides:
+                    DrawSnapGuides(dc, State.SnapGuides!, State.SnapTransform);
+                    break;
+                case SelectionAdornerDrawOpKind.Marquee:
+                    dc.DrawRectangle(MarqueeFill, MarqueePen, ToAvaloniaRect(op.Rect));
+                    break;
+                case SelectionAdornerDrawOpKind.SelectionRect:
+                    DrawSelectionRect(dc, ToAvaloniaRect(op.Rect), op.DrawHandles);
+                    break;
+                case SelectionAdornerDrawOpKind.GeometryHandles:
+                    DrawGeometryHandles(dc);
+                    break;
+                case SelectionAdornerDrawOpKind.PreviewRect:
+                    DrawPreviewRect(dc, ToAvaloniaRect(op.Rect), op.RotationDeg);
+                    break;
+            }
         }
-        else
-        {
-            foreach (var selection in State.Selections)
-                DrawSelectionRect(dc, ToAvaloniaRect(selection.ScreenRect), drawHandles: false);
-
-            if (SelectionBounds is { } groupBounds)
-                DrawSelectionRect(dc, groupBounds, drawHandles: true);
-        }
-
-        DrawGeometryHandles(dc);
-
-        foreach (var preview in State.TransformPreview)
-            DrawPreviewRect(dc, ToAvaloniaRect(preview.ScreenBounds), preview.RotationDeg);
-
-        // Preview
-        if (State.PreviewRect is { } previewRect)
-            DrawPreviewRect(dc, ToAvaloniaRect(previewRect), State.PreviewRotationDeg);
     }
 
-    private static void DrawSnapGuides(DrawingContext dc, IReadOnlyList<SnapGuideLine> guides, SlideTransformCore xf)
+    private void DrawSnapGuides(DrawingContext dc, IReadOnlyList<SnapGuideLine> guides, SlideTransformCore xf)
     {
-        // We don't know the actual bounds here — use very large values to span the screen.
-        const double Span = 5000;
-        foreach (var g in guides)
+        // The planner spans each guide over the layer's own extent, matching the WPF adorner.
+        foreach (var segment in SnapGuideRenderPlanner.Plan(guides, xf, Bounds.Width, Bounds.Height))
         {
-            if (g.IsHorizontal)
-            {
-                double sy = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
-                dc.DrawLine(SnapGuidePen, new Point(-Span, sy), new Point(Span, sy));
-            }
-            else
-            {
-                double sx = SlideCanvasGeometryPlanner.SnapGuideToScreenPosition(g, xf);
-                dc.DrawLine(SnapGuidePen, new Point(sx, -Span), new Point(sx, Span));
-            }
+            dc.DrawLine(
+                SnapGuidePen,
+                new Point(segment.Start.X, segment.Start.Y),
+                new Point(segment.End.X, segment.End.Y));
         }
     }
 
@@ -205,9 +182,7 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
         var rotateCenter = GetRotateHandleCenter(rect);
         double topCenterX = rotateCenter.X;
         double rotY       = rotateCenter.Y;
-        // Built from the shared accent brush rather than casting HandleBorder to the concrete Pen:
-        // the shared pens are ImmutablePens so they can live in static fields without thread affinity.
-        dc.DrawLine(new ImmutablePen(AccentBrush, 1.0),
+        dc.DrawLine(RotateHandleStem,
             new Point(topCenterX, rect.Top),
             new Point(topCenterX, rotY));
         dc.DrawEllipse(RotateHandleFill, RotateHandleBorder,
@@ -216,7 +191,7 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
 
     private void DrawGeometryHandles(DrawingContext dc)
     {
-        const double radius = 5.0;
+        const double radius = SelectionAdornerStyle.EditPointRadius;
         foreach (var handle in State.GeometryHandles)
             dc.DrawEllipse(
                 EditPointFill,
@@ -230,8 +205,8 @@ public sealed partial class SelectionAdornerLayer : Control, ISelectionAdornerSu
                 null,
                 EditPointPreviewPen,
                 ToAvaloniaPoint(preview.ScreenPosition),
-                radius + 2,
-                radius + 2);
+                radius + SelectionAdornerStyle.EditPointPreviewRadiusExtra,
+                radius + SelectionAdornerStyle.EditPointPreviewRadiusExtra);
     }
 
     // ── Geometry helpers ────────────────────────────────────────────────────────

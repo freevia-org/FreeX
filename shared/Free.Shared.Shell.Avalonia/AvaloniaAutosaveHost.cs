@@ -43,6 +43,7 @@ public sealed class AvaloniaAutosaveHost<TDocument> : IDisposable
     private readonly AutosaveApplicationProfile<TDocument> _profile;
     private readonly AvaloniaAutosaveHostCallbacks<TDocument> _callbacks;
     private readonly Func<string, string?>? _getText;
+    private readonly AutosaveRecoveryPromptMode _startupPromptMode;
     private readonly IDisposable _emergencySnapshotRegistration;
     private readonly AutosavePeriodicTaskLoop _periodicLoop;
 
@@ -51,7 +52,8 @@ public sealed class AvaloniaAutosaveHost<TDocument> : IDisposable
         AutosaveDocumentPorts<TDocument> ports,
         AvaloniaAutosaveHostCallbacks<TDocument> callbacks,
         Func<string, string?>? getText = null,
-        Func<AutosaveDocumentPorts<TDocument>, AutosaveApplicationSession<TDocument>>? sessionFactory = null)
+        Func<AutosaveDocumentPorts<TDocument>, AutosaveApplicationSession<TDocument>>? sessionFactory = null,
+        bool quoteStartupDisplayName = true)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(ports);
@@ -62,6 +64,10 @@ public sealed class AvaloniaAutosaveHost<TDocument> : IDisposable
         _profile = profile;
         _callbacks = callbacks;
         _getText = getText;
+        // The startup offer quotes the display name unless the product opts out to match its WPF host.
+        _startupPromptMode = quoteStartupDisplayName
+            ? AutosaveRecoveryPromptMode.StartupQuotedDisplayName
+            : AutosaveRecoveryPromptMode.Startup;
         Session = sessionFactory?.Invoke(ports) ?? new AutosaveApplicationSession<TDocument>(profile, ports);
         _periodicLoop = new AutosavePeriodicTaskLoop(
             profile.Interval,
@@ -126,7 +132,7 @@ public sealed class AvaloniaAutosaveHost<TDocument> : IDisposable
             createOffer: (recovery, remainingCount) => _profile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                AutosaveRecoveryPromptMode.StartupQuotedDisplayName),
+                _startupPromptMode),
             promptAsync: offer => PromptAsync(owner, offer),
             recoverInCurrentWindow: RecoverInCurrentWindow,
             recoverInNewWindowAsync: RecoverInNewWindowAsync,

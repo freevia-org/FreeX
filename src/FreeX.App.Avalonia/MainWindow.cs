@@ -3123,20 +3123,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
         };
 
-    private static KeyModifiers ToAvaloniaKeyModifiers(NativeMenuGestureModifiers modifiers)
-    {
-        var result = KeyModifiers.None;
-        if (modifiers.HasFlag(NativeMenuGestureModifiers.Control))
-            result |= KeyModifiers.Control;
-        if (modifiers.HasFlag(NativeMenuGestureModifiers.Alt))
-            result |= KeyModifiers.Alt;
-        if (modifiers.HasFlag(NativeMenuGestureModifiers.Shift))
-            result |= KeyModifiers.Shift;
-        if (modifiers.HasFlag(NativeMenuGestureModifiers.Meta))
-            result |= KeyModifiers.Meta;
-
-        return result;
-    }
+    private static KeyModifiers ToAvaloniaKeyModifiers(FreeKeyModifiers modifiers) =>
+        Free.Shared.Shell.Avalonia.AvaloniaKeyModifiersMapper.ToAvalonia(modifiers);
 
     private static void AddNativeTopLevelMenus(
         NativeMenu nativeMenu,
@@ -28292,7 +28280,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private static bool TryGetWorkbookShortcutRoute(
         WorkbookShortcutKey key,
-        WorkbookShortcutModifiers modifiers,
+        FreeKeyModifiers modifiers,
         out WorkbookShortcutRoute route) =>
         WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route) ||
         WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route);
@@ -28300,19 +28288,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey) =>
         WorkbookKeyboardShortcutCatalog.TryParseKeyName(key.ToString(), out shortcutKey);
 
-    private static WorkbookShortcutModifiers ToWorkbookShortcutModifiers(KeyModifiers modifiers)
-    {
-        var result = WorkbookShortcutModifiers.None;
-        if (modifiers.HasFlag(KeyModifiers.Control))
-            result |= WorkbookShortcutModifiers.Control;
-        if (modifiers.HasFlag(KeyModifiers.Meta))
-            result |= WorkbookShortcutModifiers.Meta;
-        if (modifiers.HasFlag(KeyModifiers.Alt))
-            result |= WorkbookShortcutModifiers.Alt;
-        if (modifiers.HasFlag(KeyModifiers.Shift))
-            result |= WorkbookShortcutModifiers.Shift;
-        return result;
-    }
+    private static FreeKeyModifiers ToWorkbookShortcutModifiers(KeyModifiers modifiers) =>
+        Free.Shared.Shell.Avalonia.AvaloniaKeyModifiersMapper.FromAvalonia(modifiers);
 
     /// <summary>
     /// The worksheet-cell context-menu shortcut (Menu key / Shift+F10) — the same key combo used for
@@ -29230,7 +29207,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 sheet,
                 navigationTarget,
                 navigationKey,
-                navigationModifiers.HasFlag(ExcelWorksheetNavigationModifiers.Shift));
+                navigationModifiers.HasFlag(FreeKeyModifiers.Shift));
             if (adjustedTarget is null)
             {
                 // No selectable cell exists further in this direction (e.g. every remaining cell
@@ -29267,17 +29244,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _ => ExcelWorksheetNavigationKey.Other
         };
 
-    private static ExcelWorksheetNavigationModifiers ToWorksheetNavigationModifiers(KeyModifiers modifiers)
-    {
-        var result = ExcelWorksheetNavigationModifiers.None;
-        if (modifiers.HasFlag(KeyModifiers.Shift))
-            result |= ExcelWorksheetNavigationModifiers.Shift;
-        if (modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta))
-            result |= ExcelWorksheetNavigationModifiers.Control;
-        if (modifiers.HasFlag(KeyModifiers.Alt))
-            result |= ExcelWorksheetNavigationModifiers.Alt;
-        return result;
-    }
+    private static FreeKeyModifiers ToWorksheetNavigationModifiers(KeyModifiers modifiers) =>
+        Free.Shared.Shell.Avalonia.AvaloniaKeyModifiersMapper.FromAvalonia(modifiers, Free.Shared.Shell.KeyModifierMetaPolicy.AsControl);
 
     /// <summary>
     /// Moves the active cell to <paramref name="target"/> (or extends the current selection to

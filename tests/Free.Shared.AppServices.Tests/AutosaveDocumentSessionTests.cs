@@ -2,11 +2,9 @@ namespace Free.Shared.AppServices.Tests;
 
 public sealed class AutosaveDocumentSessionTests : IDisposable
 {
-    private readonly string _directory = Path.Combine(
-        Path.GetTempPath(),
-        "SharedAutosaveDocumentSessionTests_" + Guid.NewGuid().ToString("N"));
+    private readonly TestTemporaryDirectory _temporaryDirectory = new("SharedAutosaveDocumentSessionTests_");
 
-    public AutosaveDocumentSessionTests() => Directory.CreateDirectory(_directory);
+    private string _directory => _temporaryDirectory.Path;
 
     [Fact]
     public void Snapshot_UsesInjectedDocumentWriterAndSharedGenerationGate()
@@ -122,11 +120,7 @@ public sealed class AutosaveDocumentSessionTests : IDisposable
         File.Exists(store.GetLockPath("clean-exit")).Should().BeFalse();
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_directory))
-            Directory.Delete(_directory, recursive: true);
-    }
+    public void Dispose() => _temporaryDirectory.Dispose();
 
     private static AutosaveDocumentSession<TestDocument> CreateSession(
         AutosaveSnapshotStore store,

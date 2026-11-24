@@ -1,10 +1,9 @@
-namespace FreeW.Core.Model;
+namespace Free.Shared.TextSearch;
 
 /// <summary>
-/// A pure, in-memory store of custom (user-added) spelling words. This is the testable core; the
-/// WPF/IO layer (see FreeW.App.Host's <c>CustomDictionaryStore</c>) wraps it to persist the words as a
-/// UTF-8 word-per-line <c>.lex</c> file under FreeW's data folder and feed that file to WPF's spell
-/// checker via <c>SpellCheck.CustomDictionaries</c>. Words are matched and de-duplicated
+/// A pure, in-memory store of custom (user-added) spelling words shared by FreeW and FreeP. This is the
+/// testable core; <c>Free.Shared.AppServices.CustomDictionaryFileStore</c> wraps it to persist the words
+/// as a UTF-8 word-per-line <c>.lex</c> file under the product's data folder. Words are matched and de-duplicated
 /// case-insensitively (so adding "Foo" then "foo" keeps a single entry), trimmed on add, and surrounding
 /// whitespace/blank entries are ignored. <see cref="Words"/> returns the entries in case-insensitive
 /// alphabetical order so the persisted file and any UI list are stable.

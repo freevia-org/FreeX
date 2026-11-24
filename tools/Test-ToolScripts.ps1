@@ -357,6 +357,69 @@ function Assert-ToolSourceCentralization {
         }
     }
 
+    # The physical-validation container lifecycle (start the harness-owned container, warn-only stop
+    # in the finally block) lives once in PhysicalValidationScriptSupport.ps1.
+    $physicalValidationSupportPath = Join-Path $ToolRoot "PhysicalValidationScriptSupport.ps1"
+    $physicalValidationSupport = Get-Content -LiteralPath $physicalValidationSupportPath -Raw
+    foreach ($requiredHelper in @(
+            "function Invoke-PhysicalValidationFixture",
+            "function Start-PhysicalValidationHarness",
+            "function Stop-PhysicalValidationHarness")) {
+        if (-not $physicalValidationSupport.Contains($requiredHelper)) {
+            throw "PhysicalValidationScriptSupport.ps1 is missing required helper '$requiredHelper'."
+        }
+    }
+    foreach ($runnerName in @(
+            "Run-FreeWWave61GroupedChildValidation.ps1",
+            "Run-FreeWWave62NestedGroupChildValidation.ps1",
+            "Run-FreeWWave63NestedEditPointsValidation.ps1",
+            "Run-FreeWWave64NestedTextValidation.ps1")) {
+        $runner = Get-Content -LiteralPath (Join-Path $ToolRoot $runnerName) -Raw
+        if (-not $runner.Contains("Start-PhysicalValidationHarness") -or
+            -not $runner.Contains("Stop-PhysicalValidationHarness") -or
+            $runner.Contains("-Action Start") -or
+            $runner.Contains("-Action Stop")) {
+            throw "$runnerName must use the shared physical-validation container lifecycle helpers."
+        }
+    }
+
+    . $physicalValidationSupportPath
+    $harnessProbeRoot = New-ToolTemporaryDirectory -Prefix "freex-physical-harness-"
+    try {
+        $harnessProbeTools = Join-Path $harnessProbeRoot "tools"
+        New-Item -ItemType Directory -Path $harnessProbeTools -Force | Out-Null
+        $harnessProbeLog = Join-Path $harnessProbeRoot "calls.txt"
+        $harnessStub = Join-Path $harnessProbeTools "Run-LinuxInteractiveDocker.ps1"
+        Set-Content -LiteralPath $harnessStub -Encoding ascii -Value @(
+            'param([string]$Action, [string]$App, [int]$Port, [string]$OutputDir, [string]$DocumentPath, [switch]$Replace)',
+            'Add-Content -LiteralPath $env:FREEX_PHYSICAL_HARNESS_LOG -Value "$Action|$App|$Port|$([bool]$Replace)"',
+            'if ($env:FREEX_PHYSICAL_HARNESS_FAIL -eq "1") { exit 3 }')
+        $harnessPowerShell = Get-ToolPowerShellPath
+        $env:FREEX_PHYSICAL_HARNESS_LOG = $harnessProbeLog
+        $env:FREEX_PHYSICAL_HARNESS_FAIL = "0"
+        try {
+            Start-PhysicalValidationHarness -PowerShellPath $harnessPowerShell -RepoRoot $harnessProbeRoot -App FreeW -Port 6001 -OutputDir $harnessProbeRoot -DocumentPath $harnessProbeLog | Out-Null
+            Stop-PhysicalValidationHarness -PowerShellPath $harnessPowerShell -RepoRoot $harnessProbeRoot -App FreeW -Port 6001 -WarnOnFailure | Out-Null
+            $harnessCalls = @(Get-Content -LiteralPath $harnessProbeLog)
+            if ($harnessCalls.Count -ne 2 -or $harnessCalls[0] -ne "Start|FreeW|6001|True" -or $harnessCalls[1] -ne "Stop|FreeW|6001|False") {
+                throw "Physical-validation harness helpers must start with -Replace and stop the same app/port; received '$($harnessCalls -join ';')'."
+            }
+
+            $env:FREEX_PHYSICAL_HARNESS_FAIL = "1"
+            $harnessWarnings = @()
+            Stop-PhysicalValidationHarness -PowerShellPath $harnessPowerShell -RepoRoot $harnessProbeRoot -App FreeW -Port 6001 -WarnOnFailure -WarningVariable harnessWarnings -WarningAction SilentlyContinue | Out-Null
+            if ($harnessWarnings.Count -ne 1 -or -not "$($harnessWarnings[0])".Contains("Could not stop harness-owned FreeW container on port 6001")) {
+                throw "Stop-PhysicalValidationHarness -WarnOnFailure must report a failed stop as one warning instead of throwing."
+            }
+        }
+        finally {
+            Remove-Item Env:\FREEX_PHYSICAL_HARNESS_LOG, Env:\FREEX_PHYSICAL_HARNESS_FAIL -ErrorAction SilentlyContinue
+        }
+    }
+    finally {
+        Remove-ToolTemporaryDirectory -Path $harnessProbeRoot
+    }
+
     foreach ($runnerName in @(
             "Run-FreePClipboardShortcutValidation.ps1",
             "Run-FreePFileSlideshowShortcutValidation.ps1",

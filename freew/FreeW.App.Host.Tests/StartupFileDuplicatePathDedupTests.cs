@@ -20,9 +20,8 @@ namespace FreeW.App.Host.Tests;
 /// warning at open time. FreeX (<c>App.xaml.cs</c>) and FreeP (<c>PresentationStartupOpenSession</c>)
 /// avoid this entirely by routing every startup argument through the shared
 /// <see cref="Free.Shared.AppServices.StartupFileOpenPlanner"/>, whose <c>seenPaths</c> guard
-/// collapses a duplicated path to one window. FreeW does not call that planner, so the fix instead
-/// deduplicates <c>startupFilePaths</c> in the constructor itself (<c>DeduplicateStartupFilePaths</c>)
-/// using the same <see cref="PlatformPathIdentityComparer"/> building block the planner uses.
+/// collapses a duplicated path to one window. FreeW's WPF host now plans <c>startupFilePaths</c>
+/// through that same planner (via <c>FileCommands.PlanStartupDocuments</c>).
 ///
 /// <para>
 /// These construct the real production <see cref="MainWindow"/> (exactly as <c>Program.cs</c>'s
@@ -44,31 +43,22 @@ public sealed class StartupFileDuplicatePathDedupTests : IDisposable
 
     public void Dispose() => _temporaryDirectory.Dispose();
 
-    // Direct coverage of the fix itself: DeduplicateStartupFilePaths must collapse a path repeated in
-    // argv to its first occurrence, using the same PlatformPathIdentityComparer the shared
-    // StartupFileOpenPlanner uses for its own seenPaths guard (and case-insensitively/slash-normalized
-    // on Windows, matching that comparer, not raw ordinal equality).
-    [Fact]
-    public void DeduplicateStartupFilePaths_CollapsesARepeatedPathToItsFirstOccurrence()
+    // The WPF host routes startup arguments through the shared planner like the Avalonia host does, so a
+    // missing first argument is ignored and the first openable file becomes the primary document.
+    [StaFact]
+    public void MainWindow_WithMissingThenValidStartupPaths_OpensTheValidFileInThePrimaryWindow()
     {
-        var path = @"C:\work\Report.docx";
+        var missingPath = Path.Combine(_tempDir, "does-not-exist.docx");
+        var docPath = WriteDocx("Valid.docx", "Valid document");
+        var messages = new RecordingUserMessageService();
 
-        var result = MainWindow.DeduplicateStartupFilePaths([path, path]);
+        var window = new MainWindow(
+            new FreeWOptions(),
+            messageService: messages,
+            startupFilePaths: [missingPath, docPath]);
 
-        Assert.Equal([path], result);
-    }
-
-    // Sibling no-regression: two distinct paths must both survive, in order -- the fix must not
-    // collapse anything other than a true duplicate.
-    [Fact]
-    public void DeduplicateStartupFilePaths_KeepsTwoDistinctPathsInOrder()
-    {
-        var first = @"C:\work\First.docx";
-        var second = @"C:\work\Second.docx";
-
-        var result = MainWindow.DeduplicateStartupFilePaths([first, second]);
-
-        Assert.Equal([first, second], result);
+        Assert.Equal(docPath, GetFileCommands(window).CurrentPath);
+        Assert.Empty(messages.Messages);
     }
 
     // The exact user gesture from the finding, driven through the real MainWindow constructor: the

@@ -307,8 +307,9 @@ public sealed class PresentationReviewWorkflowSessionTests
     public void MainWindowSourceGuards_KeepReviewInputAndPaneOrchestrationInSession()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
-        var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var facade = File.ReadAllText(Path.Combine(root, "freep", "RendererShared", "MainWindow.ReviewFacade.cs"));
+        var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs")) + facade;
+        var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs")) + facade;
 
         foreach (var source in new[] { wpf, avalonia })
         {
