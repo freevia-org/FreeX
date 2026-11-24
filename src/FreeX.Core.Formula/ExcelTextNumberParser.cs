@@ -147,6 +147,13 @@ internal static class ExcelTextNumberParser
         if (pctCount > 0 &&
             TryParseNumericStrict(trimmed, culture, out var pct, out _))
         {
+            // Double.TryParse also succeeds for overflow, NaN, and infinity. Reject these before
+            // percent scaling, matching the finite-value contract of the US grammar branch.
+            if (!double.IsFinite(pct))
+            {
+                number = 0;
+                return false;
+            }
             for (int i = 0; i < pctCount; i++)
                 pct /= 100.0;
 
@@ -155,7 +162,11 @@ internal static class ExcelTextNumberParser
         }
 
         if (TryParseNumericStrict(trimmed, culture, out number, out bool rejectedNumericComma))
-            return true;
+        {
+            if (double.IsFinite(number)) return true;
+            number = 0;
+            return false;
+        }
 
         // If TryParseNumericStrict identified the input as a malformed numeric (contains commas
         // but grouping is invalid), do not fall through to DateTime — "1,2" should not become
