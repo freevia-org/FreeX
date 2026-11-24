@@ -18,6 +18,7 @@ public sealed class R111_YearlessMonthDayDateCoercionTests
     [Fact]
     public void Load_CoercesYearlessSlashMonthDayToCurrentYearDate()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var adapter = new DelimitedTextFileAdapter(".csv", "Comma-separated values", ',');
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("3/4\r\n"));
 
@@ -32,6 +33,7 @@ public sealed class R111_YearlessMonthDayDateCoercionTests
     [Fact]
     public void Load_CoercesYearlessHyphenMonthDayToCurrentYearDate()
     {
+        using var culture = TestCultureScope.CurrentCulture("en-US");
         var adapter = new DelimitedTextFileAdapter(".csv", "Comma-separated values", ',');
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("1-2\r\n"));
 
@@ -41,6 +43,25 @@ public sealed class R111_YearlessMonthDayDateCoercionTests
         var expected = new DateTime(DateTime.Now.Year, 1, 2);
         sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
             .Should().Be(DateTimeValue.FromDateTime(expected));
+    }
+
+    [Theory]
+    [InlineData("bg-BG", "3/4", 4, 3)]
+    [InlineData("bg-BG", "1-2", 2, 1)]
+    [InlineData("de-DE", "3/4", 4, 3)]
+    [InlineData("de-DE", "1-2", 2, 1)]
+    public void Load_DayFirstCulture_InterpretsYearlessDateUsingLocalDateOrder(
+        string cultureName, string text, int month, int day)
+    {
+        using var culture = TestCultureScope.CurrentCulture(cultureName);
+        var adapter = new DelimitedTextFileAdapter(".csv", "Comma-separated values", ',');
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(text + "\r\n"));
+
+        var workbook = adapter.Load(stream);
+        var sheet = workbook.Sheets.Single();
+
+        sheet.GetValue(new CellAddress(sheet.Id, 1, 1))
+            .Should().Be(DateTimeValue.FromDateTime(new DateTime(DateTime.Now.Year, month, day)));
     }
 
     // Sibling/no-regression coverage: a plain two-digit-group decimal number sharing the "."

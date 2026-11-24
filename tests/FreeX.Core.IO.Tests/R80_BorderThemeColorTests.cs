@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using FluentAssertions;
@@ -99,9 +100,13 @@ public sealed class R80_border_theme_color_Tests
 
     // ---- Native raw-XML border reader (XlsxCellBorderStyleReader): theme attr must populate ThemeColor ----
 
-    [Fact]
-    public void CellBorderStyleReader_ThemeColorAttribute_PopulatesBorderThemeColor()
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void CellBorderStyleReader_ThemeColorAttribute_PopulatesBorderThemeColor(string cultureName)
     {
+        using var culture = TestCultureScope.CurrentCulture(cultureName);
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var stylesXml = new XDocument(
             new XElement(ns + "styleSheet",
@@ -115,12 +120,14 @@ public sealed class R80_border_theme_color_Tests
                         new XElement(ns + "left"),
                         new XElement(ns + "right"),
                         new XElement(ns + "top", new XAttribute("style", "medium"),
-                            new XElement(ns + "color", new XAttribute("theme", "4"), new XAttribute("tint", Tint.ToString("R")))),
+                            new XElement(ns + "color", new XAttribute("theme", "4"), new XAttribute("tint", Tint.ToString("R", CultureInfo.InvariantCulture)))),
                         new XElement(ns + "bottom"))),
                 new XElement(ns + "cellXfs",
                     new XElement(ns + "xf", new XAttribute("borderId", "0")),
                     new XElement(ns + "xf", new XAttribute("borderId", "1")))));
 
+        stylesXml.Descendants(ns + "color").Single().Attribute("tint")!.Value.Should().Be("0.4",
+            "OOXML numeric attributes use a decimal point regardless of the fixture host's culture");
         var table = XlsxCellBorderStyleReader.Read(stylesXml, WorkbookTheme.Office, new WorkbookIndexedColorPalette());
 
         table.TryGetVisibleBorders(1, out var borders).Should().BeTrue();

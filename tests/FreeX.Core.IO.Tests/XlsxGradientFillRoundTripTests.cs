@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FluentAssertions;
@@ -115,22 +116,22 @@ public sealed class XlsxGradientFillRoundTripTests
 
         if (string.Equals(type, "linear", StringComparison.OrdinalIgnoreCase))
         {
-            gradEl.SetAttributeValue("degree", degree.ToString("G"));
+            gradEl.SetAttributeValue("degree", degree.ToString("G", CultureInfo.InvariantCulture));
         }
         else
         {
             // path — only emit inset attrs when non-zero
-            if (left   != 0) gradEl.SetAttributeValue("left",   left.ToString("G"));
-            if (right  != 0) gradEl.SetAttributeValue("right",  right.ToString("G"));
-            if (top    != 0) gradEl.SetAttributeValue("top",    top.ToString("G"));
-            if (bottom != 0) gradEl.SetAttributeValue("bottom", bottom.ToString("G"));
+            if (left   != 0) gradEl.SetAttributeValue("left",   left.ToString("G", CultureInfo.InvariantCulture));
+            if (right  != 0) gradEl.SetAttributeValue("right",  right.ToString("G", CultureInfo.InvariantCulture));
+            if (top    != 0) gradEl.SetAttributeValue("top",    top.ToString("G", CultureInfo.InvariantCulture));
+            if (bottom != 0) gradEl.SetAttributeValue("bottom", bottom.ToString("G", CultureInfo.InvariantCulture));
         }
 
         foreach (var (pos, rgb) in stops)
         {
             gradEl.Add(new XElement(
                 MainNs + "stop",
-                new XAttribute("position", pos.ToString("G")),
+                new XAttribute("position", pos.ToString("G", CultureInfo.InvariantCulture)),
                 new XElement(MainNs + "color", new XAttribute("rgb", rgb))));
         }
         return gradEl;
@@ -161,12 +162,26 @@ public sealed class XlsxGradientFillRoundTripTests
         gf.Stops[1].Color.Should().Be(CC(0xFF, 0xFF, 0xFF));
     }
 
-    [Fact]
-    public void XlsxAdapter_PathGradientFill_RoundTrips_InsetAndStops()
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("bg-BG")]
+    [InlineData("de-DE")]
+    public void XlsxAdapter_PathGradientFill_RoundTrips_InsetAndStops(string cultureName)
     {
+        using var culture = TestCultureScope.CurrentCulture(cultureName);
         var spec = new GradientSpec("path", 0, 0.3, 0.3, 0.3, 0.3,
             [(0.0, "FFFF0000"), (1.0, "FFFFFFFF")]);
         using var stream = BuildXlsxWithGradients(spec);
+
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var styles = archive.GetEntry("xl/styles.xml")!.Open())
+        {
+            var gradient = XDocument.Load(styles).Descendants(MainNs + "gradientFill").Single();
+            foreach (var inset in new[] { "left", "right", "top", "bottom" })
+                gradient.Attribute(inset)!.Value.Should().Be("0.3",
+                    "OOXML fractional attributes must remain invariant under comma-decimal cultures");
+        }
+        stream.Position = 0;
 
         var wb = new XlsxFileAdapter().Load(stream);
         var style = wb.GetStyle(wb.GetSheetAt(0)!.GetStyleOnly(1u, 1u)!.Value);
