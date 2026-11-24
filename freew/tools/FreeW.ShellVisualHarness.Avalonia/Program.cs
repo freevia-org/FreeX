@@ -20,6 +20,8 @@ using FreeW.Core.Model;
 [assembly: AvaloniaTestApplication(typeof(ShellCaptureApp))]
 
 var output = Required(args, "--output");
+if (args.Contains("--verify-text-spans", StringComparer.OrdinalIgnoreCase))
+    return await BodyTextSpanRegression.RunAsync(output);
 var includeContextual = args.Contains("--include-contextual", StringComparer.OrdinalIgnoreCase);
 var includeSplit = args.Contains("--include-split", StringComparer.OrdinalIgnoreCase);
 var widths = Optional(args, "--widths")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
