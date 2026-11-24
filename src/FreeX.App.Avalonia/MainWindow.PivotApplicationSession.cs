@@ -6,13 +6,18 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private PivotApplicationSession PivotApplication =>
+        CreatePivotApplicationSession();
+
+    private PivotApplicationSession CreatePivotApplicationSession(bool preserveSelection = false) =>
         new(
             _session.Workbook,
             (SheetId _, string referenceText, out GridRange range) =>
                 _session.TryResolveReferenceRange(referenceText, out range),
             (command, _) =>
             {
-                var result = _session.ExecuteReviewCommand(command);
+                var result = preserveSelection
+                    ? _session.ExecuteCommandPreservingSelection(command)
+                    : _session.ExecuteReviewCommand(command);
                 return new PivotCommandExecutionResult(
                     result.Success,
                     result.ErrorMessage,
