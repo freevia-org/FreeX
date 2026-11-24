@@ -15,6 +15,7 @@ public sealed class TestLaneSolutionTests
 
         defaultLaneProjects.Should().BeEquivalentTo(new[]
         {
+            "tests/FreeX.App.Avalonia.NativeBridgeGateway/FreeX.App.Avalonia.NativeBridgeGateway.csproj",
             "tests/FreeX.App.Avalonia.Tests/FreeX.App.Avalonia.Tests.csproj",
             "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.csproj",
             "tests/FreeX.App.Avalonia.CaptureTests/FreeX.App.Avalonia.CaptureTests.Batch2.csproj",
