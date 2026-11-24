@@ -55,11 +55,12 @@ public sealed class R72_ClipboardCsvFormatTests
             using var transfer = new DataTransfer();
             MainWindow.AddClipboardTextAndHtmlForTest(transfer, text, viewport, sheet, range, window.Session.Workbook.Theme);
 
-            var htmlPlatformFormat = DataFormat.CreateStringPlatformFormat("text/html");
+            var htmlPlatformFormat = DataFormat.CreateStringPlatformFormat(
+                OperatingSystem.IsMacOS() ? "public.html" : "text/html");
             var htmlWindowsFormat = DataFormat.CreateStringPlatformFormat("HTML Format");
 
             transfer.Formats.Should().Contain(DataFormat.Text, "plain text must still be on the clipboard, unchanged by adding CSV");
-            transfer.Formats.Should().Contain(htmlPlatformFormat, "the 'text/html' fragment must still be present (R66)");
+            transfer.Formats.Should().Contain(htmlPlatformFormat, "the HTML fragment must still be present under the native platform format (R66)");
             transfer.Formats.Should().Contain(htmlWindowsFormat, "the Windows 'HTML Format' CF_HTML variant must still be present (R66)");
             transfer.Formats.Should().Contain(MainWindow.CsvPlatformFormatForTest);
             transfer.Formats.Should().Contain(MainWindow.CsvWindowsPlatformFormatForTest);

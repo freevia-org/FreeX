@@ -284,7 +284,24 @@ public sealed class AvaloniaPlatformClipboard : IPlatformClipboard
     public static DataFormat<string> CreateStringFormat(PlatformClipboardFormat format) =>
         format.Scope == PlatformClipboardFormatScope.Application
             ? DataFormat.CreateStringApplicationFormat(format.Name)
-            : DataFormat.CreateStringPlatformFormat(format.Name);
+            : DataFormat.CreateStringPlatformFormat(GetPlatformTextFormatName(format.Name));
+
+    private static string GetPlatformTextFormatName(string name)
+    {
+        if (!OperatingSystem.IsMacOS())
+            return name;
+
+        // Avalonia.Native exposes macOS pasteboard UTIs as platform-format names. MIME names
+        // accepted by the write bridge are not mapped back on reads, so use the same native name
+        // in both directions. Keep Windows CF_HTML separate: its header is not an HTML fragment.
+        return name.ToLowerInvariant() switch
+        {
+            "text/html" => "public.html",
+            "text/csv" => "public.comma-separated-values-text",
+            "text/rtf" or "application/rtf" => "public.rtf",
+            _ => name,
+        };
+    }
 
     /// <summary>
     /// App-scoped flavor carrying the exact PNG bytes that were written, so reading an image back

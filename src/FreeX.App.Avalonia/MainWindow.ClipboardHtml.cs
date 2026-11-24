@@ -23,13 +23,14 @@ public sealed partial class MainWindow
     // "text/csv" is the cross-platform (Linux/macOS) MIME name; "Csv" mirrors Windows'
     // System.Windows.DataFormats.CommaSeparatedValue clipboard format name for parity with the WPF host
     // when this shell runs on Windows.
-    private static readonly DataFormat<string> CsvPlatformFormat = DataFormat.CreateStringPlatformFormat("text/csv");
-    private static readonly DataFormat<string> CsvWindowsPlatformFormat = DataFormat.CreateStringPlatformFormat("Csv");
-
     private static readonly PlatformClipboardFormat CsvClipboardFormat =
         new("text/csv", PlatformClipboardDataKind.Text);
     private static readonly PlatformClipboardFormat CsvWindowsClipboardFormat =
         new("Csv", PlatformClipboardDataKind.Text);
+    private static readonly DataFormat<string> CsvPlatformFormat =
+        AvaloniaPlatformClipboard.CreateStringFormat(CsvClipboardFormat);
+    private static readonly DataFormat<string> CsvWindowsPlatformFormat =
+        AvaloniaPlatformClipboard.CreateStringFormat(CsvWindowsClipboardFormat);
 
     private static void AddClipboardTextAndHtml(
         DataTransfer transfer,
