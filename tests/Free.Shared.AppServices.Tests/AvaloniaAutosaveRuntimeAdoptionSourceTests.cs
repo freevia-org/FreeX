@@ -30,7 +30,7 @@ public sealed class AvaloniaAutosaveRuntimeAdoptionSourceTests
 
         // FreeP's WPF host (the reference) uses the unquoted Startup wording; its Avalonia adapter must
         // opt out of the shared Avalonia default (quoted display name) rather than drift from it.
-        wpfHost.Should().Contain("AutosaveRecoveryPromptMode.Startup)");
+        wpfHost.Should().Contain("AutosaveRecoveryPromptMode.Startup,"); // followed by the localizer argument
         freepAdapter.Should().Contain("quoteStartupDisplayName: false");
     }
 
