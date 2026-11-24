@@ -139,7 +139,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("QuickAnalysisShellOpenIssueTextTarget.Dialog");
         source.Should().NotContain("var issue = openPlan.Issue");
         source.Should().NotContain("openPlan.Decision == QuickAnalysisShellOpenDecision");
-        source.Should().Contain("Text = UiText.Get(group.TitleResourceKey)");
+        source.Should().Contain("Header = UiText.Get(group.TitleResourceKey)");
+        source.Should().Contain("new TabControl");
         source.Should().Contain("foreach (var group in shellPlan.Groups)");
         source.Should().NotContain("foreach (var group in displayModel.Groups)");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, item.AutomationId)");

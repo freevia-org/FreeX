@@ -68,7 +68,7 @@ public static partial class BuiltInFunctions
         for (int i = start; i != end; i += step)
         {
             var candidate = lookupVector[i];
-            if (candidate is ErrorValue err) return err;
+            if (candidate is ErrorValue) continue; // exact modes skip error cells (Excel)
             if (MatchExactValue(candidate, lookupValue))
                 return new NumberValue(i + 1);
         }
@@ -86,7 +86,7 @@ public static partial class BuiltInFunctions
             for (int i = start; i != end; i += step)
             {
                 var candidate = lookupVector[i];
-                if (candidate is ErrorValue err) return err;
+                if (candidate is ErrorValue) continue; // exact modes skip error cells (Excel)
                 if (ScalarEqualsExactLookup(candidate, lookupValue))
                     return new NumberValue(i + 1);
             }
@@ -98,7 +98,7 @@ public static partial class BuiltInFunctions
             for (int i = start; i != end; i += step)
             {
                 var candidate = lookupVector[i];
-                if (candidate is ErrorValue err) return err;
+                if (candidate is ErrorValue) continue; // exact modes skip error cells (Excel)
                 if (MatchExactValue(candidate, lookupValue))
                     return new NumberValue(i + 1);
             }

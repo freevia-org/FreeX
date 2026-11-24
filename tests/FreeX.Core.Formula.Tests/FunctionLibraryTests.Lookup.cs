@@ -730,13 +730,14 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Match_DirectRangeElementError_PropagatesBeforeLaterMatch()
+    public void Match_DirectRangeElementError_IsSkippedBeforeLaterMatch()
     {
         var sheet = MakeSheet(
             (1, 1, ErrorValue.DivByZero),
             (2, 1, new NumberValue(20)));
 
-        _eval.Evaluate("=MATCH(20,A1:A2,0)", sheet).Should().Be(ErrorValue.DivByZero);
+        // Verified against real Excel (COM): exact MATCH skips error cells in the lookup vector.
+        _eval.Evaluate("=MATCH(20,A1:A2,0)", sheet).Should().Be(new NumberValue(2));
     }
 
 

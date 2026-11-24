@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using FluentAssertions;
 using FreeX.App.Presentation.QuickAnalysis;
@@ -145,23 +146,12 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         }
 
         public string? FocusedMenuHeader =>
-            _focusedMenuHeader ?? (ActiveContextMenu is { } menu
-                ? FocusedMenuItem(menu)?.Header?.ToString()
-                  ?? menu.Items.OfType<MenuItem>()
-                      .FirstOrDefault(item => item.IsEnabled)
-                      ?.Header
-                      ?.ToString()
-                : null);
+            _focusedMenuHeader;
 
         public string? ContextMenuPlacementTargetName =>
-            ActiveContextMenu?.PlacementTarget is FrameworkElement target ? target.Name : _contextMenuPlacementTargetName;
+            ActiveQuickAnalysisPopup?.PlacementTarget is FrameworkElement target ? target.Name : _contextMenuPlacementTargetName;
 
-        public IReadOnlyList<string> OpenMenuHeaders =>
-            _openMenuHeaders.Count > 0
-                ? _openMenuHeaders
-                : ActiveContextMenu?.Items.OfType<MenuItem>()
-                    .Select(item => item.Header?.ToString() ?? "")
-                    .ToList() ?? _openMenuHeaders;
+        public IReadOnlyList<string> OpenMenuHeaders => _openMenuHeaders;
 
         public QuickAnalysisPreviewVisualKind QuickAnalysisPreviewVisual =>
             SheetGrid.QuickAnalysisPreviewVisual;
@@ -218,7 +208,7 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
 
             _contextMenuPlacementTargetName = "SheetGrid";
             _openMenuHeaders = BuildOpenMenuHeaders(shellPlan);
-            ActiveContextMenu!.IsOpen = false;
+            ActiveQuickAnalysisPopup!.IsOpen = false;
             PumpDispatcher();
             PreviewItem(shellPlan.AllItems().First());
         }
@@ -246,9 +236,8 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
         {
             SheetGrid.SelectedRange = _selectedRange;
             _focusedMenuHeader = item.Label;
-            var menuItem = new MenuItem
+            var menuItem = new Button
             {
-                Header = item.Label,
                 Tag = item
             };
             _window.ShowQuickAnalysisPreview(menuItem);
@@ -347,29 +336,15 @@ public sealed class MainWindowQuickAnalysisKeyboardTests
             return (SheetId)field.GetValue(window)!;
         }
 
-        private ContextMenu? ActiveContextMenu
+        private Popup? ActiveQuickAnalysisPopup
         {
             get
             {
-                var quickAnalysisMenuField = typeof(MainWindow)
-                    .GetField("_quickAnalysisMenu", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingFieldException(nameof(MainWindow), "_quickAnalysisMenu");
-                return quickAnalysisMenuField.GetValue(_window) as ContextMenu;
+                var quickAnalysisPopupField = typeof(MainWindow)
+                    .GetField("_quickAnalysisPopup", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new MissingFieldException(nameof(MainWindow), "_quickAnalysisPopup");
+                return quickAnalysisPopupField.GetValue(_window) as Popup;
             }
-        }
-
-        private static MenuItem? FocusedMenuItem(ContextMenu menu)
-        {
-            if (FocusManager.GetFocusedElement(menu) is MenuItem scopedMenuItem &&
-                ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(scopedMenuItem), menu))
-            {
-                return scopedMenuItem;
-            }
-
-            return Keyboard.FocusedElement is MenuItem keyboardMenuItem &&
-                ReferenceEquals(ItemsControl.ItemsControlFromItemContainer(keyboardMenuItem), menu)
-                    ? keyboardMenuItem
-                    : null;
         }
 
         public void Dispose()
