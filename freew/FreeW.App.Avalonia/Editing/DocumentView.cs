@@ -19748,8 +19748,12 @@ public sealed partial class DocumentView : Control
             // it belongs to the (possibly protected) body text.
             if (start == 0)
                 return false;
-            start--;
-            length = 1;
+            if (!TryGetContentControlSpanRuns(caret, out var runs)
+                || TextElementDeletionPlanner.Plan(string.Concat(runs.Select(run => run.Text)), start, backward: true)
+                    is not { } range)
+                return false;
+            start = range.Start;
+            length = range.Length;
         }
 
         return ApplyContentControlTextEdit(
@@ -19768,7 +19772,12 @@ public sealed partial class DocumentView : Control
         {
             if (start >= caret.SpanLength)
                 return false;
-            length = 1;
+            if (!TryGetContentControlSpanRuns(caret, out var runs)
+                || TextElementDeletionPlanner.Plan(string.Concat(runs.Select(run => run.Text)), start, backward: false)
+                    is not { } range)
+                return false;
+            start = range.Start;
+            length = range.Length;
         }
 
         return ApplyContentControlTextEdit(
@@ -19986,6 +19995,9 @@ public sealed partial class DocumentView : Control
         if (IsEditingLocked)
             return;
 
+        if (TryDeleteUnicodeTextElement(backward: true))
+            return;
+
         if (_shapeCaret is not null)
         {
             DeleteShapeText(backward: true);
@@ -20129,6 +20141,9 @@ public sealed partial class DocumentView : Control
             return;
 
         if (IsEditingLocked)
+            return;
+
+        if (TryDeleteUnicodeTextElement(backward: false))
             return;
 
         if (_shapeCaret is not null)
