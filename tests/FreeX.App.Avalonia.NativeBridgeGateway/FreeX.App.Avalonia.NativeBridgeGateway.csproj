@@ -11,7 +11,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" />
-    <PackageReference Include="Avalonia.Native" VersionOverride="12.0.5-freex.grid.3" />
+    <PackageReference Include="Avalonia.Native" VersionOverride="12.0.5-freex.grid.4" />
   </ItemGroup>
   <Target Name="RequirePublicTestSigningKey" BeforeTargets="CoreCompile">
     <Error Condition="!Exists('$(AvaloniaPublicSigningKey)')" Text="The public test-signing fixture is missing; restore Fixtures/Avalonia.Public.snk or supply the matching AvaloniaPublicSigningKey." />
