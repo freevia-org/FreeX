@@ -1,4 +1,7 @@
 <Project>
+  <!-- Prepare the immutable Grid bridge feed before NuGet collects restore sources.
+       The matching custom package versions are pinned centrally in Directory.Packages.props. -->
+  <Import Project="$(MSBuildThisFileDirectory)eng/dependencies/AvaloniaGridBootstrap.targets" />
   <ItemGroup Condition="'$(IsTestProject)' == 'true'">
     <Compile Include="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/*.cs"
              Exclude="$(MSBuildThisFileDirectory)tests/SharedTestInfrastructure/LocalizationWrapperContractTestSupport.cs;

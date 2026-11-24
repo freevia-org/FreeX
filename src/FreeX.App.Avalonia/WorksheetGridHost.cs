@@ -19,6 +19,10 @@ internal sealed class WorksheetGridHost : ContentControl
     private readonly Dictionary<(uint Row, uint Column), WorksheetCellAutomationPeer> _cellPeers = [];
     private readonly Dictionary<(uint Row, uint Column), WorksheetCellBorder> _borders = [];
     private IReadOnlyList<(uint Row, uint Column)> _coordinates = [];
+    private uint[] _rows = [];
+    private uint[] _columns = [];
+    private Dictionary<uint, int> _rowIndices = [];
+    private Dictionary<uint, int> _columnIndices = [];
     private Func<uint, uint, WorksheetAutomationCell>? _readCell;
     private Control? _surface;
     private bool _bordersDirty = true;
@@ -26,6 +30,8 @@ internal sealed class WorksheetGridHost : ContentControl
     private bool _publishQueued;
     private bool _closed;
     private Matrix? _publishedTransform;
+    private double[] _publishedRowHeights = [];
+    private double[] _publishedColumnWidths = [];
 
     public WorksheetGridHost() => LayoutUpdated += (_, _) => PublishChanges();
 
@@ -35,19 +41,33 @@ internal sealed class WorksheetGridHost : ContentControl
 
     internal void UpdateAutomationViewport(
         Control surface,
-        IReadOnlyList<(uint Row, uint Column)> coordinates,
+        IReadOnlyList<uint> rows,
+        IReadOnlyList<uint> columns,
         Func<uint, uint, WorksheetAutomationCell> readCell)
     {
         if (_closed)
             return;
         _surface = surface;
-        _coordinates = coordinates;
+        _rows = rows.Distinct().ToArray();
+        _columns = columns.Distinct().ToArray();
+        _rowIndices = _rows.Select((value, index) => (value, index)).ToDictionary(item => item.value, item => item.index);
+        _columnIndices = _columns.Select((value, index) => (value, index)).ToDictionary(item => item.value, item => item.index);
+        _coordinates = _rows.SelectMany(row => _columns.Select(column => (row, column))).ToArray();
         _readCell = readCell;
-        var visible = coordinates.ToHashSet();
+        // Event subscribers must see children from the same snapshot as counts/GetItem,
+        // including while an evicted item's location-change notification is delivered.
+        _bordersDirty = true;
+        InvalidateGridChildren();
+        var reachable = _coordinates.ToHashSet();
         foreach (var key in _cellPeers.Keys.ToArray())
         {
-            if (!visible.Contains(key) && !ReadCell(key).IsActive)
+            if (!reachable.Contains(key) && !ReadCell(key).IsActive)
+            {
+                // A native client may retain this peer after cache eviction. Announce its
+                // transition to an absent grid location before dropping our strong reference.
+                _cellPeers[key].PublishChanges();
                 _cellPeers.Remove(key);
+            }
         }
         QueuePublication();
     }
@@ -57,7 +77,13 @@ internal sealed class WorksheetGridHost : ContentControl
         _surface = null;
         _readCell = null;
         _coordinates = [];
+        _rows = [];
+        _columns = [];
+        _rowIndices.Clear();
+        _columnIndices.Clear();
         _borders.Clear();
+        _bordersDirty = true;
+        InvalidateGridChildren();
         foreach (var peer in _cellPeers.Values)
             peer.PublishChanges();
         _cellPeers.Clear();
@@ -123,6 +149,12 @@ internal sealed class WorksheetGridHost : ContentControl
         return _borders.GetValueOrDefault(key);
     }
 
+    private void InvalidateGridChildren()
+    {
+        if (ControlAutomationPeer.FromElement(this) is WorksheetGridAutomationPeer grid)
+            grid.InvalidateViewportChildren();
+    }
+
     private void QueuePublication()
     {
         _bordersDirty = true;
@@ -137,10 +169,34 @@ internal sealed class WorksheetGridHost : ContentControl
         }, DispatcherPriority.Loaded);
     }
 
+    private bool CaptureLayoutGeometry()
+    {
+        if (_surface is not Grid grid)
+        {
+            var hadGeometry = _publishedRowHeights.Length > 0 || _publishedColumnWidths.Length > 0;
+            _publishedRowHeights = [];
+            _publishedColumnWidths = [];
+            return hadGeometry;
+        }
+        var changed = grid.RowDefinitions.Count != _publishedRowHeights.Length ||
+            grid.ColumnDefinitions.Count != _publishedColumnWidths.Length;
+        for (var i = 0; !changed && i < grid.RowDefinitions.Count; i++)
+            changed = grid.RowDefinitions[i].ActualHeight != _publishedRowHeights[i];
+        for (var i = 0; !changed && i < grid.ColumnDefinitions.Count; i++)
+            changed = grid.ColumnDefinitions[i].ActualWidth != _publishedColumnWidths[i];
+        if (changed)
+        {
+            _publishedRowHeights = grid.RowDefinitions.Select(definition => definition.ActualHeight).ToArray();
+            _publishedColumnWidths = grid.ColumnDefinitions.Select(definition => definition.ActualWidth).ToArray();
+        }
+        return changed;
+    }
+
     private void PublishChanges()
     {
         var transform = SurfaceTransform();
-        if (!_publishPending && transform == _publishedTransform)
+        var geometryChanged = CaptureLayoutGeometry();
+        if (!_publishPending && transform == _publishedTransform && !geometryChanged)
             return;
         _publishPending = false;
         _publishedTransform = transform;
@@ -151,9 +207,22 @@ internal sealed class WorksheetGridHost : ContentControl
     }
 
     private sealed class WorksheetGridAutomationPeer(WorksheetGridHost owner)
-        : ControlAutomationPeer(owner), ISelectionProvider
+        : ControlAutomationPeer(owner), ISelectionProvider, IGridProvider
     {
         private AutomationPeer[] _publishedSelection = [];
+        private int _publishedRowCount;
+        private int _publishedColumnCount;
+        public int RowCount => owner._rows.Length;
+        public int ColumnCount => owner._columns.Length;
+
+        public AutomationPeer GetItem(int row, int column)
+        {
+            if (row < 0 || row >= RowCount)
+                throw new ArgumentOutOfRangeException(nameof(row));
+            if (column < 0 || column >= ColumnCount)
+                throw new ArgumentOutOfRangeException(nameof(column));
+            return owner.GetCellPeer(owner._rows[row], owner._columns[column]);
+        }
         public bool CanSelectMultiple => true;
         public bool IsSelectionRequired => false;
 
@@ -166,9 +235,17 @@ internal sealed class WorksheetGridHost : ContentControl
             .Select(key => owner.GetCellPeer(key.Row, key.Column))
             .Concat(base.GetChildrenCore() ?? []).ToArray();
 
+        internal void InvalidateViewportChildren() => InvalidateChildren();
+
         internal void NotifyViewportChanged()
         {
             InvalidateChildren();
+            if (_publishedRowCount != RowCount)
+                RaisePropertyChangedEvent(GridPatternIdentifiers.RowCountProperty, _publishedRowCount, RowCount);
+            if (_publishedColumnCount != ColumnCount)
+                RaisePropertyChangedEvent(GridPatternIdentifiers.ColumnCountProperty, _publishedColumnCount, ColumnCount);
+            _publishedRowCount = RowCount;
+            _publishedColumnCount = ColumnCount;
             var selection = GetSelection().ToArray();
             if (!_publishedSelection.SequenceEqual(selection))
                 RaisePropertyChangedEvent(SelectionPatternIdentifiers.SelectionProperty, _publishedSelection, selection);
@@ -178,12 +255,14 @@ internal sealed class WorksheetGridHost : ContentControl
 
     // A control peer cannot follow replacement controls: its Owner and subscriptions are immutable.
     // Coordinate peers instead resolve every property from the host's current viewport, as on WPF.
-    private sealed class WorksheetCellAutomationPeer : AutomationPeer, IValueProvider, ISelectionItemProvider
+    private sealed class WorksheetCellAutomationPeer : AutomationPeer, IValueProvider, ISelectionItemProvider, IGridItemProvider
     {
         private readonly WorksheetGridHost _host;
         private readonly (uint Row, uint Column) _key;
         private WorksheetAutomationCell _published;
         private Rect _publishedBounds;
+        private int _publishedRow;
+        private int _publishedColumn;
         private IReadOnlyList<AutomationPeer> _publishedChildren = [];
 
         internal WorksheetCellAutomationPeer(WorksheetGridHost host, (uint Row, uint Column) key)
@@ -192,10 +271,17 @@ internal sealed class WorksheetGridHost : ContentControl
             _key = key;
             _published = State;
             _publishedBounds = host.CellBounds(key);
+            _publishedRow = Row;
+            _publishedColumn = Column;
         }
 
         private WorksheetAutomationCell State => _host.ReadCell(_key);
         private WorksheetCellBorder? Border => _host.BorderFor(_key);
+        public int Row => _host._rowIndices.GetValueOrDefault(_key.Row, -1);
+        public int Column => _host._columnIndices.GetValueOrDefault(_key.Column, -1);
+        public int RowSpan => 1;
+        public int ColumnSpan => 1;
+        public AutomationPeer ContainingGrid => ControlAutomationPeer.CreatePeerForElement(_host);
         public bool IsReadOnly => true;
         public string Value => State.Value;
         public bool IsSelected => State.IsSelected;
@@ -244,6 +330,8 @@ internal sealed class WorksheetGridHost : ContentControl
         {
             var state = State;
             var bounds = GetBoundingRectangleCore();
+            Notify(GridItemPatternIdentifiers.RowProperty, _publishedRow, Row);
+            Notify(GridItemPatternIdentifiers.ColumnProperty, _publishedColumn, Column);
             Notify(AutomationElementIdentifiers.NameProperty, _published.Name, state.Name);
             Notify(AutomationElementIdentifiers.HelpTextProperty, _published.HelpText, state.HelpText);
             Notify(ValuePatternIdentifiers.ValueProperty, _published.Value, state.Value);
@@ -255,6 +343,8 @@ internal sealed class WorksheetGridHost : ContentControl
             _publishedChildren = children;
             _published = state;
             _publishedBounds = bounds;
+            _publishedRow = Row;
+            _publishedColumn = Column;
         }
 
         private void Notify<T>(AutomationProperty property, T before, T after)

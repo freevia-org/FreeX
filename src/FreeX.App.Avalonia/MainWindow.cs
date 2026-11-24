@@ -5208,7 +5208,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Background = (IBrush?)BuildWorksheetBackgroundBrush(_session.ActiveSheet.BackgroundImage) ?? Brushes.White,
         };
-        UpdateWorksheetAutomation(grid, rowMetrics, colMetrics, cellsByAddress);
+        UpdateWorksheetAutomation(grid, rowMetrics, colMetrics);
 
         if (showHeadings)
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetRowHeaderWidth(viewport, zoomFactor)) });

@@ -1,0 +1,23 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)AvaloniaGrid.Packages.props" />
+  <PropertyGroup>
+    <!-- Proposed layout: eng/dependencies beneath the repository root. -->
+    <AvaloniaGridRepositoryRoot Condition="'$(AvaloniaGridRepositoryRoot)' == ''">$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../..'))</AvaloniaGridRepositoryRoot>
+    <AvaloniaGridFeed>$([System.IO.Path]::Combine('$(AvaloniaGridRepositoryRoot)', '.dependencies', 'avalonia-grid', '$(AvaloniaGridVersion)-$([System.String]::Copy($(AvaloniaGridArchiveSha256)).Substring(0, 16))'))</AvaloniaGridFeed>
+    <RestorePackagesPath Condition="'$(RestorePackagesPath)' == ''">$([System.IO.Path]::Combine('$(AvaloniaGridRepositoryRoot)', '.dependencies', 'nuget-packages'))</RestorePackagesPath>
+    <AvaloniaGridDownloadTimeoutSeconds Condition="'$(AvaloniaGridDownloadTimeoutSeconds)' == ''">120</AvaloniaGridDownloadTimeoutSeconds>
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(AvaloniaGridFeed)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+  <UsingTask TaskName="FreeXPrepareAvaloniaGridFeed" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <Task>
+      <Code Type="Class" Language="cs" Source="$(MSBuildThisFileDirectory)BootstrapTask.cs" />
+    </Task>
+  </UsingTask>
+  <!-- This hook runs before NuGet computes each project's restore settings. -->
+  <Target Name="PrepareAvaloniaGridFeed" BeforeTargets="_GetRestoreSettings;_GenerateRestoreGraphProjectEntry;CollectPackageReferences;Restore">
+    <FreeXPrepareAvaloniaGridFeed RepositoryRoot="$(AvaloniaGridRepositoryRoot)" Version="$(AvaloniaGridVersion)" ArchiveUrl="$(AvaloniaGridArchiveUrl)" ArchiveSha256="$(AvaloniaGridArchiveSha256)" ArchiveBytes="$(AvaloniaGridArchiveBytes)" Packages="@(_AvaloniaGridPinnedPackage)" PackagesCachePath="$(RestorePackagesPath)" DownloadTimeoutSeconds="$(AvaloniaGridDownloadTimeoutSeconds)" AllowLoopbackHttpForTests="$(AvaloniaGridAllowLoopbackHttpForTests)">
+      <Output TaskParameter="FeedPath" PropertyName="_AvaloniaGridPreparedFeed" />
+    </FreeXPrepareAvaloniaGridFeed>
+    <Error Condition="'$(_AvaloniaGridPreparedFeed)' != '$(AvaloniaGridFeed)'" Text="Prepared Avalonia Grid feed differs from the evaluated NuGet source." />
+  </Target>
+</Project>

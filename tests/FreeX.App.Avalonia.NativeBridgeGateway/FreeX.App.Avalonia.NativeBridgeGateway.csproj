@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Avalonia.Native.UnitTests</AssemblyName>
+    <SignAssembly>true</SignAssembly>
+    <PublicSign>true</PublicSign>
+    <AssemblyOriginatorKeyFile>$(AvaloniaPublicSigningKey)</AssemblyOriginatorKeyFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Native" VersionOverride="12.0.5-freex.grid.3" />
+  </ItemGroup>
+  <Target Name="RequireExplicitPublicTestSigningKey" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(AvaloniaPublicSigningKey)')" Text="Supply AvaloniaPublicSigningKey from the pinned official source build/avalonia.snk for this isolated test helper." />
+  </Target>
+</Project>
