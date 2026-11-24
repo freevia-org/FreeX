@@ -16,11 +16,13 @@ public sealed partial class DocumentView
             var sections = _doc.Sections;
             if (_hfCaret is { } caret)
             {
-                var sectionIndex = caret.Target.UseFinalSectionStore
-                    || caret.Target.SectionIndex < 0
-                    || caret.Target.SectionIndex >= sections.Count
-                    ? sections.Count - 1
-                    : caret.Target.SectionIndex;
+                var sectionIndex = caret.Target.DisplaySectionIndex >= 0
+                    ? caret.Target.DisplaySectionIndex
+                    : caret.Target.UseFinalSectionStore
+                        || caret.Target.SectionIndex < 0
+                        || caret.Target.SectionIndex >= sections.Count
+                            ? sections.Count - 1
+                            : caret.Target.SectionIndex;
                 return HeaderFooterSectionLinkPlanner.Describe(sections, sectionIndex, caret.Target.Slot);
             }
 
@@ -46,8 +48,15 @@ public sealed partial class DocumentView
         if (!view.CanLinkToPrevious)
             return;
 
+        var wasEditing = IsHeaderFooterCaretActive;
+        var next = view.IsLinkedToPrevious
+            ? FreeW.Core.Model.DocumentModelCloner.CloneHeaderFooter(
+                view.Content, FreeW.Core.Model.RevisionClonePolicy.Preserve) ?? new FreeW.Core.Model.HeaderFooter()
+            : null;
         ExitHeaderFooterCaret();
-        if (HeaderFooterSectionLinkPlanner.ToggleLinkToPrevious(_doc.Sections, view.SectionIndex, view.Slot))
-            InvalidateLayoutAndVisual();
+        _bus.Execute(new ReplaceHeaderFooterSlotCommand(
+            view.SectionIndex, view.Slot, next, "Link to Previous"));
+        if (wasEditing)
+            ActivateHeaderFooterSlot(view.Slot, view.SectionIndex);
     }
 }

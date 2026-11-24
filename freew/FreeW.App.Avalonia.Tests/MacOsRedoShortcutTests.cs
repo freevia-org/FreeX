@@ -46,7 +46,7 @@ public sealed class MacOsRedoShortcutTests
             string Text() => story switch
             {
                 "shape" => view.SelectedFloatingShape()!.PlainText,
-                "header" => view.Document.Sections[0].HeadersFooters.Header!.PlainText,
+                "header" => view.Document.Sections[0].HeadersFooters.Header?.PlainText ?? string.Empty,
                 _ => view.Document.PlainText,
             };
 

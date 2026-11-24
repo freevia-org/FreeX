@@ -838,7 +838,7 @@ public sealed partial class DocumentView : Control
         {
             var target = new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true,
                 hit.HeaderFooterIsFooter!.Value ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header,
-                hit.HeaderFooterParagraphIndex!.Value);
+                hit.HeaderFooterParagraphIndex!.Value, DisplaySectionIndex: _doc.Sections.Count - 1);
             PlaceCaretInHeaderFooter(target, hit.Start);
             PlaceCaretInHeaderFooter(target, hit.Start + hit.Length, extendSelection: true);
             return;
@@ -1426,7 +1426,7 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public (int SectionIndex, bool IsFooter, HeaderFooterSlotKind Slot, int ParaIdx, int Offset)? HeaderFooterCaretInfo =>
         _hfCaret is { } hc
-            ? (hc.Target.SectionIndex,
+            ? (hc.Target.DisplaySectionIndex >= 0 ? hc.Target.DisplaySectionIndex : hc.Target.SectionIndex,
                 HeaderFooterDialogPlanner.IsFooterSlot(hc.Target.Slot),
                 hc.Target.Slot,
                 hc.Target.ParaIdx,
@@ -1451,38 +1451,22 @@ public sealed partial class DocumentView : Control
     /// <summary>
     /// Programmatically place the caret inside the DEFAULT header or footer of the active (final) section
     /// at <paramref name="paraIdx"/> + <paramref name="offset"/>. Triggers a layout pass if needed so the
-    /// header/footer region exists, ensures the targeted slot/paragraph exists (creating an empty paragraph
-    /// when the slot is currently null/empty), then sets <c>_hfCaret</c>. Supports automation and a future
+    /// header/footer region exists, using a view-only empty story until the first undoable edit
+    /// when the slot is currently null/empty, then sets <c>_hfCaret</c>. Supports automation and a future
     /// "Edit Header"/"Edit Footer" ribbon command. First-page/odd-even variants are addressed via the
     /// hit-test entry point (clicking the rendered region) rather than this default-slot helper.
     /// </summary>
     public void PlaceCaretInHeaderFooter(bool footer, int paraIdx = 0, int offset = 0)
     {
-        if (_laidOutWidth < 0)
-            Relayout(FallbackWidth);
-
-        // Default slot on the document-level (final-section) store; create the slot + a paragraph if absent
-        // so the caret has a region to land in (mirrors Word's "click into empty header to start typing").
-        var store = _doc.FinalSectionHeadersFooters;
-        var slot = footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
-        var hf = HeaderFooterDialogPlanner.GetSlot(store, slot);
-        if (hf is null)
-        {
-            hf = new HeaderFooter();
-            HeaderFooterDialogPlanner.SetSlot(store, slot, hf);
-        }
-        if (hf.Paragraphs.Count == 0)
-            hf.Paragraphs.Add(new Paragraph());
-
-        var target = new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot,
-            Math.Clamp(paraIdx, 0, hf.Paragraphs.Count - 1));
-        // Set the caret first so HfCaretTargets returns true, THEN re-layout at the current width so the
-        // (possibly freshly-created/empty) band is built immediately and becomes hit-testable / drawable.
-        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
+        ActivateHeaderFooterSlot(footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header,
+            _doc.Sections.Count - 1);
+        if (_hfCaret is not { } caret || ResolveHfStore(caret.Target) is not { } store
+            || HeaderFooterDialogPlanner.GetSlot(store, caret.Target.Slot) is not { } story)
+            return;
+        var target = caret.Target with { ParaIdx = Math.Clamp(paraIdx, 0, story.Paragraphs.Count - 1) };
         PlaceCaretInHeaderFooter(target, offset);
-        Relayout(width);
+        Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
         InvalidateVisual();
-        CaretMoved?.Invoke();
     }
 
     /// <summary>
@@ -1491,6 +1475,10 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private void PlaceCaretInHeaderFooter(HfTarget target, int offset, bool extendSelection = false)
     {
+        FinishShapeTextSelectionDrag(releasePointerCapture: true);
+        _shapeCaret = null;
+        _shapeSelectionAnchor = null;
+        _activeShapeTextChildPath = null;
         var len = HfParaLength(target);
         offset = Math.Clamp(offset, 0, len);
         var previousCaret = _hfCaret;
@@ -1840,13 +1828,28 @@ public sealed partial class DocumentView : Control
     private void HfEditParagraph(HfTarget target, Action<List<HfAtom>> mutate, int newOffset)
     {
         var slot = HeaderFooterDialogPlanner.CommandSlotIndexFor(target.Slot);
-        _bus.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
-            target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
-            {
-                var atoms = HfAtoms(p);
-                mutate(atoms);
-                HfSetAtoms(p, atoms);
-            }));
+        var ownsUndoGroup = IsEmptyHeaderFooterPlaceholder(target) && !_bus.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _bus.BeginUndoGroup();
+        try
+        {
+            MaterializeEmptyHeaderFooterStory(target);
+            _bus.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
+                target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
+                {
+                    var atoms = HfAtoms(p);
+                    mutate(atoms);
+                    HfSetAtoms(p, atoms);
+                }));
+            if (ownsUndoGroup)
+                _bus.CommitUndoGroup("Edit header/footer");
+        }
+        catch
+        {
+            if (ownsUndoGroup && _bus.IsUndoGroupOpen)
+                _bus.RollbackUndoGroup();
+            throw;
+        }
         var len = HfParaLength(target);
         _hfCaret = (target, Math.Clamp(newOffset, 0, len));
         _hfSelectionAnchor = null;
@@ -2056,7 +2059,8 @@ public sealed partial class DocumentView : Control
     {
         if (_hfCaret is not { } hc)
             return;
-        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        var ownsUndoGroup = (NormalizedHfSelection() is not null || IsEmptyHeaderFooterPlaceholder(hc.Target))
+            && !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
         if (NormalizedHfSelection() is not null && !TryDeleteHfSelection())
@@ -2077,6 +2081,7 @@ public sealed partial class DocumentView : Control
         var atoms = HfAtoms(para);
         var (idx, _) = HfAtomIndexForOffset(atoms, offset);
 
+        MaterializeEmptyHeaderFooterStory(target);
         _bus.Execute(new FreeW.Core.Model.SpliceHeaderFooterParagraphsCommand(
             target.SectionIndex,
             target.UseFinalSectionStore,
@@ -7258,14 +7263,14 @@ public sealed partial class DocumentView : Control
         int paraIdx)
     {
         if (ReferenceEquals(sectionHf, _doc.FinalSectionHeadersFooters))
-            return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
+            return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx, _doc.Sections.Count - 1);
         for (var i = 0; i < _doc.Sections.Count; i++)
         {
             if (ReferenceEquals(_doc.Sections[i].HeadersFooters, sectionHf))
-                return new HfTarget(i, UseFinalSectionStore: false, slot, paraIdx);
+                return new HfTarget(i, UseFinalSectionStore: false, slot, paraIdx, i);
         }
         // Defensive fallback: treat as the final-section store.
-        return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx);
+        return new HfTarget(_doc.Sections.Count - 1, UseFinalSectionStore: true, slot, paraIdx, _doc.Sections.Count - 1);
     }
 
     /// <summary>
@@ -7323,8 +7328,10 @@ public sealed partial class DocumentView : Control
                 sectionPage,
                 diffOddEven,
                 pageNumberDisplay[pi].LogicalPageNumber);
-            var header = slots.Header;
-            var footer = slots.Footer;
+            var header = slots.Header is { Paragraphs.Count: > 0 } ? slots.Header
+                : ActiveEmptyHeaderFooterStory(pageSection.SectionIndex, slots.HeaderSlot) ?? slots.Header;
+            var footer = slots.Footer is { Paragraphs.Count: > 0 } ? slots.Footer
+                : ActiveEmptyHeaderFooterStory(pageSection.SectionIndex, slots.FooterSlot) ?? slots.Footer;
             var headerSlot = slots.HeaderSlot;
             var footerSlot = slots.FooterSlot;
 
@@ -7345,15 +7352,15 @@ public sealed partial class DocumentView : Control
 
             // AV-HFEDIT: emit an empty (but editable) band when the H/F caret is active in this slot even if
             // the slot has no visible content yet — so a freshly-clicked/empty header still renders + edits.
-            var headerActive = header is not null && (!header.IsEmpty || HfCaretTargets(sectionHf, headerSlot));
-            var footerActive = footer is not null && (!footer.IsEmpty || HfCaretTargets(sectionHf, footerSlot));
+            var headerActive = header is not null && (!header.IsEmpty || IsActiveHeaderFooterSlot(pageSection.SectionIndex, headerSlot));
+            var footerActive = footer is not null && (!footer.IsEmpty || IsActiveHeaderFooterSlot(pageSection.SectionIndex, footerSlot));
 
             // Emit header.
             if (headerActive)
             {
                 var hfY = pageTop + headerDistDip;
                 EmitHfParagraphs(header!, hfY, hfWidth, pageNumberText, _pageCount,
-                    pi => MakeHfTarget(sectionHf, headerSlot, pi),
+                    paragraphIndex => HeaderFooterRenderTarget(pageSection.SectionIndex, headerSlot, paragraphIndex),
                     slots.HeaderSlot,
                     pi + 1,
                     pageSection.SectionIndex + 1,
@@ -7372,7 +7379,7 @@ public sealed partial class DocumentView : Control
                 var footerStartIndex = _headerFooterItems.Count;
                 var footerBottomEdge = pageBottom - footerDistDip;
                 var footerEndY = EmitHfParagraphs(footer!, footerBottomEdge, hfWidth, pageNumberText, _pageCount,
-                    pi => MakeHfTarget(sectionHf, footerSlot, pi),
+                    paragraphIndex => HeaderFooterRenderTarget(pageSection.SectionIndex, footerSlot, paragraphIndex),
                     slots.FooterSlot,
                     pi + 1,
                     pageSection.SectionIndex + 1,
@@ -10343,9 +10350,9 @@ public sealed partial class DocumentView : Control
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
                         : contentTopY;
                     var sentinelH = lastParaLine.HasValue ? lastParaLine.Value.Height : Build("A", fmt).Height;
-                    var sentinelParaOffset = cellModel.Paragraphs.Count > pIdx
-                        ? cellModel.Paragraphs[pIdx].PlainText.Length
-                        : 0;
+                    // CellParaOffset follows the resolved glyph stream, which can differ
+                    // from cached model text for fields and CRLF line breaks.
+                    var sentinelParaOffset = paraCharOffset;
                     _placed.Add(new PlacedChar(blockIndex, glyphOffset, sentinelX, sentinelY, 0, sentinelH, fmt, '\0',
                         Sentinel: true, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: sentinelParaOffset));
                     glyphOffset++;
@@ -18428,6 +18435,12 @@ public sealed partial class DocumentView : Control
             return;
         }
 
+        if (TryHandleTextNavigation(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (_shapeCaret is { } shapeCaret)
         {
             switch (e.Key)
@@ -21836,6 +21849,13 @@ public sealed partial class DocumentView : Control
     /// </summary>
     public void SelectAll()
     {
+        if (SelectAllActiveShapeText())
+            return;
+        if (_hfCaret is not null)
+        {
+            SelectAllHeaderFooterText();
+            return;
+        }
         if (_doc.Blocks.Count == 0)
             return;
         _selectionAnchor = new DocPosition(0, 0);
@@ -22226,32 +22246,8 @@ public sealed partial class DocumentView : Control
     public void EditHeaderFooterSlot(string slotName) =>
         EditHeaderFooterSlot(HeaderFooterDialogPlanner.ParseSlot(slotName));
 
-    public void EditHeaderFooterSlot(HeaderFooterSlotKind slot)
-    {
-        var plan = HeaderFooterDialogPlanner.PlanSlotActivation(slot, _doc.Page);
-        if (plan.Kind != HeaderFooterSlotActivationKind.Active)
-            return;
-
-        var store = _doc.FinalSectionHeadersFooters;
-        var current = HeaderFooterDialogPlanner.GetSlot(store, slot);
-        if (current is null)
-        {
-            current = new HeaderFooter();
-            current.Paragraphs.Add(new Paragraph());
-            HeaderFooterDialogPlanner.SetSlot(store, slot, current);
-        }
-        else if (current.Paragraphs.Count == 0)
-        {
-            current.Paragraphs.Add(new Paragraph());
-        }
-
-        PlaceCaretInHeaderFooter(new HfTarget(
-            SectionIndex: -1,
-            UseFinalSectionStore: true,
-            Slot: slot,
-            ParaIdx: 0), 0);
-        Focus();
-    }
+    public void EditHeaderFooterSlot(HeaderFooterSlotKind slot) =>
+        ActivateHeaderFooterSlot(slot, ActiveHeaderFooterSectionSlot.SectionIndex);
 
     public void CloseHeaderFooterEditing()
     {
@@ -22260,29 +22256,11 @@ public sealed partial class DocumentView : Control
     }
 
     public void InsertHeaderFooterPageNumber(bool footer) =>
-        MutateDefaultHeaderFooterSlot(
-            footer,
-            current => HeaderFooterDialogPlanner.AddPageNumberToSlot(current));
+        InsertSectionHeaderFooterPageNumber(footer);
 
-    public void InsertHeaderFooterDateTime() =>
-        MutateDefaultHeaderFooterSlot(
-            footer: false,
-            current => HeaderFooterDialogPlanner.AppendFieldDateTimeToSlot(current, "DATE"));
+    public void InsertHeaderFooterDateTime() => InsertActiveHeaderFooterField("DATE");
 
-    public void InsertHeaderFooterDocumentInfo() =>
-        MutateDefaultHeaderFooterSlot(
-            footer: false,
-            current => HeaderFooterDialogPlanner.AppendComplexFieldToSlot(current, "FILENAME"));
-
-    private void MutateDefaultHeaderFooterSlot(bool footer, Func<HeaderFooter?, HeaderFooter> mutate)
-    {
-        var store = _doc.FinalSectionHeadersFooters;
-        var slot = footer ? HeaderFooterSlotKind.Footer : HeaderFooterSlotKind.Header;
-        var next = mutate(HeaderFooterDialogPlanner.GetSlot(store, slot));
-        HeaderFooterDialogPlanner.SetSlot(store, slot, next);
-        InvalidateLayoutAndVisual();
-        Focus();
-    }
+    public void InsertHeaderFooterDocumentInfo() => InsertActiveHeaderFooterField("FILENAME");
 
     /// <summary>Insert a bordered table (with a header row) after the current block. Cells edit on double-click.</summary>
     public void InsertTable(int rows, int columns)
@@ -25027,7 +25005,11 @@ public sealed partial class DocumentView : Control
         DesignEdits.SetWatermarkText(text, CurrentPageSettingsSectionIndex());
 
     private int CurrentPageSettingsSectionIndex() =>
-        PageSettingsSectionResolver.ResolveSectionIndex(_doc, _caret.Block);
+        _hfCaret is { } caret
+            ? caret.Target.DisplaySectionIndex >= 0
+                ? caret.Target.DisplaySectionIndex
+                : caret.Target.UseFinalSectionStore ? _doc.Sections.Count - 1 : caret.Target.SectionIndex
+            : PageSettingsSectionResolver.ResolveSectionIndex(_doc, _caret.Block);
 
     /// <summary>
     /// The <see cref="PageSettings"/> for the section the caret is actually in (resolved via
@@ -25335,6 +25317,8 @@ public sealed partial class DocumentView : Control
     {
         get
         {
+            if (_shapeCaret is not null)
+                return ShapeKeyboardSelectedText();
             if (_hfCaret is not null)
                 return HeaderFooterSelectedText();
             if (HasCellTextSelection())
@@ -25386,6 +25370,8 @@ public sealed partial class DocumentView : Control
 
     public void SelectAllText()
     {
+        if (SelectAllActiveShapeText())
+            return;
         if (_hfCaret is not null)
         {
             SelectAllHeaderFooterText();
@@ -25908,9 +25894,11 @@ public sealed partial class DocumentView : Control
             var len = para != null ? ParaCells(para).Count : 0;
             var newOffset = toStart ? 0 : len;
             _cellCaret = cc with { Offset = newOffset };
-            _cellAnchor = _cellCaret;
+            if (!extend)
+                _cellAnchor = _cellCaret;
             _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
-            _selectionAnchor = _caret;
+            if (!extend)
+                _selectionAnchor = _caret;
             InvalidateVisual();
             CaretMoved?.Invoke();
             return;
@@ -26368,6 +26356,7 @@ public sealed partial class DocumentView : Control
 
     private void OnModelChanged()
     {
+        RebindHeaderFooterCaretOwner();
         ClearBitmapCache();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
@@ -27653,7 +27642,8 @@ public sealed partial class DocumentView : Control
         int SectionIndex,
         bool UseFinalSectionStore,
         HeaderFooterSlotKind Slot,
-        int ParaIdx);
+        int ParaIdx,
+        int DisplaySectionIndex = -1);
 
     /// <summary>
     /// Resolves an <see cref="HfTarget"/> to the live <see cref="SectionHeadersFooters"/> store it addresses,
@@ -27661,11 +27651,11 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private SectionHeadersFooters? ResolveHfStore(HfTarget target)
     {
-        if (target.UseFinalSectionStore)
-            return _doc.FinalSectionHeadersFooters;
-        if (target.SectionIndex < 0 || target.SectionIndex >= _doc.Sections.Count)
-            return _doc.FinalSectionHeadersFooters;
-        return _doc.Sections[target.SectionIndex].HeadersFooters;
+        var actual = target.UseFinalSectionStore
+            || target.SectionIndex < 0 || target.SectionIndex >= _doc.Sections.Count
+                ? _doc.FinalSectionHeadersFooters
+                : _doc.Sections[target.SectionIndex].HeadersFooters;
+        return ResolveEmptyHeaderFooterStore(target, actual);
     }
 
     /// <summary>Resolves a target's <see cref="Paragraph"/> model, or null when unavailable.</summary>

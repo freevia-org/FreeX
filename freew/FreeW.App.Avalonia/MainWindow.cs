@@ -2297,6 +2297,7 @@ public sealed partial class MainWindow : Window
             ToggleSpellcheck: ToggleSpellCheck,
             IsSpellcheckActive: () => _editor.SpellCheckEnabled,
             AddToDictionary: AddCurrentWordToDictionary,
+            OpenSpellingAndGrammar: StartSpellingAndGrammarCheck,
             OpenThesaurus: ToggleThesaurusPane,
             SetProofingLanguage: () => RunUiTask(OpenProofingLanguageDialogAsync),
             ToggleReadAloud: ToggleReadAloud,

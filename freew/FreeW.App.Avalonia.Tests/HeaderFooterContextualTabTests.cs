@@ -206,8 +206,8 @@ public sealed class HeaderFooterContextualTabTests
         State(registry, "freew.hf-link-to-previous").IsChecked.Should().BeTrue();
         view.Document.Sections[1].HeadersFooters.Header.Should().BeNull();
 
-        // Avalonia edits headers in place, so there is no editing surface to move between sections.
-        State(registry, "freew.hf-previous-section").IsEnabled.Should().BeFalse();
+        // The in-place editing surface can now navigate to the preceding section.
+        State(registry, "freew.hf-previous-section").IsEnabled.Should().BeTrue();
         State(registry, "freew.hf-next-section").IsEnabled.Should().BeFalse();
     }
 
