@@ -1,4 +1,6 @@
-﻿using Free.Shared.AppServices;
+using Free.Shared.Shell.Wpf;
+using Free.Shared.Shell;
+using Free.Shared.AppServices;
 using System.IO;
 using System.Windows.Input;
 using System.Windows;
@@ -26,7 +28,7 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
                 .ToArray();
 
             var expected = FreeWKeyboardShortcutCatalog.All
-                .Select(shortcut => (ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers)))
+                .Select(shortcut => (ToWpfKey(shortcut.Key), WpfKeyModifiersMapper.ToWpf(shortcut.Modifiers)))
                 .ToArray();
 
             actual.Should().HaveCount(expected.Length);
@@ -165,15 +167,4 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         return editor;
     }
 
-    private static ModifierKeys ToWpfModifiers(FreeWKeyboardModifiers modifiers)
-    {
-        var result = ModifierKeys.None;
-        if ((modifiers & FreeWKeyboardModifiers.Control) != 0)
-            result |= ModifierKeys.Control;
-        if ((modifiers & FreeWKeyboardModifiers.Shift) != 0)
-            result |= ModifierKeys.Shift;
-        if ((modifiers & FreeWKeyboardModifiers.Alt) != 0)
-            result |= ModifierKeys.Alt;
-        return result;
-    }
 }
