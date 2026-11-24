@@ -27,6 +27,20 @@ public static class HeaderFooterTextEditPlanner
         selection = normalized.Value;
         var startParagraph = story.Paragraphs[selection.Start.ParagraphIndex];
         var endParagraph = story.Paragraphs[selection.End.ParagraphIndex];
+        if (selection.Start.ParagraphIndex == selection.End.ParagraphIndex)
+        {
+            // Selection deletion has always expanded partial fields to their whole atomic run.
+            // Keep that explicit intent while sharing lossless run/bookmark rebuilding.
+            var edit = StoryParagraphRunEditPlanner.PlanReplace(startParagraph,
+                selection.Start.Offset, selection.End.Offset, [],
+                StoryParagraphAtomicEditPolicy.ExpandSelection);
+            if (edit is null)
+                return null;
+            var paragraph = (Paragraph)DocumentMerge.CloneBlock(startParagraph);
+            edit.ApplyTo(paragraph);
+            return new HeaderFooterTextDeletePlan(selection.Start.ParagraphIndex, 1, [paragraph],
+                new HeaderFooterTextPosition(selection.Start.ParagraphIndex, edit.CaretOffset));
+        }
         var startAtoms = ToAtoms(startParagraph);
         var endAtoms = ReferenceEquals(startParagraph, endParagraph) ? startAtoms : ToAtoms(endParagraph);
         var startAtomIndex = AtomIndexForStart(startAtoms, selection.Start.Offset);
