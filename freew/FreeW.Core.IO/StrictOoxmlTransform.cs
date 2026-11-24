@@ -19,6 +19,10 @@ namespace FreeW.Core.IO;
 /// </summary>
 internal static class StrictOoxmlTransform
 {
+    private const string StrictRelationshipPrefix = "http://purl.oclc.org/ooxml/officeDocument/relationships/";
+    private const string TransitionalRelationshipPrefix = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
+    private const string PackageRelationshipNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+    private const string LegacyStrictPackageRelationshipNamespace = "http://purl.oclc.org/ooxml/relationships";
     // -------------------------------------------------------------------------
     // Namespace map: strict URI (key) → transitional URI (value)
     // -------------------------------------------------------------------------
@@ -64,7 +68,25 @@ internal static class StrictOoxmlTransform
             ["http://purl.oclc.org/ooxml/officeDocument/bibliography"]
                 = "http://schemas.openxmlformats.org/officeDocument/2006/bibliography",
 
-            // Custom properties
+            // Document properties use camel-case Strict names, unlike Transitional names.
+            ["http://purl.oclc.org/ooxml/officeDocument/customProperties"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties",
+            ["http://purl.oclc.org/ooxml/officeDocument/extendedProperties"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties",
+            ["http://purl.oclc.org/ooxml/officeDocument/customXml"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/customXml",
+            ["http://purl.oclc.org/ooxml/officeDocument/customXmlDataProps"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/customXmlDataProps",
+            ["http://purl.oclc.org/ooxml/drawingml/chartDrawing"]
+                = "http://schemas.openxmlformats.org/drawingml/2006/chartDrawing",
+            ["http://purl.oclc.org/ooxml/drawingml/spreadsheetDrawing"]
+                = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
+            ["http://purl.oclc.org/ooxml/drawingml/lockedCanvas"]
+                = "http://schemas.openxmlformats.org/drawingml/2006/lockedCanvas",
+            ["http://purl.oclc.org/ooxml/officeDocument/sharedTypes"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/sharedTypes",
+
+            // Read aliases emitted by older FreeW Strict saves.
             ["http://purl.oclc.org/ooxml/officeDocument/custom-properties"]
                 = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties",
 
@@ -81,9 +103,13 @@ internal static class StrictOoxmlTransform
                 = "http://schemas.openxmlformats.org/package/2006/relationships",
         };
 
-    // Reverse map: transitional → strict
+    // OPC content-type/relationship namespaces remain the same in both conformance classes.
+    // Accept old FreeW aliases on read, but never write them or the legacy property spellings.
     private static readonly IReadOnlyDictionary<string, string> TransitionalToStrict =
-        StrictToTransitional.ToDictionary(kv => kv.Value, kv => kv.Key, StringComparer.Ordinal);
+        StrictToTransitional
+            .Where(pair => pair.Key is not ("http://purl.oclc.org/ooxml/contentTypes" or LegacyStrictPackageRelationshipNamespace))
+            .GroupBy(pair => pair.Value, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First().Key, StringComparer.Ordinal);
 
     // -------------------------------------------------------------------------
     // Content-type & relationship-type maps
@@ -153,6 +179,13 @@ internal static class StrictOoxmlTransform
                 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors",
             ["http://purl.oclc.org/ooxml/officeDocument/relationships/customXml"]
                 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+            ["http://purl.oclc.org/ooxml/officeDocument/relationships/extendedProperties"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
+            ["http://purl.oclc.org/ooxml/officeDocument/relationships/customProperties"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties",
+            ["http://purl.oclc.org/ooxml/officeDocument/relationships/metadata/thumbnail"]
+                = "http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail",
+            // Legacy FreeW aliases are read-only; core properties use the OPC URI in Strict too.
             ["http://purl.oclc.org/ooxml/officeDocument/relationships/extended-properties"]
                 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties",
             ["http://purl.oclc.org/ooxml/officeDocument/relationships/custom-properties"]
@@ -166,7 +199,10 @@ internal static class StrictOoxmlTransform
 
     // Reverse: transitional rel-types → strict (built from StrictRelTypeToTransitional)
     private static readonly IReadOnlyDictionary<string, string> TransitionalRelTypeToStrict =
-        StrictRelTypeToTransitional.ToDictionary(kv => kv.Value, kv => kv.Key, StringComparer.OrdinalIgnoreCase);
+        StrictRelTypeToTransitional
+            .Where(pair => pair.Value != "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties")
+            .GroupBy(pair => pair.Value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Key, StringComparer.OrdinalIgnoreCase);
 
     // -------------------------------------------------------------------------
     // Strict package detector
@@ -241,8 +277,13 @@ internal static class StrictOoxmlTransform
     /// </summary>
     public static MemoryStream RewriteStrictToTransitional(Stream strictStream)
     {
+        using var inputArchive = new ZipArchive(strictStream, ZipArchiveMode.Read, leaveOpen: true);
+        return RewriteStrictToTransitional(inputArchive);
+    }
+
+    internal static MemoryStream RewriteStrictToTransitional(ZipArchive inputArchive)
+    {
         var output = new MemoryStream();
-        using (var inputArchive = new ZipArchive(strictStream, ZipArchiveMode.Read, leaveOpen: true))
         using (var outputArchive = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: true))
         {
             foreach (var entry in inputArchive.Entries)
@@ -252,7 +293,7 @@ internal static class StrictOoxmlTransform
                 using var outStream = outEntry.Open();
 
                 if (IsXmlEntry(entry.FullName))
-                    RewriteXmlEntry(inStream, outStream, StrictToTransitional, StrictRelTypeToTransitional);
+                    RewriteXmlEntry(inStream, outStream, StrictToTransitional, toStrict: false);
                 else
                     inStream.CopyTo(outStream);
             }
@@ -283,7 +324,7 @@ internal static class StrictOoxmlTransform
                 using var outStream = outEntry.Open();
 
                 if (IsXmlEntry(entry.FullName))
-                    RewriteXmlEntry(inStream, outStream, TransitionalToStrict, TransitionalRelTypeToStrict);
+                    RewriteXmlEntry(inStream, outStream, TransitionalToStrict, toStrict: true);
                 else
                     inStream.CopyTo(outStream);
             }
@@ -313,51 +354,59 @@ internal static class StrictOoxmlTransform
         Stream inputStream,
         Stream outputStream,
         IReadOnlyDictionary<string, string> nsMap,
-        IReadOnlyDictionary<string, string> relTypeMap)
+        bool toStrict)
     {
+        using var original = new MemoryStream();
+        inputStream.CopyTo(original);
+        original.Position = 0;
         XDocument doc;
         try
         {
-            using var reader = XmlReader.Create(inputStream, SecureXmlReaderSettings.Create());
+            using var reader = XmlReader.Create(original, SecureXmlReaderSettings.Create());
             doc = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
         }
         catch (XmlException)
         {
             // Not valid XML — copy bytes verbatim (shouldn't happen for well-formed OOXML).
-            inputStream.CopyTo(outputStream);
+            original.Position = 0;
+            original.CopyTo(outputStream);
             return;
         }
 
-        RewriteNode(doc.Root, nsMap, relTypeMap);
+        if (!RewriteNode(doc.Root, nsMap, toStrict))
+        {
+            original.Position = 0;
+            original.CopyTo(outputStream);
+            return;
+        }
 
         using var writer = new XmlTextWriter(outputStream, Encoding.UTF8) { Formatting = Formatting.None };
         doc.Save(writer);
     }
 
-    private static void RewriteNode(
+    private static bool RewriteNode(
         XElement? element,
         IReadOnlyDictionary<string, string> nsMap,
-        IReadOnlyDictionary<string, string> relTypeMap)
+        bool toStrict)
     {
         if (element is null)
-            return;
+            return false;
 
         // We need to visit every element in the tree and fix namespace URIs.
         // XLinq tracks namespace URIs in XName.Namespace; to rewrite them we must reconstruct the
         // XName with the mapped namespace.  We walk the tree bottom-up so parent renames don't
         // interfere with already-processed children.
-        RewriteElementInPlace(element, nsMap, relTypeMap);
+        var changed = false;
+        foreach (var node in element.DescendantsAndSelf().Reverse())
+            changed |= RewriteElementInPlace(node, nsMap, toStrict);
+        return changed;
     }
 
-    private static void RewriteElementInPlace(
+    private static bool RewriteElementInPlace(
         XElement element,
         IReadOnlyDictionary<string, string> nsMap,
-        IReadOnlyDictionary<string, string> relTypeMap)
+        bool toStrict)
     {
-        // Recurse children first (bottom-up)
-        foreach (var child in element.Elements())
-            RewriteElementInPlace(child, nsMap, relTypeMap);
-
         // Rewrite element name namespace
         var mappedNs = MapNamespace(element.Name.Namespace.NamespaceName, nsMap);
         var newName = mappedNs != element.Name.Namespace.NamespaceName
@@ -385,8 +434,9 @@ internal static class StrictOoxmlTransform
 
                 // For .rels files: rewrite the Type attribute value (relationship type URI)
                 var attrValue = attr.Value;
-                if (attr.Name.LocalName == "Type" && relTypeMap.TryGetValue(attrValue, out var mappedRel))
-                    attrValue = mappedRel;
+                if (attr.Name == "Type" && element.Name.LocalName == "Relationship"
+                    && element.Name.NamespaceName is PackageRelationshipNamespace or LegacyStrictPackageRelationshipNamespace)
+                    attrValue = MapRelationshipType(attrValue, toStrict);
 
                 newAttr = new XAttribute(attrName, attrValue);
             }
@@ -400,7 +450,21 @@ internal static class StrictOoxmlTransform
             element.Attributes().Remove();
             foreach (var a in newAttribs)
                 element.Add(a);
+            return true;
         }
+        return false;
+    }
+
+    private static string MapRelationshipType(string uri, bool toStrict)
+    {
+        var map = toStrict ? TransitionalRelTypeToStrict : StrictRelTypeToTransitional;
+        if (map.TryGetValue(uri, out var mapped))
+            return mapped;
+        var sourcePrefix = toStrict ? TransitionalRelationshipPrefix : StrictRelationshipPrefix;
+        var targetPrefix = toStrict ? StrictRelationshipPrefix : TransitionalRelationshipPrefix;
+        return uri.StartsWith(sourcePrefix, StringComparison.Ordinal)
+            ? targetPrefix + uri[sourcePrefix.Length..]
+            : uri;
     }
 
     private static string MapNamespace(string uri, IReadOnlyDictionary<string, string> nsMap) =>

@@ -159,6 +159,15 @@ public static partial class DocxReader
         var documentXml = LoadPart(archive, "word/document.xml")
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
+        // Strict is an alternate encoding of the same Word document, not a separate Open format.
+        // Normalize after the original archive passes the size guard, for every caller (including
+        // direct readers and embedded documents), using this archive even when the source cannot seek.
+        if (documentXml.Root?.Name.NamespaceName == "http://purl.oclc.org/ooxml/wordprocessingml/main")
+        {
+            using var transitional = StrictOoxmlTransform.RewriteStrictToTransitional(archive);
+            return ReadCore(transitional);
+        }
+
         var document = new TextDocument
         {
             // Word applies its application paragraph default when the package cascade contains no
