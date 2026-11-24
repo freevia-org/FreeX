@@ -439,15 +439,15 @@ public static class ExternalRichTextClipboardPlanner
             byte current = _bytes[_position];
             if (_state.UnicodeFallbackRemaining > 0)
             {
-                if (current == (byte)'\\' && _position + 1 < _bytes.Length
-                    && _bytes[_position + 1] == (byte)'\'')
+                // One fallback unit (\'XX, control symbol, whole control word or one byte) per the shared
+                // tokenizer; group braces are never fallback content and end the skip.
+                int next = RtfControlTokenizer.SkipFallbackUnit<byte>(_bytes, _position);
+                if (next == _position)
                 {
-                    _position = Math.Min(_bytes.Length, _position + 4);
+                    _state.UnicodeFallbackRemaining = 0;
+                    return true;
                 }
-                else if (current != (byte)'{' && current != (byte)'}')
-                {
-                    _position++;
-                }
+                _position = next;
                 _state.UnicodeFallbackRemaining--;
                 return true;
             }
@@ -506,10 +506,9 @@ public static class ExternalRichTextClipboardPlanner
             if (marker == (byte)'\'')
             {
                 _position++;
-                int high = HexValue(ReadByteOrZero());
-                int low = HexValue(ReadByteOrZero());
-                if (high >= 0 && low >= 0)
-                    AppendByte((byte)((high << 4) | low));
+                if (RtfControlTokenizer.TryReadHexEscape<byte>(_bytes, _position, out var escaped, out var escapeEnd))
+                    AppendByte(escaped);
+                _position = escapeEnd;
                 return;
             }
 
@@ -527,7 +526,7 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             }
 
-            if (!IsAsciiLetter(marker))
+            if (!RtfControlTokenizer.IsAsciiLetter(marker))
             {
                 _position++;
                 if (_state.Destination == Destination.FieldInstruction)
@@ -550,38 +549,17 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             }
 
-            int start = _position;
-            while (_position < _bytes.Length && IsAsciiLetter(_bytes[_position]))
-                _position++;
-            string word = Encoding.ASCII.GetString(_bytes, start, _position - start);
+            // The shared tokenizer lexes the control word, its optional parameter and its single delimiter space.
+            if (!RtfControlTokenizer.TryReadControlWord<byte>(_bytes, _position, out var token))
+                return;
+            string word = Encoding.ASCII.GetString(_bytes, token.NameStart, token.NameLength);
+            _position = token.End;
 
-            int? parameter = null;
-            if (_position < _bytes.Length
-                && (_bytes[_position] == (byte)'-' || IsAsciiDigit(_bytes[_position])))
-            {
-                int sign = 1;
-                if (_bytes[_position] == (byte)'-')
-                {
-                    sign = -1;
-                    _position++;
-                }
-                int value = 0;
-                while (_position < _bytes.Length && IsAsciiDigit(_bytes[_position]))
-                {
-                    value = Math.Min(100_000_000, value * 10 + (_bytes[_position] - (byte)'0'));
-                    _position++;
-                }
-                parameter = sign * value;
-            }
-
-            // A single space delimits a control word and is not document text.
-            if (_position < _bytes.Length && _bytes[_position] == (byte)' ')
-                _position++;
+            // Parameters are bounded to +-100,000,000 so no downstream arithmetic can overflow.
+            int? parameter = token.Parameter is { } raw ? Math.Clamp(raw, -100_000_000, 100_000_000) : null;
 
             ApplyControl(word, parameter);
         }
-
-        private byte ReadByteOrZero() => _position < _bytes.Length ? _bytes[_position++] : (byte)0;
 
         private void ApplyControl(string word, int? parameter)
         {
@@ -896,8 +874,7 @@ public static class ExternalRichTextClipboardPlanner
                 case "u":
                     if (parameter is { } unicode)
                     {
-                        short signed = unchecked((short)unicode);
-                        string text = ((char)signed).ToString();
+                        string text = RtfControlTokenizer.ToUtf16CodeUnit(unicode).ToString();
                         if (_state.Destination == Destination.ListLevelText)
                             CaptureListLevelTextChar(text);
                         else
@@ -2698,17 +2675,6 @@ public static class ExternalRichTextClipboardPlanner
         private static bool IsEmpty(Paragraph paragraph) =>
             paragraph.Runs.All(run => string.IsNullOrEmpty(run.Text));
 
-        private static int HexValue(byte value) => value switch
-        {
-            >= (byte)'0' and <= (byte)'9' => value - (byte)'0',
-            >= (byte)'a' and <= (byte)'f' => value - (byte)'a' + 10,
-            >= (byte)'A' and <= (byte)'F' => value - (byte)'A' + 10,
-            _ => -1,
-        };
-
-        private static bool IsAsciiLetter(byte value) =>
-            value is >= (byte)'a' and <= (byte)'z' or >= (byte)'A' and <= (byte)'Z';
-
-        private static bool IsAsciiDigit(byte value) => value is >= (byte)'0' and <= (byte)'9';
+        private static int HexValue(byte value) => RtfControlTokenizer.HexDigitValue(value);
     }
 }
