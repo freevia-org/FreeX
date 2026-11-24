@@ -26,4 +26,14 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Link the unmodified product fonts and their license; do not duplicate binaries or QA evidence. -->
+    <None Include="../../freew/FreeW.App.Avalonia/Assets/Fonts/Carlito/*.ttf"
+          Link="Fixtures/Fonts/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../freew/FreeW.App.Avalonia/Assets/Fonts/Carlito/OFL.txt"
+          Link="Fixtures/Fonts/Carlito-OFL.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../freew/FreeW.App.Avalonia/Assets/Fonts/Carlito/UPSTREAM.json"
+          Link="Fixtures/Fonts/Carlito-UPSTREAM.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

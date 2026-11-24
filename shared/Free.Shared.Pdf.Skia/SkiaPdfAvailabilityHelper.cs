@@ -9,7 +9,7 @@ public static class SkiaPdfAvailabilityHelper
 {
     /// <summary>
     /// Returns <see langword="true"/> when <paramref name="ex"/> indicates the SkiaSharp
-    /// native library (or its HarfBuzz shaper) could not be loaded or initialized on this
+    /// native library could not be loaded or initialized on this
     /// platform, signalling that the portable fallback writer should be used instead.
     /// </summary>
     /// <remarks>

@@ -31,7 +31,7 @@ public static class FreeWAvaloniaXpsExport
         {
             // XPS remains a real OPC package: raster pages are embedded as PNG resources when the
             // portable vector writer cannot represent the document's text without an XPS font.
-            var pngPages = SkiaPdfWriter.RenderPagesToPng(document);
+            var pngPages = SkiaPdfWriter.RenderPagesToPng(document, 96, FreeWAvaloniaPdfFontSource.Open);
             var rasterDocument = new PdfContentDocument(
                 document.Pages.Select((page, index) => new PdfContentPage(
                     page.WidthPoints,

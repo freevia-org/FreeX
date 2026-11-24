@@ -7,8 +7,8 @@ namespace Free.Shared.Pdf.Skia;
 
 /// <summary>
 /// SkiaSharp PDF backend for the shared draw-op model. Unlike the dependency-free portable WinAnsi
-/// writer, Skia shapes text (HarfBuzz) and <b>automatically embeds/subsets</b> the fonts it draws,
-/// so non-WinAnsi text (Cyrillic, Greek, CJK, accented Latin) renders without bundling a font.
+/// writer, Skia <b>automatically embeds/subsets</b> the fonts it draws and maps Unicode text.
+/// Text uses direct glyph drawing with codepoint font fallback, not complex-script shaping.
 ///
 /// <para>
 /// Consumes the same <see cref="PdfContentDocument"/> as <see cref="PortablePdfWriter"/>, so a
@@ -30,10 +30,17 @@ public static class SkiaPdfWriter
     /// <see cref="PortablePdfWriter.WriteToBytes"/>'s diagnostic policy so the two writers agree.
     /// </param>
     public static byte[] WriteToBytes(PdfContentDocument document, ICollection<string>? imageDiagnostics = null)
+        => WriteToBytes(document, imageDiagnostics, fontSource: null);
+
+    /// <summary>Writes embedded-font PDF text using an optional caller-selected font source.</summary>
+    public static byte[] WriteToBytes(
+        PdfContentDocument document,
+        ICollection<string>? imageDiagnostics,
+        PdfFontSourceResolver? fontSource)
     {
         ArgumentNullException.ThrowIfNull(document);
         using var stream = new MemoryStream();
-        Write(document, stream, imageDiagnostics);
+        Write(document, stream, imageDiagnostics, fontSource);
         return stream.ToArray();
     }
 
@@ -88,13 +95,20 @@ public static class SkiaPdfWriter
     }
 
     public static IReadOnlyList<byte[]> RenderPagesToPng(PdfContentDocument document, int dpi = 96)
+        => RenderPagesToPng(document, dpi, fontSource: null);
+
+    /// <summary>Renders pages with the same caller-selected fonts used by vector PDF export.</summary>
+    public static IReadOnlyList<byte[]> RenderPagesToPng(
+        PdfContentDocument document,
+        int dpi,
+        PdfFontSourceResolver? fontSource)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (document.Pages.Count == 0)
             throw new InvalidOperationException("Raster rendering requires at least one page.");
         ValidateRasterDpi(dpi);
 
-        using var typefaces = PdfTypefaceSet.Create();
+        using var typefaces = PdfTypefaceSet.Create(fontSource);
         using var textRenderer = new FallbackTextRenderer();
         var scale = dpi / 72f;
         var pages = new List<byte[]>(document.Pages.Count);
@@ -122,7 +136,15 @@ public static class SkiaPdfWriter
     /// </summary>
     /// <param name="imageDiagnostics">See <see cref="WriteToBytes"/>.</param>
     public static int Write(PdfContentDocument document, Stream stream, ICollection<string>? imageDiagnostics = null) =>
-        WriteCore(document, stream, rasterization: null, imageDiagnostics);
+        WriteCore(document, stream, rasterization: null, imageDiagnostics, fontSource: null);
+
+    /// <summary>Writes vector PDF text using caller-selected font data before system fallback.</summary>
+    public static int Write(
+        PdfContentDocument document,
+        Stream stream,
+        ICollection<string>? imageDiagnostics,
+        PdfFontSourceResolver? fontSource) =>
+        WriteCore(document, stream, rasterization: null, imageDiagnostics, fontSource);
 
     /// <summary>Writes raster pages at the requested DPI, with optional selectable text and live PDF annotations.</summary>
     /// <param name="imageDiagnostics">See <see cref="WriteToBytes"/>.</param>
@@ -134,7 +156,20 @@ public static class SkiaPdfWriter
         ICollection<string>? imageDiagnostics = null)
     {
         ValidateRasterDpi(dpi);
-        return WriteCore(document, stream, new Rasterization(dpi, includeSelectableText), imageDiagnostics);
+        return WriteCore(document, stream, new Rasterization(dpi, includeSelectableText), imageDiagnostics, fontSource: null);
+    }
+
+    /// <summary>Uses caller-selected fonts for raster pages and their selectable-text overlays.</summary>
+    public static int WriteRasterized(
+        PdfContentDocument document,
+        Stream stream,
+        int dpi,
+        bool includeSelectableText,
+        ICollection<string>? imageDiagnostics,
+        PdfFontSourceResolver? fontSource)
+    {
+        ValidateRasterDpi(dpi);
+        return WriteCore(document, stream, new Rasterization(dpi, includeSelectableText), imageDiagnostics, fontSource);
     }
 
     private readonly record struct Rasterization(int Dpi, bool IncludeSelectableText);
@@ -143,7 +178,8 @@ public static class SkiaPdfWriter
         PdfContentDocument document,
         Stream stream,
         Rasterization? rasterization,
-        ICollection<string>? imageDiagnostics)
+        ICollection<string>? imageDiagnostics,
+        PdfFontSourceResolver? fontSource)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(stream);
@@ -160,11 +196,11 @@ public static class SkiaPdfWriter
 
         if (document.Properties is not { } properties ||
             (string.IsNullOrWhiteSpace(properties.Language) && properties.ViewerSettings is null && properties.Outlines.Count == 0))
-            return WriteDocument(document, stream, rasterization, imageDiagnostics);
+            return WriteDocument(document, stream, rasterization, imageDiagnostics, fontSource);
 
         if (stream.CanRead && stream.CanSeek)
         {
-            var pageCount = WriteDocument(document, stream, rasterization, imageDiagnostics);
+            var pageCount = WriteDocument(document, stream, rasterization, imageDiagnostics, fontSource);
             SkiaPdfCatalog.AppendUpdate(stream, properties, pageCount);
             return pageCount;
         }
@@ -172,7 +208,7 @@ public static class SkiaPdfWriter
         // The catalog update must read the generated PDF. Stage only for destinations that
         // cannot be read and repositioned, such as write-only and non-seekable output streams.
         using var buffer = new MemoryStream();
-        var bufferedPageCount = WriteDocument(document, buffer, rasterization, imageDiagnostics);
+        var bufferedPageCount = WriteDocument(document, buffer, rasterization, imageDiagnostics, fontSource);
         SkiaPdfCatalog.AppendUpdate(buffer, properties, bufferedPageCount);
         buffer.Position = 0;
         buffer.CopyTo(stream);
@@ -183,9 +219,10 @@ public static class SkiaPdfWriter
         PdfContentDocument document,
         Stream stream,
         Rasterization? rasterization,
-        ICollection<string>? imageDiagnostics)
+        ICollection<string>? imageDiagnostics,
+        PdfFontSourceResolver? fontSource)
     {
-        using var typefaces = PdfTypefaceSet.Create();
+        using var typefaces = PdfTypefaceSet.Create(fontSource);
 
         var pageCount = 0;
         using var textRenderer = new FallbackTextRenderer();
@@ -1234,12 +1271,16 @@ public static class SkiaPdfWriter
     internal sealed class PdfTypefaceSet : IDisposable
     {
         private readonly Dictionary<(string Family, PdfFontFace Face), SKTypeface> _cache = new();
+        private readonly List<SKData> _sourceData = [];
+        private readonly PdfFontSourceResolver? _fontSource;
 
-        private PdfTypefaceSet()
+        private PdfTypefaceSet(PdfFontSourceResolver? fontSource)
         {
+            _fontSource = fontSource;
         }
 
-        public static PdfTypefaceSet Create() => new();
+        public static PdfTypefaceSet Create() => new(null);
+        public static PdfTypefaceSet Create(PdfFontSourceResolver? fontSource) => new(fontSource);
 
         public SKTypeface For(string? fontFamily, PdfFontFace face)
         {
@@ -1255,7 +1296,9 @@ public static class SkiaPdfWriter
                 PdfFontFace.BoldItalic => (SKFontStyleWeight.Bold, SKFontStyleSlant.Italic),
                 _ => (SKFontStyleWeight.Normal, SKFontStyleSlant.Upright),
             };
-            var typeface = SKTypeface.FromFamilyName(
+            // A missing system family can return a non-null substitute. The caller's exact
+            // source must therefore be tried first, rather than only after a null system result.
+            var typeface = FromSource(family, face) ?? SKTypeface.FromFamilyName(
                     family.Length == 0 ? null : family,
                     weight,
                     SKFontStyleWidth.Normal,
@@ -1270,6 +1313,43 @@ public static class SkiaPdfWriter
             return typeface;
         }
 
+        private SKTypeface? FromSource(string family, PdfFontFace face)
+        {
+            if (_fontSource is null)
+                return null;
+            var context = $"Could not load the supplied PDF font '{family}' ({face}).";
+            Stream? source;
+            try { source = _fontSource(family, face); }
+            catch (Exception exception) { throw new InvalidDataException(context, exception); }
+            if (source is null)
+                return null;
+
+            SKData? data = null;
+            SKTypeface? typeface = null;
+            try
+            {
+                using (source)
+                {
+                    if (!source.CanRead)
+                        throw new InvalidDataException("The font source is not readable.");
+                    using var bytes = new MemoryStream();
+                    source.CopyTo(bytes);
+                    data = SKData.CreateCopy(bytes.ToArray());
+                    typeface = SKTypeface.FromData(data);
+                    if (typeface is null)
+                        throw new InvalidDataException("The supplied data is not a supported single-face font.");
+                }
+                _sourceData.Add(data);
+                return typeface;
+            }
+            catch (Exception exception)
+            {
+                typeface?.Dispose();
+                data?.Dispose();
+                throw new InvalidDataException(context, exception);
+            }
+        }
+
         public void Dispose()
         {
             foreach (var typeface in _cache.Values.Distinct())
@@ -1279,6 +1359,9 @@ public static class SkiaPdfWriter
                 typeface.Dispose();
             }
             _cache.Clear();
+            foreach (var data in _sourceData)
+                data.Dispose();
+            _sourceData.Clear();
         }
     }
 

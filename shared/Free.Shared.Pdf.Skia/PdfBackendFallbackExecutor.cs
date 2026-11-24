@@ -3,7 +3,7 @@ namespace Free.Shared.Pdf.Skia;
 /// <summary>Identifies the writer that produced a PDF stream.</summary>
 public enum PdfExportBackend
 {
-    /// <summary>Unicode-capable Skia/HarfBuzz writer with automatically embedded/subset fonts.</summary>
+    /// <summary>Unicode-mapped Skia text with automatically embedded/subset fonts.</summary>
     Skia,
 
     /// <summary>Dependency-free WinAnsi writer used when Skia is unavailable.</summary>

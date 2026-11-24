@@ -54,12 +54,12 @@ public static class FreeWAvaloniaPdfExport
         // catches the diagnostic, so callers can surface the loss instead of the export looking clean.
         var imageDiagnostics = new List<string>();
 
-        // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi
-        // text exports correctly without bundling a font. When the Skia native asset is missing it
-        // throws on first use; we then fall back to the dependency-free WinAnsi writer.
+        // Keep the editor's selected bundled Calibri fallback in the PDF too. Skia embeds
+        // the selected fonts; direct text drawing does not establish complex-script shaping.
+        // Missing native Skia assets still use the dependency-free WinAnsi writer.
         var result = PdfBackendFallbackExecutor.Execute(
             stream,
-            target => SkiaPdfWriter.Write(document, target, imageDiagnostics),
+            target => SkiaPdfWriter.Write(document, target, imageDiagnostics, FreeWAvaloniaPdfFontSource.Open),
             target =>
             {
                 imageDiagnostics.Clear();
