@@ -115,8 +115,9 @@ public sealed record AccessibleDocumentSnapshot(
 
 /// <summary>
 /// Builds the renderer-neutral text/range view used by document automation peers. The flattened
-/// text deliberately matches <see cref="TextDocument.PlainText"/>: body blocks and table rows are
-/// newline-separated, table cells are tab-separated, and paragraphs inside a cell are newline-separated.
+/// text defaults to <see cref="TextDocument.PlainText"/>; renderers may supply their resolved paragraph
+/// text. Body blocks and table rows remain newline-separated, table cells tab-separated, and paragraphs
+/// inside a cell newline-separated in either projection.
 /// </summary>
 public static class AccessibleDocumentSnapshotPlanner
 {
@@ -223,11 +224,22 @@ public static class AccessibleDocumentSnapshotPlanner
     public static AccessibleDocumentSnapshot Build(
         TextDocument document,
         AccessibleDocumentLocation caret,
-        AccessibleDocumentLocation? selectionAnchor = null)
+        AccessibleDocumentLocation? selectionAnchor = null) =>
+        Build(document, caret, selectionAnchor, paragraphText: null);
+
+    /// <summary>
+    /// Builds ranges in a renderer's text-offset space. The projection receives the exact body or
+    /// grid-cell address, including when a paragraph instance occurs at more than one address.
+    /// </summary>
+    public static AccessibleDocumentSnapshot Build(
+        TextDocument document,
+        AccessibleDocumentLocation caret,
+        AccessibleDocumentLocation? selectionAnchor,
+        Func<AccessibleDocumentLocation, Paragraph, string>? paragraphText)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var flattened = Flatten(document);
+        var flattened = Flatten(document, paragraphText);
         var caretOffset = ResolveOffset(flattened, caret);
         AccessibleTextRange? selection = null;
         if (selectionAnchor is not null)
@@ -282,7 +294,9 @@ public static class AccessibleDocumentSnapshotPlanner
         return AccessibleDocumentLocation.Body(paragraphIndex, paragraphOffset);
     }
 
-    private static FlattenedDocument Flatten(TextDocument document)
+    private static FlattenedDocument Flatten(
+        TextDocument document,
+        Func<AccessibleDocumentLocation, Paragraph, string>? paragraphText)
     {
         var text = new StringBuilder();
         var paragraphs = new List<AccessibleTextRange>();
@@ -296,7 +310,9 @@ public static class AccessibleDocumentSnapshotPlanner
             switch (document.Blocks[blockIndex])
             {
                 case Paragraph paragraph:
-                    AppendParagraph(text, paragraphs, locations, new LocationKey(AccessibleDocumentRegion.Body, blockIndex, 0, 0, 0), paragraph.PlainText);
+                    AppendParagraph(text, paragraphs, locations,
+                        new LocationKey(AccessibleDocumentRegion.Body, blockIndex, 0, 0, 0),
+                        paragraphText?.Invoke(AccessibleDocumentLocation.Body(blockIndex, 0), paragraph) ?? paragraph.PlainText);
                     break;
 
                 case Table table:
@@ -324,7 +340,9 @@ public static class AccessibleDocumentSnapshotPlanner
                                         rowIndex,
                                         projected.StartColumn,
                                         paragraphIndex),
-                                    cell.Paragraphs[paragraphIndex].PlainText);
+                                    paragraphText?.Invoke(AccessibleDocumentLocation.TableCell(
+                                        blockIndex, rowIndex, projected.StartColumn, paragraphIndex, 0),
+                                        cell.Paragraphs[paragraphIndex]) ?? cell.Paragraphs[paragraphIndex].PlainText);
                             }
                         }
                     }
