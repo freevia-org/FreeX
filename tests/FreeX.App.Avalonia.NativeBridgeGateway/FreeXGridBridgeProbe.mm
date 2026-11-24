@@ -42,6 +42,13 @@ extern "C" __attribute__((visibility("default"))) int FreeXGridBridgeProbe(
         if([nativeGrid accessibilityRowCount]!=rows || [nativeGrid accessibilityColumnCount]!=columns) return 21;
         if([nativeCell accessibilityParent]!=nativeGrid) return 22;
         if(cellWritable>=0 && [nativeCell isAccessibilitySelectorAllowed:@selector(setAccessibilityValue:)]!=(cellWritable!=0)) return 35;
+        if(cellWritable>=0 && [nativeCell respondsToSelector:@selector(setAccessibilityValue:)]!=(cellWritable!=0)) return 38;
+        for(NSString* name in @[@"setAccessibilityRowCount:", @"setAccessibilityColumnCount:",
+                               @"setAccessibilityOrderedByRow:", @"setAccessibilityVisibleCells:",
+                               @"setAccessibilitySelectedCells:", @"setAccessibilitySelectedChildren:"])
+            if([nativeGrid respondsToSelector:NSSelectorFromString(name)]) return 39;
+        if([nativeCell respondsToSelector:@selector(setAccessibilityRowIndexRange:)] ||
+           [nativeCell respondsToSelector:@selector(setAccessibilityColumnIndexRange:)]) return 40;
         if(cellWritable==0)
         {
             id beforeValue=[nativeCell accessibilityValue];
@@ -71,6 +78,7 @@ extern "C" __attribute__((visibility("default"))) int FreeXGridBridgeProbe(
             NSAccessibilityElement* nativeChild=[elementClass acquire:child];
             if([nativeChild accessibilityParent]!=nativeCell) return 29;
             if(childWritable>=0 && [nativeChild isAccessibilitySelectorAllowed:@selector(setAccessibilityValue:)]!=(childWritable!=0)) return 37;
+            if(childWritable>=0 && [nativeChild respondsToSelector:@selector(setAccessibilityValue:)]!=(childWritable!=0)) return 41;
             if(focus) { [nativeChild setAccessibilityFocused:YES]; if(![nativeChild isAccessibilityFocused]) return 30; }
             if(press && ![nativeChild accessibilityPerformPress]) return 31;
         }

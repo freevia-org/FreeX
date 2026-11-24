@@ -14,12 +14,12 @@
     <PackageVersion Include="UglyToad.PdfPig" Version="1.7.0-custom-5" />
     <PackageVersion Include="UglyToad.PdfPig.DocumentLayoutAnalysis" Version="1.7.0-custom-5" />
     <!-- Avalonia UI framework -->
-    <PackageVersion Include="Avalonia" Version="12.0.5-freex.grid.4" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.0.5-freex.grid.4" />
-    <PackageVersion Include="Avalonia.Headless" Version="12.0.5-freex.grid.4" />
-    <PackageVersion Include="Avalonia.Skia" Version="12.0.5-freex.grid.4" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.5-freex.grid.4" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5-freex.grid.4" />
+    <PackageVersion Include="Avalonia" Version="12.0.5-freex.grid.5" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.0.5-freex.grid.5" />
+    <PackageVersion Include="Avalonia.Headless" Version="12.0.5-freex.grid.5" />
+    <PackageVersion Include="Avalonia.Skia" Version="12.0.5-freex.grid.5" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.0.5-freex.grid.5" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5-freex.grid.5" />
     <!-- VideoLAN's maintained cross-platform media engine and native desktop views. -->
     <PackageVersion Include="LibVLCSharp" Version="3.10.0" />
     <PackageVersion Include="LibVLCSharp.Avalonia" Version="3.10.0" />

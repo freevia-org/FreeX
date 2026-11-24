@@ -1,73 +1,73 @@
 <Project>
   <PropertyGroup>
-    <AvaloniaGridVersion>12.0.5-freex.grid.4</AvaloniaGridVersion>
-    <AvaloniaGridArchiveSha256>a6c30d18aa2273b523463aaf0721b052a7259986306c749f94902552419af30c</AvaloniaGridArchiveSha256>
-    <AvaloniaGridArchiveBytes>15890231</AvaloniaGridArchiveBytes>
-    <AvaloniaGridArchiveUrl>https://github.com/freevia-org/FreeX/releases/download/freex-build-dependencies/freex-avalonia-grid-12.0.5-freex.grid.4-review.zip</AvaloniaGridArchiveUrl>
+    <AvaloniaGridVersion>12.0.5-freex.grid.5</AvaloniaGridVersion>
+    <AvaloniaGridArchiveSha256>bb0f5cd9cc8068dd8e9ed0eb4e7dcc827360d44b66aeeb9a42068b17ffaf6a56</AvaloniaGridArchiveSha256>
+    <AvaloniaGridArchiveBytes>15770205</AvaloniaGridArchiveBytes>
+    <AvaloniaGridArchiveUrl>https://github.com/freevia-org/FreeX/releases/download/freex-build-dependencies/freex-avalonia-grid-12.0.5-freex.grid.5-review.zip</AvaloniaGridArchiveUrl>
   </PropertyGroup>
   <ItemGroup>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.12.0.5-freex.grid.4.nupkg">
-      <Sha256>4aaceb171ceead210367f04930a654ac4cb0aef9b18e66565c66f1c3ef5566a9</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.12.0.5-freex.grid.5.nupkg">
+      <Sha256>b05f49b5ca2e436f7fcb5199722106add1acae692c2edf2ed57e0938a402a13e</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Controls.ColorPicker.12.0.5-freex.grid.4.nupkg">
-      <Sha256>759a874d877ef13c042725b3ed57918e3f100d09f7a3bb3f1222d23a5da179ef</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Controls.ColorPicker.12.0.5-freex.grid.5.nupkg">
+      <Sha256>419134b08cd17bef31bdd05464c85461b33400ddc9b8b7c6b57bbb7ab3b646f9</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Desktop.12.0.5-freex.grid.4.nupkg">
-      <Sha256>b2004f0ef5f08e7ab731f331a8e9d83638c7850e7158d7c4788dcba8ec28c88a</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Desktop.12.0.5-freex.grid.5.nupkg">
+      <Sha256>9c7ddd9bedf0a9b6aff68f139b789a54dd041062b07a10bafe2a7a3766cc1cdd</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Fonts.Inter.12.0.5-freex.grid.4.nupkg">
-      <Sha256>358d021282c64a7a5668b1a2cdedb3c1baf2045a3d417f1157dfef8f5ec6c594</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Fonts.Inter.12.0.5-freex.grid.5.nupkg">
+      <Sha256>917b2aa559170270710cca61312bbf2f57cb9334458de250f7cd4bf3c4c2f484</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.FreeDesktop.12.0.5-freex.grid.4.nupkg">
-      <Sha256>08a32cadb033afe7ae976f67d8aa985bbdd0fe2aae4bab70563467581c0bdfa0</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.FreeDesktop.12.0.5-freex.grid.5.nupkg">
+      <Sha256>0c1d24ce58b20ebf84f317d3ed570bdad8c1ac9e8147b528301aeb013e37b2db</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.FreeDesktop.AtSpi.12.0.5-freex.grid.4.nupkg">
-      <Sha256>8b9c89d2bbe595ba287138118d79b78ef963e05667707104fe1130d2961a1541</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.FreeDesktop.AtSpi.12.0.5-freex.grid.5.nupkg">
+      <Sha256>62813ffc0f9bd3dc392cb6a34f179f1b0931a22dc8531109a83a128853e8750a</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.HarfBuzz.12.0.5-freex.grid.4.nupkg">
-      <Sha256>26a97a0f9a4aab711a446696e4127ce472eb181b04befddf64e6478f690ad2b5</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.HarfBuzz.12.0.5-freex.grid.5.nupkg">
+      <Sha256>be93437ce3ffcaf7780395c6292d63010c09055d917c588475e633cb7ef672d3</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.12.0.5-freex.grid.4.nupkg">
-      <Sha256>fcbcb034d8ebcbb04cb105f9bc5c3fe1f04c01424417cac2e0c861c22b67f668</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.12.0.5-freex.grid.5.nupkg">
+      <Sha256>5aba39d15f3a62a2fda28b0ff7ae2a64801c3b4fd02cdaa45cc9661df388bb52</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.NUnit.12.0.5-freex.grid.4.nupkg">
-      <Sha256>8f3b89594f91c142de368c7820cdd6e9a6511df802fd1b0489cf0019878bf56c</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.NUnit.12.0.5-freex.grid.5.nupkg">
+      <Sha256>9c4c7adb3b15414c83234ff0535fe9cda1f2ea299075308a24b22fe2e0eba3c0</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.Vnc.12.0.5-freex.grid.4.nupkg">
-      <Sha256>7be2f05deefc50376fe5ca791f2e0a97a289bada32552d47920e235fd037c389</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.Vnc.12.0.5-freex.grid.5.nupkg">
+      <Sha256>b26ea88c03a6c81ee6f583e08827d6a5a8c585ed7468f165a5e348550c738b95</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.XUnit.12.0.5-freex.grid.4.nupkg">
-      <Sha256>8ee20a4bd77b0a08d789f3b2aac8597af5fc3fbf73ba895ca16b43f95005e469</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Headless.XUnit.12.0.5-freex.grid.5.nupkg">
+      <Sha256>bce501abf03215b337218a61ffed78adf6b02abfe2f5485808c2f3d145fb8d53</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.LinuxFramebuffer.12.0.5-freex.grid.4.nupkg">
-      <Sha256>cbf07f6412c3a8784717d17761f5ce232094a8facbd24fead179803aa41deb96</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.LinuxFramebuffer.12.0.5-freex.grid.5.nupkg">
+      <Sha256>cc99c7dfb72b957d90d907ca5996b48f4e4a9e9a8a39f86fc460fc3385a4ebc0</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Markup.Xaml.Loader.12.0.5-freex.grid.4.nupkg">
-      <Sha256>04e540483a8cb1fa3f6668c5d48c0cda1428ea769e710c8addb6c52413b4f9c1</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Markup.Xaml.Loader.12.0.5-freex.grid.5.nupkg">
+      <Sha256>67480f44c0918293224a8d2ce6fd546419cd5f36fc5ee384f7d86281fed938a8</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Native.12.0.5-freex.grid.4.nupkg">
-      <Sha256>6aee69cf71baaf1bddc5ddb52fbb7b8a102606de4695e4450df4732b47c7b62e</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Native.12.0.5-freex.grid.5.nupkg">
+      <Sha256>a4a7819e5fe044b3ccc9c38c702ddb1c8b40fdd892cb718833debcfc01b43c67</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Remote.Protocol.12.0.5-freex.grid.4.nupkg">
-      <Sha256>84a90b2ddb080f4d7321c1d7f511d6cadb937d47e9302a776bc270ea068d8fff</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Remote.Protocol.12.0.5-freex.grid.5.nupkg">
+      <Sha256>ca752f9065ea486a4cde770960da8f222da094ff3d0e702dca2879f93089b30f</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Skia.12.0.5-freex.grid.4.nupkg">
-      <Sha256>b4f6dd532bec0e354118a3203b0533b212677a5ea5e21cded4499e876c3ea0a5</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Skia.12.0.5-freex.grid.5.nupkg">
+      <Sha256>362be358eae8bf4e0a3c55af315e593b5778e5b742ee8894d777761c6744a1f5</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Themes.Fluent.12.0.5-freex.grid.4.nupkg">
-      <Sha256>9069403cb165c31d4122a65ba7f035c20b3938dc5790540593882b9b79b5bd65</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Themes.Fluent.12.0.5-freex.grid.5.nupkg">
+      <Sha256>82aa790c4f021407483198ae380b36b603d6a33c08c44a0fd9f6e3b35514f10d</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Themes.Simple.12.0.5-freex.grid.4.nupkg">
-      <Sha256>2bc86e250a35cea6af04d6d99b9e1f1fe5623f0cc0031f3a9e7cdca6dabd9ed2</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Themes.Simple.12.0.5-freex.grid.5.nupkg">
+      <Sha256>bac3575fcd4ef7d201ee9f83290f5467c44297ab618251cf6e4ef36cf4da463a</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Win32.12.0.5-freex.grid.4.nupkg">
-      <Sha256>b52f48344bdf3295b0b4a927281e04994e44094bb6fd312dda662bf6e1ed4944</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Win32.12.0.5-freex.grid.5.nupkg">
+      <Sha256>114afc3d9821fb5217afca6bc5ce7d787c181764176f3f0481c6ca2c8e856a6a</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.Win32.Interoperability.12.0.5-freex.grid.4.nupkg">
-      <Sha256>c009d78d96d0c740a42e02abc1fce43e472ec173b8a3731206aa1478c7aa3ae9</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.Win32.Interoperability.12.0.5-freex.grid.5.nupkg">
+      <Sha256>c3aeb268bd4105f89106ad3adebeb8f97731fa374014e5764827596acca3c8af</Sha256>
     </_AvaloniaGridPinnedPackage>
-    <_AvaloniaGridPinnedPackage Include="Avalonia.X11.12.0.5-freex.grid.4.nupkg">
-      <Sha256>c03c1389e5c26d65c2c003770400cc93fe0a28f5cb840705872857e3206c45e0</Sha256>
+    <_AvaloniaGridPinnedPackage Include="Avalonia.X11.12.0.5-freex.grid.5.nupkg">
+      <Sha256>fab740f57091f19204454933dc63b7e205a2e80f7d5ef457f2284407ac3f0e97</Sha256>
     </_AvaloniaGridPinnedPackage>
   </ItemGroup>
 </Project>
