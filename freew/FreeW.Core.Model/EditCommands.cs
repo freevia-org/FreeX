@@ -3158,6 +3158,7 @@ public sealed class InsertShapeTextParagraphBreakCommand(
             fullOffset,
             source.PlainText.Length,
             RevisionClonePolicy.Preserve);
+        ParagraphBookmarkStructurePlanner.DistributeAfterSplit(source, prefix, suffix, fullOffset);
         var result = paragraphs.ToList();
         result.RemoveAt(paragraphIndex);
         result.InsertRange(paragraphIndex, [prefix, suffix]);
@@ -3232,8 +3233,10 @@ public sealed class MergeShapeTextParagraphWithPreviousCommand(
         var previous = paragraphs[paragraphIndex - 1];
         var current = paragraphs[paragraphIndex];
         var merged = (Paragraph)DocumentMerge.CloneBlock(previous);
+        var runShift = merged.Runs.Count;
         foreach (var run in current.Runs)
             merged.Runs.Add(RevisionEditPlanner.CloneRunWithText(run, run.Text));
+        ParagraphBookmarkStructurePlanner.AppendAfterMerge(merged, current, runShift);
 
         var result = paragraphs.ToList();
         result[paragraphIndex - 1] = merged;
