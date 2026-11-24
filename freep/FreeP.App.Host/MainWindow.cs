@@ -2908,7 +2908,7 @@ public sealed partial class MainWindow : Window,
 
     private SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers) =>
+        FreeKeyModifiers modifiers) =>
         _smartArtTextPaneSession.ApplyKeyboardRoute(key, modifiers);
 
     private void ConvertSelectedSmartArtToShapes()
@@ -2918,7 +2918,7 @@ public sealed partial class MainWindow : Window,
         Key key,
         ModifierKeys keyboardModifiers,
         out SmartArtTextPaneShortcutKey shortcutKey,
-        out SmartArtTextPaneShortcutModifiers modifiers)
+        out FreeKeyModifiers modifiers)
     {
         shortcutKey = key switch
         {
@@ -2931,17 +2931,12 @@ public sealed partial class MainWindow : Window,
         };
         if (key is not (Key.Enter or Key.Return or Key.Tab or Key.Up or Key.Down or Key.Delete))
         {
-            modifiers = SmartArtTextPaneShortcutModifiers.None;
+            modifiers = FreeKeyModifiers.None;
             return false;
         }
 
-        modifiers = SmartArtTextPaneShortcutModifiers.None;
-        if (keyboardModifiers.HasFlag(ModifierKeys.Shift))
-            modifiers |= SmartArtTextPaneShortcutModifiers.Shift;
-        if (keyboardModifiers.HasFlag(ModifierKeys.Control))
-            modifiers |= SmartArtTextPaneShortcutModifiers.Control;
-        if (keyboardModifiers.HasFlag(ModifierKeys.Alt))
-            modifiers |= SmartArtTextPaneShortcutModifiers.Alt;
+        // Meta policy: Drop. The Windows key is ignored by the SmartArt text pane shortcuts.
+        modifiers = WpfKeyModifiersMapper.FromWpf(keyboardModifiers, KeyModifierMetaPolicy.Drop);
         return true;
     }
 
@@ -3519,24 +3514,14 @@ public sealed partial class MainWindow : Window,
         {
             InputBindings.Add(new KeyBinding(
                 commands[shortcut.Command],
-                new KeyGesture(ToWpfKey(shortcut.Key), ToWpfModifiers(shortcut.Modifiers))));
+                new KeyGesture(ToWpfKey(shortcut.Key), WpfKeyModifiersMapper.ToWpf(shortcut.Modifiers))));
         }
     }
 
     private static Key ToWpfKey(FreePKeyboardKey key) =>
         Enum.Parse<Key>(key.ToString());
 
-    private static ModifierKeys ToWpfModifiers(FreePKeyboardModifiers modifiers)
-    {
-        var result = ModifierKeys.None;
-        if ((modifiers & FreePKeyboardModifiers.Control) != 0)
-            result |= ModifierKeys.Control;
-        if ((modifiers & FreePKeyboardModifiers.Shift) != 0)
-            result |= ModifierKeys.Shift;
-        if ((modifiers & FreePKeyboardModifiers.Alt) != 0)
-            result |= ModifierKeys.Alt;
-        return result;
-    }
+
 
     // ── Slide show (Wave 4B) ──────────────────────────────────────────────────────
 

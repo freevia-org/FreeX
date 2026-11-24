@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
@@ -67,16 +68,6 @@ public enum TableCellEditKeyboardKey
     B,
     I,
     U,
-}
-
-[Flags]
-public enum TableCellEditKeyboardModifiers
-{
-    None = 0,
-    Control = 1,
-    Shift = 2,
-    Alt = 4,
-    Platform = 8,
 }
 
 public enum TableCellEditKeyboardAction
@@ -698,24 +689,24 @@ public static class TableCellEditPlanner
 
     public static TableCellEditKeyboardPlan PlanKeyboard(
         TableCellEditKeyboardKey key,
-        TableCellEditKeyboardModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         if (key == TableCellEditKeyboardKey.Escape)
             return new(TableCellEditKeyboardAction.Cancel);
 
         if (key == TableCellEditKeyboardKey.Tab &&
-            (modifiers & (TableCellEditKeyboardModifiers.Control |
-                          TableCellEditKeyboardModifiers.Alt |
-                          TableCellEditKeyboardModifiers.Platform)) == 0)
+            (modifiers & (FreeKeyModifiers.Control |
+                          FreeKeyModifiers.Alt |
+                          FreeKeyModifiers.Meta)) == 0)
         {
             return new(
                 TableCellEditKeyboardAction.Navigate,
-                (modifiers & TableCellEditKeyboardModifiers.Shift) != 0
+                (modifiers & FreeKeyModifiers.Shift) != 0
                     ? TableCellNavigationDirection.Previous
                     : TableCellNavigationDirection.Next);
         }
 
-        if ((modifiers & TableCellEditKeyboardModifiers.Control) != 0)
+        if ((modifiers & FreeKeyModifiers.Control) != 0)
         {
             var formatKind = key switch
             {

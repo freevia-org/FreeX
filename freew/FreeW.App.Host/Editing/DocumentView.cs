@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -1414,17 +1415,9 @@ public sealed partial class DocumentView : RichTextBox
         _ => DocumentEditorInputKey.None,
     };
 
-    private static DocumentEditorInputModifiers ToEditorInputModifiers(ModifierKeys modifiers)
-    {
-        var result = DocumentEditorInputModifiers.None;
-        if ((modifiers & ModifierKeys.Control) != 0)
-            result |= DocumentEditorInputModifiers.Control;
-        if ((modifiers & ModifierKeys.Shift) != 0)
-            result |= DocumentEditorInputModifiers.Shift;
-        if ((modifiers & ModifierKeys.Alt) != 0)
-            result |= DocumentEditorInputModifiers.Alt;
-        return result;
-    }
+    // Meta policy: the Windows key is dropped (FreeW's WPF editor never saw it).
+    private static FreeKeyModifiers ToEditorInputModifiers(ModifierKeys modifiers) =>
+        WpfKeyModifiersMapper.FromWpf(modifiers, KeyModifierMetaPolicy.Drop);
 
     // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
     // the just-typed char, and if one fires, delete back N chars and insert the replacement at the caret.

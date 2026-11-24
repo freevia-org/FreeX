@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -30,7 +31,7 @@ public sealed class CanvasGestureRouterTests
         var preview = router.PreviewPointer(
             new CanvasGesturePoint(120, 80),
             SlideTransformCore.Identity,
-            CanvasGestureModifiers.None);
+            FreeKeyModifiers.None);
         preview.Kind.Should().Be(CanvasGestureKind.Resize);
         preview.ShapeId.Should().Be(shape.Id);
         preview.Resize.Should().Be(new CanvasResizeBounds(
@@ -42,7 +43,7 @@ public sealed class CanvasGestureRouterTests
         router.CompletePointer(
             new CanvasGesturePoint(120, 80),
             SlideTransformCore.Identity,
-            CanvasGestureModifiers.None).Should().BeTrue();
+            FreeKeyModifiers.None).Should().BeTrue();
 
         shape.ExtentCxEmu.Should().Be(110 * EmusPerDip);
         shape.ExtentCyEmu.Should().Be(60 * EmusPerDip);
@@ -91,8 +92,8 @@ public sealed class CanvasGestureRouterTests
         // Slide-space point (160,0) is local point (40,20) [top edge, 30 DIP right of Left]
         // rotated +90 degrees about the shape's centre (110,70).
         var dragTarget = new CanvasGesturePoint(160, 0);
-        router.PreviewPointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None);
-        router.CompletePointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None)
+        router.PreviewPointer(dragTarget, SlideTransformCore.Identity, FreeKeyModifiers.None);
+        router.CompletePointer(dragTarget, SlideTransformCore.Identity, FreeKeyModifiers.None)
             .Should().BeTrue();
 
         shape.PresetGeometryAdjustments.Should().ContainKey("adj");
@@ -134,8 +135,8 @@ public sealed class CanvasGestureRouterTests
         press.Handled.Should().BeTrue();
 
         var dragTarget = new CanvasGesturePoint(40, 20);
-        router.PreviewPointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None);
-        router.CompletePointer(dragTarget, SlideTransformCore.Identity, CanvasGestureModifiers.None)
+        router.PreviewPointer(dragTarget, SlideTransformCore.Identity, FreeKeyModifiers.None);
+        router.CompletePointer(dragTarget, SlideTransformCore.Identity, FreeKeyModifiers.None)
             .Should().BeTrue();
 
         shape.PresetGeometryAdjustments.Should().ContainKey("adj");
@@ -143,11 +144,11 @@ public sealed class CanvasGestureRouterTests
     }
 
     [Theory]
-    [InlineData(CanvasGestureModifiers.Control)]
-    [InlineData(CanvasGestureModifiers.Shift)]
-    [InlineData(CanvasGestureModifiers.Meta)]
+    [InlineData(FreeKeyModifiers.Control)]
+    [InlineData(FreeKeyModifiers.Shift)]
+    [InlineData(FreeKeyModifiers.Meta)]
     public void AdditiveSelectionModifiers_SelectWithoutStartingAnAccidentalMove(
-        CanvasGestureModifiers modifier)
+        FreeKeyModifiers modifier)
     {
         var presentation = Presentation.CreateEmpty();
         var slide = presentation.Slides[0];
@@ -190,20 +191,20 @@ public sealed class CanvasGestureRouterTests
         router.PreviewPointer(
                 new CanvasGesturePoint(-8, -10),
                 SlideTransformCore.Identity,
-                CanvasGestureModifiers.None)
+                FreeKeyModifiers.None)
             .Should().Be(CanvasGesturePreviewPlan.Empty);
 
         var preview = router.PreviewPointer(
             new CanvasGesturePoint(200, 200),
             SlideTransformCore.Identity,
-            CanvasGestureModifiers.None);
+            FreeKeyModifiers.None);
         preview.Kind.Should().Be(CanvasGestureKind.Marquee);
         preview.Marquee.Should().Be(new SlideScreenRect(-10, -10, 210, 210));
 
         router.CompletePointer(
             new CanvasGesturePoint(200, 200),
             SlideTransformCore.Identity,
-            CanvasGestureModifiers.None).Should().BeTrue();
+            FreeKeyModifiers.None).Should().BeTrue();
 
         editor.SelectedShapeIds.Should().Equal(shape.Id);
     }
@@ -212,11 +213,11 @@ public sealed class CanvasGestureRouterTests
     // shapes to the pre-existing selection, not discard it. Pre-select shape B (off to the side),
     // then Shift+drag a marquee around disjoint shape A only; B must still be selected afterward.
     [Theory]
-    [InlineData(CanvasGestureModifiers.Shift)]
-    [InlineData(CanvasGestureModifiers.Control)]
-    [InlineData(CanvasGestureModifiers.Meta)]
+    [InlineData(FreeKeyModifiers.Shift)]
+    [InlineData(FreeKeyModifiers.Control)]
+    [InlineData(FreeKeyModifiers.Meta)]
     public void AdditiveMarquee_PreservesPriorSelectionAndAddsNewHits(
-        CanvasGestureModifiers modifier)
+        FreeKeyModifiers modifier)
     {
         var presentation = Presentation.CreateEmpty();
         var slide = presentation.Slides[0];
@@ -286,12 +287,12 @@ public sealed class CanvasGestureRouterTests
         router.PreviewPointer(
             new CanvasGesturePoint(200, 200),
             SlideTransformCore.Identity,
-            CanvasGestureModifiers.None);
+            FreeKeyModifiers.None);
 
         router.CompletePointer(
             new CanvasGesturePoint(200, 200),
             SlideTransformCore.Identity,
-            CanvasGestureModifiers.None).Should().BeTrue();
+            FreeKeyModifiers.None).Should().BeTrue();
 
         editor.SelectedShapeIds.Should().Equal(a.Id);
     }
@@ -444,9 +445,9 @@ public sealed class CanvasGestureRouterTests
         editor.Select(shape.Id);
         var router = new CanvasGestureRouter(editor);
 
-        router.HandleKeyDown(CanvasGestureKey.Right, CanvasGestureModifiers.None)
+        router.HandleKeyDown(CanvasGestureKey.Right, FreeKeyModifiers.None)
             .Handled.Should().BeTrue();
-        router.HandleKeyDown(CanvasGestureKey.Down, CanvasGestureModifiers.Shift)
+        router.HandleKeyDown(CanvasGestureKey.Down, FreeKeyModifiers.Shift)
             .Handled.Should().BeTrue();
         shape.OffsetXEmu.Should().Be(10 * EmusPerDip + CanvasGesturePlanner.SmallNudgeEmu);
         shape.OffsetYEmu.Should().Be(20 * EmusPerDip + CanvasGesturePlanner.LargeNudgeEmu);
@@ -457,14 +458,14 @@ public sealed class CanvasGestureRouterTests
             new CanvasGesturePoint(0, 0));
         var escape = router.HandleKeyDown(
             CanvasGestureKey.Escape,
-            CanvasGestureModifiers.None);
+            FreeKeyModifiers.None);
         escape.Should().Be(new CanvasGestureKeyboardPlan(
             true,
             CanvasGestureKeyboardActionKind.CancelGesture));
         router.IsActive.Should().BeTrue("the native host still owns pointer release and visual cleanup");
 
         router.Cancel();
-        router.HandleKeyDown(CanvasGestureKey.Delete, CanvasGestureModifiers.None)
+        router.HandleKeyDown(CanvasGestureKey.Delete, FreeKeyModifiers.None)
             .Handled.Should().BeTrue();
         editor.CurrentSlide!.Shapes.Should().NotContain(shape);
     }
@@ -473,7 +474,7 @@ public sealed class CanvasGestureRouterTests
         CanvasGesturePoint screen,
         CanvasGesturePoint slide,
         int clickCount = 1,
-        CanvasGestureModifiers modifiers = CanvasGestureModifiers.None,
+        FreeKeyModifiers modifiers = FreeKeyModifiers.None,
         CanvasGestureHandleKind selectionHandle = CanvasGestureHandleKind.None,
         string? geometryHandle = null,
         bool hasSingleSelectionFrame = false,

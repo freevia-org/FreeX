@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
@@ -211,7 +212,7 @@ public sealed class PresentationSmartArtTextPaneSession
 
     public SmartArtNodeEditResult? ApplyKeyboardRoute(
         SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         LastKeyboardRoute = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
             key,

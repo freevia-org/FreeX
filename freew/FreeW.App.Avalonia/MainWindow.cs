@@ -3352,17 +3352,9 @@ public sealed partial class MainWindow : Window
             AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
     }
 
-    private static FreeWKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)
-    {
-        var result = FreeWKeyboardModifiers.None;
-        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
-            result |= FreeWKeyboardModifiers.Control;
-        if ((modifiers & KeyModifiers.Shift) != 0)
-            result |= FreeWKeyboardModifiers.Shift;
-        if ((modifiers & KeyModifiers.Alt) != 0)
-            result |= FreeWKeyboardModifiers.Alt;
-        return result;
-    }
+    // Meta policy: Command (Meta) acts as Control for editor shortcuts on macOS, so it folds to Control.
+    private static FreeKeyModifiers ToKeyboardModifiers(KeyModifiers modifiers) =>
+        AvaloniaKeyModifiersMapper.FromAvalonia(modifiers, KeyModifierMetaPolicy.AsControl);
 
     private static bool TryMapKeyboardKey(Key key, out FreeWKeyboardKey mapped)
     {

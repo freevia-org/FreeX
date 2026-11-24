@@ -1,3 +1,5 @@
+using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -249,7 +251,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
         SlideTransformCore transform,
         Slide slide,
         int clickCount,
-        CanvasGestureModifiers modifiers)
+        FreeKeyModifiers modifiers)
     {
         var projection = SelectionAdornerGeometry.BuildProjection(
             slide,
@@ -432,12 +434,9 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
     private static CanvasGestureKey ToGestureKey(Key key) =>
         CanvasGestureNativeInputMapper.MapKeyName(key.ToString());
 
-    private static CanvasGestureModifiers ToGestureModifiers(KeyModifiers modifiers) =>
-        CanvasGestureNativeInputMapper.MapModifiers(
-            modifiers.HasFlag(KeyModifiers.Shift),
-            modifiers.HasFlag(KeyModifiers.Control),
-            modifiers.HasFlag(KeyModifiers.Alt),
-            modifiers.HasFlag(KeyModifiers.Meta));
+    // Meta policy: Keep. Command stays visible to the gesture planner (additive-selection modifier).
+    private static FreeKeyModifiers ToGestureModifiers(KeyModifiers modifiers) =>
+        AvaloniaKeyModifiersMapper.FromAvalonia(modifiers, KeyModifierMetaPolicy.Keep);
 
     private static Rect ToAvaloniaRect(SlideScreenRect rect)
         => new(rect.Left, rect.Top, rect.Width, rect.Height);

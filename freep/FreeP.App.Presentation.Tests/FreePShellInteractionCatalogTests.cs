@@ -1,3 +1,4 @@
+using Free.Shared.Shell;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -88,23 +89,23 @@ public sealed class FreePShellInteractionCatalogTests
     }
 
     [Theory]
-    [InlineData(FreePKeyboardKey.Apps, FreePKeyboardModifiers.None, true)]
-    [InlineData(FreePKeyboardKey.F10, FreePKeyboardModifiers.Shift, true)]
-    [InlineData(FreePKeyboardKey.F10, FreePKeyboardModifiers.None, false)]
-    [InlineData(FreePKeyboardKey.Apps, FreePKeyboardModifiers.Control, false)]
+    [InlineData(FreePKeyboardKey.Apps, FreeKeyModifiers.None, true)]
+    [InlineData(FreePKeyboardKey.F10, FreeKeyModifiers.Shift, true)]
+    [InlineData(FreePKeyboardKey.F10, FreeKeyModifiers.None, false)]
+    [InlineData(FreePKeyboardKey.Apps, FreeKeyModifiers.Control, false)]
     public void ContextMenuInvocationOwnsOnlyMenuAndShiftF10(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool expected) =>
         FreePContextMenuCatalog.IsKeyboardInvocation(key, modifiers).Should().Be(expected);
 
     [Theory]
-    [InlineData(FreePKeyboardKey.Escape, FreePKeyboardModifiers.None, true)]
-    [InlineData(FreePKeyboardKey.Escape, FreePKeyboardModifiers.Shift, false)]
-    [InlineData(FreePKeyboardKey.F10, FreePKeyboardModifiers.None, false)]
+    [InlineData(FreePKeyboardKey.Escape, FreeKeyModifiers.None, true)]
+    [InlineData(FreePKeyboardKey.Escape, FreeKeyModifiers.Shift, false)]
+    [InlineData(FreePKeyboardKey.F10, FreeKeyModifiers.None, false)]
     public void ContextMenuDismissalOwnsOnlyUnmodifiedEscape(
         FreePKeyboardKey key,
-        FreePKeyboardModifiers modifiers,
+        FreeKeyModifiers modifiers,
         bool expected) =>
         FreePContextMenuCatalog.IsKeyboardDismissal(key, modifiers).Should().Be(expected);
 
