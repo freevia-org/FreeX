@@ -4,6 +4,7 @@
 // Usage:
 //   FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...]
 //   FreeW.PageLayoutShot [<output-dir>] --input-docx <path> [--input-page-count <n>] [--input-output-stem <stem>]
+//   FreeW.PageLayoutShot --probe-document-fonts
 //
 // If <output-dir> is omitted PNGs are written next to the executable:
 //   freew_print_layout.png  — Print Layout (grey desk + discrete white pages + drop-shadow)
@@ -34,8 +35,15 @@ var positionalArgs = new List<string>();
 string? inputDocxPath = null;
 var inputPageCount = 1;
 string? inputOutputStem = null;
+var probeDocumentFonts = false;
 for (var i = 0; i < args.Length; i++)
 {
+    if (string.Equals(args[i], "--probe-document-fonts", StringComparison.OrdinalIgnoreCase))
+    {
+        probeDocumentFonts = true;
+        continue;
+    }
+
     if (string.Equals(args[i], "--scenario", StringComparison.OrdinalIgnoreCase))
     {
         if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
@@ -107,7 +115,7 @@ Dispatcher.UIThread.Post(() =>
 {
     try
     {
-        exitCode = RenderAll(outDir, inputDocxCapture);
+        exitCode = probeDocumentFonts ? PageShotDocumentFontProbe.Run() : RenderAll(outDir, inputDocxCapture);
     }
     catch (Exception ex)
     {

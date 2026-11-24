@@ -37,6 +37,18 @@ organization or distributing it for commercial use, replace this dependency,
 use a suitably licensed version, or confirm the required license has been
 obtained.
 
+## Bundled Document Fonts
+
+FreeW Avalonia bundles unchanged Carlito Regular, Bold, Italic and Bold Italic fonts
+from [Google Fonts](https://github.com/google/fonts/tree/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/carlito)
+(commit `06bfe0d62a98375cb09c942fa18e68bd32cff057`) under the SIL Open Font License 1.1.
+Copyright 2013 The Carlito Project Authors (https://github.com/googlefonts/carlito),
+with Reserved Font Name "Carlito". The font provides a document-only fallback when
+Calibri is unavailable. Original font files, source URLs, byte counts and SHA-256
+hashes are recorded in `freew/FreeW.App.Avalonia/Assets/Fonts/Carlito/UPSTREAM.json`.
+The full copyright and license appear in the bundled third-party license text and
+[the Carlito license file](docs/legal/licenses/Carlito-OFL-1.1.txt).
+
 ## Runtime Packages
 
 | Package | Version | License | Project |

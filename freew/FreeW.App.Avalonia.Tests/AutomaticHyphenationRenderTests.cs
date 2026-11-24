@@ -10,6 +10,9 @@ public sealed class AutomaticHyphenationRenderTests
 {
     private const string LongWord = "characteristically";
 
+    // Explicit Arial keeps these wrap-budget fixtures on the headless stub metrics;
+    // the default Calibri family now resolves to real bundled Carlito font data.
+
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
@@ -175,7 +178,7 @@ public sealed class AutomaticHyphenationRenderTests
             document.Page.AutoHyphenation = true;
 
             var paragraph = new Paragraph(LongWord);
-            paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 24 };
+            paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontFamily = "Arial", FontSizePt = 24 };
             var table = Table.Create(1, 1);
             table.Rows[0].Cells[0].Paragraphs.Clear();
             table.Rows[0].Cells[0].Paragraphs.Add(paragraph);
@@ -227,7 +230,7 @@ public sealed class AutomaticHyphenationRenderTests
                 document.Page.ConsecutiveHyphenLimit = consecutiveHyphenLimit;
 
                 var paragraph = new Paragraph(string.Join(' ', Enumerable.Repeat(LongWord, 3)));
-                paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 24 };
+                paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontFamily = "Arial", FontSizePt = 24 };
                 var table = Table.Create(1, 1);
                 table.Rows[0].Cells[0].Paragraphs.Clear();
                 table.Rows[0].Cells[0].Paragraphs.Add(paragraph);
@@ -326,7 +329,7 @@ public sealed class AutomaticHyphenationRenderTests
                 SuppressAutoHyphensIsSet = suppressAutoHyphens,
             },
         };
-        paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontSizePt = 24 };
+        paragraph.Runs[0].Formatting = paragraph.Runs[0].Formatting with { FontFamily = "Arial", FontSizePt = 24 };
         document.Blocks.Add(paragraph);
         return (document, paragraph);
     }

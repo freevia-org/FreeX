@@ -44,7 +44,7 @@ internal sealed partial class OutlineView : Border
         {
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
-            FontFamily = new FontFamily("Calibri"),
+            FontFamily = DocumentFontFamilyResolver.Resolve("Calibri"),
             FontSize = 15,
         };
         _controller.RowsChanged += RenderRows;

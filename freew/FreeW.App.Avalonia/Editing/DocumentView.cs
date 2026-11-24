@@ -4576,7 +4576,7 @@ public sealed partial class DocumentView : Control
             : Color.FromRgb(0x80, 0x80, 0x80);
         var brush = new SolidColorBrush(color);
         var typeface = new Typeface(
-            watermark.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            DocumentFontFamilyResolver.Resolve(watermark.FontFamily),
             FontStyle.Normal,
             FontWeight.Normal);
         var unitText = new FormattedText(
@@ -11879,7 +11879,7 @@ public sealed partial class DocumentView : Control
 
         // The shared planner preserves Word's VML text-path footprint and fitshape sizing.
         var typeface = new Typeface(
-            wm.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            DocumentFontFamilyResolver.Resolve(wm.FontFamily),
             FontStyle.Normal, FontWeight.Normal);
         var unitText = new FormattedText(
             wm.Text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, brush);
@@ -27384,7 +27384,7 @@ public sealed partial class DocumentView : Control
     internal FormattedText Build(string text, RunFormatting fmt)
     {
         var typeface = new Typeface(
-            fmt.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            DocumentFontFamilyResolver.Resolve(fmt.FontFamily),
             fmt.Italic ? FontStyle.Italic : FontStyle.Normal,
             fmt.Bold ? FontWeight.Bold : FontWeight.Normal);
 
@@ -28303,7 +28303,7 @@ public sealed partial class DocumentView : Control
     internal FormattedText BuildChartSceneText(ChartSceneText text)
     {
         var typeface = new Typeface(
-            new FontFamily(text.Kind == ChartSceneTextKind.Title ? "Aptos" : "Calibri"),
+            DocumentFontFamilyResolver.Resolve(text.Kind == ChartSceneTextKind.Title ? "Aptos" : "Calibri"),
             FontStyle.Normal,
             FontWeight.Normal);
         return new FormattedText(

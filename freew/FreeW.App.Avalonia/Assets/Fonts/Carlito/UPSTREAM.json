@@ -1,0 +1,46 @@
+{
+  "repository": "https://github.com/google/fonts",
+  "commit": "06bfe0d62a98375cb09c942fa18e68bd32cff057",
+  "path": "ofl/carlito",
+  "license": "SIL Open Font License 1.1",
+  "files": [
+    {
+      "name": "Carlito-Regular.ttf",
+      "bytes": 628032,
+      "gitBlobSha1": "427b95989fee609ab683d800ad00e22a4b14ecad",
+      "sha256": "f6418f708baede9789daef5d458c0f53d2a888af9820e8062934e504fedc6595",
+      "url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/carlito/Carlito-Regular.ttf"
+    },
+    {
+      "name": "Carlito-Bold.ttf",
+      "bytes": 682468,
+      "gitBlobSha1": "67543b5a1efe4b910317116b02e8e9e01659692e",
+      "sha256": "bb5d20f79b82599ec72983597437373a80f2d2085fa91fc144fd74e876a594db",
+      "url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/carlito/Carlito-Bold.ttf"
+    },
+    {
+      "name": "Carlito-Italic.ttf",
+      "bytes": 615236,
+      "gitBlobSha1": "8dc3c84edfc8f0b6c6acdbd112abfda827b484ac",
+      "sha256": "0b019225e58d702bfedcbd35c21696769f8ee115cb6343f84c2f240312450d1c",
+      "url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/carlito/Carlito-Italic.ttf"
+    },
+    {
+      "name": "Carlito-BoldItalic.ttf",
+      "bytes": 808508,
+      "gitBlobSha1": "e2c5d8803828d9a3373459d71cf18ec06753cef5",
+      "sha256": "b32928186c119599e03ca6a1ffc680fdcb7fac95772f4b95d989cf6cd3861517",
+      "url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/carlito/Carlito-BoldItalic.ttf"
+    },
+    {
+      "name": "OFL.txt",
+      "gitBlobSha1": "8d6b170e4d9a5580a34471dc4ac3e8fc5fbbd712",
+      "url": "https://raw.githubusercontent.com/google/fonts/06bfe0d62a98375cb09c942fa18e68bd32cff057/ofl/carlito/OFL.txt",
+      "upstreamSha256": "58402f82a7c332a700294988fe7554fbb0a63a8d27ccc1ee3bbc640311990a00",
+      "upstreamBytes": 4424,
+      "sha256": "ecd848e05cf9ac95f4565491833b06c9fff3b17f396f8d8df06f77f432a793ac",
+      "bytes": 4423,
+      "normalization": "Trailing whitespace removed from license text; wording unchanged."
+    }
+  ]
+}

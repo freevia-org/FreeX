@@ -77,6 +77,10 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
+    <AvaloniaResource Include="Assets/Fonts/Carlito/*.ttf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

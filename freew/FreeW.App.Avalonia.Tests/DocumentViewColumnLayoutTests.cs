@@ -338,6 +338,8 @@ public sealed class DocumentViewColumnLayoutTests
             static TextDocument BuildDocument(bool explicitWidowOff)
             {
                 var doc = TextDocument.CreateEmpty();
+                // This boundary fixture uses explicit headless metrics, independent of Calibri fallback.
+                doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
                 doc.Blocks.Clear();
                 doc.Page.WidthPt = 360;
                 doc.Page.HeightPt = 216;
@@ -507,6 +509,8 @@ public sealed class DocumentViewColumnLayoutTests
         var ran = await OnUiThread(() =>
         {
             var doc = TextDocument.CreateEmpty();
+            // This boundary fixture uses explicit headless metrics, independent of Calibri fallback.
+            doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
             doc.Blocks.Clear();
             doc.Page.WidthPt = 360;
             doc.Page.HeightPt = 216;
@@ -562,6 +566,8 @@ public sealed class DocumentViewColumnLayoutTests
         var ran = await OnUiThread(() =>
         {
             var doc = TextDocument.CreateEmpty();
+            // This boundary fixture uses explicit headless metrics, independent of Calibri fallback.
+            doc.DefaultRun = doc.DefaultRun with { FontFamily = "Arial" };
             doc.Blocks.Clear();
             doc.Page.WidthPt = 360;
             doc.Page.HeightPt = 216;

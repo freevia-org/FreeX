@@ -343,7 +343,7 @@ public sealed class ReferencesTabTests
 
         var entry = view.Document.Blocks.OfType<Paragraph>()
             .Single(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId);
-        entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, [2-9][0-9]*$");
+        entry.PlainText.Should().MatchRegex(@"^Overflow Case\t1, (?:[2-9]|[1-9][0-9]+)$");
         entry.Runs.Select(run => run.Text).Should().HaveCount(3);
     });
 

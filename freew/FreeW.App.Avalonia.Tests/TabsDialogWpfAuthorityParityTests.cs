@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -78,7 +79,7 @@ public sealed class TabsDialogWpfAuthorityParityTests
                 defaultTabStopPt: 42.5);
 
             dialog.StopsForTest.SelectedIndex = 0;
-            dialog.PositionBoxForTest.Text.Should().Be("108.25");
+            dialog.PositionBoxForTest.Text.Should().Be(108.25.ToString("0.##", CultureInfo.CurrentCulture));
             dialog.AlignmentBoxForTest.SelectedIndex.Should().Be(3);
             dialog.LeaderBoxForTest.SelectedIndex.Should().Be(3);
 

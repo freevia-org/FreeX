@@ -110,7 +110,7 @@ internal static class DocumentStylesGallery
         var label = new TextBlock
         {
             Text = name,
-            FontFamily = new FontFamily(run.FontFamily ?? "Calibri"),
+            FontFamily = DocumentFontFamilyResolver.Resolve(run.FontFamily ?? "Calibri"),
             FontSize = Math.Min((run.FontSizePt ?? 11) * 96d / 72d, 16),
             FontWeight = run.Bold ? FontWeight.Bold : FontWeight.Normal,
             FontStyle = run.Italic ? global::Avalonia.Media.FontStyle.Italic : global::Avalonia.Media.FontStyle.Normal,
