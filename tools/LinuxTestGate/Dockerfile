@@ -24,9 +24,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 #                             without these the process fails to load libSkiaSharp/Avalonia.X11
 #                             even under Avalonia.Headless.
 #   fontconfig,
-#   fonts-dejavu-core       - font enumeration/measurement in the Avalonia tests needs at least one
-#                             real font available; DejaVu is small and matches what the interactive
-#                             image already uses for text-layout parity.
+#   fonts-dejavu-core,
+#   fonts-dejavu-extra      - font enumeration/measurement and PDF rendering need complete DejaVu
+#                             families, including italic and bold italic. Core alone supplies only
+#                             upright Sans/Serif faces, so Skia resolves italic requests as upright.
 #   rsync                   - tools/Run-LinuxTestGate.ps1 syncs the bind-mounted repo into a
 #                             container-local volume with rsync (excluding bin/obj) so MSBuild's many
 #                             small file writes never hit the slow Windows-bind-mounted filesystem.
@@ -41,6 +42,7 @@ RUN apt-get update -qq \
         libfontconfig1 \
         fontconfig \
         fonts-dejavu-core \
+        fonts-dejavu-extra \
         rsync \
         util-linux \
     && rm -rf /var/lib/apt/lists/*
