@@ -1,4 +1,6 @@
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -22,8 +24,7 @@ namespace FreeX.App.Avalonia;
 /// delegated to the Core <see cref="ReapplyStructuredTableStyleCommand"/>, which captures the table's
 /// current banding (<see cref="StructuredTableStyleBanding.CaptureCurrent"/>) so there is no dependency on
 /// the WPF-only TableStyleGalleryPlanner. Convert to Range removes the structured table via
-/// <see cref="ConvertStructuredTableToRangeCommand"/> (no confirmation dialog in this Phase; the WPF host
-/// asks Yes/No first).
+/// <see cref="ConvertStructuredTableToRangeCommand"/> after the same Yes/No confirmation as the WPF host.
 /// </remarks>
 public sealed partial class MainWindow
 {
@@ -68,6 +69,9 @@ public sealed partial class MainWindow
         }
 
         var plan = TableDesignCommandPlanner.BuildConvertToRangePlan(_session.ActiveSheet.Id, table);
+        if (ShowSynchronousPrompt(FreeXSynchronousPromptCatalog.ForConvertTableToRange()) != UserMessageResult.Yes)
+            return;
+
         var result = _session.ExecuteReviewCommand(plan.Command);
 
         if (result.Success)

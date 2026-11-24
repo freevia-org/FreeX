@@ -15,6 +15,7 @@ public enum FreeXSynchronousPromptKind
     UpdateDiscardsOtherWindowChanges,
     UpdateApplyFailed,
     SortAdjacentData,
+    ConvertTableToRange,
 }
 
 /// <summary>Renderer-neutral text, buttons, severity, and dismissal policy for a synchronous prompt.</summary>
@@ -132,6 +133,15 @@ public static class FreeXSynchronousPromptCatalog
             LocalizedTextDescriptor.Resource(SortAdjacentDataBodyResourceKey),
             UserMessageButtons.YesNo,
             UserMessageIcon.Warning,
+            UserMessageResult.No);
+
+    public static FreeXSynchronousPromptDescriptor ForConvertTableToRange() =>
+        new(
+            FreeXSynchronousPromptKind.ConvertTableToRange,
+            LocalizedTextDescriptor.Resource("MainWindow_TooltipTitle_ConvertToRange"),
+            LocalizedTextDescriptor.Resource("TableDesign_ConvertToRangeConfirmation"),
+            UserMessageButtons.YesNo,
+            UserMessageIcon.Question,
             UserMessageResult.No);
 
     public static UpdateReadyConfirmationPlan ForUpdateReady(string? version)

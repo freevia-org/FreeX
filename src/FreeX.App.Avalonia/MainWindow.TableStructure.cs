@@ -7,12 +7,17 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     /// <summary>
-    /// Handles the table-scoped Insert/Delete entries (Table Rows Above/Below, Table Columns to the
-    /// Left/Right, Delete Table Rows/Columns) shared by the cell context menu. Returns false for any
-    /// other action so the caller keeps routing it.
+    /// Handles the table-scoped Insert/Delete entries and Convert to Range shared by the cell
+    /// context menu. Returns false for other actions so the caller keeps routing them.
     /// </summary>
     private bool TryExecuteTableStructureContextMenuAction(WorksheetContextMenuAction action)
     {
+        if (action == WorksheetContextMenuAction.ConvertTableToRange)
+        {
+            ConvertActiveTableToRange();
+            return true;
+        }
+
         if (!WorksheetContextMenuTableActions.TryGetTableStructureAction(action, out var tableAction))
             return false;
 
