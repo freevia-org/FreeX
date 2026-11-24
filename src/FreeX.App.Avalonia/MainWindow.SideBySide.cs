@@ -15,12 +15,13 @@ namespace FreeX.App.Avalonia;
 // scroll application remain in this shell. _suppressScrollBroadcast is a local
 // re-entrancy guard that prevents the receiving window from echoing a native scroll event back.
 //
-// Scroll sync is hooked into the two places that change the viewport origin in the Avalonia shell:
+// Scroll sync is hooked into the three places that change the viewport origin in the Avalonia shell:
 //   1. WorksheetScrollBar_ValueChanged (scrollbar drag / click)
 //   2. SheetScrollViewer_PointerWheelChanged (mouse-wheel pan)
+//   3. ApplyCellDragAutoScroll (captured selection drag)
 //
-// Both paths call RefreshShell() which triggers _refreshRibbonToggleStates. We broadcast via
-// BroadcastScrollOffsetToSideBySidePartner() which is called from the two scroll handlers
+// Each route refreshes the viewport and its scrollbar chrome. We broadcast via
+// BroadcastScrollOffsetToSideBySidePartner() from the local scroll handlers
 // after they update the session viewport.  The broadcast is suppressed when the partner is
 // applying an incoming scroll position to avoid infinite feedback loops.
 //
@@ -122,36 +123,34 @@ public sealed partial class MainWindow : Window
         if (_suppressScrollBroadcast)
             return;
 
-        var row = _verticalWorksheetScrollBar.Value;
-        var col = _horizontalWorksheetScrollBar.Value;
+        // Scrollbar values are relative to each window's own frozen panes. Send worksheet
+        // indices so a partner with different freeze counts receives the same visible origin.
+        var origin = _session.ViewportOrigin;
         SideBySideCoordinator.ApplyToSynchronousPartner(
             this,
-            (Row: row, Column: col),
+            (Row: origin.TopRow, Column: origin.LeftCol),
             static (partner, offset) => partner.ApplySynchronizedScrollOffset(offset.Row, offset.Column));
     }
 
-    private void ApplySynchronizedScrollOffset(double row, double col)
+    private void ApplySynchronizedScrollOffset(uint row, uint col)
     {
         _suppressScrollBroadcast = true;
         try
         {
-            // Clamp to the partner's own scroll range so differing content sizes never throw.
-            var clampedRow = Math.Clamp(row, _verticalWorksheetScrollBar.Minimum, _verticalWorksheetScrollBar.Maximum);
-            var clampedCol = Math.Clamp(col, _horizontalWorksheetScrollBar.Minimum, _horizontalWorksheetScrollBar.Maximum);
-
-            // Only update if there is actually a meaningful change (avoids a no-op RefreshShell round-trip).
-            var rowChanged = Math.Abs(_verticalWorksheetScrollBar.Value - clampedRow) > 0.001;
-            var colChanged = Math.Abs(_horizontalWorksheetScrollBar.Value - clampedCol) > 0.001;
-            if (!rowChanged && !colChanged)
-                return;
-
-            // Drive the session viewport directly, mirroring WorksheetScrollBar_ValueChanged.
+            var frozenRows = _session.GetEffectiveFrozenRows();
+            var frozenColumns = _session.GetEffectiveFrozenCols();
+            var verticalValue = WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(row, frozenRows);
+            var horizontalValue = WorkbookViewportScrollPlanner.WorksheetIndexToScrollbarValue(col, frozenColumns);
+            // Each partner retains its own scroll range and frozen-pane boundary.
+            var clampedRow = Math.Clamp(verticalValue, _verticalWorksheetScrollBar.Minimum, _verticalWorksheetScrollBar.Maximum);
+            var clampedCol = Math.Clamp(horizontalValue, _horizontalWorksheetScrollBar.Minimum, _horizontalWorksheetScrollBar.Maximum);
             var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
-                _session.ActiveSheet,
-                clampedRow,
-                clampedCol);
+                frozenRows, frozenColumns, clampedRow, clampedCol);
             if (_session.SetViewportOrigin(topRow, leftCol))
-        RefreshShell(UiText.Get("MainLoc_Ready"));
+            {
+                CloseAutoFilterFlyout();
+                RefreshShellForViewportPan(UiText.Get("MainLoc_Ready"));
+            }
         }
         finally
         {

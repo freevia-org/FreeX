@@ -116,8 +116,8 @@ public static class WorkbookViewportScrollPlanner
     }
 
     /// <summary>
-    /// Sheet-resolved convenience overload for callers whose Freeze Panes state is not per-window
-    /// (the Avalonia host). A null sheet resolves to zero frozen rows.
+    /// Sheet-resolved convenience overload for persisted sheet state. Live windows should pass their
+    /// effective per-view frozen-row count instead. A null sheet resolves to zero frozen rows.
     /// </summary>
     public static int CountVisibleScrollableRows(ViewportModel viewport, Sheet? sheet) =>
         CountVisibleScrollableRows(viewport, sheet?.FrozenRows ?? 0);
@@ -129,21 +129,43 @@ public static class WorkbookViewportScrollPlanner
     public static WorkbookViewportScrollState Create(Sheet sheet, ViewportModel viewport)
     {
         ArgumentNullException.ThrowIfNull(sheet);
+        return Create(
+            sheet,
+            viewport,
+            sheet.ViewTopRow ?? GetScrollableRowStart(sheet),
+            sheet.ViewLeftCol ?? GetScrollableColumnStart(sheet),
+            sheet.FrozenRows,
+            sheet.FrozenCols);
+    }
+
+    /// <summary>
+    /// Plans scrollbars for one live view. The sheet supplies the shared used range, while the
+    /// origin and frozen counts belong to this window and may differ from the persisted sheet state.
+    /// </summary>
+    public static WorkbookViewportScrollState Create(
+        Sheet sheet,
+        ViewportModel viewport,
+        uint topRow,
+        uint leftCol,
+        uint frozenRows,
+        uint frozenColumns)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(viewport);
 
-        var visibleRows = (uint)CountVisibleScrollableRows(viewport, sheet.FrozenRows);
-        var visibleColumns = (uint)CountVisibleScrollableColumns(viewport, sheet.FrozenCols);
+        var visibleRows = (uint)CountVisibleScrollableRows(viewport, frozenRows);
+        var visibleColumns = (uint)CountVisibleScrollableColumns(viewport, frozenColumns);
         var (usedMaxRow, usedMaxCol) = CalculateUsedRangeExtents(sheet);
         return new WorkbookViewportScrollState(
             CreateAxis(
-                sheet.ViewTopRow ?? GetScrollableRowStart(sheet),
-                sheet.FrozenRows,
+                topRow,
+                frozenRows,
                 CellAddress.MaxRow,
                 visibleRows,
                 usedMaxRow),
             CreateAxis(
-                sheet.ViewLeftCol ?? GetScrollableColumnStart(sheet),
-                sheet.FrozenCols,
+                leftCol,
+                frozenColumns,
                 CellAddress.MaxCol,
                 visibleColumns,
                 usedMaxCol));

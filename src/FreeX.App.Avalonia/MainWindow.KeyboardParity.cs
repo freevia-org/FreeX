@@ -650,8 +650,9 @@ public sealed partial class MainWindow
         if (rowVisible && columnVisible)
             return;
 
-        var topRow = rowVisible ? _session.ActiveSheet.ViewTopRow ?? 1 : active.Row;
-        var leftColumn = columnVisible ? _session.ActiveSheet.ViewLeftCol ?? 1 : active.Col;
+        var origin = _session.ViewportOrigin;
+        var topRow = rowVisible ? origin.TopRow : active.Row;
+        var leftColumn = columnVisible ? origin.LeftCol : active.Col;
         if (_session.SetViewportOrigin(topRow, leftColumn))
             RefreshShell(UiText.Get("MainLoc_Ready"));
     }

@@ -4630,7 +4630,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void UpdateViewportScrollBars()
     {
-        var state = WorkbookViewportScrollPlanner.Create(_session.ActiveSheet, _session.Viewport);
+        var origin = _session.ViewportOrigin;
+        var state = WorkbookViewportScrollPlanner.Create(
+            _session.ActiveSheet, _session.Viewport,
+            origin.TopRow, origin.LeftCol,
+            _session.GetEffectiveFrozenRows(), _session.GetEffectiveFrozenCols());
         _isUpdatingWorksheetScrollBars = true;
         try
         {
@@ -7848,7 +7852,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ApplyCellDragAutoScroll(GridAutoScrollRequest request)
     {
-        var sheet = _session.ActiveSheet;
         var oldHorizontalMaximum = _horizontalWorksheetScrollBar.Maximum;
         var oldHorizontalValue = _horizontalWorksheetScrollBar.Value;
         var oldVerticalMaximum = _verticalWorksheetScrollBar.Maximum;
@@ -7865,7 +7868,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     request.HorizontalDirection,
                     step: 1,
                     _horizontalWorksheetScrollBar.ViewportSize,
-                    WorkbookViewportScrollPlanner.GetScrollableColumnLimit(sheet));
+                    WorkbookViewportScrollPlanner.GetScrollableColumnLimit(_session.GetEffectiveFrozenCols()));
                 _horizontalWorksheetScrollBar.Maximum = maximum;
                 _horizontalWorksheetScrollBar.Value = value;
             }
@@ -7878,7 +7881,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     request.VerticalDirection,
                     step: 1,
                     _verticalWorksheetScrollBar.ViewportSize,
-                    WorkbookViewportScrollPlanner.GetScrollableRowLimit(sheet));
+                    WorkbookViewportScrollPlanner.GetScrollableRowLimit(_session.GetEffectiveFrozenRows()));
                 _verticalWorksheetScrollBar.Maximum = maximum;
                 _verticalWorksheetScrollBar.Value = value;
             }
@@ -7897,7 +7900,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
-            sheet,
+            _session.GetEffectiveFrozenRows(),
+            _session.GetEffectiveFrozenCols(),
             _verticalWorksheetScrollBar.Value,
             _horizontalWorksheetScrollBar.Value);
         if (_session.SetViewportOrigin(topRow, leftCol))
@@ -10001,7 +10005,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             address,
             Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
-                _session.Viewport, _session.Workbook.GetSheet(address.Sheet)) - 1),
+                _session.Viewport, _session.GetEffectiveFrozenRows()) - 1),
             editor.Text,
             _session.FormulaEditAddress is not null,
             FormulaEditorSurfaceKind.Inline,
@@ -10328,9 +10332,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
             _session.Workbook.GetSheet(current.Sheet),
             Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
-                _session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
+                _session.Viewport, _session.GetEffectiveFrozenRows()) - 1),
             Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(
-                _session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1));
+                _session.Viewport, _session.GetEffectiveFrozenCols()) - 1));
         if (navigation is null)
             return false;
 
@@ -20330,7 +20334,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
             current,
             Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
-                _session.Viewport, _session.Workbook.GetSheet(current.Sheet)) - 1),
+                _session.Viewport, _session.GetEffectiveFrozenRows()) - 1),
             _formulaBox.Text,
             _session.FormulaEditAddress is not null,
             FormulaEditorSurfaceKind.FormulaBar,
@@ -29158,9 +29162,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var pageRows = Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableRows(
-            _session.Viewport, _session.ActiveSheet) - 1);
+            _session.Viewport, _session.GetEffectiveFrozenRows()) - 1);
         var pageCols = Math.Max(1, WorkbookViewportScrollPlanner.CountVisibleScrollableColumns(
-            _session.Viewport, _session.ActiveSheet) - 1);
+            _session.Viewport, _session.GetEffectiveFrozenCols()) - 1);
         var extendSelection = ExcelSelectionModePlanner.ShouldExtendSelection(_keyboardSelectionMode, navigationModifiers);
         var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
         var addArea = _keyboardSelectionMode == ExcelSelectionMode.Add && !moveOnly;
@@ -29513,7 +29517,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CloseAutoFilterFlyout();
 
         var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
-            _session.ActiveSheet,
+            _session.GetEffectiveFrozenRows(),
+            _session.GetEffectiveFrozenCols(),
             _verticalWorksheetScrollBar.Value,
             _horizontalWorksheetScrollBar.Value);
         if (_session.SetViewportOrigin(topRow, leftCol))
