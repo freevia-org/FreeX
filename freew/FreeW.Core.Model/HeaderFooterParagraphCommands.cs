@@ -45,6 +45,7 @@ public sealed class EditHeaderFooterParagraphCommand(
     Action<Paragraph> rebuild) : IDocumentCommand
 {
     private List<Run>? _previous;
+    private List<BookmarkBoundary>? _previousBookmarks;
 
     public string Label => "Edit header/footer";
 
@@ -62,6 +63,7 @@ public sealed class EditHeaderFooterParagraphCommand(
         }
 
         _previous = [.. paragraph.Runs];
+        _previousBookmarks = [.. paragraph.BookmarkBoundaries];
         rebuild(paragraph);
     }
 
@@ -81,7 +83,11 @@ public sealed class EditHeaderFooterParagraphCommand(
 
         paragraph.Runs.Clear();
         paragraph.Runs.AddRange(_previous);
+        paragraph.BookmarkBoundaries.Clear();
+        if (_previousBookmarks is not null)
+            paragraph.BookmarkBoundaries.AddRange(_previousBookmarks);
         _previous = null;
+        _previousBookmarks = null;
     }
 }
 

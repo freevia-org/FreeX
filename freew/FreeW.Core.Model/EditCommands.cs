@@ -330,6 +330,7 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
 public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Paragraph> rebuild) : IDocumentCommand
 {
     private List<Run>? _previous;
+    private List<BookmarkBoundary>? _previousBookmarks;
     private DropCapLayoutIntent? _previousDropCap;
 
     public string Label => "Format";
@@ -338,6 +339,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
     {
         if (!SetParagraphFormattingCommand.TryGetParagraph(context, paragraphIndex, out var paragraph)) return;
         _previous = [.. paragraph.Runs];
+        _previousBookmarks = [.. paragraph.BookmarkBoundaries];
         _previousDropCap = paragraph.DropCap;
         rebuild(paragraph);
     }
@@ -351,6 +353,9 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
         runs.Clear();
         runs.AddRange(_previous);
         paragraph.DropCap = _previousDropCap;
+        paragraph.BookmarkBoundaries.Clear();
+        if (_previousBookmarks is not null)
+            paragraph.BookmarkBoundaries.AddRange(_previousBookmarks);
     }
 }
 
@@ -365,6 +370,7 @@ public sealed class ReplaceTableCellParagraphRunsCommand(
     Action<Paragraph> rebuild) : IDocumentCommand
 {
     private List<Run>? _previous;
+    private List<BookmarkBoundary>? _previousBookmarks;
     private DropCapLayoutIntent? _previousDropCap;
 
     public string Label => "Edit table cell";
@@ -375,6 +381,7 @@ public sealed class ReplaceTableCellParagraphRunsCommand(
             return;
 
         _previous = [.. paragraph.Runs];
+        _previousBookmarks = [.. paragraph.BookmarkBoundaries];
         _previousDropCap = paragraph.DropCap;
         rebuild(paragraph);
     }
@@ -387,6 +394,9 @@ public sealed class ReplaceTableCellParagraphRunsCommand(
         paragraph.Runs.Clear();
         paragraph.Runs.AddRange(_previous);
         paragraph.DropCap = _previousDropCap;
+        paragraph.BookmarkBoundaries.Clear();
+        if (_previousBookmarks is not null)
+            paragraph.BookmarkBoundaries.AddRange(_previousBookmarks);
     }
 
     private bool TryGetParagraph(IDocumentCommandContext context, out Paragraph paragraph)

@@ -9,6 +9,7 @@ public sealed class ReplaceCellParagraphRunsCommand(
     Action<Paragraph> rebuild) : IDocumentCommand
 {
     private List<Run>? _previous;
+    private List<BookmarkBoundary>? _previousBookmarks;
 
     public string Label => "Edit table cell";
 
@@ -26,6 +27,7 @@ public sealed class ReplaceCellParagraphRunsCommand(
         }
 
         _previous = [.. paragraph.Runs];
+        _previousBookmarks = [.. paragraph.BookmarkBoundaries];
         rebuild(paragraph);
     }
 
@@ -45,7 +47,11 @@ public sealed class ReplaceCellParagraphRunsCommand(
 
         paragraph.Runs.Clear();
         paragraph.Runs.AddRange(_previous);
+        paragraph.BookmarkBoundaries.Clear();
+        if (_previousBookmarks is not null)
+            paragraph.BookmarkBoundaries.AddRange(_previousBookmarks);
         _previous = null;
+        _previousBookmarks = null;
     }
 }
 
