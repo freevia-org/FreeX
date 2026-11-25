@@ -37,6 +37,7 @@ public static class CellEntryParser
             FormulaEvaluator.ValidateFormulaEntryLength(text);
 
             var formula = text[1..];
+            formula = FormulaTextCultureAdapter.ToInvariantFormulaText(formula, CultureInfo.CurrentCulture);
             if (useR1C1ReferenceStyle)
                 formula = FormulaReferenceStyleService.ToA1(formula, address);
 
