@@ -27,6 +27,7 @@ public partial class MainWindow
     private static readonly FreeXBackstageFramePlan BackstageFramePlan = FreeXBackstageFramePlanner.Build();
 
     private BackstageFrame? _backstageFrame;
+    private string _backstageOpenRecentFilter = string.Empty;
 
     private void InitializeBackstageFrame()
     {
@@ -250,70 +251,116 @@ public partial class MainWindow
             FontSize = 16,
             FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F)),
-            Margin = new Thickness(0, 0, 0, 8),
         };
+        var searchBox = new TextBox
+        {
+            Text = _backstageOpenRecentFilter,
+            Width = 198,
+            Height = 26,
+            Padding = new Thickness(8, 3, 8, 3),
+            FontSize = 12,
+            Background = new SolidColorBrush(Color.FromRgb(0xF5, 0xF5, 0xF5)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD8, 0xD8, 0xD8)),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        System.Windows.Automation.AutomationProperties.SetAutomationId(searchBox, "BackstageOpenSearchBox");
+        System.Windows.Automation.AutomationProperties.SetName(
+            searchBox,
+            UiText.Get(plan.SearchAutomationNameKey));
+
+        var recentHeaderRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        recentHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        recentHeaderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         System.Windows.Automation.AutomationProperties.SetAutomationId(recentHeader, recent.AutomationId);
-        Grid.SetRow(recentHeader, 2);
-        content.Children.Add(recentHeader);
+        recentHeaderRow.Children.Add(recentHeader);
+        Grid.SetColumn(searchBox, 1);
+        recentHeaderRow.Children.Add(searchBox);
+        Grid.SetRow(recentHeaderRow, 2);
+        content.Children.Add(recentHeaderRow);
 
         var files = new StackPanel();
-        var recentFiles = BackstageRecentFileListPlanner.Build(
-            ReloadRecentFilesStore().Snapshot(),
-            string.Empty,
-            _recentFilePathExistenceCache.Exists).RecentItems;
-        foreach (var file in recentFiles)
+        void PopulateFiles()
         {
-            var button = new Button
+            var recentFiles = BackstageRecentFileListPlanner.Build(
+                ReloadRecentFilesStore().Snapshot(),
+                _backstageOpenRecentFilter,
+                _recentFilePathExistenceCache.Exists).RecentItems;
+            files.Children.Clear();
+            var emptyStateKey = FreeXBackstageOpenPanePlanner.ResolveEmptyStateKey(
+                !string.IsNullOrWhiteSpace(_backstageOpenRecentFilter),
+                recentFiles.Count);
+            if (emptyStateKey is not null)
             {
-                HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                Padding = new Thickness(8, 10, 8, 10),
-                MinHeight = 54,
-                Content = new DockPanel
+                var emptyState = new TextBlock
                 {
-                    LastChildFill = true,
-                    Children =
+                    Text = UiText.Get(emptyStateKey),
+                    Margin = new Thickness(8, 14, 8, 0),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                    TextWrapping = TextWrapping.Wrap,
+                };
+                System.Windows.Automation.AutomationProperties.SetAutomationId(emptyState, "BackstageOpenEmptyState");
+                files.Children.Add(emptyState);
+                return;
+            }
+
+            foreach (var file in recentFiles)
+            {
+                var button = new Button
+                {
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                    BorderThickness = new Thickness(0),
+                    Background = Brushes.Transparent,
+                    Padding = new Thickness(8, 10, 8, 10),
+                    MinHeight = 54,
+                    Content = new DockPanel
                     {
-                        new TextBlock
+                        LastChildFill = true,
+                        Children =
                         {
-                            Text = file.LastOpenedText,
-                            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
-                            VerticalAlignment = VerticalAlignment.Center,
-                            Width = 150,
-                        },
-                        new StackPanel
-                        {
-                            Children =
+                            new TextBlock
                             {
-                                new TextBlock { Text = file.FileName, FontSize = 13 },
-                                new TextBlock
+                                Text = file.LastOpenedText,
+                                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                                VerticalAlignment = VerticalAlignment.Center,
+                                Width = 150,
+                            },
+                            new StackPanel
+                            {
+                                Children =
                                 {
-                                    Text = file.DisplayDirectory,
-                                    FontSize = 11,
-                                    Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-                                    TextTrimming = TextTrimming.CharacterEllipsis,
+                                    new TextBlock { Text = file.FileName, FontSize = 13 },
+                                    new TextBlock
+                                    {
+                                        Text = file.DisplayDirectory,
+                                        FontSize = 11,
+                                        Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+                                        TextTrimming = TextTrimming.CharacterEllipsis,
+                                    },
                                 },
                             },
                         },
                     },
-                },
-            };
-            System.Windows.Automation.AutomationProperties.SetAutomationId(button, "BackstageOpenRecentFileButton");
-            System.Windows.Automation.AutomationProperties.SetName(button, file.OpenAutomationName);
-            button.Click += (_, _) => RunGuardedUiCommand("Open Recent Workbook", () => OpenFileAsync(file.Path));
-            files.Children.Add(button);
+                };
+                System.Windows.Automation.AutomationProperties.SetAutomationId(button, "BackstageOpenRecentFileButton");
+                System.Windows.Automation.AutomationProperties.SetName(button, file.OpenAutomationName);
+                button.Click += (_, _) => RunGuardedUiCommand("Open Recent Workbook", () => OpenFileAsync(file.Path));
+                files.Children.Add(button);
+            }
         }
 
-        if (recentFiles.Count == 0)
+        searchBox.TextChanged += (_, _) =>
         {
-            files.Children.Add(new TextBlock
-            {
-                Text = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
-                Margin = new Thickness(8, 14, 8, 0),
-                Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
-            });
-        }
+            var filter = searchBox.Text ?? string.Empty;
+            if (string.Equals(filter, _backstageOpenRecentFilter, StringComparison.Ordinal))
+                return;
+
+            _backstageOpenRecentFilter = filter;
+            PopulateFiles();
+        };
+        PopulateFiles();
 
         var recentScroll = new ScrollViewer { Content = files, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         System.Windows.Automation.AutomationProperties.SetAutomationId(recentScroll, recent.AutomationId);

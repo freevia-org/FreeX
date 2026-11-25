@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using System.Globalization;
 
@@ -59,7 +60,7 @@ public static class SpreadsheetDisplayFormatter
             var formula = useR1C1ReferenceStyle
                 ? FormulaReferenceStyleService.ToR1C1(cell.FormulaText, address)
                 : cell.FormulaText;
-            return "=" + formula;
+            return "=" + FormulaTextCultureAdapter.ToRegionalFormulaText(formula, culture ?? CultureInfo.CurrentCulture);
         }
 
         if (TryFormatBuiltInShortDateForFormulaBar(cell, address, sheet, workbook, culture, out var dateText))
