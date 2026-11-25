@@ -30,6 +30,7 @@ public partial class MainWindow
     internal void ShowStartScreen()
     {
         StartScreenOverlay.Visibility = Visibility.Visible;
+        _backstageOpenRecentFilter = string.Empty;
         // The shared frame builds the Home pane (greeting + recent list refresh runs in its ContentFactory)
         // and lands focus on the Home rail entry. The overlay/frame become visible on the next layout pass,
         // so post the focus at Loaded priority (the rail buttons aren't focusable until they are visible) —
