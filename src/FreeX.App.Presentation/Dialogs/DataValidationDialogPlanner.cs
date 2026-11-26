@@ -1,4 +1,6 @@
 using FreeX.Core.Model;
+using FreeX.Core.Formula;
+using System.Globalization;
 
 namespace FreeX.App.Presentation.Dialogs;
 
@@ -248,14 +250,75 @@ public static class DataValidationDialogPlanner
         DataValidationDialogModel.ForType(type).ShowsFormula2(op);
 
     public static string NormalizeFormula1(DvType type, string? formula1) =>
-        type == DvType.Any
-            ? ""
-            : formula1?.Trim() ?? "";
+        NormalizeFormulaText(type, formula1);
 
     public static string NormalizeFormula2(DvType type, DvOperator op, string? formula2) =>
         RequiresSecondFormula(type, op)
-            ? formula2?.Trim() ?? ""
+            ? NormalizeFormulaText(type, formula2)
             : "";
+
+    public static string FormatFormula1ForEditor(DvType type, string? formula1) =>
+        FormatFormulaText(type, formula1);
+
+    public static string FormatFormula2ForEditor(DvType type, string? formula2) =>
+        FormatFormulaText(type, formula2);
+
+    private static string NormalizeFormulaText(DvType type, string? value)
+    {
+        if (type == DvType.Any)
+            return "";
+
+        var text = value?.Trim() ?? "";
+        if (type == DvType.List && !text.TrimStart().StartsWith('='))
+            return RewriteInlineListSeparator(text, toRegional: false);
+
+        if (text.StartsWith('=') || type == DvType.Custom)
+            return FormulaTextCultureAdapter.ToInvariantFormulaText(text, CultureInfo.CurrentCulture);
+
+        return text;
+    }
+
+    private static string FormatFormulaText(DvType type, string? value)
+    {
+        var text = value ?? "";
+        if (type == DvType.List && !text.TrimStart().StartsWith('='))
+            return RewriteInlineListSeparator(text, toRegional: true);
+
+        if (text.StartsWith('=') || type == DvType.Custom)
+            return FormulaTextCultureAdapter.ToRegionalFormulaText(text, CultureInfo.CurrentCulture);
+
+        return text;
+    }
+
+    private static string RewriteInlineListSeparator(string text, bool toRegional)
+    {
+        var separator = CultureInfo.CurrentCulture.TextInfo.ListSeparator;
+        if (separator.Length != 1 || separator[0] == ',')
+            return text;
+
+        var source = toRegional ? ',' : separator[0];
+        var target = toRegional ? separator[0] : ',';
+        var builder = new System.Text.StringBuilder(text.Length);
+        var inQuotes = false;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var current = text[i];
+            if (current == '"')
+            {
+                builder.Append(current);
+                if (inQuotes && i + 1 < text.Length && text[i + 1] == '"')
+                    builder.Append(text[++i]);
+                else
+                    inQuotes = !inQuotes;
+            }
+            else
+            {
+                builder.Append(!inQuotes && current == source ? target : current);
+            }
+        }
+
+        return builder.ToString();
+    }
 
     public static DataValidation CreateRule(DataValidationRuleEditorInput input)
     {

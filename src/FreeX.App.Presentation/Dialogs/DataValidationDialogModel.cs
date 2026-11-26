@@ -373,6 +373,8 @@ public sealed record DataValidationDialogModel(
             formula = "=" + formula;
         }
 
+        formula = FormulaTextCultureAdapter.ToInvariantFormulaText(formula, CultureInfo.CurrentCulture);
+
         try
         {
             _ = new Parser(new Lexer(formula).Tokenize()).Parse();

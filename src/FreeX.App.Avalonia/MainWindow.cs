@@ -25594,8 +25594,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             typeBox.SelectedItem = FindDataValidationTypeChoice(typeChoices, rule.Type) ?? typeChoices[0];
             SelectOperator(rule.Operator);
-            formula1Box.Text = rule.Formula1 ?? "";
-            formula2Box.Text = rule.Formula2 ?? "";
+            formula1Box.Text = DataValidationDialogPlanner.FormatFormula1ForEditor(rule.Type, rule.Formula1);
+            formula2Box.Text = DataValidationDialogPlanner.FormatFormula2ForEditor(rule.Type, rule.Formula2);
             allowBlankBox.IsChecked = rule.AllowBlank;
             showDropdownBox.IsChecked = rule.ShowDropdown;
             showInputMessageBox.IsChecked = rule.ShowInputMessage;
