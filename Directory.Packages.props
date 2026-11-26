@@ -34,7 +34,7 @@
     <PackageVersion Include="Enums.NET" Version="5.0.0" />
     <PackageVersion Include="ExtendedNumerics.BigDecimal" Version="2025.1001.2.129" />
     <PackageVersion Include="MathNet.Numerics.Signed" Version="5.0.0" />
-    <PackageVersion Include="Microsoft.IO.RecyclableMemoryStream" Version="3.0.1" />
+    <PackageVersion Include="Microsoft.IO.RecyclableMemoryStream" Version="4.0.1" />
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
     <PackageVersion Include="ZString" Version="2.6.0" />
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
