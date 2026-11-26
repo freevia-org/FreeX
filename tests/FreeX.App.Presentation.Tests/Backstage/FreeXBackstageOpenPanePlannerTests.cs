@@ -6,17 +6,26 @@ namespace FreeX.App.Presentation.Tests.Backstage;
 public sealed class FreeXBackstageOpenPanePlannerTests
 {
     [Fact]
-    public void Build_ExposesRecentAndBrowseLocations()
+    public void Build_ExposesLocalizedSearchNameAlongsideRecentAndBrowseLocations()
     {
         var plan = FreeXBackstageOpenPanePlanner.Build();
 
-        plan.TitleKey.Should().Be("MainWindow_Text_Open");
-        plan.RecentSectionKey.Should().Be("MainWindow_Text_Recent");
-        plan.Locations.Select(location => location.Id)
-            .Should().Equal(FreeXBackstageOpenLocationId.Recent, FreeXBackstageOpenLocationId.Browse);
-        plan.Locations.Single(location => location.Id == FreeXBackstageOpenLocationId.Recent)
-            .AutomationId.Should().Be("BackstageOpenRecentLocation");
-        plan.Locations.Single(location => location.Id == FreeXBackstageOpenLocationId.Browse)
-            .LabelKey.Should().Be("GetData_BrowseButton");
+        plan.SearchAutomationNameKey.Should().Be("MainWindow_AutomationName_SearchRecentFiles");
+        plan.Locations.Select(location => location.Id).Should().Equal(
+            FreeXBackstageOpenLocationId.Recent,
+            FreeXBackstageOpenLocationId.Browse);
+    }
+
+    [Theory]
+    [InlineData(false, 0, "Backstage_Home_NoRecentWorkbooks")]
+    [InlineData(true, 0, "Backstage_Home_NoMatchingWorkbooks")]
+    [InlineData(false, 1, null)]
+    [InlineData(true, 1, null)]
+    public void ResolveEmptyStateKey_DistinguishesEmptyHistoryFromNoSearchMatches(
+        bool hasFilter,
+        int rowCount,
+        string? expected)
+    {
+        FreeXBackstageOpenPanePlanner.ResolveEmptyStateKey(hasFilter, rowCount).Should().Be(expected);
     }
 }

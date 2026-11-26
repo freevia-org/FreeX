@@ -87,8 +87,8 @@ public partial class DataValidationDialog : Window
         SelectComboItemByTag(TypeCombo, DataValidationDialogPlanner.TypeTag(existing.Type));
         SelectComboItemByTag(OperatorCombo, DataValidationDialogPlanner.OperatorTag(existing.Operator));
         SelectComboItemByTag(AlertStyleCombo, DataValidationDialogPlanner.AlertStyleTag(existing.AlertStyle));
-        Formula1Box.Text = existing.Formula1 ?? "";
-        Formula2Box.Text = existing.Formula2 ?? "";
+        Formula1Box.Text = DataValidationDialogPlanner.FormatFormula1ForEditor(existing.Type, existing.Formula1);
+        Formula2Box.Text = DataValidationDialogPlanner.FormatFormula2ForEditor(existing.Type, existing.Formula2);
         AllowBlankBox.IsChecked = existing.AllowBlank;
         ShowDropdownBox.IsChecked = existing.ShowDropdown;
         ShowInputMessageBox.IsChecked = existing.ShowInputMessage;
