@@ -1,10 +1,8 @@
-using System.Globalization;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 using Avalonia;
 using Avalonia.Headless;
-using Avalonia.Media;
 using Free.Shared.Pdf;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
@@ -167,12 +165,15 @@ public sealed class DocumentViewPdfListMarkerTests
             var origin = view.RenderedPageOriginForTest(page);
             var expectedX = (marker.X - origin.X) / DipPerPoint;
             var face = (format.Bold, format.Italic) switch { (true, true) => PdfFontFace.BoldItalic, (true, false) => PdfFontFace.Bold, (false, true) => PdfFontFace.Italic, _ => PdfFontFace.Regular };
-            var independent = new FormattedText(marker.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                new Typeface(format.FontFamily!, format.Italic ? FontStyle.Italic : FontStyle.Normal, format.Bold ? FontWeight.Bold : FontWeight.Normal),
-                format.FontSizePt!.Value * DipPerPoint, Brushes.Black);
-            var expectedY = document.Page.HeightPt - (marker.Y - origin.Y + independent.Baseline) / DipPerPoint;
+            // Use the established scalar/shaped body PDF baseline convention so markers
+            // sit on the same exported line as their list text.
+            var expectedY = document.Page.HeightPt - (marker.Y - origin.Y) / DipPerPoint - format.FontSizePt!.Value;
             var match = exported.Should().ContainSingle(item => item.Page == page && item.Text.Text == marker.Text
                 && Math.Abs(item.Text.X - expectedX) < 0.01 && Math.Abs(item.Text.Y - expectedY) < 0.01).Which.Text;
+            pdf.Pages[page].Ops.OfType<PdfText>().Should().Contain(body =>
+                (body.Text == "Body" || body.Text == "Body😀" || body.Text == "Cell" || body.Text == "After")
+                && Math.Abs(body.Y - match.Y) < 0.01,
+                "the marker and its authored list text must share the PDF baseline");
             match.Face.Should().Be(face); match.FontFamily.Should().Be(format.FontFamily); match.FontSize.Should().Be(format.FontSizePt!.Value);
             match.Color.Should().Be(format.ColorHex == "#9B2226" ? new PdfColor(155, 34, 38) : PdfColor.Black);
         }

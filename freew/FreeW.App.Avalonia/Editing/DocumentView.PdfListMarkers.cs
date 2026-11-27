@@ -22,13 +22,14 @@ public sealed partial class DocumentView
                 (false, true) => PdfFontFace.Italic,
                 _ => PdfFontFace.Regular,
             };
-            // Render draws FormattedText at its top-left. Carry its actual baseline into
-            // PDF's bottom-left coordinate system, without the editor's desk/page gaps.
-            var baselineDip = Build(text, formatting).Baseline;
+            // Use the same top-to-baseline convention as the scalar and shaped body PDF
+            // adapters, so the marker and its list text share an exported line baseline.
+            // Page-local coordinates exclude the editor's desk padding and page gaps.
+            var fontSizePt = formatting.FontSizePt ?? DefaultFontSizePt;
             pages[page].Add(new PdfText(
                 Math.Max(0, (x - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt),
-                pageHeightPt - (y - _surfacePlan.PageTopDip(page) + baselineDip) / PxPerPoint,
-                formatting.FontSizePt ?? DefaultFontSizePt,
+                pageHeightPt - (y - _surfacePlan.PageTopDip(page)) / PxPerPoint - fontSizePt,
+                fontSizePt,
                 face, ParseColor(formatting.ColorHex), text, formatting.FontFamily));
         }
     }
