@@ -105,19 +105,31 @@ public sealed class HeadlessDispatchOverloadContractTests
             var directory = Path.Combine(root, relativeDirectory);
             if (!Directory.Exists(directory)) continue;
 
-            foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-            {
-                var relativePath = Path.GetRelativePath(root, path);
-                var segments = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                if (segments.Any(IsIgnoredSourceSegment))
-                    continue;
-
-                // This file documents the banned shape in prose, so it would match itself.
-                if (Path.GetFileName(path).Equals($"{nameof(HeadlessDispatchOverloadContractTests)}.cs", StringComparison.Ordinal))
-                    continue;
-
+            foreach (var path in EnumerateSourceDirectory(directory))
                 yield return path;
-            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateSourceDirectory(string directory)
+    {
+        foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.TopDirectoryOnly)
+                     .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            // This file documents the banned shape in prose, so it would match itself.
+            if (Path.GetFileName(path).Equals($"{nameof(HeadlessDispatchOverloadContractTests)}.cs", StringComparison.Ordinal))
+                continue;
+
+            yield return path;
+        }
+
+        // Filtering an AllDirectories result still traverses bin/obj before rejecting their files.
+        // Prune ignored directory entries first so generated output is never visited.
+        foreach (var child in Directory.EnumerateDirectories(directory, "*", SearchOption.TopDirectoryOnly)
+                     .Where(path => !IsIgnoredSourceSegment(Path.GetFileName(path)))
+                     .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            foreach (var path in EnumerateSourceDirectory(child))
+                yield return path;
         }
     }
 
