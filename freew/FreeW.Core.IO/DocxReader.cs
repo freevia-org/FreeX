@@ -2122,7 +2122,7 @@ public static partial class DocxReader
             else
             {
                 current.Instruction.Append(string.Concat(run.Elements(W + "instrText").Select(text => text.Value)));
-                current.Instruction.Append(string.Concat(run.Elements(W + "t").Select(text => text.Value)));
+                current.Instruction.Append(string.Concat(run.Elements(W + "t").Select(ReadLiteralRunText)));
             }
 
             return true;
@@ -2444,6 +2444,13 @@ public static partial class DocxReader
             Math.Max(0, distancePt));
     }
 
+    private static string ReadLiteralRunText(XElement textElement) =>
+        // Word displays physical XML line endings inside w:t/w:delText as spaces, even
+        // with xml:space="preserve". XML parsing already normalizes physical CR/CRLF
+        // to LF. Leave escaped CR character references alone; explicit w:br/w:cr
+        // elements are handled separately as actual model line breaks.
+        textElement.Value.Replace('\n', ' ');
+
     /// <summary>
     /// Appends the text content of a field-result run element to <paramref name="sb"/>. Handles:
     /// <list type="bullet">
@@ -2460,7 +2467,7 @@ public static partial class DocxReader
         foreach (var child in run.Elements())
         {
             if (child.Name == W + "t" || child.Name == W + "delText")
-                sb.Append(child.Value);
+                sb.Append(ReadLiteralRunText(child));
             else if (child.Name == W + "tab" || child.Name == W + "ptab")
                 sb.Append('\t');
             else if (child.Name == W + "br" || child.Name == W + "cr")
@@ -2818,7 +2825,7 @@ public static partial class DocxReader
             else if (!state.PastSeparate)
             {
                 state.Instruction.Append(string.Concat(run.Elements(W + "instrText").Select(text => text.Value)));
-                state.Instruction.Append(string.Concat(run.Elements(W + "t").Select(text => text.Value)));
+                state.Instruction.Append(string.Concat(run.Elements(W + "t").Select(ReadLiteralRunText)));
                 run.Remove();
             }
         }
@@ -3558,8 +3565,8 @@ public static partial class DocxReader
 
         foreach (var sourceRun in container.Elements(W + "r"))
         {
-            var text = string.Concat(sourceRun.Elements(W + "t").Select(textElement => textElement.Value))
-                + string.Concat(sourceRun.Elements(W + "delText").Select(textElement => textElement.Value));
+            var text = string.Concat(sourceRun.Elements(W + "t").Select(ReadLiteralRunText))
+                + string.Concat(sourceRun.Elements(W + "delText").Select(ReadLiteralRunText));
             if (sourceRun.Elements(W + "tab").Any())
                 text += "\t";
             if (text.Length > 0)
@@ -4943,7 +4950,7 @@ public static partial class DocxReader
         foreach (var child in r.Elements())
         {
             if (child.Name == W + "t" || child.Name == W + "delText")
-                text.Append(child.Value);
+                text.Append(ReadLiteralRunText(child));
             else if (child.Name == W + "softHyphen")
                 text.Append(Hyphenator.SoftHyphen);
             else if (child.Name == W + "noBreakHyphen")
@@ -6112,7 +6119,7 @@ public static partial class DocxReader
         if (style is null)
             return null;
 
-        var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
+        var text = string.Concat(txbxContent.Descendants(W + "t").Select(ReadLiteralRunText));
         var fontSizePt = HalfPointsToPoints(rPr?.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
 
         var wordArt = new WordArt(text, style.Value, fontSizePt)
