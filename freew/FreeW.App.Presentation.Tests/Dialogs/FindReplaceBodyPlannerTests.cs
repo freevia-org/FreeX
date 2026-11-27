@@ -287,22 +287,46 @@ public sealed class FindReplaceBodyPlannerTests
         Replace(document, Request("a", "z")).ReplacedCount.Should().Be(5);
     }
 
-    [Fact]
-    public void FiveThousandReplacements_AreOnePass_NotOneScanPerReplacement()
+    // Same shape check as FiveThousandParagraphJoins_AreOnePass below: a flat 2 s wall-clock ceiling
+    // flaked under machine load, so the guarantee (one linear pass over the document, not a rescan of
+    // the document per replacement) is asserted on the bytes the planning thread allocates, which load
+    // and scheduling do not change. 10 replacements per paragraph at N and 4N paragraphs: linear work
+    // allocates ~4x as much, a per-replacement rescan (quadratic) ~16x. Wall clock is only a hang guard.
+    private static long AllocatedByReplacing(int paragraphCount, out TimeSpan elapsed)
     {
-        var paragraphs = Enumerable.Range(0, 500)
+        var paragraphs = Enumerable.Range(0, paragraphCount)
             .Select(_ => (Block)new Paragraph(string.Join(' ', Enumerable.Repeat("lorem needle ipsum", 10))))
             .ToArray();
         var document = Doc(paragraphs);
 
+        var before = GC.GetAllocatedBytesForCurrentThread();
         var watch = Stopwatch.StartNew();
         var command = Replace(document, Request("needle", "pin"));
         watch.Stop();
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
 
-        command.ReplacedCount.Should().Be(5_000);
+        command.ReplacedCount.Should().Be(paragraphCount * 10);
         Text(document).Should().OnlyContain(text => !text.Contains("needle") && text.Contains("lorem pin ipsum"));
-        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2), "a per-replacement rescan of the document is quadratic");
+        elapsed = watch.Elapsed;
+        return allocated;
+    }
 
+    [Fact]
+    public void FiveThousandReplacements_AreOnePass_NotOneScanPerReplacement()
+    {
+        const int Small = 125;
+        const int Large = 500;
+
+        AllocatedByReplacing(40, out _); // warm-up: JIT and first-use allocations out of the measurement.
+        var small = AllocatedByReplacing(Small, out _);
+        var large = AllocatedByReplacing(Large, out var elapsed);
+
+        small.Should().BeGreaterThan(0);
+        var ratio = (double)large / small;
+        ratio.Should().BeLessThan(
+            6d,
+            "4x the replacements should allocate ~4x (one pass); a per-replacement rescan of the document is quadratic (~16x)");
+        elapsed.Should().BeLessThan(TimeSpan.FromSeconds(20), "this is only a hang guard; the allocation ratio above is the real check");
     }
 
     // A flat wall-clock ceiling for this operation failed under machine load (the same replace
