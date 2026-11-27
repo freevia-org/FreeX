@@ -95,4 +95,38 @@ public sealed class DataValidationDialogPlannerCreateRuleTests
 
         rule.IsX14.Should().BeFalse();
     }
+
+    [Fact]
+    public void CustomFormula_CommaDecimalAndSemicolonArguments_AreStoredInvariantAndShownRegional()
+    {
+        using var scope = TestCultureScope.CurrentCulture("de-DE");
+        var source = "=SUM(1,5;2,5)>3";
+
+        DataValidationDialogModel.ForType(DvType.Custom).Validate(new DvCriteriaInput
+        {
+            Type = DvType.Custom,
+            Formula1 = source
+        }).IsValid.Should().BeTrue();
+
+        var rule = DataValidationDialogPlanner.CreateRule(new DataValidationRuleEditorInput
+        {
+            Type = DvType.Custom,
+            Formula1 = source
+        });
+
+        rule.Formula1.Should().Be("=SUM(1.5,2.5)>3");
+        DataValidationDialogPlanner.FormatFormula1ForEditor(rule.Type, rule.Formula1).Should().Be(source);
+    }
+
+    [Fact]
+    public void InlineList_CommaSeparatedStorage_IsShownWithRegionalListSeparatorAndStoredBack()
+    {
+        using var scope = TestCultureScope.CurrentCulture("de-DE");
+        const string stored = "Yes,No,\"Maybe, later\"";
+
+        var editorText = DataValidationDialogPlanner.FormatFormula1ForEditor(DvType.List, stored);
+        editorText.Should().Be("Yes;No;\"Maybe, later\"");
+
+        DataValidationDialogPlanner.NormalizeFormula1(DvType.List, editorText).Should().Be(stored);
+    }
 }

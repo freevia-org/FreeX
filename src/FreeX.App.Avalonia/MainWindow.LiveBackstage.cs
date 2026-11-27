@@ -89,7 +89,9 @@ public sealed partial class MainWindow
     // like the WPF pane flow's ResetRecentTab.
     private bool _liveBackstageShowingPinnedList;
     private string _liveBackstageRecentFilter = string.Empty;
+    private string _liveBackstageOpenFilter = string.Empty;
     private TextBox? _liveBackstageSearchBox;
+    private TextBox? _liveBackstageOpenSearchBox;
 
     private Control BuildBackstageOverlay()
     {
@@ -258,7 +260,9 @@ public sealed partial class MainWindow
         SetRibbonKeyTipsVisible(false);
         _liveBackstageShowingPinnedList = false;
         _liveBackstageRecentFilter = string.Empty;
+        _liveBackstageOpenFilter = string.Empty;
         _liveBackstageSearchBox = null;
+        _liveBackstageOpenSearchBox = null;
         _backstageOverlay.Show(FreeXBackstageFramePlanner.GetPaneStableId(
             LiveBackstageFramePlan.Selection.DefaultPane));
     }
@@ -526,6 +530,7 @@ public sealed partial class MainWindow
 
     private Control BuildLiveBackstageOpenPane()
     {
+        var restoreSearchFocus = _liveBackstageOpenSearchBox is { IsFocused: true };
         var content = CreateLiveBackstagePaneStack(LiveBackstagePaneTopInset);
         content.Children.Add(new TextBlock
         {
@@ -558,29 +563,95 @@ public sealed partial class MainWindow
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             Foreground = LiveBackstageInk,
-            Margin = new Thickness(0, 0, 0, 8),
+            VerticalAlignment = VerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(recentHeader, recent.AutomationId);
-        content.Children.Add(recentHeader);
+        var searchBox = new TextBox
+        {
+            Text = _liveBackstageOpenFilter,
+            Width = 198,
+            Height = 26,
+            MinHeight = 0,
+            Padding = new Thickness(8, 3),
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            Background = Brush(0xF5, 0xF5, 0xF5),
+            BorderBrush = Brush(0xD8, 0xD8, 0xD8),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(2),
+            VerticalAlignment = VerticalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(searchBox, "BackstageOpenSearchBox");
+        AutomationProperties.SetName(searchBox, UiText.Get(LiveBackstageOpenPanePlan.SearchAutomationNameKey));
+        _liveBackstageOpenSearchBox = searchBox;
+        var recentHeaderRow = new AvaloniaGrid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+            Margin = new Thickness(0, 0, 0, 8),
+        };
+        recentHeaderRow.Children.Add(recentHeader);
+        AvaloniaGrid.SetColumn(searchBox, 1);
+        recentHeaderRow.Children.Add(searchBox);
+        content.Children.Add(recentHeaderRow);
 
         var files = new StackPanel();
         content.Children.Add(files);
-        var recentPlan = BackstageRecentFileListPlanner.Build(
-            ReloadRecentFilesStore().Snapshot(),
-            string.Empty,
-            _recentFilePathExistenceCache.Exists);
-        foreach (var entry in recentPlan.RecentItems)
-            files.Children.Add(BuildLiveBackstageRecentRow(entry));
-
-        if (recentPlan.RecentItems.Count == 0)
+        void PopulateRecentFiles()
         {
-            files.Children.Add(new TextBlock
+            var recentPlan = BackstageRecentFileListPlanner.Build(
+                ReloadRecentFilesStore().Snapshot(),
+                _liveBackstageOpenFilter,
+                _recentFilePathExistenceCache.Exists);
+            files.Children.Clear();
+            var entries = recentPlan.RecentItems;
+            var emptyStateKey = FreeXBackstageOpenPanePlanner.ResolveEmptyStateKey(
+                !string.IsNullOrWhiteSpace(_liveBackstageOpenFilter),
+                entries.Count);
+            if (emptyStateKey is not null)
             {
-                Text = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
-                FontFamily = FormulaBarFontFamily,
-                FontSize = 13,
-                Foreground = LiveBackstageMutedInk,
-                Margin = new Thickness(0, 14, 0, 0),
+                var emptyState = new TextBlock
+                {
+                    Text = UiText.Get(emptyStateKey),
+                    FontFamily = FormulaBarFontFamily,
+                    FontSize = 13,
+                    Foreground = LiveBackstageMutedInk,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 14, 0, 0),
+                };
+                AutomationProperties.SetAutomationId(emptyState, "BackstageOpenEmptyState");
+                files.Children.Add(emptyState);
+                return;
+            }
+
+            foreach (var entry in entries)
+                files.Children.Add(BuildLiveBackstageRecentRow(entry));
+        }
+
+        searchBox.TextChanged += (_, _) =>
+        {
+            var filter = searchBox.Text ?? string.Empty;
+            if (string.Equals(filter, _liveBackstageOpenFilter, StringComparison.Ordinal))
+                return;
+
+            _liveBackstageOpenFilter = filter;
+            PopulateRecentFiles();
+        };
+        PopulateRecentFiles();
+
+        if (restoreSearchFocus)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!ReferenceEquals(_liveBackstageOpenSearchBox, searchBox))
+                    return;
+
+                searchBox.Focus();
+                searchBox.CaretIndex = searchBox.Text?.Length ?? 0;
             });
         }
 
