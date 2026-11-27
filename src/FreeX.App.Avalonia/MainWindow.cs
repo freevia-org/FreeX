@@ -569,7 +569,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Popup? _functionAutocompletePopup;
     private ListBox? _functionAutocompleteListBox;
     private bool FunctionAutocompleteIsOpen => _functionAutocompletePopup?.IsOpen == true;
-    private Canvas? _cellAddressAutocompleteOverlay;
+    private Popup? _cellAddressAutocompletePopup;
     private Border? _cellAddressAutocompleteSurface;
     private ListBox? _cellAddressAutocompleteListBox;
 
@@ -1747,11 +1747,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var root = new AvaloniaGrid();
         root.Children.Add(frame.Root);
         root.Children.Add(BuildBackstageOverlay());
-        // Keep the Name Box list in the same client render tree as the workbook. Avalonia's
-        // Linux PopupRoot/overlay path is a separate compositor surface, so it is absent from
-        // root captures and does not provide a stable input target for this shell-owned control.
-        if (_cellAddressAutocompleteOverlay is not null)
-            root.Children.Add(_cellAddressAutocompleteOverlay);
+        // The Name Box list is a native popup window; the Popup itself only needs a logical parent.
+        if (_cellAddressAutocompletePopup is not null)
+            root.Children.Add(_cellAddressAutocompletePopup);
 
         var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
             Window: this,
@@ -3708,7 +3706,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (args.GetCurrentPoint(_cellAddressDropDownButton).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
                 return;
 
-            ShowCellAddressAutocompletePopup();
+            // The chevron toggles: a press while the list is open (or that just light-dismissed it)
+            // closes it rather than reopening.
+            if (CellAddressAutocompleteOpen)
+                HideCellAddressAutocompletePopup();
+            else if (Environment.TickCount64 - _cellAddressAutocompleteLightDismissedAtTicks < 250)
+                _cellAddressAutocompleteLightDismissedAtTicks = CellAddressAutocompleteNeverDismissed;
+            else
+                ShowCellAddressAutocompletePopup();
             args.Handled = true;
         },
             RoutingStrategies.Tunnel,
@@ -20519,8 +20524,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         _cellAddressAutocompleteListBox = new ListBox
         {
-            Height = NameBoxDropdownHeight - 2,
-            MaxHeight = 220,
+            MaxHeight = NameBoxDropdownMaxHeight - 2,
+            // The theme's list inset/border would add pixels to the fixed 208x136 frame.
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(0),
             MinWidth = 180,
             Focusable = true,
             // The shell-owned surface supplies the popup background and border; the standard
@@ -20531,6 +20538,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 (item, _) => BuildCellAddressAutocompleteText(item),
                 supportsRecycling: true),
         };
+        // Fixed row metrics so the popup is the same height for the same rows on every platform
+        // (WPF: five rows plus the 2px list inset and 1px border measure 208x136).
+        _cellAddressAutocompleteListBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(Layoutable.HeightProperty, NameBoxDropdownRowHeight),
+                new Setter(Layoutable.MinHeightProperty, NameBoxDropdownRowHeight),
+                new Setter(TemplatedControl.PaddingProperty, new Thickness(0)),
+            },
+        });
         AutomationProperties.SetAutomationId(_cellAddressAutocompleteListBox, "CellAddressAutocompleteList");
         _cellAddressAutocompleteListBox.AddHandler(
             InputElement.KeyDownEvent,
@@ -20563,7 +20581,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressAutocompleteSurface = new Border
         {
             Width = NameBoxDropdownWidth,
-            Height = NameBoxDropdownHeight,
+            // Content height like WPF's ComboBox drop-down: one row minimum, MaxDropDownHeight cap.
+            MinHeight = NameBoxDropdownRowHeight + 6,
+            MaxHeight = NameBoxDropdownMaxHeight,
+            Padding = new Thickness(0, 2),
             Background = Brushes.White,
             BorderBrush = FormulaBarControlBorder,
             BorderThickness = new Thickness(1),
@@ -20571,58 +20592,35 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsVisible = false,
         };
         AutomationProperties.SetAutomationId(_cellAddressAutocompleteSurface, "CellAddressAutocompleteOverlay");
-        _cellAddressAutocompleteOverlay = new Canvas
+        // WPF's Name Box drop-down is a real top-level popup window (the Excel one is too), so the
+        // list is hosted in a native popup rather than the main window's overlay layer: the pixels
+        // can then be captured and compared as their own window and the list can extend past the
+        // client area. Headless/overlay-only platforms still fall back to the overlay layer.
+        _cellAddressAutocompletePopup = new Popup
         {
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
-            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
-            IsVisible = false,
-            IsHitTestVisible = false,
-            ClipToBounds = false,
+            Child = _cellAddressAutocompleteSurface,
+            PlacementTarget = _cellAddressDropDownButton,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            ShouldUseOverlayLayer = false,
+            WindowManagerAddShadowHint = false,
+            IsLightDismissEnabled = true,
         };
-        _cellAddressAutocompleteOverlay.Children.Add(_cellAddressAutocompleteSurface);
-        _cellAddressAutocompleteOverlay.PointerPressed += (_, args) =>
+        _cellAddressAutocompletePopup.Closed += (_, _) =>
         {
-            if (args.GetCurrentPoint(_cellAddressAutocompleteOverlay).Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
-                return;
-
-            if (!IsCellAddressAutocompleteDescendant(args.Source as Visual))
-                HideCellAddressAutocompletePopup();
-        };
-        _cellAddressAutocompleteOverlay.PointerReleased += (_, args) =>
-        {
-            if (!IsCellAddressAutocompleteDescendant(args.Source as Visual))
-                args.Handled = true;
+            if (_cellAddressAutocompleteSurface is not null)
+                _cellAddressAutocompleteSurface.IsVisible = false;
+            // A closure we did not request is the outside-click light dismiss; remember it so the
+            // chevron press that caused it toggles the list closed instead of reopening it.
+            if (!_cellAddressAutocompleteHidingProgrammatically)
+                _cellAddressAutocompleteLightDismissedAtTicks = Environment.TickCount64;
         };
     }
 
-    private bool IsCellAddressAutocompleteDescendant(Visual? visual)
-    {
-        for (var current = visual; current is not null; current = current.GetVisualParent())
-        {
-            if (ReferenceEquals(current, _cellAddressAutocompleteSurface))
-                return true;
-        }
+    private bool _cellAddressAutocompleteHidingProgrammatically;
+    private const long CellAddressAutocompleteNeverDismissed = long.MinValue / 2;
+    private long _cellAddressAutocompleteLightDismissedAtTicks = CellAddressAutocompleteNeverDismissed;
 
-        return false;
-    }
-
-    private void PositionCellAddressAutocompleteSurface()
-    {
-        if (_cellAddressAutocompleteOverlay is not { } overlay ||
-            _cellAddressAutocompleteSurface is not { } surface)
-        {
-            return;
-        }
-
-        var topLeft = _cellAddressDropDownButton.TranslatePoint(
-            new Point(0, _cellAddressDropDownButton.Bounds.Height),
-            overlay);
-        if (topLeft is not { } origin)
-            return;
-
-        Canvas.SetLeft(surface, origin.X);
-        Canvas.SetTop(surface, origin.Y);
-    }
+    private bool CellAddressAutocompleteOpen => _cellAddressAutocompletePopup?.IsOpen == true;
 
     private void ShowCellAddressAutocompletePopup()
     {
@@ -20630,40 +20628,70 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressAutocompleteListBox!.IsEnabled = items.Count > 0;
         _cellAddressAutocompleteListBox.ItemsSource = items.ToArray();
         _cellAddressAutocompleteListBox.SelectedIndex = -1;
-        FitCellAddressAutocompleteSurfaceToContent();
-        PositionCellAddressAutocompleteSurface();
-        _cellAddressAutocompleteSurface!.IsVisible = true;
-        _cellAddressAutocompleteOverlay!.IsVisible = true;
-        _cellAddressAutocompleteOverlay.IsHitTestVisible = true;
-        _cellAddressAutocompleteOverlay.UpdateLayout();
+        var popup = _cellAddressAutocompletePopup!;
+        if (popup.IsOpen)
+            HideCellAddressAutocompletePopup();
 
-        if (_cellAddressDropDownButton.IsAttachedToVisualTree())
-        {
-            var popupPosition = _cellAddressDropDownButton.PointToScreen(
-                new Point(0, _cellAddressDropDownButton.Bounds.Height));
-            RecordOptionalNameBoxPopupOpened(
-                "overlay-layer",
-                popupPosition.X,
-                popupPosition.Y,
-                NameBoxDropdownWidth,
-                (int)Math.Round(_cellAddressAutocompleteSurface.Height));
-        }
+        // The popup window sizes itself to the surface (content height, capped at WPF's
+        // MaxDropDownHeight); the list only has its real template and rows once the popup is open.
+        _cellAddressAutocompleteSurface!.IsVisible = true;
+        popup.IsOpen = true;
         Dispatcher.UIThread.Post(
             () =>
             {
-                if (_cellAddressAutocompleteOverlay?.IsVisible == true)
+                if (!CellAddressAutocompleteOpen)
+                    return;
+
+                RecordCellAddressAutocompleteOpened(popup);
+            },
+            DispatcherPriority.Loaded);
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (CellAddressAutocompleteOpen)
                     _cellAddressAutocompleteListBox?.Focus();
             },
             DispatcherPriority.Input);
     }
 
+    private void RecordCellAddressAutocompleteOpened(Popup popup)
+    {
+        if (!_cellAddressDropDownButton.IsAttachedToVisualTree() ||
+            _cellAddressAutocompleteSurface is not { } surface)
+        {
+            return;
+        }
+
+        surface.UpdateLayout();
+        // Report where the popup really is: the native popup window's own screen origin when it
+        // has one, otherwise the chevron's bottom-left corner the overlay was placed against.
+        var origin = TopLevel.GetTopLevel(surface) is PopupRoot popupRoot
+            ? popupRoot.PointToScreen(new Point(0, 0))
+            : _cellAddressDropDownButton.PointToScreen(
+                new Point(0, _cellAddressDropDownButton.Bounds.Height));
+        RecordOptionalNameBoxPopupOpened(
+            popup.IsUsingOverlayLayer ? "overlay-layer" : "native-x11-popup-root",
+            origin.X,
+            origin.Y,
+            NameBoxDropdownWidth,
+            (int)Math.Round(surface.Bounds.Height));
+    }
+
     private void HideCellAddressAutocompletePopup()
     {
-        if (_cellAddressAutocompleteOverlay is not { } overlay)
+        if (_cellAddressAutocompletePopup is not { } popup)
             return;
 
-        overlay.IsHitTestVisible = false;
-        overlay.IsVisible = false;
+        _cellAddressAutocompleteHidingProgrammatically = true;
+        try
+        {
+            popup.IsOpen = false;
+        }
+        finally
+        {
+            _cellAddressAutocompleteHidingProgrammatically = false;
+        }
+
         if (_cellAddressAutocompleteSurface is not null)
             _cellAddressAutocompleteSurface.IsVisible = false;
     }
@@ -20671,21 +20699,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     // WPF's Name Box ComboBox drop-down is content height capped at MaxDropDownHeight=220; the
     // fixed 136px surface left blank space under short lists and clipped long ones early.
     private const double NameBoxDropdownMaxHeight = 220;
-
-    private void FitCellAddressAutocompleteSurfaceToContent()
-    {
-        if (_cellAddressAutocompleteListBox is null || _cellAddressAutocompleteSurface is null)
-            return;
-
-        _cellAddressAutocompleteListBox.Height = double.NaN;
-        _cellAddressAutocompleteListBox.Measure(
-            new Size(NameBoxDropdownWidth - 2, double.PositiveInfinity));
-        var content = _cellAddressAutocompleteListBox.DesiredSize.Height;
-        // Two pixels are the surface border; an empty list still keeps one row of height.
-        var height = Math.Min(NameBoxDropdownMaxHeight, Math.Max(content, 24) + 2);
-        _cellAddressAutocompleteSurface.Height = height;
-        _cellAddressAutocompleteListBox.Height = height - 2;
-    }
+    private const double NameBoxDropdownRowHeight = 26;
 
     private static TextBlock BuildCellAddressAutocompleteText(NameBoxNavigationItem item)
     {
@@ -20695,7 +20709,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontFamily = new FontFamily("Consolas, DejaVu Sans Mono, Liberation Mono, monospace"),
             FontSize = 15,
             Foreground = Brush(28, 38, 48),
-            Padding = new Thickness(8, 3),
+            Padding = new Thickness(6, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
             TextWrapping = TextWrapping.NoWrap,
         };
         AutomationProperties.SetName(text, item.AccessibleDescription);

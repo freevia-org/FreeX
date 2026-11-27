@@ -1128,6 +1128,44 @@ probe_name_box_dropdown_parity() {
         popup_count=1
         popup_id="$popup_host"
     fi
+    if [[ "$popup_host" == "native-x11-popup-root" ]]; then
+        # The popup is a real top-level X11 window: identify it as the one window that appeared
+        # between the before/open inventories with the popup's 208px width, and crop its exact
+        # on-screen bounds rather than the position the app computed.
+        local native_window=""
+        native_window="$(python3 - "$output/$before_x11" "$output/$open_x11" <<'PY'
+import re
+import sys
+
+def read(path):
+    windows = {}
+    with open(path, encoding="utf-8") as stream:
+        for line in stream:
+            window_id, _, rest = line.rstrip("\n").partition("|")
+            windows[window_id] = rest
+    return windows
+
+before = read(sys.argv[1])
+opened = read(sys.argv[2])
+matches = []
+for window_id, rest in opened.items():
+    if window_id in before:
+        continue
+    fields = dict(re.findall(r"(X|Y|WIDTH|HEIGHT)=(-?\d+)", rest))
+    if fields.get("WIDTH") == "208" and int(fields.get("HEIGHT", "0")) >= 136:
+        matches.append((window_id, fields))
+if len(matches) == 1:
+    window_id, fields = matches[0]
+    print("|".join((window_id, fields["X"], fields["Y"], fields["WIDTH"], fields["HEIGHT"])))
+PY
+)"
+        if [[ -n "$native_window" ]]; then
+            IFS='|' read -r popup_id popup_x popup_y popup_width popup_height <<< "$native_window"
+        else
+            popup_id="$popup_host"
+            popup_count=0
+        fi
+    fi
 
     if [[ "$popup_count" == "1" &&
           "$popup_x" =~ ^[0-9]+$ && "$popup_y" =~ ^[0-9]+$ &&
