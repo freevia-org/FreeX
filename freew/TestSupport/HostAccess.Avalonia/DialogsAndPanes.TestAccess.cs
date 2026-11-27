@@ -269,6 +269,12 @@ public sealed partial class FindReplaceDialog
     internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
     internal string StatusForTest => _status.Text ?? string.Empty;
 
+    /// <summary>Replaces the clipboard the Replace with box's <c>^c</c> reads, so a test supplies its text.</summary>
+    internal void SetPlatformClipboardForTest(IPlatformClipboard clipboard) => _platformClipboard = clipboard;
+
+    /// <summary>The awaitable clipboard-then-act path an action with <c>^c</c> in Replace with takes.</summary>
+    internal Task ExecuteWithClipboardForTest(FindReplaceDialogActionKind action) => ExecuteWithClipboardAsync(action);
+
     internal void SetFormatChooserForTest(Func<FindReplaceDialogFieldKind, FindFormat?, Task<FindFormat?>> chooser) =>
         _chooseFormat = chooser;
 
