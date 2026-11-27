@@ -108,6 +108,12 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
             .SelectMany(file => FindCaptureMethodNames(file.Source))
             .ToHashSet(StringComparer.Ordinal);
         expectedMethods.Add("CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook");
+        // Clipboard pixel tests use the same isolated Skia host without calling the parity-capture API.
+        var expectedFilters = expectedMethods.Concat(new[]
+        {
+            nameof(ChartClipboardPixelTests),
+            nameof(DrawingClipboardTextPixelTests),
+        }).ToHashSet(StringComparer.Ordinal);
         var captureProjectDirectory = Path.GetDirectoryName(RepoFile(
             "tests", "FreeX.App.Avalonia.CaptureTests", "CaptureTests.Shared.props"))!;
         var captureFilterBatches = Directory.GetFiles(
@@ -119,28 +125,30 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
             .And.OnlyContain(batch => batch.Length > 0 && batch.Length <= 6);
 
         var captureFilters = captureFilterBatches.SelectMany(batch => batch).ToArray();
-        captureFilters.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(expectedMethods);
+        captureFilters.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(expectedFilters);
 
         var mainFilter = ReadFilterTerms(RepoFile(
             "tests", "FreeX.App.Avalonia.Tests", "FreeX.App.Avalonia.Tests.csproj"),
             "FullyQualifiedName!~",
             '&');
-        mainFilter.Should().BeEquivalentTo(expectedMethods);
+        mainFilter.Should().BeEquivalentTo(expectedFilters);
     }
 
-    [Fact]
-    public void GridCaptureRasterSmoke_RunsOnlyInTheSkiaEvidenceLane()
+    [Theory]
+    [InlineData("CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook", "GridCaptureTests.cs")]
+    [InlineData(nameof(ChartClipboardPixelTests), nameof(ChartClipboardPixelTests) + ".cs")]
+    [InlineData(nameof(DrawingClipboardTextPixelTests), nameof(DrawingClipboardTextPixelTests) + ".cs")]
+    public void RasterSmoke_RunsOnlyInTheSkiaEvidenceLane(string filterTerm, string sourceFile)
     {
-        const string method = "CaptureGridRange_WritesPngAndJsonLog_ForNewWorkbook";
         var sharedProjectSource = File.ReadAllText(RepoFile(
             "tests", "FreeX.App.Avalonia.CaptureTests", "CaptureTests.Shared.props"));
-        sharedProjectSource.Should().Contain("GridCaptureTests.cs");
+        sharedProjectSource.Should().Contain(sourceFile);
 
         var mainFilter = ReadFilterTerms(RepoFile(
             "tests", "FreeX.App.Avalonia.Tests", "FreeX.App.Avalonia.Tests.csproj"),
             "FullyQualifiedName!~",
             '&');
-        mainFilter.Should().Contain(method,
+        mainFilter.Should().Contain(filterTerm,
             "the lightweight headless backend intentionally provides no raster framebuffer");
 
         var captureProjectDirectory = Path.GetDirectoryName(RepoFile(
@@ -148,7 +156,7 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         var routedProjects = Directory.GetFiles(
                 captureProjectDirectory,
                 "FreeX.App.Avalonia.CaptureTests*.csproj")
-            .Where(file => ReadFilterTerms(file, "FullyQualifiedName~", '|').Contains(method, StringComparer.Ordinal))
+            .Where(file => ReadFilterTerms(file, "FullyQualifiedName~", '|').Contains(filterTerm, StringComparer.Ordinal))
             .ToArray();
         routedProjects.Should().ContainSingle()
             .Which.Should().EndWith("FreeX.App.Avalonia.CaptureTests.Batch6.csproj");
