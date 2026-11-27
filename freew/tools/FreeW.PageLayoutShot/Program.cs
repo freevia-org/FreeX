@@ -4,6 +4,7 @@
 // Usage:
 //   FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...]
 //   FreeW.PageLayoutShot [<output-dir>] --input-docx <path> [--input-page-count <n>] [--input-output-stem <stem>]
+//   FreeW.PageLayoutShot <empty-output-dir> --full-document --input-docx <path> [--source-root <repo>]
 //   FreeW.PageLayoutShot --probe-document-fonts
 //
 // If <output-dir> is omitted PNGs are written next to the executable:
@@ -36,8 +37,25 @@ string? inputDocxPath = null;
 var inputPageCount = 1;
 string? inputOutputStem = null;
 var probeDocumentFonts = false;
+var fullDocument = false;
+var inputPageCountSpecified = false;
+string? sourceRoot = null;
 for (var i = 0; i < args.Length; i++)
 {
+    if (string.Equals(args[i], "--full-document", StringComparison.OrdinalIgnoreCase))
+    {
+        fullDocument = true;
+        continue;
+    }
+
+    if (string.Equals(args[i], "--source-root", StringComparison.OrdinalIgnoreCase))
+    {
+        if (++i >= args.Length || string.IsNullOrWhiteSpace(args[i]))
+            throw new ArgumentException("--source-root requires a repository directory.");
+        sourceRoot = Path.GetFullPath(args[i]);
+        continue;
+    }
+
     if (string.Equals(args[i], "--probe-document-fonts", StringComparison.OrdinalIgnoreCase))
     {
         probeDocumentFonts = true;
@@ -76,6 +94,7 @@ for (var i = 0; i < args.Length; i++)
 
     if (string.Equals(args[i], "--input-page-count", StringComparison.OrdinalIgnoreCase))
     {
+        inputPageCountSpecified = true;
         if (++i >= args.Length || !int.TryParse(args[i], out inputPageCount) || inputPageCount < 1)
             throw new ArgumentException("--input-page-count requires a positive integer.");
 
@@ -97,7 +116,15 @@ for (var i = 0; i < args.Length; i++)
 if (positionalArgs.Count > 1)
     throw new ArgumentException("usage: FreeW.PageLayoutShot [<output-dir>] [--scenario <scenario-id> ...] [--input-docx <path> [--input-page-count <n>] [--input-output-stem <stem>]]");
 
-var inputDocxCapture = inputDocxPath is null
+if (fullDocument && (inputDocxPath is null || positionalArgs.Count != 1 || inputPageCountSpecified
+    || inputOutputStem is not null || probeDocumentFonts
+    || args.Any(argument => string.Equals(argument, "--scenario", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(argument, "--fixtures-dir", StringComparison.OrdinalIgnoreCase))))
+    throw new ArgumentException("--full-document requires an explicit empty output directory and --input-docx; page counts, output stems, scenarios, fixtures and font-only probing cannot be combined with it.");
+if (sourceRoot is not null && !fullDocument)
+    throw new ArgumentException("--source-root is supported only with --full-document.");
+
+var inputDocxCapture = inputDocxPath is null || fullDocument
     ? null
     : InputDocxCaptureOptions.Create(inputDocxPath, inputPageCount, inputOutputStem);
 
@@ -115,7 +142,9 @@ Dispatcher.UIThread.Post(() =>
 {
     try
     {
-        exitCode = probeDocumentFonts ? PageShotDocumentFontProbe.Run() : RenderAll(outDir, inputDocxCapture);
+        exitCode = fullDocument
+            ? FullDocumentCapture.Run(outDir, inputDocxPath!, sourceRoot)
+            : probeDocumentFonts ? PageShotDocumentFontProbe.Run() : RenderAll(outDir, inputDocxCapture);
     }
     catch (Exception ex)
     {
