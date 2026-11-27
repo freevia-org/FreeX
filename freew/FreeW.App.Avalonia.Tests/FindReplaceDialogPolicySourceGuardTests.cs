@@ -41,7 +41,7 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("new AvaloniaFindReplaceCommandHost(_editor)");
         commandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
         commandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
-        commandHost.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
+        commandHost.Should().Contain("editor.ReplaceAll(request)");
         source.Should().NotContain("TextSearch.FindAll(");
         source.Should().NotContain("internal static int CountMatches(");
         source.Should().NotContain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
@@ -127,6 +127,18 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("FindReplaceDialogPlanner.FindNextMatch(");
         source.Should().Contain("new FindReplaceSearchOptions()");
         source.Should().NotContain("DocumentSearch");
+    }
+
+    [Fact]
+    public void DocumentView_ReplaceAllUsesTheSharedBodyAndStoryPlanners()
+    {
+        var source = ReadAvaloniaSource("Editing", "DocumentView.cs");
+
+        source.Should().Contain("FindReplaceBodyPlanner.PlanReplaceAll(_doc, request, tracked, selection)");
+        source.Should().Contain("FindReplaceStoryPlanner.ReplaceAll(_doc, request, _bus.Execute, tracked)");
+        // The hand-rolled select-and-replace loop (body plus default header/footer only) is gone.
+        source.Should().NotContain("ReplaceAllCore(");
+        source.Should().NotContain("FindNextHeaderFooterOnly(");
     }
 
     /// <summary>

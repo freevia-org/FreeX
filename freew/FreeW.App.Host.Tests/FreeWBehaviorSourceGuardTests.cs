@@ -80,7 +80,7 @@ public sealed class FreeWBehaviorSourceGuardTests
         avaloniaCommandHost.Should().Contain("class AvaloniaFindReplaceCommandHost");
         avaloniaCommandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
         avaloniaCommandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
-        avaloniaCommandHost.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
+        avaloniaCommandHost.Should().Contain("editor.ReplaceAll(request)");
         wpf.Should().NotContain("TextSearch.FindAll(");
         avaloniaCommandHost.Should().NotContain("TextSearch.FindAll(");
 

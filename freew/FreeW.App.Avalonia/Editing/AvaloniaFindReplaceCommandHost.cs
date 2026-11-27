@@ -11,5 +11,5 @@ internal sealed class AvaloniaFindReplaceCommandHost(DocumentView editor) : IFin
         editor.ReplaceNext(request.Term, request.Replacement, request.Options);
 
     public FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request) =>
-        new(editor.ReplaceAll(request.Term, request.Replacement, request.Options));
+        editor.ReplaceAll(request);
 }

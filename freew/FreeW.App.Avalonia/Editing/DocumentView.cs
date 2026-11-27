@@ -761,30 +761,6 @@ public sealed partial class DocumentView : Control
     public bool FindNext(string query, FindReplaceSearchOptions options) =>
         FindNext(query, options, headerFooterResume: null);
 
-    /// <summary>
-    /// <paramref name="headerFooterResume"/> lets Replace All continue a header/footer slot past
-    /// the text it just wrote there. Interactive Find Next always passes null and keeps its
-    /// existing behaviour of re-landing on the first remaining match in the slot.
-    /// </summary>
-    /// <summary>
-    /// Searches ONLY the default header/footer, for Replace All once the body story is finished.
-    /// </summary>
-    private bool FindNextHeaderFooterOnly(
-        string query,
-        FindReplaceSearchOptions options,
-        (bool IsFooter, int ParagraphIndex, int Offset)? headerFooterResume)
-    {
-        if (string.IsNullOrEmpty(query))
-            return false;
-        if (FindReplaceDialogPlanner.FindNextHeaderFooterMatch(
-                _doc, query, options, headerFooterResume) is not { } hit)
-            return false;
-
-        SelectFindReplaceMatch(hit);
-        InvalidateVisual();
-        return true;
-    }
-
     private bool FindNext(
         string query,
         FindReplaceSearchOptions options,
@@ -1015,183 +991,81 @@ public sealed partial class DocumentView : Control
     /// <summary>
     /// Replace every occurrence of <paramref name="query"/>, restricted to the current body-text selection
     /// when one is active before the call (matching Word and the WPF shell's
-    /// WpfFindReplaceCommandHost.ReplaceAll); otherwise every occurrence from the document start. A cell-text
-    /// selection is not honored as a restriction here -- there is no scoped Replace All for table cells, so
-    /// that case keeps its historical whole-document behavior. Returns the count.
+    /// WpfFindReplaceCommandHost.ReplaceAll); otherwise every occurrence in the body and in every other
+    /// story. A cell-text selection is not honored as a restriction here -- there is no scoped Replace All
+    /// for table cells, so that case keeps its historical whole-document behavior. Returns the count.
     /// </summary>
     public int ReplaceAll(string query, string replacement) =>
-        ReplaceAllCore(query, replacement, options: null);
+        ReplaceAll(query, replacement, new FindReplaceSearchOptions());
 
     public int ReplaceAll(
         string query,
         string replacement,
         FindReplaceSearchOptions options) =>
-        ReplaceAllCore(query, replacement, options);
+        ReplaceAll(new FindReplaceReplaceRequest(query, replacement, options)).ReplacementCount;
 
-    private int ReplaceAllCore(string query, string replacement, FindReplaceSearchOptions? options)
+    /// <summary>
+    /// Story-wide Replace All, planned by the same portable planners the WPF host runs
+    /// (<see cref="FindReplaceBodyPlanner.PlanReplaceAll"/> for the body, then
+    /// <see cref="FindReplaceStoryPlanner.ReplaceAll"/> for headers/footers, notes, comments and text
+    /// boxes), honoring the request's find/replace formatting. The body edit and the story edits form one
+    /// undo entry. When a body selection is active the operation stays inside it, as in Word.
+    /// </summary>
+    internal FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request)
     {
-        if (string.IsNullOrEmpty(query) || IsEditingLocked)
-            return 0;
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.ToCriteria().IsEmpty || IsEditingLocked)
+            return new FindReplaceAllExecutionResult(0);
 
         var priorSelection = NormalizedSelection();
         var restrictToSelection = priorSelection is not null && !HasCellTextSelection();
-        var limit = restrictToSelection ? priorSelection!.Value.End : default;
+        var selection = restrictToSelection ? CurrentBodyTextRange() : (DocumentTextRange?)null;
+        var tracked = TrackChangesEnabled
+            ? new FindReplaceRevisionContext(RevisionAuthor, _editingSession.RevisionDateXmlForEdit())
+            : null;
 
-        _caret = restrictToSelection ? priorSelection!.Value.Start : new DocPosition(FirstEditableBlock(), 0);
-        _selectionAnchor = _caret;
         var count = 0;
-        // Word (and the WPF shell's FindReplaceDialog.ReplaceAll, which wraps its own loop in
-        // BeginUndoGroup/CommitUndoGroup("Replace All")) undoes a whole Replace All as one Ctrl+Z. Each
-        // ReplaceSelectionWith call below eventually reaches DocumentCommandBus.Execute, which pushes a
-        // standalone undo-stack entry per call whenever no group is open -- so without this outer group,
-        // an N-match Replace All became N separate undo entries here. ownsUndoGroup guards against the
-        // (currently unreached, but the rest of this file always guards it this way) case of being called
-        // while an outer caller already has a group open.
-        // r176/r177: a header/footer match had no resume position -- FindInDefaultHeaderFooter
-        // rescanned each paragraph from offset 0, and the planner justified that by assuming
-        // "each replacement removes that occurrence". That fails whenever the replacement
-        // CONTAINS the search term (Confidential -> Strictly Confidential): the term is recreated
-        // and the next find returns it again. r176 stopped the resulting runaway with a
-        // forward-progress guard that BROKE the loop, which fixed the corruption but silently
-        // abandoned every slot after the offending one -- a header that tripped it left the
-        // FOOTER unreplaced with no indication. r177 gives the walk the resume position it was
-        // missing instead, so the loop simply moves past what it just wrote and carries on into
-        // the next slot. No guard, and nothing is skipped.
-        (bool IsFooter, int ParagraphIndex, int Offset)? headerFooterResume = null;
         var ownsUndoGroup = !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
         try
         {
-            // Once the body story wraps, it is finished -- but the header and footer have not been
-            // visited yet. FindNextMatch only falls through to them when the body yields NO match at
-            // all, so before r177 a document whose body contained the term had its header/footer
-            // occurrences silently skipped and the reported count was short by that many. Switch to
-            // the header/footer-only walk at that point instead of ending the operation.
-            var bodyExhausted = false;
-            while (count < 10000)
-            {
-                var searchFrom = _caret;
-                bool found;
-                if (bodyExhausted)
-                {
-                    found = FindNextHeaderFooterOnly(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
-                    if (!found)
-                        break;
-                }
-                else
-                {
-                    found = FindNext(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
-                    if (!found || HasWrappedAround(searchFrom))
-                    {
-                        // Body finished (or never matched). Hand off to the header/footer walk; only
-                        // stop for real once that also comes up empty.
-                        //
-                        // r178: NOT when the operation is restricted to a selection. A selection is a
-                        // body concept -- SelectFindReplaceMatch clears _selectionAnchor for a
-                        // header/footer hit, so the restrict check below can never fire for one, and
-                        // the r177 handoff therefore replaced header and footer text that lay far
-                        // outside the range the user had selected. Replace All in a selection must
-                        // stay inside it.
-                        if (restrictToSelection)
-                            break;
+            var body = FindReplaceBodyPlanner.PlanReplaceAll(_doc, request, tracked, selection);
+            _bus.Execute(body);
+            count += body.ReplacedCount;
 
-                        bodyExhausted = true;
-                        found = FindNextHeaderFooterOnly(query, options ?? new FindReplaceSearchOptions(), headerFooterResume);
-                        if (!found)
-                            break;
-                    }
-                }
-
-                // A header/footer Find Next hit (see SelectFindReplaceMatch) routes through the separate
-                // _hfCaret/_hfSelectionAnchor model and leaves _selectionAnchor null -- so matchStart is
-                // nullable here, unlike before this was reachable. restrictToSelection is already a
-                // body-selection-only concept (a cell-text selection isn't honored as a restriction either,
-                // per the remarks above), so a header/footer hit is simply never restricted and never
-                // contributes to the shifting `limit` below; it just gets replaced and counted like any
-                // other match.
-                if (_hfSelectionAnchor is { } headerFooterMatch)
-                {
-                    // r178: a header/footer hit can never lie inside a BODY selection, and
-                    // SelectFindReplaceMatch clears _selectionAnchor for one -- so the
-                    // restrict-to-selection check further down (which reads _selectionAnchor)
-                    // silently skips these hits entirely. Reject them here instead, or Replace All
-                    // "within the selection" rewrites header and footer text far outside the range
-                    // the user highlighted. Reachable by the ordinary FindNext fallback as well as
-                    // by the body-exhausted handoff, so the check has to live here rather than at
-                    // the handoff alone.
-                    if (restrictToSelection)
-                        break;
-
-                    // Resume the next search just past what this replacement is about to write,
-                    // in this slot and paragraph. Later paragraphs in the slot, and the other
-                    // slot, are still searched in full (see FindInDefaultHeaderFooter).
-                    headerFooterResume = (
-                        headerFooterMatch.Target.Slot == HeaderFooterSlotKind.Footer,
-                        headerFooterMatch.Target.ParaIdx,
-                        headerFooterMatch.Offset + replacement.Length);
-                }
-
-                var matchStart = _selectionAnchor;
-                if (restrictToSelection && matchStart is { } restrictAnchor && Compare(restrictAnchor, limit) >= 0)
-                    break;
-
-                // The match's block never changes under ReplaceSelectionWith (it only rewrites text within a
-                // single paragraph), so a replacement before the selection's end offset, in that same block,
-                // shifts the end offset by however much the paragraph's character count actually changed --
-                // measured from the live model rather than assumed from replacement.Length - match.Length, so
-                // this stays correct even under Track Changes (where a "replace" leaves the struck-through
-                // original text in place and only inserts the replacement, a different length delta than a
-                // literal swap). Otherwise the selection boundary would drift out of sync with the edited text
-                // as later matches are located and replaced.
-                var lengthBefore = restrictToSelection && matchStart is { } lengthAnchor
-                    && limit.Block == lengthAnchor.Block
-                    && _doc.Blocks[lengthAnchor.Block] is Paragraph beforeParagraph
-                    ? beforeParagraph.PlainText.Length
-                    : (int?)null;
-
-                var originalMatchText = SelectedText;
-                ReplaceSelectionWith(replacement);
-                SkipTrackedLeftoverMatch(originalMatchText);
-
-                if (lengthBefore is { } before && matchStart is { } shiftAnchor
-                    && _doc.Blocks[shiftAnchor.Block] is Paragraph afterParagraph)
-                    limit = limit with { Offset = limit.Offset + (afterParagraph.PlainText.Length - before) };
-
-                count++;
-            }
+            // Every story outside the body. Skipped when the operation is restricted to a selection:
+            // a selection is a body concept, and reaching outside it would rewrite text far from what
+            // the user highlighted.
+            if (!restrictToSelection)
+                count += FindReplaceStoryPlanner.ReplaceAll(_doc, request, _bus.Execute, tracked);
         }
         catch
         {
-            // r177: Replace All is one operation to the user, so a failure partway must leave the
-            // document as it found it rather than half-replaced. This used to fall into the finally
-            // below and COMMIT whatever had been applied -- undoable, but still a partial replacement
-            // the user never asked for. The WPF sibling had the worse version of the same bug (it
-            // abandoned the group, leaving the partial edit in the document and absent from the undo
-            // stack); both shells now roll back.
-            if (ownsUndoGroup)
+            // Replace All is one operation to the user: a failure partway must leave the document as it
+            // found it rather than half-replaced.
+            if (ownsUndoGroup && _bus.IsUndoGroupOpen)
                 _bus.RollbackUndoGroup();
             throw;
         }
         finally
         {
             // CommitUndoGroup no-ops (pushes nothing) when nothing was collected, e.g. a zero-match
-            // Replace All -- safe to call unconditionally. The catch above has already closed the
-            // group on the throwing path, and IsUndoGroupOpen guards the double-close.
+            // Replace All. The catch above has already closed the group on the throwing path.
             if (ownsUndoGroup && _bus.IsUndoGroupOpen)
                 _bus.CommitUndoGroup("Replace All");
         }
 
+        // The body may have gained or lost paragraphs, so the old caret address can be stale: park it at
+        // the selection start (or the first editable block) and let ClampCaret drop every cell caret.
+        _hfCaret = null;
+        _hfSelectionAnchor = null;
+        _caret = restrictToSelection
+            ? priorSelection!.Value.Start
+            : new DocPosition(FirstEditableBlock(), 0);
+        ClampCaret();
         InvalidateVisual();
-        return count;
-    }
-
-    private bool HasWrappedAround(DocPosition searchFrom)
-    {
-        if (_selectionAnchor is not { } anchor)
-            return false;
-        return anchor.Block < searchFrom.Block
-            || (anchor.Block == searchFrom.Block && anchor.Offset < searchFrom.Offset);
+        return new FindReplaceAllExecutionResult(count, restrictToSelection);
     }
 
     private void ReplaceSelectionWith(string replacement)
