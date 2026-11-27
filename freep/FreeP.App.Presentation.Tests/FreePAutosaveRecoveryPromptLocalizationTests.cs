@@ -40,6 +40,22 @@ public sealed class FreePAutosaveRecoveryPromptLocalizationTests
         }
     }
 
+    [Fact]
+    public void DirtyGateAction_ResolvesThroughTheCatalogLikeTheRestOfTheRecoveryText()
+    {
+        var neutralKeys = Loc.GetNeutralResourceKeys();
+        neutralKeys.Should().Contain("Autosave_Recovery_DirtyGate_Action");
+        FreePAutosaveProfile.Recovery.RequiredResourceKeys.Should().Contain("Autosave_Recovery_DirtyGate_Action");
+
+        var defaults = FreePAutosaveProfile.Recovery.ResolveText();
+        defaults.DirtyGateAction.Should().Be("recovering an unsaved presentation");
+        Loc.GetNeutral("Autosave_Recovery_DirtyGate_Action").Should().Be(defaults.DirtyGateAction);
+
+        var translated = FreePAutosaveProfile.Recovery.ResolveText(
+            key => key == "Autosave_Recovery_DirtyGate_Action" ? "translated action" : null);
+        translated.DirtyGateAction.Should().Be("translated action");
+    }
+
     [Theory]
     [InlineData("en-US")]
     [InlineData("fr-FR")]

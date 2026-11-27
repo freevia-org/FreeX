@@ -52,7 +52,8 @@ internal sealed partial class AutosaveCoordinator
                 // The manual command may target a window with unrelated unsaved edits. Run the
                 // product's synchronous dirty gate before accepting the recovery candidate.
                 ConfirmRecoveryIntoCurrentWindow: () =>
-                    file.ConfirmCloseAllowed("recovering an unsaved document"),
+                    file.ConfirmCloseAllowed(
+                        FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get).DirtyGateAction),
                 RecoverInNewWindow: recoverInNewWindow),
             UiText.Get,
             sessionFactory: sessionPorts => (sessionFactory ?? DefaultSessionFactory)?.Invoke(sessionPorts)

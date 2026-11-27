@@ -17,7 +17,8 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
             "Recover",
             "Skip",
             "No unsaved widgets were found.",
-            "Could not recover the widget.\n\n{0}"));
+            "Could not recover the widget.\n\n{0}",
+            "recovering an unsaved widget"));
 
     private static readonly AutosaveApplicationProfile<TestDocument> Profile = new(
         Recovery,
@@ -34,7 +35,7 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
     [Fact]
     public void Constructor_RejectsBlankProductNounAndFallback()
     {
-        var defaults = new AutosaveRecoveryTextDefaults("t", "r", "s", "n", "f");
+        var defaults = new AutosaveRecoveryTextDefaults("t", "r", "s", "n", "f", "a");
 
         Action blankProduct = () => _ = new AutosaveRecoveryProfile(
             new AutosaveRecoveryPromptText(" ", "widgets"), "a widget", defaults);
@@ -55,12 +56,14 @@ public sealed class AutosaveApplicationProfileTests : IDisposable
         defaults.Title.Should().Be("TestApp - Recover");
         defaults.NoDocumentsMessage.Should().Be("No unsaved widgets were found.");
         defaults.FailureMessageFormat.Should().Be("Could not recover the widget.\n\n{0}");
+        defaults.DirtyGateAction.Should().Be("recovering an unsaved widget");
 
         var localized = Recovery.ResolveText(key => $"localized:{key}");
         localized.Title.Should().Be("localized:Autosave_Recovery_Title");
         localized.RecoverButton.Should().Be("localized:Autosave_Recovery_Recover_Button");
         localized.SkipButton.Should().Be("localized:Autosave_Recovery_Skip_Button");
         localized.NoDocumentsMessage.Should().Be("localized:Autosave_Recovery_None_Message");
+        localized.DirtyGateAction.Should().Be("localized:Autosave_Recovery_DirtyGate_Action");
         Recovery.RequiredResourceKeys.Should().Contain("Autosave_Recovery_Title");
     }
 

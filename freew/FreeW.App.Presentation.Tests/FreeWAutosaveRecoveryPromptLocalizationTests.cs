@@ -40,6 +40,22 @@ public sealed class FreeWAutosaveRecoveryPromptLocalizationTests
         }
     }
 
+    [Fact]
+    public void DirtyGateAction_ResolvesThroughTheCatalogLikeTheRestOfTheRecoveryText()
+    {
+        var neutralKeys = Loc.GetNeutralResourceKeys();
+        neutralKeys.Should().Contain("Autosave_Recovery_DirtyGate_Action");
+        FreeWAutosaveProfile.Recovery.RequiredResourceKeys.Should().Contain("Autosave_Recovery_DirtyGate_Action");
+
+        var defaults = FreeWAutosaveProfile.Recovery.ResolveText();
+        defaults.DirtyGateAction.Should().Be("recovering an unsaved document");
+        Loc.GetNeutral("Autosave_Recovery_DirtyGate_Action").Should().Be(defaults.DirtyGateAction);
+
+        var translated = FreeWAutosaveProfile.Recovery.ResolveText(
+            key => key == "Autosave_Recovery_DirtyGate_Action" ? "translated action" : null);
+        translated.DirtyGateAction.Should().Be("translated action");
+    }
+
     [Theory]
     [InlineData("en-US")]
     [InlineData("fr-FR")]

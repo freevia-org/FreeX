@@ -658,7 +658,8 @@ public sealed partial class MainWindow : Window,
             // the WPF host's AutosaveCoordinator.RecoverUnsavedPresentations and FreeW's Avalonia
             // AutosaveAdapter.RecoverUnsavedDocumentsAsync wiring.
             confirmDiscardOrSaveAsync: () =>
-                _fileSession.ConfirmCloseAllowedAsync("recovering an unsaved presentation"));
+                _fileSession.ConfirmCloseAllowedAsync(
+                    FreePAutosaveProfile.Recovery.ResolveText(UiText.Get).DirtyGateAction));
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: Close,

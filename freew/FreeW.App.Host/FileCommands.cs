@@ -200,7 +200,7 @@ internal sealed class FileCommands
 
     public bool RecoverSnapshot(string snapshotPath, string? originalPath) =>
         _workflow.Open(
-            "recovering an unsaved document",
+            FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get).DirtyGateAction,
             () => snapshotPath,
             path => OpenSnapshotCore(path, originalPath));
 

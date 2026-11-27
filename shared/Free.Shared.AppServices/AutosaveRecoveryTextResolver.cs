@@ -5,14 +5,16 @@ public sealed record AutosaveRecoveryTextDefaults(
     string RecoverButton,
     string SkipButton,
     string NoDocumentsMessage,
-    string FailureMessageFormat);
+    string FailureMessageFormat,
+    string DirtyGateAction);
 
 public sealed record AutosaveRecoveryTextValues(
     string Title,
     string RecoverButton,
     string SkipButton,
     string NoDocumentsMessage,
-    string FailureMessageFormat);
+    string FailureMessageFormat,
+    string DirtyGateAction);
 
 /// <summary>Resolves the common autosave recovery chrome shared by sister apps.</summary>
 public sealed class AutosaveRecoveryTextResolver
@@ -30,6 +32,7 @@ public sealed class AutosaveRecoveryTextResolver
             new("Autosave_Recovery_Skip_Button", defaults.SkipButton),
             new("Autosave_Recovery_None_Message", defaults.NoDocumentsMessage),
             new("Autosave_Recovery_Failure_Message_Format", defaults.FailureMessageFormat),
+            new("Autosave_Recovery_DirtyGate_Action", defaults.DirtyGateAction),
         ];
     }
 
@@ -42,5 +45,6 @@ public sealed class AutosaveRecoveryTextResolver
             _texts[1].Resolve(getText),
             _texts[2].Resolve(getText),
             _texts[3].Resolve(getText),
-            _texts[4].Resolve(getText));
+            _texts[4].Resolve(getText),
+            _texts[5].Resolve(getText));
 }

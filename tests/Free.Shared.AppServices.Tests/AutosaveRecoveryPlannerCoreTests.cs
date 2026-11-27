@@ -41,20 +41,23 @@ public sealed class AutosaveRecoveryPlannerCoreTests
                 "Restore",
                 "Later",
                 "Nothing found.",
-                "Could not recover. {0}"));
+                "Could not recover. {0}",
+                "recovering an unsaved thing"));
 
         resolver.RequiredResourceKeys.Should().Equal(
             "Autosave_Recovery_Title",
             "Autosave_Recovery_Recover_Button",
             "Autosave_Recovery_Skip_Button",
             "Autosave_Recovery_None_Message",
-            "Autosave_Recovery_Failure_Message_Format");
+            "Autosave_Recovery_Failure_Message_Format",
+            "Autosave_Recovery_DirtyGate_Action");
         resolver.Resolve().Should().Be(new AutosaveRecoveryTextValues(
             "Product - Recover",
             "Restore",
             "Later",
             "Nothing found.",
-            "Could not recover. {0}"));
+            "Could not recover. {0}",
+            "recovering an unsaved thing"));
     }
 
     private static AutosaveRecoveryCandidate Candidate(

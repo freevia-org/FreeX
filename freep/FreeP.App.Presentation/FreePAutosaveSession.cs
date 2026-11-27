@@ -23,7 +23,8 @@ public static class FreePAutosaveProfile
             "Recover",
             "Skip",
             "No unsaved presentations were found.",
-            "Could not recover the presentation.\n\n{0}"));
+            "Could not recover the presentation.\n\n{0}",
+            "recovering an unsaved presentation"));
 
     public static AutosaveApplicationProfile<Presentation> Session { get; } = new(
         Recovery,

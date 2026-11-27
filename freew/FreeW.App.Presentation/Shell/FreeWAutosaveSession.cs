@@ -19,7 +19,8 @@ public static class FreeWAutosaveProfile
             "Recover",
             "Skip",
             "No unsaved documents were found.",
-            "Could not recover the document.\n\n{0}"));
+            "Could not recover the document.\n\n{0}",
+            "recovering an unsaved document"));
 
     public static AutosaveApplicationProfile<TextDocument> Session { get; } = new(
         Recovery,

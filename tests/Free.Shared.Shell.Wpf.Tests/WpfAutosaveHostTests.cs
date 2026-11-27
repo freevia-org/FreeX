@@ -21,7 +21,8 @@ public sealed class WpfAutosaveHostTests : IDisposable
             "Recover",
             "Skip",
             "No unsaved widgets were found.",
-            "Could not recover the widget.\n\n{0}"));
+            "Could not recover the widget.\n\n{0}",
+            "recovering an unsaved widget"));
 
     private static readonly AutosaveApplicationProfile<TestDocument> Profile = new(
         Recovery,

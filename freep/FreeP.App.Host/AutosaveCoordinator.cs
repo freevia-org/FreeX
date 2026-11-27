@@ -45,7 +45,8 @@ internal sealed partial class AutosaveCoordinator
                 // The manual command may target a window with unrelated unsaved edits. Run the
                 // product's asynchronous dirty gate before accepting the recovery candidate.
                 ConfirmRecoveryIntoCurrentWindow: () =>
-                    file.ConfirmCloseAllowedAsync("recovering an unsaved presentation")
+                    file.ConfirmCloseAllowedAsync(
+                        FreePAutosaveProfile.Recovery.ResolveText(UiText.Get).DirtyGateAction)
                         .GetAwaiter()
                         .GetResult(),
                 RecoverInNewWindow: recoverInNewWindow),

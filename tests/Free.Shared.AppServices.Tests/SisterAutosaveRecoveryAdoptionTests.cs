@@ -57,9 +57,11 @@ public sealed class SisterAutosaveRecoveryAdoptionTests
         presentationText.Title.Should().Be("FreeP - Recover");
         presentationText.NoDocumentsMessage.Should().Be("No unsaved presentations were found.");
         presentationText.FailureMessageFormat.Should().Be("Could not recover the presentation.\n\n{0}");
+        presentationText.DirtyGateAction.Should().Be("recovering an unsaved presentation");
         documentText.Title.Should().Be("FreeW - Recover");
         documentText.NoDocumentsMessage.Should().Be("No unsaved documents were found.");
         documentText.FailureMessageFormat.Should().Be("Could not recover the document.\n\n{0}");
+        documentText.DirtyGateAction.Should().Be("recovering an unsaved document");
 
         FreePAutosaveProfile.ResolveBackstageLabel().Should().Be("Recover Unsaved Presentations");
         FreePAutosaveProfile.RequiredResourceKeys.Should().Contain("Autosave_Recovery_Backstage_Label");

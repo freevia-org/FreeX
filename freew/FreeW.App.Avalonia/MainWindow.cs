@@ -357,7 +357,8 @@ public sealed partial class MainWindow : Window
             _editor,
             _fileWorkflow.Workflow,
             recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync,
-            confirmDiscardOrSaveAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("recovering an unsaved document"),
+            confirmDiscardOrSaveAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync(
+                FreeWAutosaveProfile.Recovery.ResolveText(UiText.Get).DirtyGateAction),
             // Deferred accessor: _mailMerge is only built later, when the Mailings tab's commands are
             // wired up in BuildRibbon(). Null unless Mailings > Preview Results is currently showing a
             // merged record, in which case the autosave snapshot must capture the template instead.
