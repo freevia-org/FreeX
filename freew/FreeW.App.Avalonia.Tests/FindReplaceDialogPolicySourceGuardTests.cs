@@ -13,7 +13,7 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
         source.Should().Contain("FindReplaceDialogPlanner.Surface");
         source.Should().Contain("Surface.Actions");
-        source.Should().Contain("Surface.Option(");
+        source.Should().Contain("Surface.Options");
         source.Should().Contain("new FindReplaceDialogSession(");
         source.Should().Contain("SyncSessionInput()");
         source.Should().Contain("private FindReplaceDialogInput ReadInput()");
@@ -21,9 +21,23 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().NotContain("_session.FindNext()");
         source.Should().NotContain("_session.ReplaceNext()");
         source.Should().NotContain("_session.ReplaceAll()");
-        source.Should().Contain("ApplyCompactCheckBox(_matchCase");
-        source.Should().Contain("ApplyCompactCheckBox(_wholeWord");
-        source.Should().Contain("ApplyCompactCheckBox(_useWildcards");
+        // Options are rendered from the shared surface, never hand-added per kind.
+        source.Should().Contain("foreach (var choice in Surface.Options)");
+        source.Should().Contain("ApplyCompactCheckBox(box, DialogChromeStyle)");
+        source.Should().Contain("FindReplaceDialogPlanner.LabelFor(choice.Kind, _text)");
+        source.Should().Contain("state.IsOptionEnabled(kind)");
+        source.Should().Contain("state.IsOptionChecked(kind)");
+        source.Should().NotContain("private readonly CheckBox _matchCase");
+        source.Should().NotContain("private readonly CheckBox _wholeWord");
+        source.Should().NotContain("private readonly CheckBox _useWildcards");
+        foreach (var kind in new[]
+                 {
+                     "MatchCase", "WholeWord", "UseWildcards", "MatchPrefix",
+                     "MatchSuffix", "IgnorePunctuation", "IgnoreWhiteSpace",
+                 })
+        {
+            source.Should().Contain($"IsChecked(FindReplaceOptionKind.{kind})");
+        }
         source.Should().Contain("new AvaloniaFindReplaceCommandHost(_editor)");
         commandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
         commandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
@@ -91,7 +105,11 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
             source.Should().Contain("_session.PlanSpecialInsertion(");
             source.Should().Contain("_session.BuildGoToTargets(");
             source.Should().Contain("_session.PlanGoTo(");
-            source.Should().Contain("Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId");
+            // The shared surface owns the option automation ids: the WPF host names them per kind, the
+            // Avalonia host loops over Surface.Options.
+            (source.Contains("Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId")
+                || source.Contains("SetAutomationId(box, choice.AutomationId)"))
+                .Should().BeTrue();
             source.Should().Contain("Surface.GoToButtonAutomationId");
             source.Should().NotContain("FindReplaceDialogPlanner.BuildGoToTargets(");
             source.Should().NotContain("FindReplaceDialogPlanner.PlanGoTo(");
