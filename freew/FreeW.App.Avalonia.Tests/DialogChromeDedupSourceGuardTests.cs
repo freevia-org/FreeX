@@ -34,7 +34,7 @@ public sealed class DialogChromeDedupSourceGuardTests
             [
                 "using Free.Shared.Shell.Avalonia;",
                 "AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCase, DialogChromeStyle);",
+                "AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);",
                 "AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: Surface.Metrics.ButtonMinWidth);",
                 "AvaloniaCompactDialogChrome.CreateActionRow(",
             ]),
