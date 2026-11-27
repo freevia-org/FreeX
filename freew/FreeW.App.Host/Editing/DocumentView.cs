@@ -17978,10 +17978,11 @@ public sealed partial class DocumentView : RichTextBox
             return false;
         }
 
-        var startOffset = OffsetInParagraph(
+        // Model offsets: the view-only list marker run is not a model character (see PlainOffsetInParagraph).
+        var startOffset = PlainOffsetInParagraph(
             startParagraph,
             hasSelection ? Selection.Start : CaretPosition!);
-        var endOffset = OffsetInParagraph(
+        var endOffset = PlainOffsetInParagraph(
             endParagraph,
             hasSelection ? Selection.End : CaretPosition!);
         range = new DocumentTextRange(
@@ -18026,8 +18027,21 @@ public sealed partial class DocumentView : RichTextBox
 
     private static bool TryTextPointerInInline(Inline inline, ref int remaining, out TextPointer pointer)
     {
+        // Model offsets (the inverse of PlainOffsetInParagraph): the view-only list marker run is no
+        // character, a tab-stop element and a line break are one each.
         switch (inline)
         {
+            case WpfRun { Tag: MultiLevelMarker }:
+                break;
+            case LineBreak:
+            case InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan } }:
+                if (remaining <= 0)
+                {
+                    pointer = inline.ElementStart;
+                    return true;
+                }
+                remaining--;
+                break;
             case WpfRun run:
                 if (remaining <= run.Text.Length)
                 {
@@ -20087,14 +20101,7 @@ public sealed partial class DocumentView : RichTextBox
 
     /// <summary>The plain-text character offset of <paramref name="position"/> from the paragraph's start.</summary>
     private static int OffsetInParagraph(WpfParagraph paragraph, TextPointer position)
-    {
-        var modelTextStart = TextPointerAtParagraphOffset(paragraph, 0);
-        if (position.CompareTo(modelTextStart) <= 0)
-            return 0;
-
-        var range = new TextRange(modelTextStart, position);
-        return range.Text.Length;
-    }
+        => PlainOffsetInParagraph(paragraph, position);
 
     private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
         => _editingSession.TryApplyProofingLanguage(plan);

@@ -144,6 +144,40 @@ public sealed class FindReplaceSingleMatchHostTests
         AssertFormatted(cell.Paragraphs[1], "tiger");
     }
 
+    [StaTheory]
+    [InlineData(ListKind.None, "item cat here")]
+    [InlineData(ListKind.Bullet, "item cat here")]
+    [InlineData(ListKind.Number, "item cat here")]
+    [InlineData(ListKind.MultiLevel, "item cat here")]
+    [InlineData(ListKind.Bullet, "a\tb\titem cat here")]
+    [InlineData(ListKind.Number, "a\tb\titem cat here")]
+    public void FindNext_InABodyListParagraph_SelectsTheMatchAtItsModelOffsets_AndReplaceFormatsIt(ListKind kind, string text)
+    {
+        var item = new Paragraph(text) { Formatting = ParagraphFormatting.Default with { ListKind = kind } };
+        var view = Load(_ => { }, new Paragraph("intro"), item, new Paragraph("tail"));
+        var expectedStart = text.IndexOf("cat", StringComparison.Ordinal);
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.SetFormatForTest(FindReplaceDialogFieldKind.Replace, BoldRed);
+            dialog.FindNextForTest();
+
+            var range = view.FindReplaceSelectionRange();
+            range.Should().NotBeNull();
+            range!.Value.Start.BlockIndex.Should().Be(1);
+            range.Value.Start.Offset.Should().Be(expectedStart, "the list marker and tab chrome are not model characters");
+            range.Value.End.Offset.Should().Be(expectedStart + 3);
+
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var paragraphs = view.Model.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("intro", text.Replace("cat", "tiger", StringComparison.Ordinal), "tail");
+        AssertFormatted(paragraphs[1], "tiger");
+    }
+
     [StaFact]
     public void FindNext_DoesNotSeeTextInANestedTable_BecauseTheSurfaceHostsItReadOnly()
     {
