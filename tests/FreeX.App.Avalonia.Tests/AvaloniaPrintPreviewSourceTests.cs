@@ -48,6 +48,14 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("PrintPreviewSurfacePlanner.PreviewPageLeftPadding");
         source.Should().Contain("ScrollBarVisibility.Auto");
         source.Should().Contain("CreateFindNavigationButton");
+        source.Should().Contain("Width = plan.BoxWidth");
+        source.Should().Contain("Height = plan.BoxHeight");
+        source.Should().Contain("Height = plan.BarHeight");
+        source.Should().Contain("Margin = new Thickness(plan.BoxLeftOffset, plan.BoxTopOffset, 0, 0)");
+        source.Should().Contain("Margin = new Thickness(0, 0, 0, plan.BarBottomGap)");
+        source.Should().Contain("boxGrid.Children.Add(previous)");
+        source.Should().Contain("boxGrid.Children.Add(next)");
+        source.Should().NotContain("ColumnDefinitions(\"240,Auto,Auto,*\")");
         source.Should().Contain("new MenuFlyout { Items = { overflowItem } }");
         source.Should().Contain("toolbar.Children.AddRange(controls)");
 

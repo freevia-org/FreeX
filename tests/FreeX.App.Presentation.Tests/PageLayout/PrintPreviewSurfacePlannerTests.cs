@@ -7,6 +7,20 @@ namespace FreeX.App.Presentation.Tests.PageLayout;
 public sealed class PrintPreviewSurfacePlannerTests
 {
     [Fact]
+    public void CreateFindBarPlan_MatchesWpfDocumentViewerFindBoxGeometry()
+    {
+        var plan = PrintPreviewSurfacePlanner.CreateFindBarPlan();
+
+        plan.PlaceholderText.Should().Be("Type text to find...");
+        plan.BoxWidth.Should().Be(231);
+        plan.BoxHeight.Should().Be(20);
+        plan.BarHeight.Should().Be(27);
+        plan.BoxLeftOffset.Should().Be(8);
+        plan.BoxTopOffset.Should().Be(3);
+        plan.BarBottomGap.Should().Be(2);
+    }
+
+    [Fact]
     public void CreateTopToolbarPlan_OwnsPrintPreviewToolbarDescriptors()
     {
         var plan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(
