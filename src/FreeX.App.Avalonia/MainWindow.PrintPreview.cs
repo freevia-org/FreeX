@@ -1450,19 +1450,23 @@ public sealed partial class MainWindow
         var findBar = new Grid
         {
             Background = PrintPreviewChromeBackground,
-            ColumnDefinitions = new ColumnDefinitions("240,Auto,Auto,*"),
-            MinHeight = 26,
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Height = plan.BarHeight,
+            Margin = new Thickness(0, 0, 0, plan.BarBottomGap),
         };
         var findBox = new TextBox
         {
             PlaceholderText = plan.PlaceholderText,
-            Margin = new Thickness(6, 2),
-            Height = 22,
+            MinHeight = 0,
+            Height = plan.BoxHeight - 2,
+            Padding = new Thickness(3, 0),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             FontStyle = FontStyle.Italic,
-            BorderBrush = Brush(130, 130, 130),
-            BorderThickness = new Thickness(1),
+            Background = Brushes.Transparent,
+            PlaceholderForeground = Brush(96, 96, 96),
+            BorderThickness = new Thickness(0),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         var previous = CreateFindNavigationButton(plan.PreviousButtonText, isPrevious: true);
         var next = CreateFindNavigationButton(plan.NextButtonText, isPrevious: false);
@@ -1481,13 +1485,45 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(next, StripDisplayMnemonic(UiText.Get("FindReplace_FindNext")));
         AutomationProperties.SetAutomationId(status, "PrintPreviewFindStatus");
         ConfigureTextAnnouncement(status);
+        // WPF DocumentViewer find box: one 230x20 framed box with the query, the filled previous/next
+        // triangles and the options drop-down glyph inside it, inset 8 DIP from the pane's left edge.
+        var dropDownGlyph = new global::Avalonia.Controls.Shapes.Path
+        {
+            Data = Geometry.Parse("M 0 0 L 8 0 L 4 4 Z"),
+            Fill = Brushes.Black,
+            Width = 8,
+            Height = 4,
+            Margin = new Thickness(4, 0, 6, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
+        var boxGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"),
+        };
         Grid.SetColumn(findBox, 0);
         Grid.SetColumn(previous, 1);
         Grid.SetColumn(next, 2);
-        Grid.SetColumn(status, 3);
-        findBar.Children.Add(findBox);
-        findBar.Children.Add(previous);
-        findBar.Children.Add(next);
+        Grid.SetColumn(dropDownGlyph, 3);
+        boxGrid.Children.Add(findBox);
+        boxGrid.Children.Add(previous);
+        boxGrid.Children.Add(next);
+        boxGrid.Children.Add(dropDownGlyph);
+        var boxFrame = new Border
+        {
+            Width = plan.BoxWidth,
+            Height = plan.BoxHeight,
+            Margin = new Thickness(plan.BoxLeftOffset, plan.BoxTopOffset, 0, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Background = Brushes.White,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            Child = boxGrid,
+        };
+        AutomationProperties.SetAutomationId(boxFrame, "PrintPreviewFindBoxFrame");
+        Grid.SetColumn(boxFrame, 0);
+        Grid.SetColumn(status, 1);
+        findBar.Children.Add(boxFrame);
         findBar.Children.Add(status);
         return (findBar, findBox, previous, next, status);
     }
@@ -1525,13 +1561,14 @@ public sealed partial class MainWindow
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
             Content = new global::Avalonia.Controls.Shapes.Path
             {
-                Data = Geometry.Parse(isPrevious ? "M 10 2 L 5 7 L 10 12" : "M 4 2 L 9 7 L 4 12"),
-                Stroke = Brush(0, 102, 204),
-                StrokeThickness = 1.5,
-                Width = 12,
-                Height = 14,
+                Data = Geometry.Parse(isPrevious ? "M 4 0 L 4 8 L 0 4 Z" : "M 0 0 L 0 8 L 4 4 Z"),
+                Fill = Brush(0, 102, 204),
+                Width = 4,
+                Height = 8,
             },
         };
+        button.Resources["ButtonBackgroundDisabled"] = Brushes.Transparent;
+        button.Resources["ButtonBorderBrushDisabled"] = Brushes.Transparent;
         ToolTip.SetTip(button, toolTip);
         return button;
     }

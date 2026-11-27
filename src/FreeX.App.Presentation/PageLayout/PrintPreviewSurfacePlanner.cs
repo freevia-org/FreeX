@@ -51,7 +51,13 @@ public sealed record PrintPreviewDocumentToolbarChromePlan(
 public sealed record PrintPreviewFindBarPlan(
     string PlaceholderText,
     string PreviousButtonText,
-    string NextButtonText);
+    string NextButtonText,
+    double BoxWidth = 231,
+    double BoxHeight = 20,
+    double BarHeight = 27,
+    double BoxLeftOffset = 8,
+    double BoxTopOffset = 3,
+    double BarBottomGap = 2);
 
 public sealed record PrintPreviewPageRangeFieldsPlan(
     string FromPageText,
