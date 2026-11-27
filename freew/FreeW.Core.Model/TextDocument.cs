@@ -2306,10 +2306,9 @@ public enum RevisionKind
 /// had inserted, both still pending" pattern (<c>&lt;w:ins w:author="A"&gt;&lt;w:del w:author="B"&gt;...
 /// &lt;/w:del&gt;&lt;/w:ins&gt;</c>). <see cref="Run.Revision"/>/<see cref="Run.RevisionAuthor"/>/
 /// <see cref="Run.RevisionDateXml"/> record only the innermost wrapper (the visually authoritative one);
-/// this carries the superseded outer wrapper's data instead of silently discarding it. Read-only for now --
-/// DocxWriter does not re-emit the nested wrapper on save, so a round-trip still loses it; this exists so
-/// the outer author/date at least survive for the lifetime of the open document instead of vanishing the
-/// instant the file is read.
+/// this carries the outer wrapper's data instead of silently discarding it. The DOCX writer places this
+/// outer mark around the primary mark on save. This retains one outer wrapper's authorship; it does not
+/// model an arbitrary-depth revision tree or preserve the original outer wrapper's group identifier.
 /// </summary>
 public sealed record NestedRevisionInfo(RevisionKind Kind, string? Author, string? DateXml);
 

@@ -18,7 +18,8 @@ public class NestedRevisionAuthorshipRoundTripTests
         using var input = BuildPackage("""
             <w:p><w:ins w:id="1" w:author="Reviewer A" w:date="2026-01-01T10:00:00Z"><w:del w:id="2" w:author="Reviewer B" w:date="2026-01-02T11:30:00Z"><w:r><w:delText>hello </w:delText></w:r></w:del></w:ins></w:p>
             """);
-        var paragraph = DocxReader.Read(input).Paragraphs.Single();
+        var document = DocxReader.Read(input);
+        var paragraph = document.Paragraphs.Single();
         var run = paragraph.Runs.Single(r => r.Text == "hello ");
 
         // The innermost wrapper (Reviewer B's deletion) stays authoritative for rendering/accept-reject --
@@ -32,6 +33,15 @@ public class NestedRevisionAuthorshipRoundTripTests
         run.NestedRevision!.Kind.Should().Be(RevisionKind.Inserted);
         run.NestedRevision.Author.Should().Be("Reviewer A");
         run.NestedRevision.DateXml.Should().Be("2026-01-01T10:00:00Z");
+
+        using var saved = new MemoryStream();
+        DocxWriter.Write(document, saved);
+        saved.Position = 0;
+        var reopened = DocxReader.Read(saved).Paragraphs.Single().Runs.Single(item => item.Text == "hello ");
+        reopened.Revision.Should().Be(run.Revision);
+        reopened.RevisionAuthor.Should().Be(run.RevisionAuthor);
+        reopened.RevisionDateXml.Should().Be(run.RevisionDateXml);
+        reopened.NestedRevision.Should().Be(run.NestedRevision);
     }
 
     [Fact]

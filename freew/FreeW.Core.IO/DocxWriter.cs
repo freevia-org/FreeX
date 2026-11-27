@@ -1125,6 +1125,35 @@ public static partial class DocxWriter
         }
     }
 
+    private static IEnumerable<int> ReservedMoveRevisionIds(IEnumerable<Paragraph> paragraphs)
+    {
+        foreach (var paragraph in paragraphs)
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.MoveRevisionId is { } id)
+                yield return id;
+            if (run.Shape is { } shape)
+                foreach (var nestedId in ReservedMoveRevisionIds(shape.TextParagraphs))
+                    yield return nestedId;
+            if (run.DrawingGroup is { } group)
+                foreach (var nestedId in ReservedMoveRevisionIds(group))
+                    yield return nestedId;
+        }
+    }
+
+    private static IEnumerable<int> ReservedMoveRevisionIds(DrawingGroup group)
+    {
+        foreach (var child in group.Children)
+        {
+            if (child is Shape shape)
+                foreach (var id in ReservedMoveRevisionIds(shape.TextParagraphs))
+                    yield return id;
+            if (child is DrawingGroup nested)
+                foreach (var id in ReservedMoveRevisionIds(nested))
+                    yield return id;
+        }
+    }
+
     /// <summary>All paragraphs, including those nested inside table cells (where runs can also live).</summary>
     private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
     {
@@ -1601,10 +1630,9 @@ public static partial class DocxWriter
         // overlap. Each shape BuildRun emits takes the next id.
         var ids = new IdAllocator(
             shapeDrawingSeed: images.Count + charts.Count + smartArts.Count,
-            reservedRevisionIds: EnumerateStoryParagraphs(document)
-                .SelectMany(paragraph => paragraph.Runs)
-                .Where(run => run.MoveRevisionId is not null)
-                .Select(run => run.MoveRevisionId!.Value));
+            reservedRevisionIds: ReservedMoveRevisionIds(EnumerateStoryParagraphs(document)
+                .Concat(TextDocumentStoryTraversal.EnumerateBlockParagraphs(document.Blocks,
+                    TextDocumentStoryTraversalOptions.IncludeNestedTables))));
 
         // Map each image/chart run to its assigned part by replaying the same walk order CollectImages /
         // CollectCharts used, so document.xml and the rels agree on which rId belongs to which run.
@@ -1915,12 +1943,14 @@ public static partial class DocxWriter
         IReadOnlyDictionary<Chart, ChartPart>? GroupCharts = null,
         IReadOnlyDictionary<SmartArt, SmartArtPart>? GroupSmartArts = null)
     {
-        public static RunDrawings Empty(IReadOnlySet<int> validCommentIds) => new(
+        // Supply the whole emitted part: a move in a later note or nested text box must
+        // already be reserved when the first ordinary or outer revision ID is allocated.
+        public static RunDrawings Empty(IReadOnlySet<int> validCommentIds, IEnumerable<Paragraph> paragraphs) => new(
             new Dictionary<Run, ImagePart>(),
             new Dictionary<Run, ChartPart>(),
             new Dictionary<Run, EmbeddedObjectPart>(),
             new Dictionary<Run, SmartArtPart>(),
-            new IdAllocator(),
+            new IdAllocator(reservedRevisionIds: ReservedMoveRevisionIds(paragraphs)),
             validCommentIds,
             null,
             null,
@@ -1970,7 +2000,10 @@ public static partial class DocxWriter
         var imagesByRun = hasImages ? BuildHeaderFooterImagesByRun(part) : new Dictionary<Run, ImagePart>();
         var preservedDrawingRelIds = part.PreservedDrawings
             .ToDictionary(drawing => drawing.PartName, drawing => drawing.RelationshipId, StringComparer.Ordinal);
-        var drawings = RunDrawings.Empty(validCommentIds) with
+        IEnumerable<Paragraph> revisionParagraphs = part.Content.Table is { } revisionTable
+            ? TextDocumentStoryTraversal.EnumerateBlockParagraphs([revisionTable], TextDocumentStoryTraversalOptions.IncludeNestedTables)
+            : part.Content.Paragraphs;
+        var drawings = RunDrawings.Empty(validCommentIds, revisionParagraphs) with
         {
             Images = imagesByRun,
             PreservedDrawingRelIds = preservedDrawingRelIds
@@ -2206,7 +2239,8 @@ public static partial class DocxWriter
         footnotes.Add(Separator(0, "continuationSeparator"));
 
         // Footnote chart references resolve against word/_rels/footnotes.xml.rels.
-        var noteDrawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet()) with
+        var noteDrawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet(),
+            document.Footnotes.Values.SelectMany(note => note.Content)) with
         {
             Images = BuildNoteImagesByRun(document.Footnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), images),
             PreservedDrawingRelIds = preservedDrawings
@@ -2268,7 +2302,8 @@ public static partial class DocxWriter
         endnotes.Add(Separator(0, "continuationSeparator"));
 
         // Endnote chart references resolve against word/_rels/endnotes.xml.rels.
-        var noteDrawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet()) with
+        var noteDrawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet(),
+            document.Endnotes.Values.SelectMany(note => note.Content)) with
         {
             Images = BuildNoteImagesByRun(document.Endnotes.Values.OrderBy(note => note.Id).SelectMany(note => note.Content), images),
             PreservedDrawingRelIds = preservedDrawings
@@ -2449,7 +2484,8 @@ public static partial class DocxWriter
         var imagesByRun = commentImages.Count > 0
             ? BuildCommentImagesByRun(document, commentImages)
             : new Dictionary<Run, ImagePart>();
-        var drawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet()) with
+        var drawings = RunDrawings.Empty(document.Comments.Keys.ToHashSet(),
+            FlattenComments(document).SelectMany(comment => comment.Content)) with
         {
             Images = imagesByRun,
             PreservedDrawingRelIds = preservedDrawings
@@ -3022,32 +3058,51 @@ public static partial class DocxWriter
         a.Revision == b.Revision
         && string.Equals(a.RevisionAuthor, b.RevisionAuthor, StringComparison.Ordinal)
         && string.Equals(a.RevisionDateXml, b.RevisionDateXml, StringComparison.Ordinal)
-        && a.MoveRevisionId == b.MoveRevisionId;
+        && a.MoveRevisionId == b.MoveRevisionId
+        && a.NestedRevision == b.NestedRevision;
 
     /// <summary>
     /// Builds a tracked-change wrapper carrying its id and author/date. Move revisions preserve their source
     /// w:moveFrom/w:moveTo wrapper and shared id; ordinary revisions use fresh w:ins/w:del ids.
     /// </summary>
-    private static XElement NewRevisionWrapper(Run run, IdAllocator ids)
+    private static XElement NewRevisionWrapper(Run run, IdAllocator ids) =>
+        NewRevisionWrapper(run.Revision, run.RevisionAuthor, run.RevisionDateXml, run.MoveRevisionId, ids);
+
+    private static XElement NewRevisionWrapper(RevisionKind kind, string? author, string? dateXml, int? moveId, IdAllocator ids)
     {
-        var isMove = run.MoveRevisionId is not null;
+        var isMove = moveId is not null;
         var name = isMove
-            ? run.Revision == RevisionKind.Deleted ? "moveFrom" : "moveTo"
-            : run.Revision == RevisionKind.Deleted ? "del" : "ins";
+            ? kind == RevisionKind.Deleted ? "moveFrom" : "moveTo"
+            : kind == RevisionKind.Deleted ? "del" : "ins";
         var wrapper = new XElement(W + name,
-            new XAttribute(W + "id", run.MoveRevisionId ?? ids.NextRevisionId()));
-        if (run.RevisionAuthor is { Length: > 0 } author)
-            wrapper.Add(new XAttribute(W + "author", author));
-        if (run.RevisionDateXml is { Length: > 0 } date)
-            wrapper.Add(new XAttribute(W + "date", date));
+            new XAttribute(W + "id", moveId ?? ids.NextRevisionId()),
+            // CT_TrackChange requires author even when the model has no author to name.
+            new XAttribute(W + "author", author ?? string.Empty));
+        if (dateXml is { Length: > 0 })
+            wrapper.Add(new XAttribute(W + "date", dateXml));
         return wrapper;
+    }
+
+    private sealed record RevisionRunContainer(XElement Root, XElement Content);
+
+    private static RevisionRunContainer NewRevisionRunContainer(Run run, IdAllocator ids)
+    {
+        var inner = NewRevisionWrapper(run, ids);
+        if (run.NestedRevision is not { Kind: not RevisionKind.None } outer)
+            return new(inner, inner);
+
+        // The innermost mark remains authoritative for run text (including delText).
+        // Keep the imported outer author's mark around it without modifying either model mark.
+        var root = NewRevisionWrapper(outer.Kind, outer.Author, outer.DateXml, moveId: null, ids);
+        root.Add(inner);
+        return new(root, inner);
     }
 
     /// <summary>
     /// Builds a bare <c>CT_TrackChange</c> element (a <c>w:ins</c> or <c>w:del</c> carrying only an id plus
     /// optional author/date, no wrapped content) — the shape used both by a row's <c>trPr/w:ins</c>/<c>w:del</c>
     /// (a tracked row insertion/deletion) and by a paragraph mark's <c>pPr/rPr/w:ins</c>/<c>w:del</c> (a
-    /// tracked Enter/Backspace). Mirrors <see cref="NewRevisionWrapper"/>, which additionally wraps run content.
+    /// tracked Enter/Backspace). Mirrors <see cref="NewRevisionWrapper(Run, IdAllocator)"/>, which additionally wraps run content.
     /// </summary>
     private static XElement BuildTrackChangeMarker(string name, string? author, string? dateXml, IdAllocator ids)
     {
@@ -3437,14 +3492,14 @@ public static partial class DocxWriter
 
         // The current open revision wrapper (w:ins/w:del) and the run it was opened for; run-level
         // elements are added through Content(...) so they land inside the wrapper when one is open.
-        XElement? revisionWrapper = null;
+        RevisionRunContainer? revisionWrapper = null;
         Run? revisionKey = null;
 
         void FlushRevision()
         {
             if (revisionWrapper is not null)
             {
-                p.Add(revisionWrapper);
+                p.Add(revisionWrapper.Root);
                 revisionWrapper = null;
                 revisionKey = null;
             }
@@ -3502,8 +3557,8 @@ public static partial class DocxWriter
             }
         }
 
-        // Route one run-level element (a w:r or w:hyperlink) through the active revision wrapper,
-        // (re)opening or closing it to match the run's revision mark before adding the element.
+        // Route run content through the active revision mark. A hyperlink can contain revisions,
+        // but CT_RunTrackChange cannot contain a hyperlink, so its marks belong inside the link.
         void Content(Run run, XElement element)
         {
             if (run.Revision == RevisionKind.None)
@@ -3512,13 +3567,22 @@ public static partial class DocxWriter
                 p.Add(element);
                 return;
             }
+            if (element.Name == W + "hyperlink")
+            {
+                FlushRevision();
+                var linkRevision = NewRevisionRunContainer(run, drawings.Ids);
+                linkRevision.Content.Add(element.Elements().ToArray());
+                element.ReplaceNodes(linkRevision.Root);
+                p.Add(element);
+                return;
+            }
             if (revisionKey is null || !SameRevision(revisionKey, run))
             {
                 FlushRevision();
-                revisionWrapper = NewRevisionWrapper(run, drawings.Ids);
+                revisionWrapper = NewRevisionRunContainer(run, drawings.Ids);
                 revisionKey = run;
             }
-            revisionWrapper!.Add(element);
+            revisionWrapper!.Content.Add(element);
         }
 
         while (i < runs.Count)
@@ -3574,7 +3638,7 @@ public static partial class DocxWriter
                 && runs[i].ComplexField is not { SimpleField: null })
             {
                 var content = new XElement(W + "sdtContent");
-                XElement? controlRevisionWrapper = null;
+                RevisionRunContainer? controlRevisionWrapper = null;
                 Run? controlRevisionKey = null;
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
                     && EffectiveCommentId(runs[i]) == openCommentId)
@@ -3592,11 +3656,11 @@ public static partial class DocxWriter
                     {
                         if (controlRevisionKey is null || !SameRevision(controlRevisionKey, wrapped))
                         {
-                            controlRevisionWrapper = NewRevisionWrapper(wrapped, drawings.Ids);
+                            controlRevisionWrapper = NewRevisionRunContainer(wrapped, drawings.Ids);
                             controlRevisionKey = wrapped;
-                            content.Add(controlRevisionWrapper);
+                            content.Add(controlRevisionWrapper.Root);
                         }
-                        controlRevisionWrapper!.Add(runElement);
+                        controlRevisionWrapper!.Content.Add(runElement);
                     }
                     i++;
                 }
@@ -5508,7 +5572,7 @@ public static partial class DocxWriter
             // lets a picture placed inside this text box actually resolve to the ImagePart CollectImages
             // assigned it (see the widened walk there and in the imagesByRun/imagesByGroupChild builder in
             // BuildDocument) instead of silently falling through to an empty <w:t/> in BuildTextRun.
-            var nested = RunDrawings.Empty(validCommentIds) with
+            var nested = RunDrawings.Empty(validCommentIds, []) with
             {
                 Ids = ids,
                 Images = images ?? new Dictionary<Run, ImagePart>(),
