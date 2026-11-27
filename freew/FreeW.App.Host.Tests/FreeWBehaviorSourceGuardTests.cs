@@ -78,8 +78,8 @@ public sealed class FreeWBehaviorSourceGuardTests
         wpf.Should().NotContain("TextSearch.FindAll(");
         wpf.Should().Contain("restrictToSelection");
         avaloniaCommandHost.Should().Contain("class AvaloniaFindReplaceCommandHost");
-        avaloniaCommandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
-        avaloniaCommandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
+        avaloniaCommandHost.Should().Contain("editor.FindNext(request)");
+        avaloniaCommandHost.Should().Contain("editor.ReplaceNext(request)");
         avaloniaCommandHost.Should().Contain("editor.ReplaceAll(request)");
         wpf.Should().NotContain("TextSearch.FindAll(");
         avaloniaCommandHost.Should().NotContain("TextSearch.FindAll(");

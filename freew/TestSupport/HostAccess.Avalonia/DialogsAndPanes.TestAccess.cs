@@ -269,6 +269,30 @@ public sealed partial class FindReplaceDialog
     internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
     internal string StatusForTest => _status.Text ?? string.Empty;
 
+    internal void SetFormatChooserForTest(Func<FindReplaceDialogFieldKind, FindFormat?, Task<FindFormat?>> chooser) =>
+        _chooseFormat = chooser;
+
+    internal Task ChooseFormatForTest(FindReplaceDialogFieldKind field)
+    {
+        _lastFocusedBox = field == FindReplaceDialogFieldKind.Find ? _findBox : _replaceBox;
+        return ChooseFormatAsync();
+    }
+
+    internal void ClearFormatForTest(FindReplaceDialogFieldKind field)
+    {
+        _lastFocusedBox = field == FindReplaceDialogFieldKind.Find ? _findBox : _replaceBox;
+        ShowFormatState(_session.ClearFormat(LastFocusedField));
+    }
+
+    internal string FindFormatSummaryForTest => _findFormatSummary.IsVisible ? _findFormatSummary.Text ?? string.Empty : string.Empty;
+    internal string ReplaceFormatSummaryForTest => _replaceFormatSummary.IsVisible ? _replaceFormatSummary.Text ?? string.Empty : string.Empty;
+
+    internal IReadOnlyList<string> ToolButtonAutomationIdsForTest =>
+        global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(this)
+            .OfType<Button>()
+            .Select(button => AutomationProperties.GetAutomationId(button) ?? string.Empty)
+            .ToList();
+
     internal void SetOptionForTest(FindReplaceOptionKind kind, bool isChecked) =>
         _options[kind].IsChecked = isChecked;
 

@@ -730,7 +730,114 @@ public static class FindReplaceDialogPlanner
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null)
     {
         ArgumentNullException.ThrowIfNull(document);
-        if (string.IsNullOrEmpty(term) || document.Blocks.Count == 0)
+        if (string.IsNullOrEmpty(term))
+            return null;
+
+        return FindNextMatchCore(
+            document,
+            paragraph => EnumerateMatches(paragraph.PlainText, term, options),
+            fromBlock,
+            fromOffset,
+            fromTableCell,
+            resumeHeaderFooterFrom);
+    }
+
+    /// <summary>
+    /// The term-and-options <c>FindNextMatch</c> overload for a full request: honors the request's find formatting (Word's Find what formatting, including a
+    /// formatting-only search with an empty term). A request without formatting walks exactly as the
+    /// term-and-options overload does.
+    /// </summary>
+    public static FindReplaceMatch? FindNextMatch(
+        TextDocument document,
+        FindReplaceSearchRequest request,
+        int fromBlock,
+        int fromOffset,
+        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null,
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Format is null)
+            return FindNextMatch(document, request.Term, request.Options, fromBlock, fromOffset, fromTableCell, resumeHeaderFooterFrom);
+
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty)
+            return null;
+
+        return FindNextMatchCore(
+            document,
+            paragraph => FormattedTextSearch.FindAll(document, paragraph, criteria),
+            fromBlock,
+            fromOffset,
+            fromTableCell,
+            resumeHeaderFooterFrom);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="location"/> (a paragraph, table-cell or header/footer span such as the
+    /// current selection) is exactly one match of <paramref name="request"/>, formatting included. This is
+    /// what Replace asks before replacing the selection instead of searching on.
+    /// </summary>
+    public static bool IsMatchAt(TextDocument document, FindReplaceSearchRequest request, FindReplaceMatch location)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty || location.Length <= 0 || ResolveParagraph(document, location) is not { } paragraph)
+            return false;
+
+        var matches = request.Format is null
+            ? EnumerateMatches(paragraph.PlainText, request.Term, request.Options)
+            : FormattedTextSearch.FindAll(document, paragraph, criteria);
+        return matches.Any(match => match.Start == location.Start && match.Length == location.Length);
+    }
+
+    private static Paragraph? ResolveParagraph(TextDocument document, FindReplaceMatch location)
+    {
+        if (location.IsInHeaderFooter)
+        {
+            var slot = location.HeaderFooterIsFooter == true ? document.Footer : document.Header;
+            return slot is not null
+                && location.HeaderFooterParagraphIndex is { } index
+                && index >= 0
+                && index < slot.Paragraphs.Count
+                    ? slot.Paragraphs[index]
+                    : null;
+        }
+
+        if (location.Block < 0 || location.Block >= document.Blocks.Count)
+            return null;
+
+        if (location.IsInTableCell)
+        {
+            if (document.Blocks[location.Block] is not Table table
+                || location.TableRow is not { } row
+                || row < 0
+                || row >= table.Rows.Count
+                || TableGridProjection.At(table.Rows[row], location.TableCol!.Value) is not { } projected
+                || location.TableParagraphIndex is not { } paragraphIndex
+                || paragraphIndex < 0
+                || paragraphIndex >= projected.Cell.Paragraphs.Count)
+            {
+                return null;
+            }
+
+            return projected.Cell.Paragraphs[paragraphIndex];
+        }
+
+        return document.Blocks[location.Block] as Paragraph;
+    }
+
+    private static FindReplaceMatch? FindNextMatchCore(
+        TextDocument document,
+        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        int fromBlock,
+        int fromOffset,
+        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell,
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom)
+    {
+        if (document.Blocks.Count == 0)
             return null;
 
         var startBlock = Math.Clamp(fromBlock, 0, document.Blocks.Count - 1);
@@ -742,7 +849,7 @@ public static class FindReplaceDialogPlanner
             if (block is Paragraph paragraph)
             {
                 var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
-                var match = EnumerateMatches(paragraph.PlainText, term, options)
+                var match = matchesIn(paragraph)
                     .FirstOrDefault(item => item.Start >= startAt);
                 if (match.Length > 0)
                     return new FindReplaceMatch(blockIndex, match.Start, match.Length);
@@ -752,7 +859,7 @@ public static class FindReplaceDialogPlanner
             if (block is Table table)
             {
                 var startCell = step == 0 ? fromTableCell : null;
-                var tableMatch = EnumerateTableMatches(table, term, options)
+                var tableMatch = EnumerateTableMatches(table, matchesIn)
                     .FirstOrDefault(item => IsTableMatchAtOrAfter(item, startCell));
                 if (tableMatch.Length > 0)
                     return new FindReplaceMatch(
@@ -764,14 +871,14 @@ public static class FindReplaceDialogPlanner
         if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
         {
             var startAt = Math.Clamp(fromOffset, 0, startParagraph.PlainText.Length);
-            var match = EnumerateMatches(startParagraph.PlainText, term, options)
+            var match = matchesIn(startParagraph)
                 .FirstOrDefault(item => item.Start < startAt);
             if (match.Length > 0)
                 return new FindReplaceMatch(startBlock, match.Start, match.Length);
         }
         else if (startBlock >= 0 && document.Blocks[startBlock] is Table startTable && fromTableCell is not null)
         {
-            var wrapMatch = EnumerateTableMatches(startTable, term, options)
+            var wrapMatch = EnumerateTableMatches(startTable, matchesIn)
                 .FirstOrDefault(item => IsTableMatchBefore(item, fromTableCell.Value));
             if (wrapMatch.Length > 0)
                 return new FindReplaceMatch(
@@ -785,7 +892,7 @@ public static class FindReplaceDialogPlanner
         // reported "not found" even though CountMatches/DocumentContains (fixed for headers/footers by an
         // earlier round, see the TextDocumentStoryTraversal.HeadersFooters walk in CountMatches below) had
         // already proven it was there. See FindInDefaultHeaderFooter's remarks for this fallback's scope.
-        return FindInDefaultHeaderFooter(document, term, options, resumeHeaderFooterFrom);
+        return FindInDefaultHeaderFooter(document, matchesIn, resumeHeaderFooterFrom);
     }
 
     /// <summary>
@@ -820,13 +927,16 @@ public static class FindReplaceDialogPlanner
         ArgumentNullException.ThrowIfNull(document);
         if (string.IsNullOrEmpty(term))
             return null;
-        return FindInDefaultHeaderFooter(document, term, NormalizeOptions(options), resumeFrom);
+        var normalized = NormalizeOptions(options);
+        return FindInDefaultHeaderFooter(
+            document,
+            paragraph => EnumerateMatches(paragraph.PlainText, term, normalized),
+            resumeFrom);
     }
 
     private static FindReplaceMatch? FindInDefaultHeaderFooter(
         TextDocument document,
-        string term,
-        FindReplaceSearchOptions options,
+        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeFrom = null)
     {
         // r177: when a resume point is supplied, the slot it names is searched from that offset
@@ -842,22 +952,21 @@ public static class FindReplaceDialogPlanner
         if (resumeFrom is not { IsFooter: true })
         {
             var header = resumeFrom is { IsFooter: false } h
-                ? FindInHeaderFooterSlot(document.Header, false, term, options, h.ParagraphIndex, h.Offset)
-                : FindInHeaderFooterSlot(document.Header, false, term, options);
+                ? FindInHeaderFooterSlot(document.Header, false, matchesIn, h.ParagraphIndex, h.Offset)
+                : FindInHeaderFooterSlot(document.Header, false, matchesIn);
             if (header is not null)
                 return header;
         }
 
         return resumeFrom is { IsFooter: true } f
-            ? FindInHeaderFooterSlot(document.Footer, true, term, options, f.ParagraphIndex, f.Offset)
-            : FindInHeaderFooterSlot(document.Footer, true, term, options);
+            ? FindInHeaderFooterSlot(document.Footer, true, matchesIn, f.ParagraphIndex, f.Offset)
+            : FindInHeaderFooterSlot(document.Footer, true, matchesIn);
     }
 
     private static FindReplaceMatch? FindInHeaderFooterSlot(
         HeaderFooter? headerFooter,
         bool isFooter,
-        string term,
-        FindReplaceSearchOptions options,
+        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
         int fromParagraphIndex = 0,
         int fromOffset = 0)
     {
@@ -869,7 +978,7 @@ public static class FindReplaceDialogPlanner
             // Only the paragraph the resume point names starts partway in; every later paragraph
             // in the slot is searched from its beginning, as it has not been visited yet.
             var minOffset = paraIdx == fromParagraphIndex ? Math.Max(0, fromOffset) : 0;
-            var match = EnumerateMatches(headerFooter.Paragraphs[paraIdx].PlainText, term, options)
+            var match = matchesIn(headerFooter.Paragraphs[paraIdx])
                 .FirstOrDefault(candidate => candidate.Start >= minOffset);
             if (match.Length > 0)
                 return new FindReplaceMatch(-1, match.Start, match.Length,
@@ -933,8 +1042,7 @@ public static class FindReplaceDialogPlanner
     /// </summary>
     private static IEnumerable<TableTextMatch> EnumerateTableMatches(
         Table table,
-        string term,
-        FindReplaceSearchOptions options)
+        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn)
     {
         for (var row = 0; row < table.Rows.Count; row++)
         {
@@ -953,7 +1061,7 @@ public static class FindReplaceDialogPlanner
                 var paragraphs = projected.Cell.Paragraphs;
                 for (var paraIdx = 0; paraIdx < paragraphs.Count; paraIdx++)
                 {
-                    foreach (var (start, length) in EnumerateMatches(paragraphs[paraIdx].PlainText, term, options))
+                    foreach (var (start, length) in matchesIn(paragraphs[paraIdx]))
                         yield return new TableTextMatch(row, projected.StartColumn, paraIdx, start, length);
                 }
             }

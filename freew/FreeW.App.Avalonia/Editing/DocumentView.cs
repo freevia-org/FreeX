@@ -759,23 +759,22 @@ public sealed partial class DocumentView : Control
     public bool FindNext(string query) => FindNext(query, new FindReplaceSearchOptions());
 
     public bool FindNext(string query, FindReplaceSearchOptions options) =>
-        FindNext(query, options, headerFooterResume: null);
+        FindNext(new FindReplaceSearchRequest(query, options));
 
-    private bool FindNext(
-        string query,
-        FindReplaceSearchOptions options,
-        (bool IsFooter, int ParagraphIndex, int Offset)? headerFooterResume)
+    /// <summary>
+    /// Selects the next match of a full request (term, options and Find what formatting) after the caret,
+    /// wrapping around the body and falling back to the default header/footer. The search is the shared
+    /// planner's (<c>FindReplaceDialogPlanner.FindNextMatch</c>); this host only turns the located match into a selection.
+    /// </summary>
+    internal bool FindNext(FindReplaceSearchRequest request)
     {
-        if (string.IsNullOrEmpty(query))
-            return false;
+        ArgumentNullException.ThrowIfNull(request);
         if (FindReplaceDialogPlanner.FindNextMatch(
                 _doc,
-                query,
-                options,
+                request,
                 _caret.Block,
                 _caret.Offset,
-                CurrentFindReplaceTableCellPosition(),
-                headerFooterResume) is not { } hit)
+                CurrentFindReplaceTableCellPosition()) is not { } hit)
             return false;
 
         SelectFindReplaceMatch(hit);
@@ -957,35 +956,164 @@ public sealed partial class DocumentView : Control
     public bool IsHeadingCollapsed(int blockIndex) => _outlineCollapse.IsCollapsed(blockIndex);
 
     /// <summary>If the current selection equals <paramref name="query"/>, replace it; then select the next match.</summary>
-    public bool ReplaceNext(string query, string replacement)
-    {
-        if (string.IsNullOrEmpty(query))
-            return false;
-        if (!IsEditingLocked && string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
-        {
-            var originalMatchText = SelectedText;
-            ReplaceSelectionWith(replacement);
-            SkipTrackedLeftoverMatch(originalMatchText);
-        }
-        return FindNext(query);
-    }
+    public bool ReplaceNext(string query, string replacement) =>
+        ReplaceNext(query, replacement, new FindReplaceSearchOptions());
 
     public bool ReplaceNext(
         string query,
         string replacement,
-        FindReplaceSearchOptions options)
+        FindReplaceSearchOptions options) =>
+        ReplaceNext(new FindReplaceReplaceRequest(query, replacement, options));
+
+    /// <summary>
+    /// Replace for a full request: when the selection is exactly one match (formatting included) it is
+    /// replaced -- expanding the replacement's special codes and applying Replace with formatting as the
+    /// WPF dialog does -- and the search then moves on to the next match.
+    /// </summary>
+    internal bool ReplaceNext(FindReplaceReplaceRequest request)
     {
-        if (string.IsNullOrEmpty(query))
+        ArgumentNullException.ThrowIfNull(request);
+        var search = request.ToSearchRequest();
+        if (search.ToCriteria().IsEmpty)
             return false;
 
-        if (!IsEditingLocked && FindReplaceDialogPlanner.MatchesExactly(SelectedText, query, options))
+        if (!IsEditingLocked && SelectionIsFindMatch(search))
+            ReplaceSelectedFindMatch(request);
+
+        return FindNext(search);
+    }
+
+    private bool SelectionIsFindMatch(FindReplaceSearchRequest search) =>
+        search.Format is null
+            ? FindReplaceDialogPlanner.MatchesExactly(SelectedText, search.Term, search.Options)
+            : CurrentSelectionAsFindMatch() is { } selected
+                && FindReplaceDialogPlanner.IsMatchAt(_doc, search, selected);
+
+    private void ReplaceSelectedFindMatch(FindReplaceReplaceRequest request)
+    {
+        var original = SelectedText;
+        var plan = FindReplaceDialogPlanner.PlanReplacement(request, original);
+
+        // A body match whose replacement carries formatting, a paragraph mark, or keeps the found text and
+        // only reformats it is the shared body planner's job (one match, restricted to the selection).
+        if (CurrentBodySelectionAsFindMatch() is { } body
+            && (plan.Format is not null || plan.InsertsParagraphMark || !plan.ReplacesText))
         {
-            var originalMatchText = SelectedText;
-            ReplaceSelectionWith(replacement);
-            SkipTrackedLeftoverMatch(originalMatchText);
+            ReplaceBodyMatchThroughPlanner(request, body, plan, original);
+            return;
         }
 
-        return FindNext(query, options);
+        // Plain text, and table-cell / header-footer selections (which the body planner cannot address
+        // as one match), are rewritten in place; a replacement needing a paragraph mark or formatting
+        // there is skipped, as the story planner skips it.
+        if (plan.ReplacesText && !plan.InsertsParagraphMark)
+        {
+            ReplaceSelectionWith(plan.Text);
+            SkipTrackedLeftoverMatch(original);
+        }
+    }
+
+    private void ReplaceBodyMatchThroughPlanner(
+        FindReplaceReplaceRequest request,
+        FindReplaceMatch match,
+        FindReplaceReplacementPlan plan,
+        string original)
+    {
+        var tracked = TrackChangesEnabled
+            ? new FindReplaceRevisionContext(RevisionAuthor, _editingSession.RevisionDateXmlForEdit())
+            : null;
+        var range = new DocumentTextRange(
+            new DocumentTextPosition(match.Block, match.Start),
+            new DocumentTextPosition(match.Block, match.Start + match.Length));
+        var command = FindReplaceBodyPlanner.PlanReplaceAll(_doc, request, tracked, range);
+        if (command.ReplacedCount == 0)
+            return;
+
+        _bus.Execute(command);
+
+        // Park the caret just after what was written so the next search continues from there.
+        var block = match.Block;
+        int offset;
+        if (!plan.ReplacesText)
+        {
+            offset = match.Start + match.Length;
+        }
+        else
+        {
+            var pieces = plan.Text.Split(FindSpecialCodes.ParagraphMark);
+            block += pieces.Length - 1;
+            offset = pieces.Length == 1 ? match.Start + pieces[0].Length : pieces[^1].Length;
+        }
+
+        _caret = new DocPosition(block, offset);
+        ClampCaret();
+        if (tracked is not null && plan.ReplacesText)
+            SkipTrackedLeftoverMatch(original);
+    }
+
+    /// <summary>The current body selection as a Find/Replace location, when it lies in one paragraph.</summary>
+    private FindReplaceMatch? CurrentBodySelectionAsFindMatch()
+    {
+        if (_hfCaret is not null
+            || HasCellTextSelection()
+            || NormalizedSelection() is not { } selection
+            || selection.Start.Block != selection.End.Block
+            || selection.Start.Block >= _doc.Blocks.Count
+            || _doc.Blocks[selection.Start.Block] is not Paragraph)
+        {
+            return null;
+        }
+
+        return new FindReplaceMatch(
+            selection.Start.Block,
+            selection.Start.Offset,
+            selection.End.Offset - selection.Start.Offset);
+    }
+
+    /// <summary>
+    /// The current selection as a Find/Replace location -- a paragraph span, a span inside one table-cell
+    /// paragraph, or a span inside one paragraph of the default header/footer -- or null when the
+    /// selection is none of those (so it cannot be one match).
+    /// </summary>
+    private FindReplaceMatch? CurrentSelectionAsFindMatch()
+    {
+        if (_hfCaret is { } caret)
+        {
+            if (NormalizedHfSelection() is not { } range
+                || range.Start.ParagraphIndex != range.End.ParagraphIndex
+                || !caret.Target.UseFinalSectionStore
+                || caret.Target.Slot is not (HeaderFooterSlotKind.Header or HeaderFooterSlotKind.Footer))
+            {
+                return null;
+            }
+
+            return new FindReplaceMatch(
+                -1,
+                range.Start.Offset,
+                range.End.Offset - range.Start.Offset,
+                HeaderFooterIsFooter: caret.Target.Slot == HeaderFooterSlotKind.Footer,
+                HeaderFooterParagraphIndex: range.Start.ParagraphIndex);
+        }
+
+        if (HasCellTextSelection())
+        {
+            return _cellAnchor is { } a
+                && _cellCaret is { } c
+                && a.TableBlock == c.TableBlock
+                && a.Row == c.Row
+                && a.Col == c.Col
+                && a.ParaIdx == c.ParaIdx
+                    ? new FindReplaceMatch(
+                        a.TableBlock,
+                        Math.Min(a.Offset, c.Offset),
+                        Math.Abs(a.Offset - c.Offset),
+                        a.Row,
+                        a.Col,
+                        a.ParaIdx)
+                    : null;
+        }
+
+        return CurrentBodySelectionAsFindMatch();
     }
 
     /// <summary>

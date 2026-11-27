@@ -71,8 +71,15 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         Margin = new Thickness(0, 6, 0, 0),
     };
 
+    // The "Format: ..." lines under Find what / Replace with; hidden while no formatting is set.
+    private readonly TextBlock _findFormatSummary = NewFormatSummary();
+    private readonly TextBlock _replaceFormatSummary = NewFormatSummary();
+
     private TextBox _lastFocusedBox = null!;
     private readonly FindReplaceDialogSession _session;
+
+    // Shows the Format dialog; null means cancelled. A seam so tests can answer without a modal window.
+    private Func<FindReplaceDialogFieldKind, FindFormat?, Task<FindFormat?>> _chooseFormat;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -84,7 +91,10 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         _session = new FindReplaceDialogSession(
             new AvaloniaFindReplaceCommandHost(_editor),
             openMode,
-            FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
+            FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get),
+            _text,
+            () => _editor.Document);
+        _chooseFormat = ChooseFormatWithDialogAsync;
 
         Title = Surface.Title;
         Width = Surface.Metrics.WindowWidth;
@@ -111,6 +121,8 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(_findBox, Surface.Field(FindReplaceDialogFieldKind.Find).AutomationId);
         AutomationProperties.SetAutomationId(_replaceBox, Surface.Field(FindReplaceDialogFieldKind.Replace).AutomationId);
         AutomationProperties.SetAutomationId(_goToTarget, Surface.GoToTargetAutomationId);
+        AutomationProperties.SetAutomationId(_findFormatSummary, FindReplaceDialogPlanner.FindFormatSummaryAutomationId);
+        AutomationProperties.SetAutomationId(_replaceFormatSummary, FindReplaceDialogPlanner.ReplaceFormatSummaryAutomationId);
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
@@ -120,30 +132,32 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // Row 0: Find:
-        AddLabeledRow(grid, 0, Surface.Field(FindReplaceDialogFieldKind.Find).Label, _findBox);
-        // Row 1: Replace:
-        AddLabeledRow(grid, 1, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
+        // Find: + its format summary, Replace: + its format summary.
+        AddLabeledRow(grid, Surface.Field(FindReplaceDialogFieldKind.Find).Label, _findBox);
+        AddInFieldColumn(grid, _findFormatSummary);
+        AddLabeledRow(grid, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
+        AddInFieldColumn(grid, _replaceFormatSummary);
 
         _lastFocusedBox = _findBox;
         _findBox.GotFocus += (_, _) => _lastFocusedBox = _findBox;
         _replaceBox.GotFocus += (_, _) => _lastFocusedBox = _replaceBox;
 
         // Option rows (one per Surface option) in the field column.
-        var nextRow = 2;
         foreach (var chk in _options.Values)
-        {
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(chk, nextRow++);
-            Grid.SetColumn(chk, 1);
-            grid.Children.Add(chk);
-        }
+            AddInFieldColumn(grid, chk);
 
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var specialButton = BuildSpecialButton();
-        Grid.SetRow(specialButton, nextRow);
-        Grid.SetColumn(specialButton, 1);
-        grid.Children.Add(specialButton);
+        // Special / Format / No Formatting act on whichever box last had focus, as in Word.
+        var tools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
+        tools.Children.Add(BuildSpecialButton());
+        tools.Children.Add(MakeToolButton(
+            _text.Get(FindReplaceTextId.FormatButton),
+            FindReplaceDialogPlanner.FormatButtonAutomationId,
+            async (_, _) => await ChooseFormatAsync()));
+        tools.Children.Add(MakeToolButton(
+            _text.Get(FindReplaceTextId.NoFormattingButton),
+            FindReplaceDialogPlanner.NoFormattingButtonAutomationId,
+            (_, _) => ShowFormatState(_session.ClearFormat(LastFocusedField))));
+        AddInFieldColumn(grid, tools);
 
         // --- Action buttons ---------------------------------------------------
         var actionButtons = new[]
@@ -201,7 +215,6 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
     {
         var button = MakeButton(Surface.SpecialButtonLabel, (_, _) => { }, Surface.SpecialButtonAutomationId);
         button.HorizontalAlignment = HorizontalAlignment.Left;
-        button.Margin = new Thickness(0, 6, 0, 0);
 
         var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
             FreeWContextMenuPlanner.BuildFindSpecial(),
@@ -226,6 +239,43 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         box.CaretIndex = plan.CaretIndex;
         box.Focus();
     }
+
+    // ── Find / Replace formatting ─────────────────────────────────────────────
+
+    private FindReplaceDialogFieldKind LastFocusedField =>
+        ReferenceEquals(_lastFocusedBox, _replaceBox)
+            ? FindReplaceDialogFieldKind.Replace
+            : FindReplaceDialogFieldKind.Find;
+
+    private async Task ChooseFormatAsync()
+    {
+        var field = LastFocusedField;
+        if (await _chooseFormat(field, _session.FormatFor(field)) is { } format)
+            ShowFormatState(_session.SetFormat(field, format));
+    }
+
+    private Task<FindFormat?> ChooseFormatWithDialogAsync(FindReplaceDialogFieldKind field, FindFormat? current) =>
+        FindFormatDialog.ChooseAsync(this, field, current, _editor.Document, _text);
+
+    private void ShowFormatState(FindReplaceDialogState state)
+    {
+        ShowSummary(_findFormatSummary, state.FindFormatSummary);
+        ShowSummary(_replaceFormatSummary, state.ReplaceFormatSummary);
+    }
+
+    private static void ShowSummary(TextBlock summary, string text)
+    {
+        summary.Text = text;
+        summary.IsVisible = text.Length > 0;
+    }
+
+    private static TextBlock NewFormatSummary() => new()
+    {
+        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 2, 0, 0),
+        IsVisible = false,
+    };
 
     // ── Go To section ─────────────────────────────────────────────────────────
 
@@ -353,8 +403,18 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
 
     // ── Layout helpers ────────────────────────────────────────────────────────
 
-    private static void AddLabeledRow(Grid grid, int row, string label, Control field)
+    private static void AddInFieldColumn(Grid grid, Control element)
     {
+        var row = grid.RowDefinitions.Count;
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(element, row);
+        Grid.SetColumn(element, 1);
+        grid.Children.Add(element);
+    }
+
+    private static void AddLabeledRow(Grid grid, string label, Control field)
+    {
+        var row = grid.RowDefinitions.Count;
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
         var lbl = new TextBlock
@@ -380,6 +440,15 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         };
         AutomationProperties.SetAutomationId(btn, automationId);
         AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: Surface.Metrics.ButtonMinWidth);
+        btn.Click += onClick;
+        return btn;
+    }
+
+    private static Button MakeToolButton(string content, string automationId, EventHandler<RoutedEventArgs> onClick)
+    {
+        var btn = new Button { Content = content };
+        AutomationProperties.SetAutomationId(btn, automationId);
+        AvaloniaCompactDialogChrome.ApplyButton(btn, DialogChromeStyle, minWidth: 0);
         btn.Click += onClick;
         return btn;
     }

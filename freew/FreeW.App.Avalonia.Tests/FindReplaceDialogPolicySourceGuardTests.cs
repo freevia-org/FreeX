@@ -39,8 +39,8 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
             source.Should().Contain($"IsChecked(FindReplaceOptionKind.{kind})");
         }
         source.Should().Contain("new AvaloniaFindReplaceCommandHost(_editor)");
-        commandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
-        commandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
+        commandHost.Should().Contain("editor.FindNext(request)");
+        commandHost.Should().Contain("editor.ReplaceNext(request)");
         commandHost.Should().Contain("editor.ReplaceAll(request)");
         source.Should().NotContain("TextSearch.FindAll(");
         source.Should().NotContain("internal static int CountMatches(");
@@ -127,6 +127,34 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("FindReplaceDialogPlanner.FindNextMatch(");
         source.Should().Contain("new FindReplaceSearchOptions()");
         source.Should().NotContain("DocumentSearch");
+    }
+
+    [Fact]
+    public void FindReplaceDialog_RendersFormatControlsFromTheSharedSessionAndCatalog()
+    {
+        var dialog = ReadAvaloniaSource("FindReplaceDialog.cs");
+        var formatDialog = ReadAvaloniaSource("FindFormatDialog.cs");
+        var documentView = ReadAvaloniaSource("Editing", "DocumentView.cs");
+
+        dialog.Should().Contain("FindReplaceDialogPlanner.FormatButtonAutomationId");
+        dialog.Should().Contain("FindReplaceDialogPlanner.NoFormattingButtonAutomationId");
+        dialog.Should().Contain("FindReplaceDialogPlanner.FindFormatSummaryAutomationId");
+        dialog.Should().Contain("FindReplaceDialogPlanner.ReplaceFormatSummaryAutomationId");
+        dialog.Should().Contain("_text.Get(FindReplaceTextId.FormatButton)");
+        dialog.Should().Contain("_text.Get(FindReplaceTextId.NoFormattingButton)");
+        dialog.Should().Contain("_session.SetFormat(");
+        dialog.Should().Contain("_session.ClearFormat(");
+        dialog.Should().Contain("state.FindFormatSummary");
+        dialog.Should().NotContain("Content = \"Format");
+
+        formatDialog.Should().Contain("FindReplaceDialogPlanner.TryBuildFormat(");
+        formatDialog.Should().Contain("FindReplaceDialogPlanner.BuildFormatStyleChoices(");
+        formatDialog.Should().Contain("FindFormatDialogInput.From(");
+        formatDialog.Should().Contain("text.Get(FindReplaceTextId.FormatDialogFontLabel)");
+
+        // Matching, replacement planning and the exact-match check all stay in the shared planner.
+        documentView.Should().Contain("FindReplaceDialogPlanner.IsMatchAt(");
+        documentView.Should().Contain("FindReplaceDialogPlanner.PlanReplacement(");
     }
 
     [Fact]
