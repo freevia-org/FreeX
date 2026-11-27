@@ -9119,7 +9119,7 @@ public sealed partial class DocumentView : Control
 
         if (marker is not null)
         {
-            var markerFmt = paragraph.Runs.Count > 0 ? paragraph.Runs[0].Formatting : RunFormatting.Default;
+            var markerFmt = ResolveListMarkerFormatting(paragraph);
             var markerWidth = Build(marker, markerFmt).WidthIncludingTrailingWhitespace;
             // Place the marker at the current content-space Y converted to page-space.
             var markerY = ContentYToPageSpaceY(_layoutContentY);
@@ -10183,7 +10183,7 @@ public sealed partial class DocumentView : Control
                     : [new Paragraph()];
                 var markerInsets = cellParagraphs.Select(paragraph =>
                     preservedNumberingMarkers.TryGetValue(paragraph, out var marker)
-                        ? Build(marker.Text, fmt).WidthIncludingTrailingWhitespace + 6
+                        ? Build(marker.Text, ResolveListMarkerFormatting(paragraph, cellAppearance.EffectiveBold)).WidthIncludingTrailingWhitespace + 6
                         : 0d).ToList();
                 var paragraphSpacings = cellParagraphs.Select(CellParagraphSpacing).ToList();
                 var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
@@ -10301,7 +10301,8 @@ public sealed partial class DocumentView : Control
                     {
                         // Markers are visual chrome, so they reserve the first-line leading space but
                         // are not added to editable table-cell character offsets.
-                        _markers.Add((rect.Left + leftPad, ty, preservedMarker.Text, fmt));
+                        _markers.Add((rect.Left + leftPad, ty, preservedMarker.Text,
+                            ResolveListMarkerFormatting(cellModel.Paragraphs[pIdx], EffectiveFillFor(r, cellIndex).EffectiveBold)));
                     }
 
                     foreach (var line in paraLines)

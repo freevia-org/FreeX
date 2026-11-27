@@ -1,9 +1,18 @@
 using Free.Shared.Pdf;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
 
 public sealed partial class DocumentView
 {
+    private RunFormatting ResolveListMarkerFormatting(Paragraph paragraph, bool forceBold = false)
+    {
+        var formatting = paragraph.Runs.Count > 0
+            ? ResolveRunFmt(paragraph.Runs[0], paragraph)
+            : ResolveRunFmt(RunFormatting.Default, paragraph, runStyleId: null);
+        return forceBold ? formatting with { Bold = true } : formatting;
+    }
+
     private void AppendPdfListMarkers(List<List<PdfDrawOp>> pages, double pageHeightPt)
     {
         // This is the same stream Render paints: native/preserved body markers and table

@@ -17,7 +17,7 @@ namespace FreeW.App.Avalonia;
 
 /// <summary>
 /// FreeW Avalonia Find &amp; Replace dialog: a modeless <see cref="Window"/> (non-blocking) with Find /
-/// Replace fields, match-case / whole-word / wildcard checkboxes, Find Next / Replace / Replace All
+/// Replace fields, one checkbox per option in <see cref="FindReplaceDialogPlanner.Surface"/>, Find Next / Replace / Replace All
 /// buttons, and a Go To section (headings via <see cref="DocumentOutline"/> + document start/end).
 ///
 /// Find/replace option policy, validation, request composition, and result text live in
@@ -25,8 +25,9 @@ namespace FreeW.App.Avalonia;
 /// <see cref="DocumentView.FindNext"/> / <see cref="DocumentView.GetBlockTop"/> surface so the editor
 /// controls the caret and scroll.
 ///
-/// Options supported: Match Case, Whole Word, Use Wildcards.
-/// "Use Wildcards" disables "Whole Word" through the presentation planner policy.
+/// Options: the same seven as the WPF dialog (Match case, Whole word, Use wildcards, Match prefix,
+/// Match suffix, Ignore punctuation, Ignore white space). "Use wildcards" disables every option but
+/// Match case through the presentation planner policy.
 ///
 /// The inline find bar in MainWindow continues to work; the dialog is opened via a separate
 /// <c>freew.find-replace-dialog</c> ribbon command (Home → Editing group) or Ctrl+H.
@@ -54,20 +55,9 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         Margin = new Thickness(0, 6, 0, 0),
     };
 
-    private readonly CheckBox _matchCase = new()
-    {
-        Margin = new Thickness(0, 6, 0, 0),
-    };
-
-    private readonly CheckBox _wholeWord = new()
-    {
-        Margin = new Thickness(0, 4, 0, 0),
-    };
-
-    private readonly CheckBox _useWildcards = new()
-    {
-        Margin = new Thickness(0, 4, 0, 0),
-    };
+    // One check box per Surface option, in Surface order; rendered, read and enabled from the session.
+    private readonly Dictionary<FindReplaceOptionKind, CheckBox> _options = [];
+    private readonly FindReplaceDialogText _text = new(UiText.Get);
 
     private readonly ComboBox _goToTarget = new()
     {
@@ -103,22 +93,26 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _useWildcards.IsCheckedChanged += (_, _) => ApplyOptionPolicy();
+        foreach (var choice in Surface.Options)
+        {
+            var box = new CheckBox
+            {
+                Content = FindReplaceDialogPlanner.LabelFor(choice.Kind, _text),
+                Margin = new Thickness(0, _options.Count == 0 ? 6 : 4, 0, 0),
+            };
+            AutomationProperties.SetAutomationId(box, choice.AutomationId);
+            AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
+            _options[choice.Kind] = box;
+        }
+
+        // "Use wildcards" disables every option but Match case (incompatible, mirrors Word).
+        _options[FindReplaceOptionKind.UseWildcards].IsCheckedChanged += (_, _) => ApplyOptionPolicy();
         ApplyOptionPolicy();
         AutomationProperties.SetAutomationId(_findBox, Surface.Field(FindReplaceDialogFieldKind.Find).AutomationId);
         AutomationProperties.SetAutomationId(_replaceBox, Surface.Field(FindReplaceDialogFieldKind.Replace).AutomationId);
         AutomationProperties.SetAutomationId(_goToTarget, Surface.GoToTargetAutomationId);
-        _matchCase.Content = Surface.Option(FindReplaceOptionKind.MatchCase).Label;
-        _wholeWord.Content = Surface.Option(FindReplaceOptionKind.WholeWord).Label;
-        _useWildcards.Content = Surface.Option(FindReplaceOptionKind.UseWildcards).Label;
-        AutomationProperties.SetAutomationId(_matchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
-        AutomationProperties.SetAutomationId(_wholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
-        AutomationProperties.SetAutomationId(_useWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_matchCase, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_wholeWord, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(_useWildcards, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
 
         // --- Main grid (Find label | Find box, Replace label | Replace box) ------
@@ -135,18 +129,19 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         _findBox.GotFocus += (_, _) => _lastFocusedBox = _findBox;
         _replaceBox.GotFocus += (_, _) => _lastFocusedBox = _replaceBox;
 
-        // Row 2-4: checkboxes (span both columns)
-        foreach (var (chk, row) in new[] { (_matchCase, 2), (_wholeWord, 3), (_useWildcards, 4) })
+        // Option rows (one per Surface option) in the field column.
+        var nextRow = 2;
+        foreach (var chk in _options.Values)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            Grid.SetRow(chk, row);
+            Grid.SetRow(chk, nextRow++);
             Grid.SetColumn(chk, 1);
             grid.Children.Add(chk);
         }
 
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var specialButton = BuildSpecialButton();
-        Grid.SetRow(specialButton, 5);
+        Grid.SetRow(specialButton, nextRow);
         Grid.SetColumn(specialButton, 1);
         grid.Children.Add(specialButton);
 
@@ -316,16 +311,25 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         new(
             _findBox.Text,
             _replaceBox.Text,
-            _matchCase.IsChecked == true,
-            _wholeWord.IsChecked == true,
-            _useWildcards.IsChecked == true);
+            IsChecked(FindReplaceOptionKind.MatchCase),
+            IsChecked(FindReplaceOptionKind.WholeWord),
+            IsChecked(FindReplaceOptionKind.UseWildcards),
+            IsChecked(FindReplaceOptionKind.MatchPrefix),
+            IsChecked(FindReplaceOptionKind.MatchSuffix),
+            IsChecked(FindReplaceOptionKind.IgnorePunctuation),
+            IsChecked(FindReplaceOptionKind.IgnoreWhiteSpace));
+
+    private bool IsChecked(FindReplaceOptionKind kind) => _options[kind].IsChecked == true;
 
     private void ApplyOptionPolicy()
     {
         var state = SyncSessionInput();
-        _wholeWord.IsEnabled = state.WholeWordEnabled;
-        if (_wholeWord.IsChecked == true && !state.Options.WholeWord)
-            _wholeWord.IsChecked = false;
+        foreach (var (kind, box) in _options)
+        {
+            box.IsEnabled = state.IsOptionEnabled(kind);
+            if (box.IsChecked == true && !state.IsOptionChecked(kind))
+                box.IsChecked = false;
+        }
     }
 
     // ── Scroll helper (mirrors NavigationPane.ScrollEditorToBlock) ────────────

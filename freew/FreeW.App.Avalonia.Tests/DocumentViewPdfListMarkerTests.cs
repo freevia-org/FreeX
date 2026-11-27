@@ -110,6 +110,111 @@ public sealed class DocumentViewPdfListMarkerTests
     });
 
     [Theory]
+    [InlineData(false, "document", "Calibri")]
+    [InlineData(true, "document", "Calibri")]
+    [InlineData(false, "defaultStyle", "Times New Roman")]
+    [InlineData(true, "defaultStyle", "Times New Roman")]
+    [InlineData(false, "namedStyle", "Georgia")]
+    [InlineData(true, "namedStyle", "Georgia")]
+    [InlineData(false, "explicit", "Arial")]
+    [InlineData(true, "explicit", "Arial")]
+    public Task MarkerFamilyUsesTheBodyCascadeUnlessAuthoredExplicitly(bool shaped, string source, string expectedFamily) => Run(() =>
+    {
+        var document = Document(); document.DefaultRun = Format with { FontFamily = source == "document" || source == "explicit" ? "Calibri" : "Arial" };
+        var paragraph = Item(Text(shaped), ListKind.Number);
+        var raw = Format with { FontFamily = source == "explicit" ? "Arial" : null };
+        paragraph.Runs.Single().Formatting = raw;
+        if (source == "defaultStyle")
+            document.Styles["Normal"] = new DocumentStyle { Id = "Normal", Name = "Normal", IsDefault = true,
+                Run = RunFormatting.Default with { FontFamily = expectedFamily } };
+        if (source == "namedStyle")
+        {
+            document.Styles["MarkerBody"] = new DocumentStyle { Id = "MarkerBody", Name = "Marker Body",
+                Run = RunFormatting.Default with { FontFamily = expectedFamily } };
+            paragraph.StyleId = "MarkerBody";
+        }
+        document.Blocks.Add(paragraph);
+        AssertExportedMarkers(Layout(document), document, Format with { FontFamily = expectedFamily });
+        paragraph.Runs.Single().Formatting.Should().BeSameAs(raw);
+        paragraph.Runs.Single().Formatting.FontFamily.Should().Be(source == "explicit" ? "Arial" : null);
+    });
+
+    [Fact]
+    public Task EmptyListItemMarkerInheritsTheDocumentFamilyWithoutAnAuthoredTextGlyph() => Run(() =>
+    {
+        var document = Document(); document.DefaultRun = Format with { FontFamily = "Calibri" };
+        var paragraph = Item("", ListKind.Number); paragraph.Runs.Single().Formatting = Format with { FontFamily = null };
+        document.Blocks.Add(paragraph);
+        var marker = Layout(document).BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfText>()
+            .Should().ContainSingle(text => text.Text == "1.").Which;
+        marker.FontFamily.Should().Be("Calibri");
+        paragraph.PlainText.Should().BeEmpty();
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task InheritedMarkerSizeFaceAndColourUseTheSameCascadeAsItsBody(bool shaped) => Run(() =>
+    {
+        var format = Format with { FontFamily = "Calibri", FontSizePt = 19, Bold = true, Italic = true, ColorHex = "#9B2226" };
+        var document = Document(); document.DefaultRun = format;
+        var paragraph = Item(Text(shaped), ListKind.Number); paragraph.Runs.Single().Formatting = RunFormatting.Default;
+        document.Blocks.Add(paragraph);
+        AssertExportedMarkers(Layout(document), document, format);
+        paragraph.Runs.Single().Formatting.Should().BeSameAs(RunFormatting.Default);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task AdjacentCellsAndLaterCellParagraphsKeepTheirOwnInheritedMarkerFormatting(bool header) => Run(() =>
+    {
+        var document = Document();
+        var formats = new[]
+        {
+            Format with { FontFamily = "Georgia", FontSizePt = 16, ColorHex = "#228822" },
+            Format with { FontFamily = "Times New Roman", FontSizePt = 18, ColorHex = "#9B2226", Italic = true },
+            Format with { FontFamily = "Arial", FontSizePt = 14, ColorHex = "#2244AA" },
+        };
+        Paragraph Styled(int index)
+        {
+            var id = "MarkerStyle" + index;
+            document.Styles[id] = new DocumentStyle { Id = id, Name = id, Run = formats[index] };
+            var paragraph = Item(new[] { "First", "Second", "Third" }[index], ListKind.Number);
+            paragraph.StyleId = id; paragraph.Runs.Single().Formatting = RunFormatting.Default;
+            if (index == 2) paragraph.Formatting = paragraph.Formatting with { ListStartOverride = 10 };
+            return paragraph;
+        }
+        var left = new TableCell(); left.Paragraphs.Clear(); left.Paragraphs.AddRange([Styled(0), Styled(1)]);
+        var right = new TableCell(); right.Paragraphs.Clear(); right.Paragraphs.Add(Styled(2));
+        var row = new TableRow(); row.Cells.AddRange([left, right]);
+        var table = new Table(); table.Rows.Add(row); table.ColumnWidthsPt.AddRange([140, 140]);
+        table.Formatting = table.Formatting with { HeaderRow = header };
+        document.Blocks.Add(table);
+        var view = Layout(document);
+        view.RenderedMarkerPositionsForTest.Select(marker => marker.Text).Should().Equal("1.", "2.", "10.");
+        var pdfText = view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfText>().ToArray();
+        foreach (var (markerText, index) in new[] { ("1.", 0), ("2.", 1), ("10.", 2) })
+        {
+            var marker = pdfText.Should().ContainSingle(text => text.Text == markerText).Which;
+            var sourceText = new[] { "First", "Second", "Third" }[index];
+            // A cell paragraph may wrap into several PDF primitives. Match its first
+            // authored fragment on the marker's line, without requiring one unwrapped word.
+            var body = pdfText.Should().ContainSingle(text => text.Text.Length > 0
+                && sourceText.StartsWith(text.Text, StringComparison.Ordinal)
+                && text.X > marker.X && Math.Abs(text.Y - marker.Y) < 0.01).Which;
+            marker.FontFamily.Should().Be(formats[index].FontFamily); marker.FontSize.Should().Be(formats[index].FontSizePt!.Value);
+            marker.FontFamily.Should().Be(body.FontFamily); marker.Face.Should().Be(body.Face); marker.Color.Should().Be(body.Color);
+            marker.Face.Should().Be(header ? index == 1 ? PdfFontFace.BoldItalic : PdfFontFace.Bold
+                : index == 1 ? PdfFontFace.Italic : PdfFontFace.Regular);
+            marker.Y.Should().BeApproximately(body.Y, 0.01);
+            marker.X.Should().BeLessThan(body.X);
+        }
+        left.Paragraphs.Concat(right.Paragraphs).SelectMany(paragraph => paragraph.Runs)
+            .Should().OnlyContain(run => run.Formatting == RunFormatting.Default);
+    });
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task MarkersOnLaterPagesUsePageLocalCoordinatesWithoutPageGap(bool shaped) => Run(() =>

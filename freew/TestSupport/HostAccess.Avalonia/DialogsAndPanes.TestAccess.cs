@@ -1,4 +1,5 @@
 ﻿using Free.Shared.AppServices;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
@@ -260,6 +261,24 @@ public sealed partial class FindReplaceDialog
     internal FindReplaceOpenMode? FocusedFieldForTest =>
         _findBox.IsFocused ? FindReplaceOpenMode.Find :
         _replaceBox.IsFocused ? FindReplaceOpenMode.Replace : null;
+
+    internal void SetFindTextForTest(string text) => _findBox.Text = text;
+    internal void SetReplaceTextForTest(string text) => _replaceBox.Text = text;
+    internal void FindNextForTest() => Execute(FindReplaceDialogActionKind.FindNext);
+    internal void ReplaceForTest() => Execute(FindReplaceDialogActionKind.Replace);
+    internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
+    internal string StatusForTest => _status.Text ?? string.Empty;
+
+    internal void SetOptionForTest(FindReplaceOptionKind kind, bool isChecked) =>
+        _options[kind].IsChecked = isChecked;
+
+    internal bool IsOptionEnabledForTest(FindReplaceOptionKind kind) => _options[kind].IsEnabled;
+
+    internal IReadOnlyList<string> OptionLabelsForTest =>
+        _options.Values.Select(box => box.Content?.ToString() ?? string.Empty).ToList<string>();
+
+    internal IReadOnlyList<string> OptionAutomationIdsForTest =>
+        _options.Values.Select(box => AutomationProperties.GetAutomationId(box) ?? string.Empty).ToList();
 
     internal void GoToForTest(FindReplaceGoToTargetKind kind)
     {
