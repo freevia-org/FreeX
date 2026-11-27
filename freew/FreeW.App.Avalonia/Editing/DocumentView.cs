@@ -73,7 +73,6 @@ public sealed partial class DocumentView : Control
     private const double PageGap = 20;
     private const double DefaultFontSizePt = 11;
     private const double FallbackWidth = 816; // 8.5in * 96dpi
-    private const double ListIndentStep = 24;
 
     // Superscript / subscript rendering approximation (matches Word's ~58% size + ~33% raise/lower).
     // SuperSubScale: font shrinks to ~58% of the run's size (Word uses 58.3%).
@@ -6979,7 +6978,8 @@ public sealed partial class DocumentView : Control
                 if (kind != ListKind.None)
                 {
                     var markerPlan = listMarkerSequence.Advance(paragraph);
-                    inset = ListIndentStep * (markerPlan.Level + 1);
+                    inset = DocumentBodyParagraphLayoutPlanner.AdditionalListInsetPt(
+                        ResolveParagraphFmt(paragraph), markerPlan.Level) * PxPerPoint;
                     marker = markerPlan.MarkerText;
                 }
                 else if (preservedNumberingMarkers.TryGetValue(blockIndex, out var preservedMarker))
@@ -6990,7 +6990,8 @@ public sealed partial class DocumentView : Control
                     // paragraph, it does not interrupt a native list's numbering -- Word continues the
                     // numbering across intervening non-list content unless a later Number/MultiLevel
                     // paragraph carries an explicit restart override (handled above).
-                    inset = ListIndentStep * (preservedMarker.Level + 1);
+                    inset = DocumentBodyParagraphLayoutPlanner.AdditionalListInsetPt(
+                        ResolveParagraphFmt(paragraph), preservedMarker.Level) * PxPerPoint;
                     marker = preservedMarker.Text;
                 }
                 else
@@ -8741,7 +8742,7 @@ public sealed partial class DocumentView : Control
                 || r.WordArt is not null || r.SmartArt is not null || r.EmbeddedObject is not null))
             return 0.0;
 
-        var nextPf = ResolveParagraphFmt(nextParagraph);
+        var nextPf = ResolveBodyParagraphLayoutFormatting(blockIndex + 1, nextParagraph);
         var nextIndentFirst = nextPf.FirstLineIndentPt * PxPerPoint;
 
         var nextCells = DisplayCells(blockIndex + 1, nextParagraph, includeFlowBreaks: true);
@@ -9091,7 +9092,7 @@ public sealed partial class DocumentView : Control
         // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
         var cells = rawCells;
         var reviewPolicy = CurrentReviewDisplayPolicy;
-        var pf = ResolveParagraphFmt(paragraph);
+        var pf = ResolveBodyParagraphLayoutFormatting(blockIndex, paragraph);
         var alignment = pf.Alignment;
         var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
         var naturalLineHeightScale = ImportedWordLineSpacingPlanner
@@ -9165,7 +9166,9 @@ public sealed partial class DocumentView : Control
             var markerSlot     = _layoutTextAreaHeight > 0 ? (int)(_layoutContentY / _layoutTextAreaHeight) : 0;
             var markerColIndex = markerSlot % _colCount;
             var markerColLeft  = _contentLeft + markerColIndex * (_colWidth + _colGap);
-            _markers.Add((markerColLeft + paraLeftInset - markerWidth - 6, markerY, marker, markerFmt));
+            var markerOffset = DocumentBodyParagraphLayoutPlanner.MarkerOffsetFromTextPt(
+                ResolveParagraphFmt(paragraph), markerWidth / PxPerPoint, 6 / PxPerPoint) * PxPerPoint;
+            _markers.Add((markerColLeft + paraLeftInset + markerOffset, markerY, marker, markerFmt));
         }
 
         // Break the cell stream into wrapped lines.

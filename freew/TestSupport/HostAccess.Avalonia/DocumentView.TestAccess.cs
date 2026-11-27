@@ -821,6 +821,9 @@ public sealed partial class DocumentView
         }
     }
 
+    internal IReadOnlyList<(double X, double Y, string Text)> RenderedMarkerPositionsForTest =>
+        _markers.Select(marker => (marker.X, marker.Y, marker.Text)).ToArray();
+
     /// <summary>
     /// Simulates pressing Down (+1) or Up (-1) arrow from the current caret position.
     /// Exposed internally so regression tests can assert that vertical navigation reaches

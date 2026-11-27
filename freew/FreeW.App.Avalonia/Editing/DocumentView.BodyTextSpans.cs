@@ -185,7 +185,7 @@ public sealed partial class DocumentView
         return false;
     }
 
-    private BodyParagraphPlan FormatShapedBodyParagraph(Paragraph paragraph, double textWidth, double leftInset)
+    private BodyParagraphPlan FormatShapedBodyParagraph(int block, Paragraph paragraph, double textWidth, double leftInset)
     {
         var text = paragraph.PlainText;
         var stops = StringInfo.ParseCombiningCharacters(text).Append(text.Length).Distinct().ToArray();
@@ -195,7 +195,7 @@ public sealed partial class DocumentView
         if (tracking != 0 && !TryCreateTrackedBodySource(text, spans, tracking, out source))
             throw new InvalidOperationException("The tracked body paragraph changed its shaping capability during layout.");
         var defaults = spans[0].Properties;
-        var pf = ResolveParagraphFmt(paragraph);
+        var pf = ResolveBodyParagraphLayoutFormatting(block, paragraph);
         var available = Math.Max(60, textWidth - leftInset - (pf.IndentLeftPt + pf.IndentRightPt) * PxPerPoint);
         var formattingProperties = new GenericTextParagraphProperties(defaults,
             textAlignment: pf.Alignment switch
@@ -413,13 +413,13 @@ public sealed partial class DocumentView
     private bool TryLayoutShapedLiteralBody(int block, Paragraph paragraph, double textWidth, double leftInset, string? marker)
     {
         if (!BodyUsesShapedLiteralText(paragraph)) return false;
-        var plan = FormatShapedBodyParagraph(paragraph, textWidth, leftInset);
+        var plan = FormatShapedBodyParagraph(block, paragraph, textWidth, leftInset);
         _bodyTextRunCaches.Add(plan.ShapeCache);
         var text = plan.Text;
         var stops = plan.Stops;
         var pieces = plan.Pieces;
         var prepared = plan.Lines;
-        var pf = ResolveParagraphFmt(paragraph);
+        var pf = ResolveBodyParagraphLayoutFormatting(block, paragraph);
         try
         {
             _layoutContentY += pf.SpaceBeforePt * PxPerPoint;
@@ -472,7 +472,10 @@ public sealed partial class DocumentView
                 if (lineIndex == 0 && marker is not null)
                 {
                     var fmt = pieces.First(piece => !piece.Source.IsCommentReference).Formatting;
-                    _markers.Add((x - Build(marker, fmt).WidthIncludingTrailingWhitespace - 6, y, marker, fmt));
+                    var markerWidth = Build(marker, fmt).WidthIncludingTrailingWhitespace;
+                    var markerOffset = DocumentBodyParagraphLayoutPlanner.MarkerOffsetFromTextPt(
+                        ResolveParagraphFmt(paragraph), markerWidth / PxPerPoint, 6 / PxPerPoint) * PxPerPoint;
+                    _markers.Add((x + markerOffset, y, marker, fmt));
                 }
                 _layoutContentY = contentY + item.Height;
             }
@@ -493,10 +496,10 @@ public sealed partial class DocumentView
         height = 0;
         if (block + 1 >= _doc.Blocks.Count || _doc.Blocks[block + 1] is not Paragraph paragraph
             || !BodyUsesShapedLiteralText(paragraph)) return false;
-        var plan = FormatShapedBodyParagraph(paragraph, textWidth, 0);
+        var plan = FormatShapedBodyParagraph(block + 1, paragraph, textWidth, 0);
         try
         {
-            var pf = ResolveParagraphFmt(paragraph);
+            var pf = ResolveBodyParagraphLayoutFormatting(block + 1, paragraph);
             var count = DocumentParagraphPaginationPlanner.ShouldKeepParagraphTogether(pf) ? plan.Lines.Count
                 : DocumentParagraphPaginationPlanner.IsWidowControlEffective(pf)
                     ? plan.Lines.Count <= DocumentParagraphPaginationPlanner.WordWidowOrphanMinimumLines + 1
