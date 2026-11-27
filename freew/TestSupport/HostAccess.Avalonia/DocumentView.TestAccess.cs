@@ -21,6 +21,26 @@ namespace FreeW.App.Avalonia.Editing;
 
 public sealed partial class DocumentView
 {
+    internal IReadOnlyList<(int Block, int Start, int Length, Rect Bounds)> BodyTextLinesForTest =>
+        _bodyTextLines.Select(item => (item.Block, item.Line.FirstTextSourceIndex, item.Line.Length,
+            new Rect(BodyTextOrigin(item), new Size(item.Line.WidthIncludingTrailingWhitespace, item.AdvanceHeight)))).ToArray();
+
+    internal bool PlaceBodyHitForTest(Point point)
+    {
+        if (!TryHitTest(point, out var position)) return false;
+        SetBodyCaretFromHit(position);
+        _selectionAnchor = _caret;
+        CaretMoved?.Invoke();
+        return true;
+    }
+
+    internal bool HitBodyTextForTest(Point point, out int offset)
+    {
+        var result = TryHitTest(point, out var position);
+        offset = position.Offset;
+        return result;
+    }
+
 
     /// <summary>
     /// Opens the date-picker calendar for a body field and hands back the flyout, so a test can inspect

@@ -430,6 +430,7 @@ public sealed partial class DocumentView : Control
         CaretMoved += RaiseAutomationSelectionChanged;
         FloatingSelectionChanged += RaiseAutomationSelectionChanged;
         DocumentChanged += RaiseAutomationValueChanged;
+        CaretMoved += ValidateBodyCaretAffinity;
         InitializeTextInputMethod();
     }
 
@@ -628,6 +629,9 @@ public sealed partial class DocumentView : Control
 
     public void LoadDocument(TextDocument document)
     {
+        ClearBodyTextLines();
+        _bodyCaretAffinity = null;
+        _pendingBodyHitAffinity = null;
         _clipboardModelGeneration++;
         _editingSession.LoadDocument(document);
         ClearBitmapCache();
@@ -2841,6 +2845,8 @@ public sealed partial class DocumentView : Control
     /// <summary>Moves the active caret to body text and clears alternate editing regions.</summary>
     internal void MoveCaretToBlock(int blockIndex, int offset)
     {
+        _bodyCaretAffinity = null;
+        _pendingBodyHitAffinity = null;
         _hfCaret = null;
         _cellCaret = null;
         _cellAnchor = null;
@@ -2956,7 +2962,7 @@ public sealed partial class DocumentView : Control
 
         // Group consecutive same-line, same-format glyphs (excluding the page-left offset) into runs.
         var glyphs = _placed
-            .Where(p => !p.Sentinel && p.Ch != '\0' && !p.Fmt.Hidden
+            .Where(p => !p.Sentinel && p.ShapedText is null && p.Ch != '\0' && !p.Fmt.Hidden
                 && reviewPolicy.RevisionDecision(p.Revision).IsTextVisible)
             .Concat(_automaticHyphenGlyphs
                 .Where(glyph => !glyph.Fmt.Hidden
@@ -3223,6 +3229,7 @@ public sealed partial class DocumentView : Control
         }
 
         Flush();
+        AppendShapedBodyPdfText(pagesOps, pageLinkOverlays, pageHeightPt);
 
         var emittedDestinationNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var location in Bookmarks.List(_doc))
@@ -6074,6 +6081,7 @@ public sealed partial class DocumentView : Control
     private void Relayout(double width)
     {
         _pageFlowProjected = false;
+        ClearBodyTextLines();
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
@@ -7124,6 +7132,7 @@ public sealed partial class DocumentView : Control
 
     private void ResetBodyLayoutArtifacts()
     {
+        ClearBodyTextLines();
         _placed.Clear();
         _markers.Clear();
         _rects.Clear();
@@ -8721,6 +8730,8 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private double MeasureKeepWithNextFollowOnHeight(int blockIndex, double textWidth)
     {
+        if (TryMeasureShapedBodyFollowOn(blockIndex, textWidth, out var shapedHeight))
+            return shapedHeight;
         if (blockIndex + 1 >= _doc.Blocks.Count)
             return 0.0;
         if (_doc.Blocks[blockIndex + 1] is not Paragraph nextParagraph)
@@ -9068,6 +9079,8 @@ public sealed partial class DocumentView : Control
 
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
+        if (TryLayoutShapedLiteralBody(blockIndex, paragraph, textWidth, leftInset, marker))
+            return;
         var rawCells = DisplayCells(blockIndex, paragraph, includeFlowBreaks: true, captureDiagnostics: true);
         var flowBreakPlan = InlineFlowBreakSegmentationPlanner.Build(
             rawCells.Select(cell => new InlineFlowRunInput(
@@ -12109,6 +12122,7 @@ public sealed partial class DocumentView : Control
             DrawTabLeader(context, x1, x2, spanY, lineH, leader, spanFmt);
         }
 
+        DrawShapedBodyText(context);
         var selection = NormalizedSelection();
         var proofingOffsets = BuildProofingOffsetSet();
         var reviewPolicy = CurrentReviewDisplayPolicy;
@@ -12116,7 +12130,7 @@ public sealed partial class DocumentView : Control
         for (var placedIndex = 0; placedIndex < _placed.Count; placedIndex++)
         {
             var pc = _placed[placedIndex];
-            if (pc.Sentinel)
+            if (pc.Sentinel || pc.ShapedText is not null)
                 continue;
             var revisionDecision = reviewPolicy.RevisionDecision(pc.Revision);
             if (!revisionDecision.IsTextVisible)
@@ -12343,7 +12357,8 @@ public sealed partial class DocumentView : Control
             var pilcrowFmt = new RunFormatting { FontSizePt = 8, ColorHex = "#999999" };
             foreach (var pc in _placed)
             {
-                if (pc.Sentinel)
+                if (pc.Sentinel && (pc.ShapedText is null
+                    || _doc.Blocks[pc.Block] is Paragraph paragraph && pc.Offset == paragraph.PlainText.Length))
                 {
                     var ft = Build("¶", pilcrowFmt);
                     context.DrawText(ft, new Point(pc.X + 1, pc.Y + pc.LineHeight - ft.Height));
@@ -16930,6 +16945,8 @@ public sealed partial class DocumentView : Control
 
     private bool TryGetCaretRect(out Rect rect)
     {
+        if (TryGetShapedBodyCaret(out rect))
+            return true;
         // AV-TBL: when the caret is inside a cell, search by cell address + para-offset instead of
         // block+glyph-offset. This is robust after model edits (which invalidate glyph offsets).
         if (_cellCaret is { } cc)
@@ -18006,7 +18023,7 @@ public sealed partial class DocumentView : Control
                 _selectionAnchor ??= _caret;
                 _cellAnchor ??= _cellCaret;
             }
-            _caret = pos;
+            SetBodyCaretFromHit(pos);
             InvalidateVisual();
             CaretMoved?.Invoke();
         }
@@ -18135,7 +18152,7 @@ public sealed partial class DocumentView : Control
             _cellBlockFocus  = null;
         }
 
-        _caret = pos;
+        SetBodyCaretFromHit(pos);
         InvalidateVisual();
         if (previousCellBlockSelection != SelectedCellRange)
             CaretMoved?.Invoke();
@@ -25882,8 +25899,10 @@ public sealed partial class DocumentView : Control
         (int TableBlock, int Row, int Col, int ParaIdx, int Offset) caret) =>
         new(caret.TableBlock, caret.Row, caret.Col, caret.ParaIdx, caret.Offset);
 
-    private void ApplyCaretNavigation(DocumentCaretNavigationResult navigation, bool extend)
+    private void ApplyCaretNavigation(DocumentCaretNavigationResult navigation, bool extend, BodyCaretAffinity? bodyAffinity = null)
     {
+        _bodyCaretAffinity = bodyAffinity;
+        _pendingBodyHitAffinity = null;
         if (!navigation.Handled)
             return;
 
@@ -25951,9 +25970,10 @@ public sealed partial class DocumentView : Control
         if (!TryGetCaretRect(out var rect))
             return;
         var targetY = rect.Y + (direction > 0 ? rect.Height * 1.5 : -rect.Height * 0.5);
-        if (TryHitTest(new Point(rect.X, targetY), out var pos))
+        var targetPoint = TryGetShapedBodyVerticalPoint(direction, rect, out var shapedPoint) ? shapedPoint : new Point(rect.X, targetY);
+        if (TryHitTest(targetPoint, out var pos))
         {
-            _caret = pos;
+            SetBodyCaretFromHit(pos);
             if (!extend)
             {
                 _selectionAnchor = _caret;
@@ -25969,6 +25989,9 @@ public sealed partial class DocumentView : Control
     private bool TryHitTest(Point point, out DocPosition pos)
     {
         pos = _caret;
+        _pendingBodyHitAffinity = null;
+        if (TryHitShapedBodyText(point, out pos))
+            return true;
         if (_placed.Count == 0)
             return false;
 
@@ -26025,7 +26048,7 @@ public sealed partial class DocumentView : Control
         // Snap to the nearer edge of the hit glyph.
         var bodyOffset = b.Offset;
         if (!b.Sentinel && point.X > b.X + b.W / 2)
-            bodyOffset = b.Offset + 1;
+            bodyOffset = b.Offset + (b.ShapedText?.Length ?? 1);
         pos = new DocPosition(b.Block, Math.Clamp(bodyOffset, 0, BlockLength(b.Block)));
         return true;
     }
@@ -27587,7 +27610,8 @@ public sealed partial class DocumentView : Control
         // AV-CCEDIT: the content control this glyph belongs to (null = ordinary text), so the render can
         // shade the field's region and the pointer can offer its tooltip / click affordance.
         ModelContentControl? Control = null,
-        bool IsLegacyFormField = false)
+        bool IsLegacyFormField = false,
+        string? ShapedText = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;

@@ -91,8 +91,56 @@ public static partial class AvaloniaRibbonRenderer
     private sealed class ComboExecutionState
     {
         internal bool IsSynchronizing;
+        internal bool IsExecuting;
         internal bool HasPendingSelectionCommit;
         internal string? PendingSelectionValue;
+    }
+
+    private sealed class EditableRibbonComboBox : ComboBox
+    {
+        protected override Type StyleKeyOverride => typeof(ComboBox);
+
+        internal bool IsReconcilingText { get; private set; }
+        internal bool IsConfirmingCatalogSelection { get; private set; }
+        internal event Action? CatalogSelectionConfirmed;
+
+        protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+        {
+            // Editable ComboBox reconciles Text with SelectedItem inside this callback. Those
+            // selection changes include both clearing an old item and matching a typed prefix.
+            // Neither is an explicit catalog pick, even when the text happens to match an item.
+            var wasReconciling = IsReconcilingText;
+            IsReconcilingText |= change.Property == TextProperty;
+            try
+            {
+                base.OnPropertyChanged(change);
+            }
+            finally
+            {
+                IsReconcilingText = wasReconciling;
+            }
+        }
+
+        public override bool UpdateSelectionFromEvent(Control container, RoutedEventArgs eventArgs)
+        {
+            bool accepted;
+            var previousIndex = SelectedIndex;
+            IsConfirmingCatalogSelection = true;
+            try
+            {
+                // Let ComboBox finish selection and close its popup before a host callback moves
+                // focus. This also handles confirming the item already matched by typed text.
+                accepted = base.UpdateSelectionFromEvent(container, eventArgs);
+            }
+            finally
+            {
+                IsConfirmingCatalogSelection = false;
+            }
+
+            if (accepted && (eventArgs is PointerEventArgs or KeyEventArgs || SelectedIndex != previousIndex))
+                CatalogSelectionConfirmed?.Invoke();
+            return accepted;
+        }
     }
 
     private sealed class StateStoreBinding
@@ -2453,7 +2501,7 @@ public static partial class AvaloniaRibbonRenderer
 
     private static Control BuildComboControl(RibbonComboBox combo, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
     {
-        var box = new ComboBox
+        var box = new EditableRibbonComboBox
         {
             Width = combo.Width ?? 110,
             Height = RibbonVisualMetrics.SmallRowHeight,
@@ -2545,15 +2593,51 @@ public static partial class AvaloniaRibbonRenderer
         // A user pick executes the control's command, passing the chosen value so the host applies it
         // (e.g. font size). The initial programmatic SelectedIndex is suppressed by a ready flag.
         var ready = false;
+        void CommitValue(string? value)
+        {
+            if (executionState.IsExecuting)
+                return;
+
+            // A host may synchronously refresh state and focus its document from afterExecute.
+            // Record the commit first so that nested focus events cannot execute it again.
+            executionState.HasPendingSelectionCommit = true;
+            executionState.PendingSelectionValue = value;
+            executionState.IsExecuting = true;
+            try
+            {
+                ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
+            }
+            finally
+            {
+                // A synchronous state refresh clears pending selection state. Keep this commit's
+                // focus-exit suppression only when the refreshed control still represents it.
+                executionState.HasPendingSelectionCommit = string.Equals(
+                    ResolveComboValue(box), value, StringComparison.Ordinal);
+                executionState.PendingSelectionValue = executionState.HasPendingSelectionCommit ? value : null;
+                executionState.IsExecuting = false;
+            }
+        }
+
         box.SelectionChanged += (_, _) =>
         {
             if (!ready || executionState.IsSynchronizing)
                 return;
 
+            if (box.IsReconcilingText)
+            {
+                ClearPendingComboSelection(executionState);
+                return;
+            }
+            if (box.IsConfirmingCatalogSelection)
+                return;
+
             var value = ResolveComboValue(box);
-            ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
-            executionState.HasPendingSelectionCommit = true;
-            executionState.PendingSelectionValue = value;
+            CommitValue(value);
+        };
+        box.CatalogSelectionConfirmed += () =>
+        {
+            if (ready && !executionState.IsSynchronizing)
+                CommitValue(ResolveComboValue(box));
         };
         box.KeyDown += (_, e) =>
         {
@@ -2569,6 +2653,7 @@ public static partial class AvaloniaRibbonRenderer
                 return;
             }
 
+            e.Handled = true;
             var value = ResolveComboValue(box);
             if (executionState.HasPendingSelectionCommit
                 && string.Equals(executionState.PendingSelectionValue, value, StringComparison.Ordinal))
@@ -2582,14 +2667,13 @@ public static partial class AvaloniaRibbonRenderer
             {
                 executionState.HasPendingSelectionCommit = false;
                 executionState.PendingSelectionValue = null;
-                ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
+                CommitValue(value);
             }
-
-            e.Handled = true;
         };
         box.LostFocus += (_, _) =>
         {
-            if (!ready || executionState.IsSynchronizing)
+            if (!ready || executionState.IsSynchronizing || executionState.IsExecuting
+                || box.IsConfirmingCatalogSelection || box.IsDropDownOpen || box.IsKeyboardFocusWithin)
                 return;
 
             var value = ResolveComboValue(box);
@@ -2603,7 +2687,7 @@ public static partial class AvaloniaRibbonRenderer
             }
 
             ClearPendingComboSelection(executionState);
-            ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
+            CommitValue(value);
         };
         ready = true;
 

@@ -132,10 +132,11 @@ public sealed partial class DocumentView
         if (!staysInParagraph)
             return false;
         var target = DocumentTextNavigationPlanner.Move([text], new(0, offset), plan.Intent);
+        BodyCaretAffinity? affinity = null;
         if (plan.Intent is DocumentTextNavigationIntent.LineStart or DocumentTextNavigationIntent.LineEnd
-            && TryGetKeyboardLineEdge(paragraph, offset, plan.Intent == DocumentTextNavigationIntent.LineStart, out var edge))
+            && TryGetKeyboardLineEdge(paragraph, offset, plan.Intent == DocumentTextNavigationIntent.LineStart, out var edge, out affinity))
             target = target with { Offset = edge };
-        ApplyKeyboardParagraphNavigation(paragraph, target.Offset, plan.ExtendSelection);
+        ApplyKeyboardParagraphNavigation(paragraph, target.Offset, plan.ExtendSelection, affinity);
         return true;
     }
 
@@ -157,28 +158,33 @@ public sealed partial class DocumentView
         var currentOffset = _cellCaret?.Offset ?? _caret.Offset;
         var current = new DocumentTextNavigationPosition(currentIndex, currentOffset);
         var target = DocumentTextNavigationPlanner.Move(new KeyboardParagraphTexts(this, paragraphs), current, plan.Intent);
+        BodyCaretAffinity? affinity = null;
         if (plan.Intent is DocumentTextNavigationIntent.LineStart or DocumentTextNavigationIntent.LineEnd
             && TryGetKeyboardLineEdge(paragraphs[currentIndex], currentOffset,
-                plan.Intent == DocumentTextNavigationIntent.LineStart, out var lineOffset))
+                plan.Intent == DocumentTextNavigationIntent.LineStart, out var lineOffset, out affinity))
             target = current with { Offset = lineOffset };
 
-        ApplyKeyboardParagraphNavigation(paragraphs[target.ParagraphIndex], target.Offset, plan.ExtendSelection);
+        ApplyKeyboardParagraphNavigation(paragraphs[target.ParagraphIndex], target.Offset, plan.ExtendSelection,
+            target.ParagraphIndex == currentIndex ? affinity : null);
         return true;
     }
 
-    private void ApplyKeyboardParagraphNavigation(KeyboardParagraph paragraph, int offset, bool extend)
+    private void ApplyKeyboardParagraphNavigation(KeyboardParagraph paragraph, int offset, bool extend, BodyCaretAffinity? affinity = null)
     {
         ApplyCaretNavigation(paragraph.RowIndex < 0
             ? new(new DocumentTextPosition(paragraph.BlockIndex, offset))
             : new(new DocumentTextPosition(paragraph.BlockIndex, 0),
                 new DocumentTableCaretPosition(paragraph.BlockIndex, paragraph.RowIndex,
-                    paragraph.GridColumnIndex, paragraph.ParagraphIndex, offset)), extend);
+                    paragraph.GridColumnIndex, paragraph.ParagraphIndex, offset)), extend, affinity);
     }
 
-    private bool TryGetKeyboardLineEdge(KeyboardParagraph paragraph, int offset, bool toStart, out int edge)
+    private bool TryGetKeyboardLineEdge(KeyboardParagraph paragraph, int offset, bool toStart, out int edge, out BodyCaretAffinity? affinity)
     {
         if (_laidOutWidth < 0)
             Relayout(FallbackWidth);
+        affinity = null;
+        if (paragraph.RowIndex < 0 && TryGetShapedBodyLineEdge(paragraph.BlockIndex, offset, toStart, out edge, out affinity))
+            return true;
         var glyphs = _placed.Where(glyph => glyph.Block == paragraph.BlockIndex
             && (paragraph.RowIndex < 0 ? !glyph.IsCell
                 : glyph.CellRow == paragraph.RowIndex && glyph.CellCol == paragraph.GridColumnIndex
@@ -197,7 +203,7 @@ public sealed partial class DocumentView
         var chosen = glyphs[toStart ? start : end];
         edge = paragraph.RowIndex < 0 ? chosen.Offset : chosen.CellParaOffset;
         if (!toStart && !chosen.Sentinel && chosen.Ch is not ('\r' or '\n'))
-            edge++;
+            edge += chosen.ShapedText?.Length ?? 1;
         edge = Math.Clamp(edge, 0, KeyboardParagraphText(paragraph).Length);
         return true;
     }

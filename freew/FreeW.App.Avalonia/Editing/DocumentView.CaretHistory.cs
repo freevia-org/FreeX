@@ -45,7 +45,7 @@ public sealed partial class DocumentView
             // before it publishes, so reentrant edits must start their own scope too.
             _textGestureActive = false;
             scope.Commit(label, command => StateRestoringDocumentCommand<TextCaretState>.FromApplied(
-                command, before, after, RestoreTextCaretState, estimatedStateBytes: 256));
+                command, before, after, RestoreTextCaretState, estimatedStateBytes: 304));
             return result;
         }
         catch (Exception exception)
@@ -73,6 +73,7 @@ public sealed partial class DocumentView
     private sealed record TextCaretState(
         DocPosition BodyCaret,
         DocPosition? BodyAnchor,
+        BodyCaretAffinity? BodyLineAffinity,
         (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? CellCaret,
         (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? CellAnchor,
         (HfTarget Target, int Offset)? HeaderFooterCaret,
@@ -86,7 +87,7 @@ public sealed partial class DocumentView
         IReadOnlyList<(int BlockIndex, int RunIndex, string Kind)> FloatingSelections);
 
     private TextCaretState CaptureTextCaretState() => new(
-        _caret, _selectionAnchor, _cellCaret, _cellAnchor, _hfCaret, _hfSelectionAnchor,
+        _caret, _selectionAnchor, CaptureBodyCaretAffinity(), _cellCaret, _cellAnchor, _hfCaret, _hfSelectionAnchor,
         _shapeCaret, _shapeSelectionAnchor, _activeShapeTextChildPath?.ToArray(),
         _selectedFloating, _selectedInlineObject, _selectedFloatingGroupChild, _selectedFloatingObjects.ToArray());
 
@@ -109,6 +110,8 @@ public sealed partial class DocumentView
         _floatingDrag.Reset();
         _shapeEditPointsTarget = null;
         _caret = state.BodyCaret;
+        _bodyCaretAffinity = state.BodyLineAffinity;
+        _pendingBodyHitAffinity = null;
         _selectionAnchor = state.BodyAnchor;
         _cellCaret = state.CellCaret;
         _cellAnchor = state.CellAnchor;
@@ -148,7 +151,7 @@ public sealed partial class DocumentView
             {
                 InvalidateLayoutAndVisual();
                 placeEditedCaret();
-            }, estimatedStateBytes: 256));
+            }, estimatedStateBytes: 304));
         CaretMoved?.Invoke();
     }
 }
