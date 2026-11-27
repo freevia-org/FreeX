@@ -1575,22 +1575,27 @@ public sealed partial class DocumentView : Control
         {
             if (item.Target is null || item.Image is not null)
                 continue;
+            var isTableCell = _headerFooterTableClips.TryGetValue(item, out var cellClip);
+            if (isTableCell && !cellClip.Contains(point))
+                continue;
             var top = item.Y;
             var bottom = item.Y + (item.LineHeight > 0 ? item.LineHeight : DefaultFontSizePt * PxPerPoint * 1.3);
             // Vertical band test with a small slop so clicks just above/below the text still land.
-            var withinY = point.Y >= top - 2 && point.Y <= bottom + 2;
+            var withinY = isTableCell || point.Y >= top - 2 && point.Y <= bottom + 2;
             if (!withinY)
                 continue;
             // Horizontal acceptance: anywhere across the content width of the page that owns this line.
             var pageIndex = RenderedPageIndexForPoint(item.X, item.Y);
             var contentLeft = _surfacePlan.RenderedPageLeftDip(pageIndex) + (_contentLeft - _pageLeft);
-            var left = contentLeft - 4;
-            var right = contentLeft + _contentWidth + 4;
+            var left = isTableCell ? cellClip.Left : contentLeft - 4;
+            var right = isTableCell ? cellClip.Right : contentLeft + _contentWidth + 4;
             if (point.X < left || point.X > right)
                 continue;
             // Prefer the item whose drawn text X-range is closest to the click (handles tab-split segments
             // sharing a line). Distance is 0 when inside the segment's own [X, X+width] range.
             var dist = HfItemHorizontalDistance(item, point.X);
+            if (isTableCell)
+                dist += Math.Max(0, Math.Max(top - point.Y, point.Y - bottom)) * (_contentWidth + 1);
             if (dist < bestDist)
             {
                 bestDist = dist;
@@ -1644,6 +1649,14 @@ public sealed partial class DocumentView : Control
     /// <summary>Horizontal distance from <paramref name="x"/> to a rendered H/F item's drawn text range (0 when inside).</summary>
     private double HfItemHorizontalDistance(HfRenderItem item, double x)
     {
+        if (_headerFooterTableParagraphs.TryGetValue(item, out var tableLayout))
+        {
+            if (tableLayout.Layout.TextLines.Count == 0)
+                return Math.Abs(x - (item.X + tableLayout.InsertionBounds(0).X));
+            var left = item.X + tableLayout.Layout.TextLines.Min(line => line.Start);
+            var right = item.X + tableLayout.Layout.TextLines.Max(line => line.Start + line.WidthIncludingTrailingWhitespace);
+            return Math.Max(0, Math.Max(left - x, x - right));
+        }
         var width = HeaderFooterTextWidth(item.Text, item.Fmt);
         var x0 = item.X + AlignmentOffset(item.Alignment, item.AvailableWidth, width, isLast: true);
         if (SharedHeaderFooterLayout(item) is { } layout)
@@ -1667,6 +1680,9 @@ public sealed partial class DocumentView : Control
     /// </summary>
     private int HfOffsetFromPoint(HfRenderItem item, double x, double y)
     {
+        if (_headerFooterTableParagraphs.TryGetValue(item, out var tableLayout))
+            return item.ModelStartOffset + tableLayout.HitTest(new Point(x - item.X,
+                y - item.Y - RunBaselinePositionPlanner.ResolveOffsetDip(item.Fmt, PxPerPoint)));
         if (SharedHeaderFooterLayout(item) is { } literalLayout)
         {
             using (literalLayout)
@@ -3833,6 +3849,11 @@ public sealed partial class DocumentView : Control
             pagesOps[pageIndex].AddRange(floatingInFrontOpsByPage[pageIndex]);
         }
 
+        foreach (var surface in _headerFooterTableSurfaces)
+        {
+            EnsurePage(surface.PageIndex);
+            pagesOps[surface.PageIndex].AddRange(BuildPdfHeaderFooterTableSurface(surface, pageHeightPt));
+        }
         foreach (var item in _headerFooterItems)
         {
             if (item.Image is { } image)
@@ -3854,7 +3875,7 @@ public sealed partial class DocumentView : Control
                         _surfacePlan.PageTopDip(pageIndex),
                         pageHeightPt) is { } imageOp)
                 {
-                    pagesOps[pageIndex].Add(imageOp);
+                    pagesOps[pageIndex].AddRange(ClipHeaderFooterPdfOps(item, pageIndex, pageHeightPt, [imageOp]));
                 }
 
                 continue;
@@ -3871,16 +3892,18 @@ public sealed partial class DocumentView : Control
                     item.Y,
                     Math.Max(1, item.Width),
                     Math.Max(1, item.Height));
-                pagesOps[pageIndex].AddRange(BuildPdfEmbeddedObjectOps(
-                    sourceRect,
-                    embeddedObject,
-                    item.EmbeddedObjectIcon,
-                    _surfacePlan.PageTopDip(pageIndex),
-                    pageHeightPt));
+                pagesOps[pageIndex].AddRange(ClipHeaderFooterPdfOps(item, pageIndex, pageHeightPt,
+                    BuildPdfEmbeddedObjectOps(sourceRect, embeddedObject, item.EmbeddedObjectIcon,
+                        _surfacePlan.PageTopDip(pageIndex), pageHeightPt)));
                 continue;
             }
 
-            AddTextRegion(item.Text, item.Fmt, item.X, item.Y);
+            var textPage = PageIndexFromPageSpaceY(item.Y + 0.01);
+            if (textPage >= 0)
+            {
+                EnsurePage(textPage);
+                pagesOps[textPage].AddRange(BuildPdfHeaderFooterText(item, textPage, pageHeightPt));
+            }
         }
 
         foreach (var item in _noteItems)
@@ -6105,6 +6128,7 @@ public sealed partial class DocumentView : Control
         _equationVisualElements.Clear();
         _cellHits.Clear();
         _shapeTextCaretStops.Clear();
+        ClearHeaderFooterTableLayout();
         _headerFooterItems.Clear();
         _noteItems.Clear();           // AV-NOTERENDER
         _noteSeparators.Clear();      // AV-NOTERENDER
@@ -6674,6 +6698,7 @@ public sealed partial class DocumentView : Control
             };
         }
 
+        ProjectHeaderFooterTableLayout(Move);
         for (var i = 0; i < _headerFooterItems.Count; i++)
         {
             var item = _headerFooterItems[i];
@@ -7349,6 +7374,7 @@ public sealed partial class DocumentView : Control
                 // leaves the body, header, and page-paginator geometry untouched.
                 var pageBottom = pageTop + _pageHeightPx;
                 var footerStartIndex = _headerFooterItems.Count;
+                var footerSurfaceStart = _headerFooterTableSurfaces.Count;
                 var footerBottomEdge = pageBottom - footerDistDip;
                 var footerEndY = EmitHfParagraphs(footer!, footerBottomEdge, hfWidth, pageNumberText, _pageCount,
                     paragraphIndex => HeaderFooterRenderTarget(pageSection.SectionIndex, footerSlot, paragraphIndex),
@@ -7359,6 +7385,7 @@ public sealed partial class DocumentView : Control
                     pageSection.SectionPageCount);
                 var footerStoryHeight = Math.Max(0, footerEndY - footerBottomEdge);
                 var footerShift = -(footerStoryHeight + FooterStoryLeadingDip);
+                ShiftHeaderFooterTableLayout(footerSurfaceStart, footerStartIndex, footerShift);
                 for (var itemIndex = footerStartIndex; itemIndex < _headerFooterItems.Count; itemIndex++)
                     _headerFooterItems[itemIndex].Y += footerShift;
             }
@@ -7384,7 +7411,8 @@ public sealed partial class DocumentView : Control
         int pageNumber = 1,
         int sectionOrdinal = 1,
         int sectionRelativePageNumber = 1,
-        int sectionPageCount = 1)
+        int sectionPageCount = 1,
+        bool tableStyleBold = false)
     {
         var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
         // Preserved side-by-side layout table (e.g. Word's classic Left/Center/Right header/footer
@@ -7482,7 +7510,7 @@ public sealed partial class DocumentView : Control
             for (var runIndex = 0; runIndex < para.Runs.Count; runIndex++)
             {
                 var run = para.Runs[runIndex];
-                var effectiveFormatting = ResolveRunFmt(run, para);
+                var effectiveFormatting = ResolveHeaderFooterTableRunFmt(run, para, tableStyleBold);
                 // AV-CCEDIT: a control boundary ends the buffered segment, like a formatting change.
                 if (sb.Length > 0
                     && (effectiveFormatting != segFmt || !SameContentControl(run.Control, segControl)))
@@ -7581,7 +7609,7 @@ public sealed partial class DocumentView : Control
             FlushText(includeEmpty: segments.Count == 0);
 
             // Whether the paragraph contains any tab characters at all.
-            var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
+            var hasAnyTab = stopIndex > 0;
             var hasVisualObjects = segments.Any(s => s.Image is not null || s.EmbeddedObject is not null);
 
             // Compute the line height from the first non-empty segment (or use DefaultFontSizePt).
@@ -7653,7 +7681,7 @@ public sealed partial class DocumentView : Control
                 });
             }
 
-            if (!hasAnyTab && !hasVisualObjects)
+            if (!hasAnyTab && !hasVisualObjects && segments.Count == 1)
             {
                 // No tabs — use paragraph alignment as before. Emit even an EMPTY paragraph so an empty
                 // header/footer line is still clickable for editing (the caret needs a region to land in).
@@ -7799,76 +7827,8 @@ public sealed partial class DocumentView : Control
         int sectionRelativePageNumber,
         int sectionPageCount)
     {
-        var savedContentLeft = _contentLeft;
-        var y = startY;
-        try
-        {
-            for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
-            {
-                var row = table.Rows[rowIndex];
-                if (row.Cells.Count == 0)
-                    continue;
-
-                var widths = ResolveHfTableColumnWidths(table, row, totalWidth);
-                var cellX = savedContentLeft;
-                var rowEndY = y;
-                for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
-                {
-                    var cell = row.Cells[cellIndex];
-                    var cellWidth = cellIndex < widths.Count ? widths[cellIndex] : totalWidth / row.Cells.Count;
-                    _contentLeft = cellX;
-                    var cellHf = new HeaderFooter();
-                    cellHf.Paragraphs.AddRange(cell.Paragraphs);
-                    HfTarget? ResolveCellTarget(int cellParagraphIndex)
-                    {
-                        if (targetFactory is null)
-                            return null;
-                        var flatIndex = HeaderFooterTableParagraphMap.ResolveParagraphIndex(
-                            story,
-                            new HeaderFooterTableParagraphAddress(rowIndex, cellIndex, cellParagraphIndex));
-                        return flatIndex >= 0 ? targetFactory(flatIndex) : null;
-                    }
-                    var cellEndY = EmitHfParagraphs(
-                        cellHf, y, cellWidth, pageNumberText, pageCount,
-                        ResolveCellTarget, slot, pageNumber, sectionOrdinal, sectionRelativePageNumber,
-                        sectionPageCount);
-                    rowEndY = Math.Max(rowEndY, cellEndY);
-                    cellX += cellWidth;
-                }
-
-                y = rowEndY;
-            }
-        }
-        finally
-        {
-            _contentLeft = savedContentLeft;
-        }
-
-        return y;
-    }
-
-    /// <summary>
-    /// Resolves the DIP width of each cell in a header/footer layout table's row: the table's authored
-    /// column widths (<see cref="Table.ColumnWidthsPt"/>), proportionally scaled so they sum to
-    /// <paramref name="totalWidthDip"/>, or an even split across the row's cells when no authored widths
-    /// are known (or they don't cover every cell).
-    /// </summary>
-    private static List<double> ResolveHfTableColumnWidths(Table table, TableRow row, double totalWidthDip)
-    {
-        var count = row.Cells.Count;
-        if (count == 0)
-            return [];
-
-        if (table.ColumnWidthsPt.Count >= count)
-        {
-            var relevant = table.ColumnWidthsPt.Take(count).ToList();
-            var sum = relevant.Sum();
-            if (sum > 0)
-                return relevant.Select(w => w / sum * totalWidthDip).ToList();
-        }
-
-        var even = totalWidthDip / count;
-        return Enumerable.Repeat(even, count).ToList();
+        return EmitHeaderFooterTableLayout(story, table, startY, totalWidth, pageNumberText, pageCount,
+            targetFactory, slot, pageNumber, sectionOrdinal, sectionRelativePageNumber, sectionPageCount);
     }
 
     // ── AV-NOTERENDER: footnote / endnote content rendering ───────────────────────────────────────────
@@ -12378,9 +12338,13 @@ public sealed partial class DocumentView : Control
         // objects are already drawn by the planner-ordered front pass above.
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
+            DrawHeaderFooterTableSurfaces(context);
             foreach (var item in _headerFooterItems)
             {
+                using var tableClip = PushHeaderFooterTableClip(context, item);
                 DrawHeaderFooterSelection(context, item);
+                if (DrawHeaderFooterTableParagraph(context, item))
+                    continue;
                 if (item.Image is { } image)
                 {
                     var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
@@ -12751,6 +12715,13 @@ public sealed partial class DocumentView : Control
         if (overlapEnd <= overlapStart)
             return;
 
+        if (_headerFooterTableParagraphs.TryGetValue(item, out var tableLayout))
+        {
+            foreach (var bounds in tableLayout.SelectionBounds(overlapStart - itemStart, overlapEnd - itemStart))
+                context.FillRectangle(SelectionBrush, bounds.Translate(new Vector(item.X,
+                    item.Y + RunBaselinePositionPlanner.ResolveOffsetDip(item.Fmt, PxPerPoint))));
+            return;
+        }
         if (SharedHeaderFooterLayout(item) is { } literalLayout)
         {
             using (literalLayout)
@@ -12819,6 +12790,16 @@ public sealed partial class DocumentView : Control
             return false;
         }
 
+        if (_headerFooterTableParagraphs.TryGetValue(hostItem, out var tableLayout))
+        {
+            var caret = tableLayout.InsertionBounds(hc.Offset - hostItem.ModelStartOffset);
+            rect = new Rect(hostItem.X + caret.X,
+                hostItem.Y + caret.Y + RunBaselinePositionPlanner.ResolveOffsetDip(hostItem.Fmt, PxPerPoint),
+                1.5, Math.Max(1, caret.Height));
+            if (_headerFooterTableClips.TryGetValue(hostItem, out var clip))
+                rect = rect.Intersect(clip);
+            return rect.Height > 0;
+        }
         if (SharedHeaderFooterLayout(hostItem) is { } literalLayout)
         {
             using (literalLayout)

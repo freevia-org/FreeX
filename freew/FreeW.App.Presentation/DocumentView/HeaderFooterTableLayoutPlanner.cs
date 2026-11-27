@@ -63,7 +63,7 @@ public static class HeaderFooterTableLayoutPlanner
         width = columnWidths.Sum();
         var indent = double.IsFinite(table.IndentFromLeftPt ?? 0) ? (table.IndentFromLeftPt ?? 0) * dipPerPoint : 0;
         var outdent = FiniteNonNegative(TableCompatibilityIndentPlanner.ResolveLeftOutdentPt(usesLegacyCompatibilityLayout, table)) * dipPerPoint;
-        var slack = Math.Max(0, availableWidthDip - width - indent);
+        var slack = availableWidthDip - width - indent;
         var left = table.Alignment switch
         {
             TableAlignment.Center => indent + slack / 2,
@@ -173,10 +173,16 @@ public static class HeaderFooterTableLayoutPlanner
         CellBorderEdge? Convert(TableBorderEdge? edge) => edge is null ? null : new(edge.Style,
             string.Equals(edge.ColorToken, "auto", StringComparison.OrdinalIgnoreCase) ? "#000000" : edge.ColorToken, edge.WidthPt);
         var own = cell.Borders;
+        // A vertical merge's bottom boundary belongs to its final physical cell. A continuation
+        // may author that edge (including explicit removal) even though it paints no text/fill.
+        var finalBorders = rowSpan > 1
+            ? TableGridProjection.StartingAt(table.Rows[row + rowSpan - 1], column)?.Cell.Borders : null;
+        var bottomRemoved = finalBorders?.NoBottom is true || finalBorders?.Bottom is null && own?.NoBottom is true;
+        var bottom = finalBorders?.Bottom ?? own?.Bottom;
         return new CellBorders
         {
             Top = own?.NoTop is true ? null : own?.Top ?? Convert(row == 0 ? table.Borders?.Top : table.Borders?.InsideHorizontal) ?? fallback,
-            Bottom = own?.NoBottom is true ? null : own?.Bottom ?? Convert(row + rowSpan == table.Rows.Count ? table.Borders?.Bottom : table.Borders?.InsideHorizontal) ?? fallback,
+            Bottom = bottomRemoved ? null : bottom ?? Convert(row + rowSpan == table.Rows.Count ? table.Borders?.Bottom : table.Borders?.InsideHorizontal) ?? fallback,
             Left = own?.NoLeft is true ? null : own?.Left ?? Convert((table.RightToLeft ? column + span == columns : column == 0) ? table.Borders?.Left : table.Borders?.InsideVertical) ?? fallback,
             Right = own?.NoRight is true ? null : own?.Right ?? Convert((table.RightToLeft ? column == 0 : column + span == columns) ? table.Borders?.Right : table.Borders?.InsideVertical) ?? fallback,
         };

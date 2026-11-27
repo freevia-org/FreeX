@@ -203,4 +203,31 @@ public sealed class HeaderFooterTableLayoutPlannerTests
         plan.WidthDip.Should().BeApproximately(120, 1e-9);
         plan.LeftOffsetDip.Should().Be(-7);
     }
+    [Theory]
+    [InlineData(TableAlignment.Center, -25)]
+    [InlineData(TableAlignment.Right, -50)]
+    public void OversizedAlignedGridUsesSignedOverflow(TableAlignment alignment, double expected)
+    {
+        var table = TwoCells();
+        table.Alignment = alignment;
+        var plan = HeaderFooterTableLayoutPlanner.Build(table, 250, true, dipPerPoint: 1);
+        plan.WidthDip.Should().BeApproximately(300, 1e-9);
+        plan.LeftOffsetDip.Should().BeApproximately(expected, 1e-9);
+    }
+
+    [Fact]
+    public void MergedBottomEdgeComesFromTheFinalContinuationAndHonorsRemoval()
+    {
+        var table = Table.Create(2, 1);
+        var first = table.Rows[0].Cells[0]; var last = table.Rows[1].Cells[0];
+        first.VerticalMerge = VerticalMergeState.Restart; last.VerticalMerge = VerticalMergeState.Continue;
+        first.Borders = new CellBorders { Bottom = new(BorderLineStyle.Single, "#123456", 1) };
+        last.Borders = new CellBorders { Bottom = new(BorderLineStyle.Double, "#654321", 2) };
+        var plan = HeaderFooterTableLayoutPlanner.Build(table, 100, false, dipPerPoint: 1);
+        plan.Cells.Single().Borders.Edge(TableCellBorderVisualEdge.Bottom).Style.Should().Be(BorderLineStyle.Double);
+        last.Borders = new CellBorders { NoBottom = true };
+        HeaderFooterTableLayoutPlanner.Build(table, 100, false, dipPerPoint: 1).Cells.Single().Borders
+            .Edge(TableCellBorderVisualEdge.Bottom).IsVisible.Should().BeFalse();
+    }
+
 }
