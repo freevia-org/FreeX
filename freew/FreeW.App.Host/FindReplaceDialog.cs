@@ -377,6 +377,11 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         private FindReplaceSearchRequest? _storyRequest;
         private FindReplaceStoryPosition? _storyPosition;
 
+        // Find Next landed on a body match that has no text extent (a comment mark is a textless run, so
+        // selecting it selects nothing): its haystack span, so a following Replace still acts on it.
+        private (int Start, int Length)? _markMatch;
+        private FindReplaceSearchRequest? _markRequest;
+
         public string? LastMatchStatus { get; private set; }
 
         public bool FindNext(FindReplaceSearchRequest request)
@@ -407,14 +412,31 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 return Advance(search);
             }
 
-            if (!editor.Selection.IsEmpty)
+            var onMark = _markMatch is not null && Equals(_markRequest, search) && editor.Selection.IsEmpty;
+            if (!editor.Selection.IsEmpty || onMark)
             {
                 var projection = Project(search);
-                var selectionStart = projection.OffsetOf(editor.Selection.Start);
-                var selectionEnd = projection.OffsetOf(editor.Selection.End);
-                var selected = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
-                    .FirstOrDefault(match =>
-                        match.Start == selectionStart && match.Start + match.Length == selectionEnd);
+                (int Start, int Length) selected;
+                if (onMark)
+                {
+                    // Find Next landed on a match with no text extent (a comment mark): the surface cannot
+                    // select it, so the caret sitting on it is the selection.
+                    var caret = projection.OffsetOf(editor.CaretPosition);
+                    var (markStart, markLength) = _markMatch!.Value;
+                    selected = caret >= markStart && caret <= markStart + markLength
+                        ? FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
+                            .FirstOrDefault(match => match.Start == markStart && match.Length == markLength)
+                        : default;
+                }
+                else
+                {
+                    var selectionStart = projection.OffsetOf(editor.Selection.Start);
+                    var selectionEnd = projection.OffsetOf(editor.Selection.End);
+                    selected = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
+                        .FirstOrDefault(match =>
+                            match.Start == selectionStart && match.Start + match.Length == selectionEnd);
+                }
+
                 if (selected.Length > 0)
                 {
                     // Text plus formatting is several bus commands; the user asked for one Replace.
@@ -590,6 +612,16 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             ClearStoryCursor();
             var from = projection.OffsetOf(
                 editor.Selection.IsEmpty ? editor.CaretPosition : editor.Selection.End);
+            if (_markMatch is { } mark
+                && Equals(_markRequest, request)
+                && editor.Selection.IsEmpty
+                && from >= mark.Start
+                && from <= mark.Start + mark.Length)
+            {
+                // The caret still sits on the textless match Find Next last reported: move past it.
+                from = mark.Start + mark.Length;
+            }
+
             return SelectBody(projection, request, from)
                 || SelectStory(request, null)
                 || SelectBody(projection, request, 0);
@@ -602,6 +634,8 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
 
         private bool SelectBody(FindReplaceBodyProjection projection, FindReplaceSearchRequest request, int from)
         {
+            _markMatch = null;
+            _markRequest = null;
             foreach (var (start, length) in FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, request))
             {
                 if (start < from || !projection.TryGetRange(start, length, out var matchStart, out var matchEnd))
@@ -609,6 +643,12 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
 
                 editor.Selection.Select(matchStart, matchEnd);
                 editor.Focus();
+                if (editor.Selection.IsEmpty)
+                {
+                    _markMatch = (start, length);
+                    _markRequest = request;
+                }
+
                 return true;
             }
 
@@ -667,18 +707,19 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             var regionLength = match.Length;
 
             // A comment reference is a textless run: selecting it selects nothing, so the surface cannot
-            // delete it. Replace All (the shared body planner) removes it; one match steps over it.
-            if (found.Contains(FindSpecialCodes.CommentMark))
-                return skip;
+            // delete it. The shared body planner (Replace All's edit) consumes it, so a match that covers
+            // one is that planner's edit too, located in the model instead of on the surface.
+            var coversComment = found.Contains(FindSpecialCodes.CommentMark);
 
             // Inside a table cell the surface cannot format the written text, so a Replace with
             // formatting (or one that only reformats the found text) is the shared body planner's edit --
             // the same one Replace All makes for that match.
-            if ((plan.Format is not null || !plan.ReplacesText)
+            if ((plan.Format is not null || !plan.ReplacesText || coversComment)
                 && projection.TryGetRange(match.Start, match.Length, out var cellStart, out var cellEnd))
             {
                 editor.CommitToModel();
-                if (editor.TryLocateTableCellFindMatch(cellStart, cellEnd) is { } location
+                if ((editor.TryLocateTableCellFindMatch(cellStart, cellEnd)
+                        ?? (coversComment ? editor.TryLocateBodyFindMatch(cellStart, cellEnd) : null)) is { } location
                     && FindReplaceBodyPlanner.PlanReplaceMatch(editor.Model, request, location, RevisionContext())
                         is { ReplacedCount: > 0 } command)
                 {
@@ -691,6 +732,11 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                         : match.Length);
                 }
             }
+
+            // The planner declined it (Track Changes cannot strike an object through, or the paragraph
+            // does not map to the model): the surface cannot remove the mark either, so step over it.
+            if (coversComment)
+                return skip;
 
             if (plan.ReplacesText)
             {

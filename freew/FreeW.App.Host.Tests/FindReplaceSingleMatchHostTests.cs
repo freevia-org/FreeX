@@ -241,4 +241,69 @@ public sealed class FindReplaceSingleMatchHostTests
         view.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().Equal("alph-eta", "gamma");
     }
+
+    private static Paragraph CommentedParagraph(int id, string before, string after)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(before));
+        paragraph.Runs.Add(Run.CommentReference(id));
+        paragraph.Runs.Add(new Run(after));
+        return paragraph;
+    }
+
+    private static void AddComments(TextDocument document, params int[] ids)
+    {
+        foreach (var id in ids)
+            document.Comments[id] = new Comment(id, "Please revise", "Ann Reviewer", "AR");
+    }
+
+    [StaFact]
+    public void Replace_ConsumesACommentMark_LikeReplaceAll_AndMovesOnToTheNext()
+    {
+        var view = Load(
+            document => AddComments(document, 1, 2),
+            CommentedParagraph(1, "one ", " two"),
+            CommentedParagraph(2, "three ", " four"));
+
+        WithDialog(view, "^a", "|", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+            view.CommitToModel();
+            var afterFirst = view.Model.Blocks.OfType<Paragraph>().ToList();
+            afterFirst[0].PlainText.Should().Be("one | two", "a single Replace consumes the comment mark it is on");
+            afterFirst[0].Runs.Should().NotContain(run => run.IsCommentReference);
+            afterFirst[1].Runs.Should().ContainSingle(run => run.IsCommentReference, "only the match was replaced");
+
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var paragraphs = view.Model.Blocks.OfType<Paragraph>().ToList();
+        paragraphs.Select(paragraph => paragraph.PlainText).Should().Equal("one | two", "three | four");
+        paragraphs.SelectMany(paragraph => paragraph.Runs).Should().NotContain(run => run.IsCommentReference);
+    }
+
+    [StaFact]
+    public void FindNext_OnACommentMark_AdvancesToTheNextOneInsteadOfRepeatingIt()
+    {
+        var view = Load(
+            document => AddComments(document, 1, 2),
+            CommentedParagraph(1, "one ", " two"),
+            CommentedParagraph(2, "three ", " four"));
+
+        // Replacing after two Find Nexts must act on the SECOND mark, not the first again.
+        WithDialog(view, "^a", string.Empty, dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var paragraphs = view.Model.Blocks.OfType<Paragraph>().ToList();
+        paragraphs[0].Runs.Should().ContainSingle(run => run.IsCommentReference, "the first mark was stepped past");
+        paragraphs[1].Runs.Should().NotContain(run => run.IsCommentReference);
+        paragraphs[1].PlainText.Should().Be("three  four");
+    }
 }

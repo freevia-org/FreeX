@@ -243,6 +243,49 @@ public sealed partial class DocumentView
     }
 
     /// <summary>
+    /// Where a rendered span lies in the model when it is body text (top-level paragraphs, list items
+    /// included): the first paragraph's block index and plain-text offset, and, when the span runs on into
+    /// later paragraphs, where it ends. A span with no text extent (a comment mark) comes back with length
+    /// zero. Null for a table cell (see <see cref="TryLocateTableCellFindMatch"/>), a floater, or when a
+    /// rendered paragraph does not measure as its model paragraph, so the caller never edits the model at
+    /// offsets it cannot trust. The body must have been committed to the model first.
+    /// </summary>
+    internal FindReplaceMatch? TryLocateBodyFindMatch(TextPointer start, TextPointer end)
+    {
+        if (start.Paragraph is not { } startParagraph || end.Paragraph is not { } endParagraph)
+            return null;
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var visibleIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref visibleIndex);
+        if (!indexOf.TryGetValue(startParagraph, out var startVisible)
+            || !indexOf.TryGetValue(endParagraph, out var endVisible))
+        {
+            return null;
+        }
+
+        var startBlock = ModelIndexFromVisible(startVisible);
+        var endBlock = ModelIndexFromVisible(endVisible);
+        if (startBlock < 0
+            || endBlock < startBlock
+            || endBlock >= _model.Blocks.Count
+            || _model.Blocks[startBlock] is not FreeW.Core.Model.Paragraph startModel
+            || _model.Blocks[endBlock] is not FreeW.Core.Model.Paragraph endModel
+            || PlainOffsetInParagraph(startParagraph, startParagraph.ContentEnd) != startModel.PlainText.Length
+            || PlainOffsetInParagraph(endParagraph, endParagraph.ContentEnd) != endModel.PlainText.Length)
+        {
+            return null;
+        }
+
+        var startOffset = PlainOffsetInParagraph(startParagraph, start);
+        var endOffset = PlainOffsetInParagraph(endParagraph, end);
+        return endBlock == startBlock
+            ? new FindReplaceMatch(startBlock, startOffset, Math.Max(0, endOffset - startOffset))
+            : new FindReplaceMatch(startBlock, startOffset, 1, EndBlock: endBlock, EndOffset: endOffset);
+    }
+
+    /// <summary>
     /// The model <see cref="FreeW.Core.Model.Paragraph.PlainText"/> offset of a rendered position:
     /// a tab (a tab-stop element on the surface) is one character, and the view-only list-numbering
     /// marker run / gap is none. Unlike a text range over the rendered paragraph it never counts that
