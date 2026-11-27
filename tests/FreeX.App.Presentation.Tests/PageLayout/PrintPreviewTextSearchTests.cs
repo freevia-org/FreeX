@@ -131,6 +131,71 @@ public sealed class PrintPreviewTextSearchTests
         result.Should().BeNull();
     }
 
+    [Fact]
+    public void Find_DefaultsMatchWpfDocumentViewer_IgnoringCaseDiacriticsKashidaAndAlefHamza()
+    {
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "Café CAFE"), "cafe", null, backward: false)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 0, 4));
+        // A decomposed e + combining acute is one ignored mark inside the hit: the length follows the source text.
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "café!"), "cafe", null, backward: false)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 0, 5));
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "كـتاب"), "كتاب", null, backward: false)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 0, 5));
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "أحمد"), "احمد", null, backward: false)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 0, 4));
+    }
+
+    [Fact]
+    public void Find_MatchCaseOptionRequiresTheExactCase()
+    {
+        var options = new PrintPreviewFindOptions(MatchCase: true);
+
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "Cat cat"), "cat", null, backward: false, options)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 4, 3));
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "Cat"), "cat", null, backward: false, options)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void Find_MatchDiacriticOptionDistinguishesAccents()
+    {
+        var options = new PrintPreviewFindOptions(MatchDiacritic: true);
+
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "café cafe"), "cafe", null, backward: false, options)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 5, 4));
+    }
+
+    [Fact]
+    public void Find_MatchKashidaAndAlefHamzaOptionsDistinguishThoseVariants()
+    {
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "كـتاب"), "كتاب", null, backward: false,
+                new PrintPreviewFindOptions(MatchKashida: true))
+            .Should().BeNull();
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "أحمد"), "احمد", null, backward: false,
+                new PrintPreviewFindOptions(MatchAlefHamza: true))
+            .Should().BeNull();
+        // Alef hamza matching does not make the base letter stricter about diacritic-free text.
+        PrintPreviewTextSearch.Find(1, 0, _ => Page(1, "احمد"), "احمد", null, backward: false,
+                new PrintPreviewFindOptions(MatchAlefHamza: true, MatchKashida: true, MatchDiacritic: true))
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 0, 4));
+    }
+
+    [Fact]
+    public void Find_WholeWordOptionSkipsHitsInsideWordsAndStepsToTheNextWholeHit()
+    {
+        var options = new PrintPreviewFindOptions(MatchWholeWord: true);
+        var painting = Page(1, "concatenate cat, (cat) scat");
+
+        var first = PrintPreviewTextSearch.Find(1, 0, _ => painting, "cat", null, backward: false, options);
+        first.Should().Be(new PrintPreviewTextMatch(0, 0, 12, 3));
+        var second = PrintPreviewTextSearch.Find(1, 0, _ => painting, "cat", first, backward: false, options);
+        second.Should().Be(new PrintPreviewTextMatch(0, 0, 18, 3));
+        PrintPreviewTextSearch.Find(1, 0, _ => painting, "cat", second, backward: true, options)
+            .Should().Be(first);
+        PrintPreviewTextSearch.Find(1, 0, _ => painting, "cat", null, backward: false)
+            .Should().Be(new PrintPreviewTextMatch(0, 0, 3, 3), "without the option a hit inside a word counts");
+    }
+
     private static PrintPreviewPagePainting Page(int number, params string[] runs) =>
         new(number, default, runs.Select(Text).ToArray());
 

@@ -85,6 +85,49 @@ public sealed class PrintPreviewTextInteractionTests
         });
 
     [Fact]
+    public Task FindOptionsDropDownListsTheWpfRowsAndMatchCaseChangesTheSearch() =>
+        Run(async (window, _) =>
+        {
+            var sheet = window.Session.ActiveSheet;
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Needle needle"));
+            var dialog = await OpenPreviewAsync(window);
+            await PrintPreviewToolbarTestSupport.ExpandPageRowAsync(dialog);
+            var query = Find<TextBox>(dialog, "PrintPreviewFindBox");
+            var optionsButton = Find<Button>(dialog, "PrintPreviewFindOptionsButton");
+
+            optionsButton.ContextMenu.Should().NotBeNull();
+            var menu = optionsButton.ContextMenu!;
+            var rows = menu.ItemsSource.Should().BeAssignableTo<IEnumerable<MenuItem>>().Subject.ToArray();
+            rows.Select(row => row.Header).Should().Equal(
+                "Match _whole word only", "Match _case", "Match _diacritic", "Match _kashida", "Match _alef hamza");
+            rows.Should().OnlyContain(row => row.ToggleType == MenuItemToggleType.CheckBox && !row.IsChecked && row.IsEnabled);
+            rows.Select(row => AutomationProperties.GetAutomationId(row)).Should().Equal(
+                PrintPreviewSurfacePlanner.CreateFindOptionPlans().Select(plan => plan.AutomationId));
+            optionsButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await DrainAsync();
+            menu.IsOpen.Should().BeTrue();
+            menu.Close();
+
+            query.Focus();
+            query.Text = "needle";
+            await DrainAsync();
+            dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+            dialog.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+            SelectedRun(dialog).SelectedText.Should().Be("Needle", "match case is off by default");
+
+            rows[1].IsChecked = true;
+            rows[1].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            await DrainAsync();
+            dialog.GetVisualDescendants().OfType<SelectableTextBlock>()
+                .Should().OnlyContain(run => run.SelectionStart == run.SelectionEnd, "changing an option drops the previous hit");
+            dialog.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+            dialog.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
+            var run = SelectedRun(dialog);
+            run.SelectedText.Should().Be("needle");
+            run.SelectionStart.Should().Be(7);
+        });
+
+    [Fact]
     public Task PointerSelectionAcrossPrintedCellsCopiesOnlyTheSelectedText() =>
         Run(async (window, clipboard) =>
         {

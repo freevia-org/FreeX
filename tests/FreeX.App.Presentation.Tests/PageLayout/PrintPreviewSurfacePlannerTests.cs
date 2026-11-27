@@ -21,6 +21,33 @@ public sealed class PrintPreviewSurfacePlannerTests
     }
 
     [Fact]
+    public void CreateFindBarPlan_ListsTheFiveWpfDocumentViewerFindOptionsInOrder()
+    {
+        var plan = PrintPreviewSurfacePlanner.CreateFindBarPlan();
+
+        plan.Options.Select(option => option.Option).Should().Equal(
+            PrintPreviewFindOption.WholeWord,
+            PrintPreviewFindOption.Case,
+            PrintPreviewFindOption.Diacritic,
+            PrintPreviewFindOption.Kashida,
+            PrintPreviewFindOption.AlefHamza);
+        plan.Options.Select(option => option.Text).Should().Equal(
+            "Match _whole word only",
+            "Match _case",
+            "Match _diacritic",
+            "Match _kashida",
+            "Match _alef hamza");
+        plan.Options.Select(option => option.AutomationId).Should().OnlyHaveUniqueItems();
+        default(PrintPreviewFindOptions).Should().Be(new PrintPreviewFindOptions(), "every option starts unchecked");
+        foreach (var option in Enum.GetValues<PrintPreviewFindOption>())
+        {
+            var on = default(PrintPreviewFindOptions).With(option, true);
+            on.Get(option).Should().BeTrue();
+            Enum.GetValues<PrintPreviewFindOption>().Where(other => other != option).Should().OnlyContain(other => !on.Get(other));
+        }
+    }
+
+    [Fact]
     public void CreateTopToolbarPlan_OwnsPrintPreviewToolbarDescriptors()
     {
         var plan = PrintPreviewSurfacePlanner.CreateTopToolbarPlan(

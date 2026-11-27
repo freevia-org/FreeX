@@ -206,10 +206,21 @@ public sealed partial class MainWindow
         var copyIcon = CreateDocumentToolbarIcon(RibbonCommandIconKind.Copy, UiText.Get("MainWindow_TooltipTitle_Copy"), chrome);
         AutomationProperties.SetAutomationId(copyIcon, "PrintPreviewCopyButton");
         copyIcon.IsEnabled = false;
-        var (findBar, findBox, findPrevious, findNext, findStatus) =
-            CreatePrintPreviewFindBar(PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
         PrintPreviewTextCanvas? textCanvas = null;
         PrintPreviewTextMatch? lastMatch = null;
+        Action? onFindOptionsChanged = null;
+        var (findBar, findBox, findPrevious, findNext, findStatus, getFindOptions) =
+            CreatePrintPreviewFindBar(
+                PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver),
+                () => onFindOptionsChanged?.Invoke());
+        // A different option set is a different search: drop the old hit like a query edit does.
+        onFindOptionsChanged = () =>
+        {
+            if (lastMatch is not null)
+                textCanvas?.ClearSelection();
+            lastMatch = null;
+            findStatus.Text = "";
+        };
         var zoomOutButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.MinusSign, UiText.Get("MainWindow_AutomationName_ZoomOut"), chrome);
         var zoomInButton = CreateDocumentToolbarIcon(RibbonCommandIconKind.PlusSign, UiText.Get("MainWindow_AutomationName_ZoomIn"), chrome);
         var fitPageText = UiText.Get("PrintPreview_FitToOnePage");
@@ -362,7 +373,7 @@ public sealed partial class MainWindow
                 return;
 
             var match = PrintPreviewTextSearch.Find(
-                pageCount, navigator.CurrentIndex, context.BuildPainting, query, lastMatch, backward);
+                pageCount, navigator.CurrentIndex, context.BuildPainting, query, lastMatch, backward, getFindOptions());
             if (match is not { } found)
             {
                 findStatus.Text = UiText.Get("MainLoc_NoMatchesFound");
@@ -1444,8 +1455,8 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 4, 0, -4),
         };
 
-    private static (Grid Bar, TextBox Query, Button Previous, Button Next, TextBlock Status)
-        CreatePrintPreviewFindBar(PrintPreviewFindBarPlan plan)
+    private static (Grid Bar, TextBox Query, Button Previous, Button Next, TextBlock Status, Func<PrintPreviewFindOptions> GetOptions)
+        CreatePrintPreviewFindBar(PrintPreviewFindBarPlan plan, Action? onOptionsChanged = null)
     {
         var findBar = new Grid
         {
@@ -1487,16 +1498,59 @@ public sealed partial class MainWindow
         ConfigureTextAnnouncement(status);
         // WPF DocumentViewer find box: one 230x20 framed box with the query, the filled previous/next
         // triangles and the options drop-down glyph inside it, inset 8 DIP from the pane's left edge.
-        var dropDownGlyph = new global::Avalonia.Controls.Shapes.Path
+        // Clicking the glyph opens the options menu (WPF's OptionsMenuItem: five checkable rows).
+        var dropDownButton = new Button
         {
-            Data = Geometry.Parse("M 0 0 L 8 0 L 4 4 Z"),
-            Fill = Brushes.Black,
-            Width = 8,
-            Height = 4,
-            Margin = new Thickness(4, 0, 6, 0),
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            IsHitTestVisible = false,
+            Width = 18,
+            MinWidth = 18,
+            Height = 18,
+            MinHeight = 18,
+            MaxHeight = 18,
+            Padding = new Thickness(0, 0, 2, 0),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            Content = new global::Avalonia.Controls.Shapes.Path
+            {
+                Data = Geometry.Parse("M 0 0 L 8 0 L 4 4 Z"),
+                Fill = Brushes.Black,
+                Width = 8,
+                Height = 4,
+            },
         };
+        dropDownButton.Resources["ButtonBackgroundDisabled"] = Brushes.Transparent;
+        dropDownButton.Resources["ButtonBorderBrushDisabled"] = Brushes.Transparent;
+        AutomationProperties.SetAutomationId(dropDownButton, "PrintPreviewFindOptionsButton");
+        var findOptions = default(PrintPreviewFindOptions);
+        var optionItems = new List<MenuItem>();
+        foreach (var optionPlan in plan.Options)
+        {
+            var optionItem = new MenuItem
+            {
+                Header = optionPlan.Text,
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = findOptions.Get(optionPlan.Option),
+            };
+            AutomationProperties.SetAutomationId(optionItem, optionPlan.AutomationId);
+            optionItem.Click += (_, _) =>
+            {
+                findOptions = findOptions.With(optionPlan.Option, optionItem.IsChecked);
+                onOptionsChanged?.Invoke();
+            };
+            optionItems.Add(optionItem);
+        }
+
+        var optionsMenu = new ContextMenu
+        {
+            ItemsSource = optionItems,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+        };
+        AvaloniaContextMenuChrome.Apply(optionsMenu, seedIcons: false);
+        dropDownButton.ContextMenu = optionsMenu;
+        dropDownButton.Click += (_, _) => optionsMenu.Open(dropDownButton);
+        var dropDownGlyph = dropDownButton;
         var boxGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"),
@@ -1541,7 +1595,7 @@ public sealed partial class MainWindow
         Grid.SetColumn(status, 1);
         findBar.Children.Add(boxFrame);
         findBar.Children.Add(status);
-        return (findBar, findBox, previous, next, status);
+        return (findBar, findBox, previous, next, status, () => findOptions);
     }
 
     private static Border CreatePrintPreviewPane(Control documentToolbar, Border pageHost, Grid findBar)

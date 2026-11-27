@@ -52,6 +52,7 @@ public sealed record PrintPreviewFindBarPlan(
     string PlaceholderText,
     string PreviousButtonText,
     string NextButtonText,
+    IReadOnlyList<PrintPreviewFindOptionPlan> Options,
     double BoxWidth = 231,
     double BoxHeight = 20,
     double BarHeight = 27,
@@ -192,7 +193,32 @@ public static class PrintPreviewSurfacePlanner
         new(
             Text(textResolver, "PrintPreview_FindPlaceholder", "Type text to find..."),
             "<",
-            ">");
+            ">",
+            CreateFindOptionPlans(textResolver));
+
+    /// <summary>
+    /// The WPF DocumentViewer find-box drop-down: five checkable rows, none checked initially, in this order.
+    /// Captions keep their access-key underscore.
+    /// </summary>
+    public static IReadOnlyList<PrintPreviewFindOptionPlan> CreateFindOptionPlans(
+        PrintSettingsTextResolver? textResolver = null) =>
+    [
+        new(PrintPreviewFindOption.WholeWord,
+            Text(textResolver, "PrintPreview_FindMatchWholeWord", "Match _whole word only", stripMnemonics: false),
+            "PrintPreviewFindMatchWholeWordMenuItem"),
+        new(PrintPreviewFindOption.Case,
+            Text(textResolver, "FindReplace_MatchCase", "Match _case", stripMnemonics: false),
+            "PrintPreviewFindMatchCaseMenuItem"),
+        new(PrintPreviewFindOption.Diacritic,
+            Text(textResolver, "PrintPreview_FindMatchDiacritic", "Match _diacritic", stripMnemonics: false),
+            "PrintPreviewFindMatchDiacriticMenuItem"),
+        new(PrintPreviewFindOption.Kashida,
+            Text(textResolver, "PrintPreview_FindMatchKashida", "Match _kashida", stripMnemonics: false),
+            "PrintPreviewFindMatchKashidaMenuItem"),
+        new(PrintPreviewFindOption.AlefHamza,
+            Text(textResolver, "PrintPreview_FindMatchAlefHamza", "Match _alef hamza", stripMnemonics: false),
+            "PrintPreviewFindMatchAlefHamzaMenuItem"),
+    ];
 
     public static PrintPreviewSettingsRailPlan CreateSettingsRailPlan(
         Sheet? sheet,

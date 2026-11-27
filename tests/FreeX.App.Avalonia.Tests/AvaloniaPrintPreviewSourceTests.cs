@@ -53,6 +53,13 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("Height = plan.BarHeight");
         source.Should().Contain("Margin = new Thickness(plan.BoxLeftOffset, plan.BoxTopOffset, 0, 0)");
         source.Should().Contain("Margin = new Thickness(0, 0, 0, plan.BarBottomGap)");
+        source.Should().Contain("foreach (var optionPlan in plan.Options)");
+        source.Should().Contain("ToggleType = MenuItemToggleType.CheckBox");
+        source.Should().Contain("dropDownButton.ContextMenu = optionsMenu");
+        source.Should().Contain("optionsMenu.Open(dropDownButton)");
+        source.Should().Contain("AvaloniaContextMenuChrome.Apply(optionsMenu");
+        source.Should().Contain("\"PrintPreviewFindOptionsButton\"");
+        source.Should().Contain("backward, getFindOptions())");
         source.Should().Contain("boxGrid.Children.Add(previous)");
         source.Should().Contain("boxGrid.Children.Add(next)");
         source.Should().NotContain("ColumnDefinitions(\"240,Auto,Auto,*\")");

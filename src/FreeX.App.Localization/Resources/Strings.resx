@@ -19553,6 +19553,18 @@ and {0} more.</value>
   <data name="FindReplace_MatchCase" xml:space="preserve">
     <value>Match _case</value>
   </data>
+  <data name="PrintPreview_FindMatchWholeWord" xml:space="preserve">
+    <value>Match _whole word only</value>
+  </data>
+  <data name="PrintPreview_FindMatchDiacritic" xml:space="preserve">
+    <value>Match _diacritic</value>
+  </data>
+  <data name="PrintPreview_FindMatchKashida" xml:space="preserve">
+    <value>Match _kashida</value>
+  </data>
+  <data name="PrintPreview_FindMatchAlefHamza" xml:space="preserve">
+    <value>Match _alef hamza</value>
+  </data>
   <data name="ShapeGradient_InvalidGradientMessage" xml:space="preserve">
     <value>Enter two RGB colors separated by a semicolon.</value>
   </data>
