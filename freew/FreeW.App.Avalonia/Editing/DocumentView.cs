@@ -769,12 +769,19 @@ public sealed partial class DocumentView : Control
     internal bool FindNext(FindReplaceSearchRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        // The caret may be parked on a graphic or comment mark a previous Find Next selected: it has no
+        // text extent, so the search resumes after that object, not after the offset it sits at.
+        var resumeAfterMarkRun = CurrentFindMarkMatch() is { IsInHeaderFooter: false } onMark
+            ? onMark.MarkEndRunIndex ?? -1
+            : -1;
         if (FindReplaceDialogPlanner.FindNextMatch(
                 _doc,
                 request,
                 _caret.Block,
                 _caret.Offset,
-                CurrentFindReplaceTableCellPosition()) is not { } hit)
+                CurrentFindReplaceTableCellPosition(),
+                resumeAfterMarkRun: resumeAfterMarkRun) is not { } hit)
             return false;
 
         SelectFindReplaceMatch(hit);
@@ -810,6 +817,84 @@ public sealed partial class DocumentView : Control
     /// <c>ReplaceAllCore</c>'s restrict-to-selection bookkeeping accounts for.
     /// </summary>
     private void SelectFindReplaceMatch(FindReplaceMatch hit)
+    {
+        PlaceFindReplaceSelection(hit);
+        if (!hit.IsMarkOnly)
+        {
+            _findMark = null;
+            return;
+        }
+
+        // A graphic or a comment mark has no text extent, so the selection above is a caret parked at the
+        // offset the object sits at. What makes it "the match" is this record: which object (by run index)
+        // and the exact caret state it was parked with, which any edit or caret move invalidates.
+        _findMark = new FindMarkState(hit, CaptureFindMarkCaret());
+        if (!hit.IsInHeaderFooter && !hit.IsInTableCell)
+            SelectFoundInlineDrawingObject(hit);
+    }
+
+    /// <summary>
+    /// The text-less object (graphic or comment mark) the caret was last parked on by Find Next, or null
+    /// when the caret has moved, the selection has changed or an edit has happened since.
+    /// </summary>
+    private FindReplaceMatch? CurrentFindMarkMatch()
+    {
+        if (_findMark is not { } state)
+            return null;
+        if (state.Caret != CaptureFindMarkCaret())
+        {
+            _findMark = null;
+            return null;
+        }
+
+        return state.Match;
+    }
+
+    private FindMarkCaretState CaptureFindMarkCaret() =>
+        new(_caret, _selectionAnchor, _cellCaret, _cellAnchor, _hfCaret, _hfSelectionAnchor);
+
+    /// <summary>
+    /// A chart, WordArt or SmartArt that Find Next landed on is also selected as a drawing object, like a
+    /// click on it, so the match is visible and Delete removes it. Other inline graphics (a picture, a
+    /// shape) have no inline-object selection in this editor, so for them the parked caret is the cue.
+    /// </summary>
+    private void SelectFoundInlineDrawingObject(FindReplaceMatch hit)
+    {
+        if (hit.Block < 0
+            || hit.Block >= _doc.Blocks.Count
+            || _doc.Blocks[hit.Block] is not Paragraph paragraph
+            || hit.MarkRunIndex is not { } runIndex
+            || runIndex < 0
+            || runIndex >= paragraph.Runs.Count)
+        {
+            return;
+        }
+
+        var run = paragraph.Runs[runIndex];
+        var kind = run.Chart is { IsFloating: false }
+            ? "Chart"
+            : run.WordArt is { IsFloating: false }
+                ? "WordArt"
+                : run.SmartArt is { IsFloating: false }
+                    ? "SmartArt"
+                    : null;
+        if (kind is not null)
+            RefreshSelectedInlineObjectRect(hit.Block, runIndex, kind);
+    }
+
+    private readonly record struct FindMarkCaretState(
+        DocPosition Caret,
+        DocPosition? Anchor,
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? CellCaret,
+        (int TableBlock, int Row, int Col, int ParaIdx, int Offset)? CellAnchor,
+        (HfTarget Target, int Offset)? HfCaret,
+        (HfTarget Target, int Offset)? HfAnchor);
+
+    private sealed record FindMarkState(FindReplaceMatch Match, FindMarkCaretState Caret);
+
+    private FindMarkState? _findMark;
+
+    private void PlaceFindReplaceSelection(FindReplaceMatch hit)
     {
         if (hit.IsInHeaderFooter)
         {
@@ -988,7 +1073,9 @@ public sealed partial class DocumentView : Control
     }
 
     private bool SelectionIsFindMatch(FindReplaceSearchRequest search) =>
-        CurrentSelectionAsFindMatch() is { IsSpanning: true } spanning
+        CurrentFindMarkMatch() is { } mark
+            ? FindReplaceDialogPlanner.IsMatchAt(_doc, search, mark)
+            : CurrentSelectionAsFindMatch() is { IsSpanning: true } spanning
             ? FindReplaceDialogPlanner.IsMatchAt(_doc, search, spanning)
             : search.Format is null
                 ? FindReplaceDialogPlanner.MatchesExactly(SelectedText, search.Term, search.Options)
@@ -1000,6 +1087,18 @@ public sealed partial class DocumentView : Control
         var original = SelectedText;
         var plan = FindReplaceDialogPlanner.PlanReplacement(request, original);
         var needsPlanner = plan.Format is not null || plan.InsertsParagraphMark || plan.InsertsBreak || !plan.ReplacesText;
+
+        // The caret is parked on a graphic or a comment mark Find Next selected: the match has no text to
+        // rewrite, so the shared planners consume the object by its run index, as Replace All does.
+        if (CurrentFindMarkMatch() is { } markMatch)
+        {
+            _findMark = null;
+            if (markMatch.IsInHeaderFooter)
+                ReplaceHeaderFooterMatchThroughPlanner(request, markMatch);
+            else
+                ReplaceLocatedBodyMatchThroughPlanner(request, markMatch, plan, original);
+            return;
+        }
 
         // A match that runs across paragraph marks, or one in a table cell or the header/footer whose
         // replacement carries formatting, a paragraph mark, or keeps the found text and only reformats
@@ -1157,14 +1256,22 @@ public sealed partial class DocumentView : Control
         var tracked = TrackChangesEnabled
             ? new FindReplaceRevisionContext(RevisionAuthor, _editingSession.RevisionDateXmlForEdit())
             : null;
-        if (FindReplaceStoryPlanner.PlanReplacementAt(_doc, paragraph, match.Start, match.Length, request, tracked)
+        if (FindReplaceStoryPlanner.PlanReplacementAt(
+                _doc, paragraph, match.Start, match.Length, request, tracked, match.MarkRunIndex ?? -1)
             is not { Command: { } command } replacement)
         {
             return;
         }
 
         _bus.Execute(command);
-        PlaceCaretInHeaderFooter(caret.Target, replacement.Resume().Offset);
+
+        // A paragraph with graphics or note/comment marks is searched in a projected haystack, so the
+        // story planner's resume offset indexes that, not PlainText.
+        var resumeOffset = replacement.Resume().Offset;
+        var criteria = request.ToCriteria();
+        if (FindReplaceBodyPlanner.HasObjectMarks(paragraph, criteria))
+            resumeOffset = FindReplaceBodyPlanner.HaystackToPlain(_doc, paragraph, criteria, resumeOffset);
+        PlaceCaretInHeaderFooter(caret.Target, Math.Min(resumeOffset, paragraph.PlainText.Length));
     }
 
     /// <summary>The current body selection as a Find/Replace location, when it lies in one paragraph.</summary>

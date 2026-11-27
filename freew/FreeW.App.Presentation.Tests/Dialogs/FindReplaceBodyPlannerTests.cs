@@ -185,13 +185,108 @@ public sealed class FindReplaceBodyPlannerTests
     }
 
     [Fact]
-    public void FindNext_CannotSelectAGraphic_ButItIsCountedAndReplaceable()
+    public void FindNext_LocatesAGraphicByItsRunIndex_AndStepsPastEachOne()
     {
-        // A graphic has no PlainText extent, so no selectable span exists for Find Next to report.
-        var document = Doc(Runs(new Run("a"), Graphic(), new Run("b")));
+        // A graphic has no PlainText extent, so the match has length zero and is addressed by its run.
+        var document = Doc(Runs(new Run("a"), Graphic(), new Run("b"), Graphic(), Graphic(), new Run("c")));
+        var request = new FindReplaceSearchRequest("^g", NoOptions);
 
-        Count(document, "^g").Should().Be(1);
-        FindReplaceDialogPlanner.FindNextMatch(document, "^g", NoOptions, 0, 0).Should().BeNull();
+        Count(document, "^g").Should().Be(3);
+        var first = FindReplaceDialogPlanner.FindNextMatch(document, request, 0, 0)!.Value;
+        (first.Block, first.Start, first.Length, first.MarkRunIndex ?? -1, first.MarkEndRunIndex ?? -1)
+            .Should().Be((0, 1, 0, 1, 1));
+        first.IsMarkOnly.Should().BeTrue();
+
+        // Two graphics at one offset: the offset alone cannot say which was visited.
+        var second = FindReplaceDialogPlanner.FindNextMatch(document, request, 0, 1, resumeAfterMarkRun: 1)!.Value;
+        (second.Start, second.MarkRunIndex ?? -1).Should().Be((2, 3));
+        var third = FindReplaceDialogPlanner.FindNextMatch(document, request, 0, 2, resumeAfterMarkRun: 3)!.Value;
+        (third.Start, third.MarkRunIndex ?? -1).Should().Be((2, 4));
+
+        // Past the last one the walk wraps to the first.
+        var wrapped = FindReplaceDialogPlanner.FindNextMatch(document, request, 0, 2, resumeAfterMarkRun: 4)!.Value;
+        (wrapped.Start, wrapped.MarkRunIndex ?? -1).Should().Be((1, 1));
+    }
+
+    [Fact]
+    public void FindNext_LocatesACommentMarkAndOneInATableCell()
+    {
+        var cell = new TableCell();
+        var inCell = new Paragraph();
+        inCell.Runs.Add(new Run("x"));
+        inCell.Runs.Add(Run.CommentReference(9));
+        cell.Paragraphs.Add(inCell);
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var document = Doc(Runs(new Run("a"), Run.CommentReference(2), new Run("b")), table);
+
+        var body = FindReplaceDialogPlanner.FindNextMatch(document, "^a", NoOptions, 0, 0)!.Value;
+        (body.Block, body.Start, body.Length, body.MarkRunIndex ?? -1).Should().Be((0, 1, 0, 1));
+
+        var inTable = FindReplaceDialogPlanner.FindNextMatch(
+            document, new FindReplaceSearchRequest("^a", NoOptions), 0, 1, resumeAfterMarkRun: 1)!.Value;
+        (inTable.Block, inTable.TableRow ?? -1, inTable.TableCol ?? -1, inTable.TableParagraphIndex ?? -1,
+                inTable.Start, inTable.MarkRunIndex ?? -1)
+            .Should().Be((1, 0, 0, 0, 1, 1));
+    }
+
+    [Fact]
+    public void FindNext_LocatesAGraphicInTheDefaultHeader_AndIsMatchAtKnowsTheObject()
+    {
+        var document = Doc(new Paragraph("nothing here"));
+        var header = new HeaderFooter();
+        header.Paragraphs.Add(Runs(new Run("H"), Graphic(), new Run("I")));
+        document.Header = header;
+        var request = new FindReplaceSearchRequest("^g", NoOptions);
+
+        var hit = FindReplaceDialogPlanner.FindNextMatch(document, request, 0, 0)!.Value;
+
+        hit.IsInHeaderFooter.Should().BeTrue();
+        (hit.HeaderFooterIsFooter == true, hit.HeaderFooterParagraphIndex ?? -1, hit.Start, hit.Length, hit.MarkRunIndex ?? -1)
+            .Should().Be((false, 0, 1, 0, 1));
+        FindReplaceDialogPlanner.IsMatchAt(document, request, hit).Should().BeTrue();
+        FindReplaceDialogPlanner.IsMatchAt(document, request, hit with { MarkRunIndex = 0 }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsMatchAt_OfAMarkOnlyLocation_NeedsTheRightObject_AndANonMatchingSearchFails()
+    {
+        var document = Doc(Runs(new Run("a"), Graphic(), Run.CommentReference(2), new Run("b")));
+        var graphic = new FindReplaceMatch(0, 1, 0, MarkRunIndex: 1, MarkEndRunIndex: 1);
+        var comment = new FindReplaceMatch(0, 1, 0, MarkRunIndex: 2, MarkEndRunIndex: 2);
+
+        FindReplaceDialogPlanner.IsMatchAt(document, new FindReplaceSearchRequest("^g", NoOptions), graphic).Should().BeTrue();
+        FindReplaceDialogPlanner.IsMatchAt(document, new FindReplaceSearchRequest("^g", NoOptions), comment).Should().BeFalse();
+        FindReplaceDialogPlanner.IsMatchAt(document, new FindReplaceSearchRequest("^a", NoOptions), comment).Should().BeTrue();
+        FindReplaceDialogPlanner.IsMatchAt(document, new FindReplaceSearchRequest("b", NoOptions), graphic).Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanReplaceMatch_OfAMarkOnlyLocation_ConsumesThatObjectOnly()
+    {
+        static Run Image(byte id) => Run.FromImage(new InlineImage([id], 10, 10));
+        static byte[] Remaining(TextDocument document) =>
+            ((Paragraph)document.Blocks[0]).Runs.Where(run => run.Image != null).Select(run => run.Image!.Bytes[0]).ToArray();
+
+        var second = Doc(Runs(new Run("a"), Image(1), Image(2), new Run("b")));
+        var secondCommand = FindReplaceBodyPlanner.PlanReplaceMatch(
+            second,
+            new FindReplaceReplaceRequest("^g", "[x]", NoOptions),
+            new FindReplaceMatch(0, 1, 0, MarkRunIndex: 2, MarkEndRunIndex: 2));
+        secondCommand.Apply(new Context(second));
+        secondCommand.ReplacedCount.Should().Be(1);
+        ((Paragraph)second.Blocks[0]).PlainText.Should().Be("a[x]b");
+        Remaining(second).Should().Equal(new byte[] { 1 }, "the location named the second graphic");
+
+        var first = Doc(Runs(new Run("a"), Image(1), Image(2), new Run("b")));
+        FindReplaceBodyPlanner.PlanReplaceMatch(
+                first,
+                new FindReplaceReplaceRequest("^g", "[y]", NoOptions),
+                new FindReplaceMatch(0, 1, 0, MarkRunIndex: 1, MarkEndRunIndex: 1))
+            .Apply(new Context(first));
+        Remaining(first).Should().Equal(new byte[] { 2 }, "the location named the first graphic");
     }
 
     [Fact]

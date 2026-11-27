@@ -169,7 +169,9 @@ public static class FindReplaceBodyPlanner
             if (first != firstParagraph
                 || last != lastParagraph
                 || projection.Maps[first].ToPlain(match.Start) != location.Start
-                || projection.Maps[last].ToPlain(end) != endOffset)
+                || projection.Maps[last].ToPlain(end) != endOffset
+                || (location.MarkRunIndex is { } markRun
+                    && projection.Maps[first].FirstMarkRun(match.Start, end) != markRun))
             {
                 continue;
             }
@@ -344,6 +346,18 @@ public static class FindReplaceBodyPlanner
         }
 
         return matches;
+    }
+
+    /// <summary>
+    /// The <see cref="Paragraph.PlainText"/> offset of a haystack offset (see <see cref="MatchParagraph"/>) of
+    /// one paragraph, for a host that places its caret by text offset.
+    /// </summary>
+    public static int HaystackToPlain(TextDocument document, Paragraph paragraph, FindCriteria criteria, int hayOffset)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(criteria);
+        return FlowProjection.Build(document, [paragraph], criteria).Maps[0].ToPlain(Math.Max(0, hayOffset));
     }
 
     /// <summary>
@@ -536,6 +550,18 @@ public static class FindReplaceBodyPlanner
             }
 
             return PlainLength;
+        }
+
+        /// <summary>The index in the paragraph's runs of the first mark run in haystack span [start, end), or -1.</summary>
+        public int FirstMarkRun(int hayStart, int hayEnd)
+        {
+            foreach (var piece in Pieces)
+            {
+                if (piece.RunIndex >= 0 && piece.Hay >= hayStart && piece.Hay < hayEnd)
+                    return piece.RunIndex;
+            }
+
+            return -1;
         }
 
         /// <summary>

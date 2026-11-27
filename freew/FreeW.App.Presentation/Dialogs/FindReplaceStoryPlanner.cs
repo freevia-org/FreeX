@@ -94,6 +94,10 @@ public static class FindReplaceStoryPlanner
         return null;
     }
 
+    /// <summary>Counts every story match <see cref="ReplaceAll"/> would visit.</summary>
+    internal static int CountMatches(TextDocument document, FindCriteria criteria) =>
+        DocumentStories.Enumerate(document).Sum(story => MatchesIn(document, story.Paragraph, criteria).Matches.Count);
+
     /// <summary>
     /// A story paragraph's matches and the text they index. A paragraph with no object mark in it is
     /// searched as its <see cref="Paragraph.PlainText"/>. One that holds a note or comment reference, an
@@ -243,7 +247,9 @@ public static class FindReplaceStoryPlanner
     /// <paramref name="length"/>) of a story paragraph the host holds by reference (for example the
     /// header paragraph its caret is in) -- the same edit, including Replace-with formatting, as
     /// <see cref="PlanReplacement"/> makes for a match the walk found. Null when the paragraph is not part
-    /// of any non-body story or the span is no longer a match.
+    /// of any non-body story or the span is no longer a match. A span of length zero names a match that
+    /// covers only text-less objects; <paramref name="markRunIndex"/> then says which (the index in the
+    /// paragraph's runs of the first object it covers).
     /// </summary>
     public static FindReplaceStoryReplacement? PlanReplacementAt(
         TextDocument document,
@@ -251,7 +257,8 @@ public static class FindReplaceStoryPlanner
         int start,
         int length,
         FindReplaceReplaceRequest request,
-        FindReplaceRevisionContext? tracked = null)
+        FindReplaceRevisionContext? tracked = null,
+        int markRunIndex = -1)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(paragraph);
@@ -271,7 +278,9 @@ public static class FindReplaceStoryPlanner
         if (FindReplaceBodyPlanner.HasObjectMarks(paragraph, criteria))
         {
             var found = FindReplaceBodyPlanner.MatchParagraph(document, paragraph, criteria, out var haystack)
-                .Where(candidate => candidate.PlainStart == start && candidate.PlainLength == length)
+                .Where(candidate => candidate.PlainStart == start
+                    && candidate.PlainLength == length
+                    && (markRunIndex < 0 || candidate.FirstMarkRunIndex == markRunIndex))
                 .Cast<FindReplaceBodyPlanner.ParagraphMatch?>()
                 .FirstOrDefault();
             if (found is not { } located)

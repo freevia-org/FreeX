@@ -220,10 +220,22 @@ public readonly record struct FindReplaceMatch(
     int? HeaderFooterParagraphIndex = null,
     int? EndBlock = null,
     int? EndParagraphIndex = null,
-    int? EndOffset = null)
+    int? EndOffset = null,
+    int? MarkRunIndex = null,
+    int? MarkEndRunIndex = null)
 {
     public bool IsInTableCell => TableRow is not null;
     public bool IsInHeaderFooter => HeaderFooterIsFooter is not null;
+
+    /// <summary>
+    /// True for a match that covers only objects with no <see cref="Paragraph.PlainText"/> of their own (an
+    /// inline graphic, a comment mark): <see cref="Length"/> is then zero, <see cref="Start"/> is the
+    /// offset the objects sit at, and <see cref="MarkRunIndex"/> / <see cref="MarkEndRunIndex"/> are the
+    /// indexes in the paragraph's <see cref="Paragraph.Runs"/> of the first and last object it covers --
+    /// the only thing that tells two marks at one offset apart. A host that cannot give an object a
+    /// text extent selects it by those indexes.
+    /// </summary>
+    public bool IsMarkOnly => MarkRunIndex is not null;
 
     /// <summary>
     /// True when the match runs across one or more paragraph marks (Word's <c>^p</c>). It then starts at
@@ -234,6 +246,24 @@ public readonly record struct FindReplaceMatch(
     /// at least 1 and is not an offset into any one paragraph.
     /// </summary>
     public bool IsSpanning => EndOffset is not null;
+}
+
+/// <summary>
+/// One match inside a paragraph, as a span over its <see cref="Paragraph.PlainText"/>. A span of length
+/// zero covers only objects with no text (see <see cref="FindReplaceMatch.IsMarkOnly"/>); it is addressed
+/// by <see cref="MarkRun"/> / <see cref="MarkEndRun"/>, the indexes of the first and last object run.
+/// </summary>
+internal readonly record struct FindSpan(int Start, int Length, int MarkRun = -1, int MarkEndRun = -1)
+{
+    public bool IsMarkOnly => Length == 0 && MarkRun >= 0;
+
+    public static implicit operator FindSpan((int Start, int Length) span) => new(span.Start, span.Length);
+
+    public void Deconstruct(out int start, out int length)
+    {
+        start = Start;
+        length = Length;
+    }
 }
 
 public enum FindReplaceGoToTargetKind
@@ -786,7 +816,7 @@ public static class FindReplaceDialogPlanner
     /// (a note or comment reference, an inline graphic, a field under <c>^d</c>) is searched in the
     /// projected haystack Replace All uses, so Find Next agrees with it; any other is searched as text.
     /// </summary>
-    private static IEnumerable<(int Start, int Length)> ParagraphMatches(
+    private static IEnumerable<FindSpan> ParagraphMatches(
         TextDocument document,
         Paragraph paragraph,
         string? term,
@@ -798,8 +828,27 @@ public static class FindReplaceDialogPlanner
         var normalized = NormalizeOptions(options);
         var criteria = new FindCriteria(term, normalized.ToTextSearchOptions(), null);
         return FindReplaceBodyPlanner.HasObjectMarks(paragraph, criteria)
-            ? FindReplaceBodyPlanner.FindInParagraph(document, paragraph, criteria)
-            : EnumerateMatches(paragraph.PlainText, term, options);
+            ? ObjectParagraphSpans(document, paragraph, criteria)
+            : EnumerateMatches(paragraph.PlainText, term, options).Select(match => (FindSpan)match);
+    }
+
+    /// <summary>
+    /// A paragraph that holds object marks, searched in the projected haystack Replace All uses: its
+    /// matches as PlainText spans, plus the matches that cover only text-less objects (a graphic, a
+    /// comment mark) as zero-length spans addressed by run index.
+    /// </summary>
+    private static List<FindSpan> ObjectParagraphSpans(TextDocument document, Paragraph paragraph, FindCriteria criteria)
+    {
+        var spans = new List<FindSpan>();
+        foreach (var match in FindReplaceBodyPlanner.MatchParagraph(document, paragraph, criteria, out _))
+        {
+            if (match.PlainLength > 0)
+                spans.Add(new FindSpan(match.PlainStart, match.PlainLength));
+            else if (match.FirstMarkRunIndex >= 0)
+                spans.Add(new FindSpan(match.PlainStart, 0, match.FirstMarkRunIndex, match.LastMarkRunIndex));
+        }
+
+        return spans;
     }
 
     public static bool MatchesExactly(
@@ -817,6 +866,10 @@ public static class FindReplaceDialogPlanner
     /// the caret is currently positioned in one -- pass <paramref name="fromTableCell"/> (row, column,
     /// paragraph-in-cell index, and text offset within that paragraph) so the walk continues from that
     /// exact cell position instead of restarting the owning table from its first cell every call.
+    /// <paramref name="resumeAfterMarkRun"/> says the caret sits on a text-less object (see
+    /// <see cref="FindReplaceMatch.IsMarkOnly"/>) whose last run index is that: the matches that cover only
+    /// objects at the starting offset, up to and including that run, have been visited already and are not
+    /// reported again (several objects can sit at one offset, so the offset alone cannot say which).
     /// </summary>
     public static FindReplaceMatch? FindNextMatch(
         TextDocument document,
@@ -825,7 +878,8 @@ public static class FindReplaceDialogPlanner
         int fromBlock,
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null,
-        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null)
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null,
+        int resumeAfterMarkRun = -1)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (string.IsNullOrEmpty(term))
@@ -839,7 +893,8 @@ public static class FindReplaceDialogPlanner
             fromBlock,
             fromOffset,
             fromTableCell,
-            resumeHeaderFooterFrom);
+            resumeHeaderFooterFrom,
+            resumeAfterMarkRun);
     }
 
     /// <summary>
@@ -853,12 +908,17 @@ public static class FindReplaceDialogPlanner
         int fromBlock,
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null,
-        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null)
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null,
+        int resumeAfterMarkRun = -1)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(request);
         if (request.Format is null)
-            return FindNextMatch(document, request.Term, request.Options, fromBlock, fromOffset, fromTableCell, resumeHeaderFooterFrom);
+        {
+            return FindNextMatch(
+                document, request.Term, request.Options, fromBlock, fromOffset, fromTableCell,
+                resumeHeaderFooterFrom, resumeAfterMarkRun);
+        }
 
         var criteria = request.ToCriteria();
         if (criteria.IsEmpty)
@@ -866,13 +926,14 @@ public static class FindReplaceDialogPlanner
 
         return FindNextMatchCore(
             document,
-            paragraph => FormattedTextSearch.FindAll(document, paragraph, criteria),
+            paragraph => FormattedTextSearch.FindAll(document, paragraph, criteria).Select(match => (FindSpan)match),
             FindReplaceBodyPlanner.FindParagraphSpanningMatches(
                 document, request with { Options = NormalizeOptions(request.Options) }),
             fromBlock,
             fromOffset,
             fromTableCell,
-            resumeHeaderFooterFrom);
+            resumeHeaderFooterFrom,
+            resumeAfterMarkRun);
     }
 
     /// <summary>
@@ -904,13 +965,20 @@ public static class FindReplaceDialogPlanner
                         && match.EndOffset == location.EndOffset);
         }
 
-        if (criteria.IsEmpty || location.Length <= 0 || ResolveParagraph(document, location) is not { } paragraph)
+        if (criteria.IsEmpty
+            || (location.Length <= 0 && !location.IsMarkOnly)
+            || ResolveParagraph(document, location) is not { } paragraph)
+        {
             return false;
+        }
 
         var matches = request.Format is null
             ? ParagraphMatches(document, paragraph, request.Term, request.Options)
-            : FormattedTextSearch.FindAll(document, paragraph, criteria);
-        return matches.Any(match => match.Start == location.Start && match.Length == location.Length);
+            : FormattedTextSearch.FindAll(document, paragraph, criteria).Select(match => (FindSpan)match);
+        return matches.Any(match =>
+            match.Start == location.Start
+            && match.Length == location.Length
+            && (!location.IsMarkOnly || match.MarkRun == location.MarkRunIndex));
     }
 
     private static Paragraph? ResolveParagraph(TextDocument document, FindReplaceMatch location)
@@ -957,23 +1025,25 @@ public static class FindReplaceDialogPlanner
     private static FindReplaceMatch? FirstBodyMatch(
         int blockIndex,
         Paragraph paragraph,
-        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
         IReadOnlyList<FindReplaceMatch> spanning,
-        Func<int, bool> accepts)
+        Func<FindSpan, bool> accepts)
     {
         FindReplaceMatch? best = null;
-        foreach (var (start, length) in matchesIn(paragraph))
+        foreach (var found in matchesIn(paragraph))
         {
-            if (length > 0 && accepts(start))
+            if ((found.Length > 0 || found.IsMarkOnly) && accepts(found))
             {
-                best = new FindReplaceMatch(blockIndex, start, length);
+                best = found.IsMarkOnly
+                    ? new FindReplaceMatch(blockIndex, found.Start, 0, MarkRunIndex: found.MarkRun, MarkEndRunIndex: found.MarkEndRun)
+                    : new FindReplaceMatch(blockIndex, found.Start, found.Length);
                 break;
             }
         }
 
         foreach (var span in spanning)
         {
-            if (span.IsInTableCell || span.Block != blockIndex || !accepts(span.Start))
+            if (span.IsInTableCell || span.Block != blockIndex || !accepts(new FindSpan(span.Start, span.Length)))
                 continue;
 
             if (best is not { } current || span.Start <= current.Start)
@@ -984,14 +1054,24 @@ public static class FindReplaceDialogPlanner
         return best;
     }
 
+    /// <summary>
+    /// Whether a span lies at or after the position (<paramref name="startAt"/>, with the objects up to run
+    /// <paramref name="visitedThroughMarkRun"/> already visited): a match that covers only objects at
+    /// exactly that offset counts as after it only when its run is past the visited ones.
+    /// </summary>
+    private static bool IsAtOrAfter(FindSpan span, int startAt, int visitedThroughMarkRun) =>
+        span.Start > startAt
+        || (span.Start == startAt && !(span.IsMarkOnly && span.MarkRun <= visitedThroughMarkRun));
+
     private static FindReplaceMatch? FindNextMatchCore(
         TextDocument document,
-        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
         IReadOnlyList<FindReplaceMatch> spanning,
         int fromBlock,
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell,
-        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom)
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom,
+        int resumeAfterMarkRun)
     {
         if (document.Blocks.Count == 0)
             return null;
@@ -1005,33 +1085,50 @@ public static class FindReplaceDialogPlanner
             if (block is Paragraph paragraph)
             {
                 var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
-                if (FirstBodyMatch(blockIndex, paragraph, matchesIn, spanning, start => start >= startAt) is { } hit)
+                var visited = step == 0 ? resumeAfterMarkRun : -1;
+                if (FirstBodyMatch(
+                        blockIndex, paragraph, matchesIn, spanning, span => IsAtOrAfter(span, startAt, visited)) is { } hit)
+                {
                     return hit;
+                }
+
                 continue;
             }
 
             if (block is Table table)
             {
                 var startCell = step == 0 ? fromTableCell : null;
-                var tableMatch = EnumerateTableMatches(table, blockIndex, matchesIn, spanning)
-                    .FirstOrDefault(item => IsTableMatchAtOrAfter(item, startCell));
-                if (tableMatch.Length > 0)
+                var visited = step == 0 ? resumeAfterMarkRun : -1;
+                if (EnumerateTableMatches(table, blockIndex, matchesIn, spanning)
+                        .Cast<TableTextMatch?>()
+                        .FirstOrDefault(item => IsTableMatchAtOrAfter(item!.Value, startCell, visited)) is { } tableMatch)
+                {
                     return tableMatch.ToMatch(blockIndex);
+                }
             }
         }
 
         if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
         {
             var startAt = Math.Clamp(fromOffset, 0, startParagraph.PlainText.Length);
-            if (FirstBodyMatch(startBlock, startParagraph, matchesIn, spanning, start => start < startAt) is { } wrapped)
+            if (FirstBodyMatch(
+                    startBlock,
+                    startParagraph,
+                    matchesIn,
+                    spanning,
+                    span => !IsAtOrAfter(span, startAt, resumeAfterMarkRun)) is { } wrapped)
+            {
                 return wrapped;
+            }
         }
         else if (startBlock >= 0 && document.Blocks[startBlock] is Table startTable && fromTableCell is not null)
         {
-            var wrapMatch = EnumerateTableMatches(startTable, startBlock, matchesIn, spanning)
-                .FirstOrDefault(item => IsTableMatchBefore(item, fromTableCell.Value));
-            if (wrapMatch.Length > 0)
+            if (EnumerateTableMatches(startTable, startBlock, matchesIn, spanning)
+                    .Cast<TableTextMatch?>()
+                    .FirstOrDefault(item => !IsTableMatchAtOrAfter(item!.Value, fromTableCell, resumeAfterMarkRun)) is { } wrapMatch)
+            {
                 return wrapMatch.ToMatch(startBlock);
+            }
         }
 
         // The whole body (and, when applicable, the table it wrapped through) has now been searched with
@@ -1078,13 +1175,13 @@ public static class FindReplaceDialogPlanner
         var normalized = NormalizeOptions(options);
         return FindInDefaultHeaderFooter(
             document,
-            paragraph => EnumerateMatches(paragraph.PlainText, term, normalized),
+            paragraph => EnumerateMatches(paragraph.PlainText, term, normalized).Select(match => (FindSpan)match),
             resumeFrom);
     }
 
     private static FindReplaceMatch? FindInDefaultHeaderFooter(
         TextDocument document,
-        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeFrom = null)
     {
         // r177: when a resume point is supplied, the slot it names is searched from that offset
@@ -1114,7 +1211,7 @@ public static class FindReplaceDialogPlanner
     private static FindReplaceMatch? FindInHeaderFooterSlot(
         HeaderFooter? headerFooter,
         bool isFooter,
-        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
         int fromParagraphIndex = 0,
         int fromOffset = 0)
     {
@@ -1127,10 +1224,18 @@ public static class FindReplaceDialogPlanner
             // in the slot is searched from its beginning, as it has not been visited yet.
             var minOffset = paraIdx == fromParagraphIndex ? Math.Max(0, fromOffset) : 0;
             var match = matchesIn(headerFooter.Paragraphs[paraIdx])
-                .FirstOrDefault(candidate => candidate.Start >= minOffset);
-            if (match.Length > 0)
-                return new FindReplaceMatch(-1, match.Start, match.Length,
-                    HeaderFooterIsFooter: isFooter, HeaderFooterParagraphIndex: paraIdx);
+                .Cast<FindSpan?>()
+                .FirstOrDefault(candidate => candidate!.Value.Start >= minOffset
+                    && (candidate.Value.Length > 0 || candidate.Value.IsMarkOnly));
+            if (match is { } found)
+            {
+                return found.IsMarkOnly
+                    ? new FindReplaceMatch(-1, found.Start, 0,
+                        HeaderFooterIsFooter: isFooter, HeaderFooterParagraphIndex: paraIdx,
+                        MarkRunIndex: found.MarkRun, MarkEndRunIndex: found.MarkEndRun)
+                    : new FindReplaceMatch(-1, found.Start, found.Length,
+                        HeaderFooterIsFooter: isFooter, HeaderFooterParagraphIndex: paraIdx);
+            }
         }
         return null;
     }
@@ -1175,8 +1280,7 @@ public static class FindReplaceDialogPlanner
     }
 
     private static int CountStoryMatches(TextDocument document, FindCriteria criteria) =>
-        DocumentStories.Enumerate(document)
-            .Sum(story => FormattedTextSearch.FindAll(document, story.Paragraph, criteria).Count);
+        FindReplaceStoryPlanner.CountMatches(document, criteria);
 
     private readonly record struct TableTextMatch(
         int Row,
@@ -1185,10 +1289,16 @@ public static class FindReplaceDialogPlanner
         int Start,
         int Length,
         int? EndParagraphIndex = null,
-        int? EndOffset = null)
+        int? EndOffset = null,
+        int MarkRun = -1,
+        int MarkEndRun = -1)
     {
+        public bool IsMarkOnly => Length == 0 && MarkRun >= 0;
+
         public FindReplaceMatch ToMatch(int blockIndex) =>
-            new(blockIndex, Start, Length, Row, Col, ParagraphIndex, EndParagraphIndex: EndParagraphIndex, EndOffset: EndOffset);
+            IsMarkOnly
+                ? new(blockIndex, Start, 0, Row, Col, ParagraphIndex, MarkRunIndex: MarkRun, MarkEndRunIndex: MarkEndRun)
+                : new(blockIndex, Start, Length, Row, Col, ParagraphIndex, EndParagraphIndex: EndParagraphIndex, EndOffset: EndOffset);
     }
 
     /// <summary>
@@ -1202,7 +1312,7 @@ public static class FindReplaceDialogPlanner
     private static IEnumerable<TableTextMatch> EnumerateTableMatches(
         Table table,
         int blockIndex,
-        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
         IReadOnlyList<FindReplaceMatch> spanning)
     {
         for (var row = 0; row < table.Rows.Count; row++)
@@ -1223,8 +1333,15 @@ public static class FindReplaceDialogPlanner
                 for (var paraIdx = 0; paraIdx < paragraphs.Count; paraIdx++)
                 {
                     var inParagraph = matchesIn(paragraphs[paraIdx])
+                        .Where(match => match.Length > 0 || match.IsMarkOnly)
                         .Select(match => new TableTextMatch(
-                            row, projected.StartColumn, paraIdx, match.Start, match.Length));
+                            row,
+                            projected.StartColumn,
+                            paraIdx,
+                            match.Start,
+                            match.Length,
+                            MarkRun: match.MarkRun,
+                            MarkEndRun: match.MarkEndRun));
                     var startColumn = projected.StartColumn;
                     var index = paraIdx;
                     var running = spanning
@@ -1246,24 +1363,15 @@ public static class FindReplaceDialogPlanner
 
     private static bool IsTableMatchAtOrAfter(
         TableTextMatch match,
-        (int Row, int Col, int ParagraphIndex, int Offset)? from)
+        (int Row, int Col, int ParagraphIndex, int Offset)? from,
+        int visitedThroughMarkRun)
     {
         if (from is not { } f)
             return true;
         if (match.Row != f.Row) return match.Row > f.Row;
         if (match.Col != f.Col) return match.Col > f.Col;
         if (match.ParagraphIndex != f.ParagraphIndex) return match.ParagraphIndex > f.ParagraphIndex;
-        return match.Start >= f.Offset;
-    }
-
-    private static bool IsTableMatchBefore(
-        TableTextMatch match,
-        (int Row, int Col, int ParagraphIndex, int Offset) from)
-    {
-        if (match.Row != from.Row) return match.Row < from.Row;
-        if (match.Col != from.Col) return match.Col < from.Col;
-        if (match.ParagraphIndex != from.ParagraphIndex) return match.ParagraphIndex < from.ParagraphIndex;
-        return match.Start < from.Offset;
+        return IsAtOrAfter(new FindSpan(match.Start, match.Length, match.MarkRun, match.MarkEndRun), f.Offset, visitedThroughMarkRun);
     }
 
     private static bool TryValidateSearchTerm(

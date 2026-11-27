@@ -330,4 +330,149 @@ public sealed class FindReplaceSingleMatchTests
 
         text.Should().Be("Terms © apply – always");
     }
+
+    // ---- graphics and comment marks (no text extent) -----------------------------------------
+
+    private static Run Image(byte id) => Run.FromImage(new InlineImage([id], 10, 10));
+
+    private static Paragraph Marked(params Run[] runs)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.AddRange(runs);
+        return paragraph;
+    }
+
+    [Fact]
+    public async Task FindNext_OnGraphicsAndCommentMarks_ParksTheCaretOnEachObjectInTurn()
+    {
+        var graphics = new List<(int Block, int Offset)>();
+        var comments = new List<(int Block, int Offset)>();
+        var found = new List<bool>();
+        var ran = await OnUiThread(() =>
+        {
+            var document = DocumentOf(Marked(
+                new Run("a"), Image(1), new Run("b"), Run.CommentReference(1), Image(2), new Run("c")));
+            document.Comments[1] = new Comment(1, "Please revise", "Ann Reviewer", "AR");
+            var view = Load(document);
+
+            for (var i = 0; i < 3; i++)
+            {
+                found.Add(view.FindNext("^g"));
+                graphics.Add(view.CaretPosition);
+            }
+
+            for (var i = 0; i < 2; i++)
+            {
+                found.Add(view.FindNext("^a"));
+                comments.Add(view.CaretPosition);
+            }
+        });
+        ran.Should().BeTrue();
+
+        found.Should().OnlyContain(hit => hit);
+        // Two graphics and a comment mark at plain offsets 1, 2 and 2: Find Next walks them in turn, and wraps.
+        graphics.Should().Equal((0, 1), (0, 2), (0, 1));
+        comments.Should().Equal((0, 2), (0, 2));
+    }
+
+    [Fact]
+    public async Task ReplaceNext_OnAGraphic_ConsumesItLikeReplaceAll_AndMovesOnToTheNextOne()
+    {
+        string? text = null;
+        byte[] remaining = [];
+        var results = new List<bool>();
+        var ran = await OnUiThread(() =>
+        {
+            var view = Load(DocumentOf(Marked(
+                new Run("a"), Image(1), new Run("b"), Image(2), new Run("c"))));
+
+            view.FindNext("^g").Should().BeTrue();
+            results.Add(view.ReplaceNext(Request("^g", "[x]")));
+            var afterFirst = (Paragraph)view.Document.Blocks[0];
+            afterFirst.Runs.Count(run => run.Image != null).Should().Be(1, "a single Replace consumes only the graphic it is on");
+            results.Add(view.ReplaceNext(Request("^g", "[x]")));
+
+            var paragraph = (Paragraph)view.Document.Blocks[0];
+            text = paragraph.PlainText;
+            remaining = paragraph.Runs.Where(run => run.Image != null).Select(run => run.Image!.Bytes[0]).ToArray();
+        });
+        ran.Should().BeTrue();
+
+        results.Should().Equal(true, false);
+        text.Should().Be("a[x]b[x]c");
+        remaining.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ReplaceNext_OnACommentMark_ConsumesIt()
+    {
+        Paragraph? paragraph = null;
+        var ran = await OnUiThread(() =>
+        {
+            var document = DocumentOf(Marked(new Run("a"), Run.CommentReference(1), new Run("b")));
+            document.Comments[1] = new Comment(1, "Please revise", "Ann Reviewer", "AR");
+            var view = Load(document);
+
+            view.FindNext("^a").Should().BeTrue();
+            view.ReplaceNext(Request("^a", "|"));
+
+            paragraph = (Paragraph)view.Document.Blocks[0];
+        });
+        ran.Should().BeTrue();
+
+        paragraph!.PlainText.Should().Be("a|b");
+        paragraph.Runs.Should().NotContain(run => run.IsCommentReference);
+    }
+
+    [Fact]
+    public async Task ReplaceNext_AfterFindNextOnAGraphic_ForADifferentSearch_LeavesTheGraphicAlone()
+    {
+        int graphics = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Load(DocumentOf(Marked(new Run("a"), Image(1), new Run("b"))));
+
+            view.FindNext("^g").Should().BeTrue();
+            view.ReplaceNext(Request("b", "X"));
+
+            graphics = ((Paragraph)view.Document.Blocks[0]).Runs.Count(run => run.Image != null);
+        });
+        ran.Should().BeTrue();
+
+        graphics.Should().Be(1, "the parked caret is the match of the ^g search only");
+    }
+
+    [Fact]
+    public async Task FindNext_AndReplaceNext_ReachAGraphicInATableCellAndInTheHeader()
+    {
+        Paragraph? cellParagraph = null;
+        Paragraph? header = null;
+        var ran = await OnUiThread(() =>
+        {
+            var cell = new TableCell();
+            cell.Paragraphs.Add(Marked(new Run("x"), Image(1), new Run("y")));
+            var row = new TableRow();
+            row.Cells.Add(cell);
+            var table = new Table();
+            table.Rows.Add(row);
+            var document = DocumentOf(new Paragraph("intro"), table);
+            document.Header = new HeaderFooter();
+            document.Header.Paragraphs.Add(Marked(new Run("H"), Image(2), new Run("I")));
+            var view = Load(document);
+
+            view.FindNext("^g").Should().BeTrue();
+            view.ReplaceNext(Request("^g", "[cell]"));
+            view.FindNext("^g").Should().BeTrue();
+            view.ReplaceNext(Request("^g", "[hdr]"));
+
+            cellParagraph = ((Table)view.Document.Blocks[1]).Rows[0].Cells[0].Paragraphs[0];
+            header = view.Document.Header!.Paragraphs[0];
+        });
+        ran.Should().BeTrue();
+
+        cellParagraph!.PlainText.Should().Be("x[cell]y");
+        cellParagraph.Runs.Should().NotContain(run => run.Image != null);
+        header!.PlainText.Should().Be("H[hdr]I");
+        header.Runs.Should().NotContain(run => run.Image != null);
+    }
 }
