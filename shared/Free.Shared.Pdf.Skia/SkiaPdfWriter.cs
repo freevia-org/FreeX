@@ -194,22 +194,27 @@ public static class SkiaPdfWriter
             stream.SetLength(0);
         }
 
-        if (document.Properties is not { } properties ||
-            (string.IsNullOrWhiteSpace(properties.Language) && properties.ViewerSettings is null && properties.Outlines.Count == 0))
+        var needsUpdate = document.Pages.Any(SkiaPdfCatalog.HasFractionalPageSize)
+            || document.Properties is { } properties
+                && (!string.IsNullOrWhiteSpace(properties.Language) || properties.ViewerSettings is not null || properties.Outlines.Count > 0);
+        // SKManagedWStream queries Position from a native callback, including on streams whose
+        // CanSeek is false. Buffer those outputs even when no catalog/geometry revision is needed.
+        if (!needsUpdate && stream.CanSeek)
             return WriteDocument(document, stream, rasterization, imageDiagnostics, fontSource);
 
         if (stream.CanRead && stream.CanSeek)
         {
             var pageCount = WriteDocument(document, stream, rasterization, imageDiagnostics, fontSource);
-            SkiaPdfCatalog.AppendUpdate(stream, properties, pageCount);
+            SkiaPdfCatalog.AppendUpdate(stream, document.Properties, pageCount, document.Pages);
             return pageCount;
         }
 
-        // The catalog update must read the generated PDF. Stage only for destinations that
-        // cannot be read and repositioned, such as write-only and non-seekable output streams.
+        // The incremental update must read the generated PDF. Stage only for destinations
+        // that cannot be read and repositioned, or cannot report the native writer's position.
         using var buffer = new MemoryStream();
         var bufferedPageCount = WriteDocument(document, buffer, rasterization, imageDiagnostics, fontSource);
-        SkiaPdfCatalog.AppendUpdate(buffer, properties, bufferedPageCount);
+        if (needsUpdate)
+            SkiaPdfCatalog.AppendUpdate(buffer, document.Properties, bufferedPageCount, document.Pages);
         buffer.Position = 0;
         buffer.CopyTo(stream);
         return bufferedPageCount;
@@ -234,7 +239,18 @@ public static class SkiaPdfWriter
         {
             foreach (var page in document.Pages)
             {
-                var canvas = pdf.BeginPage((float)page.WidthPoints, (float)page.HeightPoints);
+                var fractionalSize = SkiaPdfCatalog.HasFractionalPageSize(page);
+                var canvasWidth = fractionalSize ? Math.Ceiling(page.WidthPoints) : page.WidthPoints;
+                var canvasHeight = fractionalSize ? Math.Ceiling(page.HeightPoints) : page.HeightPoints;
+                var canvas = pdf.BeginPage((float)canvasWidth, (float)canvasHeight);
+                if (fractionalSize)
+                {
+                    // Skia M119 rounds the PDF device to integral points. Reserve the entire page,
+                    // then align its PDF bottom-left with the authored height before rendering
+                    // content AND annotations. The catalog update restores the exact MediaBox.
+                    canvas.Translate(0, (float)(canvasHeight - page.HeightPoints));
+                    canvas.ClipRect(new SKRect(0, 0, (float)page.WidthPoints, (float)page.HeightPoints));
+                }
                 canvas.Clear(SKColors.White);
                 if (rasterization is { } settings)
                 {

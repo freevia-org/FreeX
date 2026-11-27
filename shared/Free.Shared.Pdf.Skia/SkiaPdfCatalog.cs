@@ -5,8 +5,8 @@ using System.Text.RegularExpressions;
 namespace Free.Shared.Pdf.Skia;
 
 /// <summary>
-/// Adds catalog entries and outlines in an incremental update to Skia's classic cross-reference
-/// format. The original page streams, fonts, links, and named destinations stay intact.
+/// Adds catalog entries, outlines, and authored fractional page boxes in one incremental update
+/// to Skia's classic cross-reference format. Page streams, fonts, links, and destinations stay intact.
 /// </summary>
 internal static partial class SkiaPdfCatalog
 {
@@ -15,13 +15,21 @@ internal static partial class SkiaPdfCatalog
     private const int GeneratedCatalogReadLimit = 4096;
     private const int GeneratedPageTreeReadLimit = 1024;
 
-    public static void AppendUpdate(Stream stream, PdfDocumentProperties properties, int pageCount)
+    internal static bool HasFractionalPageSize(PdfContentPage page) =>
+        page.WidthPoints != Math.Truncate(page.WidthPoints) || page.HeightPoints != Math.Truncate(page.HeightPoints);
+
+    public static void AppendUpdate(
+        Stream stream, PdfDocumentProperties? properties, int pageCount, IReadOnlyList<PdfContentPage>? authoredPages = null)
     {
-        var outlines = properties.Outlines.Where(outline =>
-            (uint)outline.PageIndex < (uint)pageCount && !string.IsNullOrWhiteSpace(outline.Title)).ToArray();
+        if (authoredPages is not null && authoredPages.Count != pageCount)
+            throw new ArgumentException("Authored page geometry must cover every exported page.", nameof(authoredPages));
+        var hasGeometry = authoredPages?.Any(HasFractionalPageSize) == true;
+        var outlines = properties?.Outlines.Where(outline =>
+            (uint)outline.PageIndex < (uint)pageCount && !string.IsNullOrWhiteSpace(outline.Title)).ToArray() ?? [];
         var hasOutlines = outlines.Length > 0;
-        var viewerEntries = PdfCatalogViewerEntries.Build(properties.ViewerSettings, hasOutlines);
-        if (string.IsNullOrWhiteSpace(properties.Language) && string.IsNullOrEmpty(viewerEntries) && !hasOutlines)
+        var viewerEntries = PdfCatalogViewerEntries.Build(properties?.ViewerSettings, hasOutlines);
+        var hasCatalogChanges = !string.IsNullOrWhiteSpace(properties?.Language) || !string.IsNullOrEmpty(viewerEntries) || hasOutlines;
+        if (!hasGeometry && !hasCatalogChanges)
             return;
 
         var trailerStart = Math.Max(0, stream.Length - GeneratedTrailerReadLimit);
@@ -50,7 +58,7 @@ internal static partial class SkiaPdfCatalog
         if (!CatalogDictionaryPattern().IsMatch(dictionary))
             throw new InvalidDataException("Skia PDF export did not produce the expected catalog dictionary.");
 
-        if (properties.Language is { } language && !string.IsNullOrWhiteSpace(language))
+        if (properties?.Language is { } language && !string.IsNullOrWhiteSpace(language))
             dictionary = ApplyLanguage(dictionary, language);
 
         if (!string.IsNullOrEmpty(viewerEntries))
@@ -63,34 +71,81 @@ internal static partial class SkiaPdfCatalog
         }
 
         long[] pageReferences = [];
-        if (hasOutlines)
+        if (hasOutlines || hasGeometry)
         {
             var pagesRoot = PagesReferencePattern().Match(dictionary);
             if (!TryParseOffset(pagesRoot.Groups["number"].ValueSpan, out var pagesNumber))
                 throw new InvalidDataException("Skia PDF export did not produce the expected page tree reference.");
 
             pageReferences = ReadPages(stream, xref, pagesNumber, pageCount);
+        }
+
+        if (hasOutlines)
+        {
             dictionary = OutlinesReferencePattern().Replace(dictionary, string.Empty);
             dictionary = dictionary.Insert(dictionary.Length - 2, FormattableString.Invariant($"\n/Outlines {objectCount} 0 R"));
         }
 
+        // Read and validate every changed page before appending anything. Annotation arrays may
+        // make a generated leaf dictionary much larger than the small page-tree node prefix.
+        var pageUpdates = new List<(long Number, string Dictionary)>();
+        if (hasGeometry)
+        {
+            for (var index = 0; index < pageCount; index++)
+            {
+                var page = authoredPages![index];
+                if (!HasFractionalPageSize(page))
+                    continue;
+                var original = ReadPageDictionary(stream, xref, pageReferences[index]);
+                var boxes = MediaBoxPattern().Matches(original);
+                if (boxes.Count != 1)
+                    throw new InvalidDataException("Skia PDF export did not produce the expected page MediaBox.");
+                var box = $"/MediaBox [0 0 {FormatPageSize(page.WidthPoints)} {FormatPageSize(page.HeightPoints)}]";
+                pageUpdates.Add((pageReferences[index], original.Remove(boxes[0].Index, boxes[0].Length).Insert(boxes[0].Index, box)));
+            }
+        }
+
         stream.Position = stream.Length;
-        var catalogRevisionOffset = WriteObject(stream, catalogNumber, dictionary);
+        var revisionOffsets = new SortedDictionary<long, long>();
+        if (hasCatalogChanges)
+            revisionOffsets[catalogNumber] = WriteObject(stream, catalogNumber, dictionary);
+        foreach (var page in pageUpdates)
+            revisionOffsets[page.Number] = WriteObject(stream, page.Number, page.Dictionary);
         var outlineOffsets = hasOutlines ? WriteOutlines(stream, objectCount, outlines, pageReferences) : [];
+        for (var index = 0; index < outlineOffsets.Length; index++)
+            revisionOffsets[objectCount + index] = outlineOffsets[index];
         var xrefRevisionOffset = stream.Position;
-        WriteAscii(stream, FormattableString.Invariant($"xref\n{catalogNumber} 1\n"));
-        WriteCrossReferenceEntry(stream, catalogRevisionOffset);
+        WriteAscii(stream, "xref\n");
+        foreach (var (number, offset) in revisionOffsets)
+        {
+            WriteAscii(stream, FormattableString.Invariant($"{number} 1\n"));
+            WriteCrossReferenceEntry(stream, offset);
+        }
         if (outlineOffsets.Length > 0)
         {
-            WriteAscii(stream, FormattableString.Invariant($"{objectCount} {outlineOffsets.Length}\n"));
-            foreach (var offset in outlineOffsets)
-                WriteCrossReferenceEntry(stream, offset);
             trailerDictionary = trailerDictionary.Remove(size.Index, size.Length)
                 .Insert(size.Index, FormattableString.Invariant($"/Size {objectCount + outlineOffsets.Length}"));
         }
 
         WriteAscii(stream, FormattableString.Invariant(
             $"trailer\n<<{trailerDictionary}\n/Prev {previousXref}>>\nstartxref\n{xrefRevisionOffset}\n%%EOF\n"));
+    }
+
+    private static string FormatPageSize(double value) => value.ToString("0.################", CultureInfo.InvariantCulture);
+
+    private static string ReadPageDictionary(Stream stream, OriginalCrossReference xref, long number)
+    {
+        var limit = GeneratedPageTreeReadLimit;
+        while (true)
+        {
+            var prefix = ReadObjectPrefix(stream, xref, number, limit);
+            if (prefix.Contains("\nendobj\n", StringComparison.Ordinal))
+                return ReadDictionary(prefix);
+            var nextLimit = (int)Math.Min(Math.Min(xref.Offset, int.MaxValue), (long)limit * 2);
+            if (nextLimit <= limit)
+                throw new InvalidDataException("Skia PDF export did not produce a complete page dictionary.");
+            limit = nextLimit;
+        }
     }
 
     private static string ReadObjectPrefix(Stream stream, OriginalCrossReference xref, long number, int readLimit)
@@ -217,7 +272,8 @@ internal static partial class SkiaPdfCatalog
     private static string ReadAscii(Stream stream, long offset, int limit)
     {
         stream.Position = offset;
-        Span<byte> bytes = stackalloc byte[(int)Math.Min(stream.Length - offset, limit)];
+        var length = (int)Math.Min(stream.Length - offset, limit);
+        Span<byte> bytes = length <= GeneratedCatalogReadLimit ? stackalloc byte[length] : new byte[length];
         stream.ReadExactly(bytes);
         return Encoding.ASCII.GetString(bytes);
     }
@@ -257,6 +313,9 @@ internal static partial class SkiaPdfCatalog
 
     [GeneratedRegex(@"(?<!\S)/Kids\s*\[(?<kids>(?:\s*[0-9]+\s+0\s+R)+)\s*\]")]
     private static partial Regex PageKidsPattern();
+
+    [GeneratedRegex(@"(?<!\S)/MediaBox\s*\[[^\]]+\]")]
+    private static partial Regex MediaBoxPattern();
 
     [GeneratedRegex(@"(?<number>[0-9]+)\s+0\s+R")]
     private static partial Regex PageReferencePattern();
