@@ -379,7 +379,7 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         if (action != FindReplaceDialogActionKind.FindNext
             && (_replaceBox.Text ?? string.Empty).Contains("^c", StringComparison.OrdinalIgnoreCase))
         {
-            _ = ExecuteWithClipboardAsync(action);
+            AvaloniaUiTaskGuard.Run(() => ExecuteWithClipboardAsync(action));
             return;
         }
 
