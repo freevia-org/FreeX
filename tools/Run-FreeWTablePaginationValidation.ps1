@@ -21,6 +21,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $outputRoot = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 $fixtureDir = Join-Path $outputRoot "fixture"
 $fixturePath = Join-Path $fixtureDir "table-page-composition-stress.docx"
@@ -121,9 +122,7 @@ Assert-FocusedTestProof $avaloniaTablePath "DocumentViewTableStructureTests.Tabl
 
 $started = $false
 try {
-    $startArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner, "-Action", "Start", "-App", "FreeW", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $outputRoot, "-DocumentPath", $fixturePath)
-    if ($PublishDir) { $startArgs += @("-PublishDir", $PublishDir) }; if ($SkipPublish) { $startArgs += "-SkipPublish" }; if ($SkipImageBuild) { $startArgs += "-SkipImageBuild" }; if ($Replace) { $startArgs += "-Replace" }
-    Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArgs -WorkingDirectory $repoRoot; $started = $true
+    Start-PhysicalValidationRunnerSession -RunnerPath $runner -RepoRoot $repoRoot -App FreeW -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $outputRoot -DocumentPath $fixturePath -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace; $started = $true
     $session = Get-Content -LiteralPath (Join-Path $outputRoot "freew/current-session.json") -Raw | ConvertFrom-Json
     $sessionDir = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     Copy-Item -LiteralPath $probe -Destination (Join-Path $sessionDir "run-freew-table-pagination-probe.sh") -Force
@@ -169,5 +168,5 @@ try {
     if ($probeExitCode -ne 0 -or $validated.summary.failed -gt 0) { throw "FreeW table-pagination validation failed with probe exit code $probeExitCode." }
 }
 finally {
-    if ($started -and -not $KeepContainer) { try { Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runner, "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $outputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop the harness-owned FreeW container." } }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $runner -RepoRoot $repoRoot -App FreeW -Port $Port -OutputDir $outputRoot -Started $started -KeepContainer:$KeepContainer -WarningPrefix "Could not stop the harness-owned FreeW container" -OmitExceptionDetail
 }

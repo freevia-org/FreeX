@@ -43,6 +43,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $manifestEvidenceHelper = Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1"
 $null = . $manifestEvidenceHelper
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -189,26 +190,16 @@ if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) {
 $sessionDirectory = $null
 $started = $false
 try {
-    $startArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", $App, "-Port", "$Port",
-        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
-        "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) {
-        $startArguments += @("-PublishDir", $PublishDir)
-    }
+    $extraArguments = @()
     if ($App -eq "FreeP") {
-        $startArguments += @(
+        $extraArguments += @(
             "-Host", "Validation",
             "-AppArgument", "--physical-animation-pane-fixture")
     }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
-    if ($Replace) { $startArguments += "-Replace" }
-    if ($App -eq "FreeW") { $startArguments += "-CupsDryRun" }
+    if ($App -eq "FreeW") { $extraArguments += "-CupsDryRun" }
 
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App $App -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot `
+        -ExtraArguments $extraArguments -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace
     $started = $true
 
     $currentSessionPath = Join-Path $resolvedOutputRoot "$appKey/current-session.json"
@@ -400,17 +391,5 @@ try {
         throw "Family physical probe failed with exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence was retained at $manifestPath; probe log: $probeLog"
     }
 } finally {
-    if ($started -and -not $KeepContainer) {
-        try {
-            Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", $App, "-Port", "$Port",
-                "-OutputDir", $resolvedOutputRoot
-            ) -WorkingDirectory $repoRoot
-        } catch {
-            Write-Warning "Could not stop harness-owned $App container on port ${Port}: $($_.Exception.Message)"
-        }
-    } elseif ($started) {
-        Write-Host "Container retained by request on port $Port."
-    }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App $App -Port $Port -OutputDir $resolvedOutputRoot -Started $started -KeepContainer:$KeepContainer -AnnounceRetained -WarningPrefix "Could not stop harness-owned $App container on port ${Port}"
 }

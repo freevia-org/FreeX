@@ -157,6 +157,34 @@ public static class PresentationViewZoomPlanner
             ? 1.0
             : NormalizeZoomPercent(state.ZoomPercent) / 100.0;
 
+    /// <summary>
+    /// The slide-to-screen transform a canvas paints with: the zoomed stage transform computed in
+    /// the area left after the rulers (when shown) take their thickness off the top and left edges,
+    /// shifted back by that inset. Shared by the WPF and Avalonia slide canvases.
+    /// </summary>
+    public static SlideTransformCore PlanViewTransform(
+        double renderWidth,
+        double renderHeight,
+        double slideWidthDip,
+        double slideHeightDip,
+        PresentationViewZoomState state,
+        bool showRulers)
+    {
+        var rulerInset = showRulers ? PresentationRulerTickPlanner.RulerThickness : 0;
+        var plan = PlanStageTransform(
+            Math.Max(0, renderWidth - rulerInset),
+            Math.Max(0, renderHeight - rulerInset),
+            slideWidthDip,
+            slideHeightDip,
+            state);
+        return new SlideTransformCore(
+            plan.Scale,
+            plan.OffsetX + rulerInset,
+            plan.OffsetY + rulerInset,
+            plan.SlideWidthDip,
+            plan.SlideHeightDip);
+    }
+
     public static SlideTransformCore PlanStageTransform(
         double renderWidth,
         double renderHeight,

@@ -108,7 +108,10 @@ public sealed class ResidualReferenceDialogSessionOwnershipTests
         source.Should().Contain("_session.UpdateType(");
         source.Should().Contain("_session.UpdateInsertAs(");
         source.Should().Contain("_session.UpdateTarget(");
-        source.Should().Contain("_session.PlanAcceptance()");
+        source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("_insertAsList.SelectedIndex,");
+        source.Should().Contain("_targetList.SelectedIndex,");
+        source.Should().Contain("_hyperlinkBox.IsChecked == true);");
         source.Should().NotContain("CrossReferenceDialogPlanner.BuildTypeChoices(");
         source.Should().NotContain("CrossReferenceDialogPlanner.BuildInsertAsChoices(");
         source.Should().NotContain("CrossReferenceDialogPlanner.BuildTargetChoices(");

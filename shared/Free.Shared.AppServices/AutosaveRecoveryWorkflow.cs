@@ -17,32 +17,65 @@ public readonly record struct AutosaveRecoveryWorkflowResult(
 
 public static class AutosaveRecoveryPromptFormatter
 {
-    public static string Format(
-        string displayName,
-        int remainingCount,
+    /// <summary>
+    /// Resource keys for the prompt body, one per prompt mode and plurality. Every template takes
+    /// {0} = document name, {1} = remaining count (multiple variants only) and {2} = the localized
+    /// "last autosaved" time, matching FreeX's <c>Startup_RecoveryPrompt*</c> contract.
+    /// </summary>
+    public static IReadOnlyList<string> RequiredResourceKeys { get; } =
+        Enum.GetValues<AutosaveRecoveryPromptMode>()
+            .SelectMany(mode => new[] { ResourceKey(mode, multiple: false), ResourceKey(mode, multiple: true) })
+            .ToArray();
+
+    public static string ResourceKey(AutosaveRecoveryPromptMode promptMode, bool multiple) =>
+        "Autosave_Recovery_Prompt_" + promptMode + (multiple ? "_Multiple" : string.Empty);
+
+    /// <summary>The English template for a prompt mode (the fallback and the neutral resx value).</summary>
+    public static string DefaultTemplate(
         AutosaveRecoveryPromptMode promptMode,
+        bool multiple,
         AutosaveRecoveryPromptText text)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentException.ThrowIfNullOrWhiteSpace(text.ProductName);
         ArgumentException.ThrowIfNullOrWhiteSpace(text.UnsavedItemPlural);
 
+        var counted = $"({{1}} unsaved {text.UnsavedItemPlural} found)";
         return promptMode switch
         {
-            AutosaveRecoveryPromptMode.Startup when remainingCount > 1 =>
-                $"{text.ProductName} found unsaved changes to {displayName} from a previous session ({remainingCount} unsaved {text.UnsavedItemPlural} found). Recover this one?",
+            AutosaveRecoveryPromptMode.Startup when multiple =>
+                $"{text.ProductName} found unsaved changes to {{0}} from a previous session {counted}. Recover this one? (Last autosaved: {{2}})",
             AutosaveRecoveryPromptMode.Startup =>
-                $"{text.ProductName} found unsaved changes to {displayName} from a previous session. Recover them?",
-            AutosaveRecoveryPromptMode.StartupQuotedDisplayName when remainingCount > 1 =>
-                $"{text.ProductName} found unsaved changes to \"{displayName}\" from a previous session ({remainingCount} unsaved {text.UnsavedItemPlural} found). Recover this one?",
+                $"{text.ProductName} found unsaved changes to {{0}} from a previous session. Recover them? (Last autosaved: {{2}})",
+            AutosaveRecoveryPromptMode.StartupQuotedDisplayName when multiple =>
+                $"{text.ProductName} found unsaved changes to \"{{0}}\" from a previous session {counted}. Recover this one? (Last autosaved: {{2}})",
             AutosaveRecoveryPromptMode.StartupQuotedDisplayName =>
-                $"{text.ProductName} found unsaved changes to \"{displayName}\" from a previous session. Recover them?",
-            AutosaveRecoveryPromptMode.Manual when remainingCount > 1 =>
-                $"Recover unsaved changes to {displayName}? ({remainingCount} unsaved {text.UnsavedItemPlural} found.)",
+                $"{text.ProductName} found unsaved changes to \"{{0}}\" from a previous session. Recover them? (Last autosaved: {{2}})",
+            AutosaveRecoveryPromptMode.Manual when multiple =>
+                $"Recover unsaved changes to {{0}}? ({{1}} unsaved {text.UnsavedItemPlural} found.) (Last autosaved: {{2}})",
             AutosaveRecoveryPromptMode.Manual =>
-                $"Recover unsaved changes to {displayName}?",
+                "Recover unsaved changes to {0}? (Last autosaved: {2})",
             _ => throw new ArgumentOutOfRangeException(nameof(promptMode), promptMode, null),
         };
+    }
+
+    public static string Format(
+        string displayName,
+        int remainingCount,
+        AutosaveRecoveryPromptMode promptMode,
+        AutosaveRecoveryPromptText text,
+        string savedAtText,
+        Func<string, string?>? getText = null,
+        IFormatProvider? provider = null)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var multiple = remainingCount > 1;
+        var template = new ResourceTextDescriptor(
+                ResourceKey(promptMode, multiple),
+                DefaultTemplate(promptMode, multiple, text))
+            .Resolve(getText);
+        return string.Format(provider, template, displayName, remainingCount, savedAtText);
     }
 }
 

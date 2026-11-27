@@ -10,10 +10,9 @@ namespace FreeW.App.Host;
 internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ComboBox _style = new();
-    private readonly TextBox _width = new() { Text = "0.5", Width = 60 };
+    private readonly TextBox _width = new() { Text = CellBordersDialogSession.DefaultWidthText, Width = 60 };
     private readonly TextBlock _validation = new() { Foreground = Brushes.Firebrick };
-    private int _presetIndex = -1;
-    private int _colorIndex;
+    private readonly CellBordersDialogSession _session = new();
     private CellBordersDialogResult? _result;
 
     private CellBordersDialog(Window? owner)
@@ -46,9 +45,9 @@ internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             var selectedIndex = index;
             button.Click += (_, _) =>
             {
-                _presetIndex = selectedIndex;
+                _session.SelectPreset(selectedIndex);
                 if (apply is not null)
-                    apply.IsEnabled = true;
+                    apply.IsEnabled = _session.CanApply;
             };
             presets.Children.Add(button);
         }
@@ -81,7 +80,7 @@ internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 Padding = new Thickness(0),
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
                 BorderBrush = Brushes.Gray,
-                BorderThickness = new Thickness(index == 0 ? 2 : 1),
+                BorderThickness = new Thickness(_session.IsColorSelected(index) ? 2 : 1),
                 ToolTip = hex,
                 Focusable = true,
             };
@@ -89,13 +88,13 @@ internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             var selectedIndex = index;
             swatch.Click += (_, _) =>
             {
-                _colorIndex = selectedIndex;
+                _session.SelectColor(selectedIndex);
                 if (selectedSwatch is not null)
                     selectedSwatch.BorderThickness = new Thickness(1);
                 swatch.BorderThickness = new Thickness(2);
                 selectedSwatch = swatch;
             };
-            if (index == 0)
+            if (_session.IsColorSelected(index))
                 selectedSwatch = swatch;
             colors.Children.Add(swatch);
         }
@@ -145,22 +144,18 @@ internal sealed class CellBordersDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept()
     {
-        if (!CellBordersDialogPlanner.TryBuildResult(
-                new CellBordersDialogInput(
-                    _presetIndex,
-                    _style.SelectedIndex,
-                    _colorIndex,
-                    _width.Text),
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var validation))
+        var acceptance = _session.PlanAcceptance(
+            _style.SelectedIndex,
+            _width.Text,
+            CultureInfo.CurrentCulture);
+        if (!acceptance.IsAccepted)
         {
-            _validation.Text = validation;
+            _validation.Text = acceptance.ValidationMessage;
             DialogFocus.FocusAndSelect(_width);
             return;
         }
 
-        _result = result;
+        _result = acceptance.Result;
         DialogResult = true;
     }
 

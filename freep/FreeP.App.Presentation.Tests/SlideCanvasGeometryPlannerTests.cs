@@ -308,7 +308,7 @@ public sealed class SlideCanvasGeometryPlannerTests
                 .And.NotContain("if (w / h > ratio)");
         }
 
-        avaloniaCanvas.Should().Contain("PresentationViewZoomPlanner.PlanStageTransform");
+        avaloniaCanvas.Should().Contain("PresentationViewZoomPlanner.PlanViewTransform(");
         avaloniaCanvas.Should().NotContain("Math.Min(renderW / _slideWidthDip");
     }
 

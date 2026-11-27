@@ -104,21 +104,12 @@ public static class RtfReader
         /// clamping behavior, while strict boundaries such as clipboard paste reject malformed parameters.
         /// </para>
         /// </summary>
-        private int ParseControlWordParameter(ReadOnlySpan<char> digits, bool negative = false)
+        private int? ResolveParameter(RtfControlWord token)
         {
-            if (uint.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var magnitude))
-            {
-                if (!negative && magnitude <= int.MaxValue)
-                    return (int)magnitude;
-
-                if (negative && magnitude <= 2147483648u)
-                    return magnitude == 2147483648u ? int.MinValue : -(int)magnitude;
-            }
-
-            if (_rejectOutOfRangeControlWordParameters)
+            if (token.ParameterOutOfRange && _rejectOutOfRangeControlWordParameters)
                 throw new InvalidDataException("RTF control-word parameter is outside the supported 32-bit range.");
 
-            return negative ? int.MinValue : int.MaxValue;
+            return token.Parameter;
         }
 
         public Parser(string rtf, bool rejectOutOfRangeControlWordParameters)
@@ -241,8 +232,8 @@ public static class RtfReader
 
             var c = _rtf[_pos];
 
-            // Control symbol (a single non-alpha char), e.g. \\, \{, \}, \*, \'XX, \~, \-, \_.
-            if (!char.IsLetter(c))
+            // Control symbol (a single non-ASCII-letter char), e.g. \\, \{, \}, \*, \'XX, \~, \-, \_.
+            if (!RtfControlTokenizer.TryReadControlWord(_rtf.AsSpan(), _pos, out var token))
             {
                 _pos++;
                 switch (c)
@@ -264,29 +255,9 @@ public static class RtfReader
 
             // Control word: letters then an optional (signed) numeric parameter, then an optional single space.
             // Strict callers reject out-of-range parameters; tolerant file reads clamp them.
-            var start = _pos;
-            while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
-                _pos++;
-            var word = _rtf.Substring(start, _pos - start);
-
-            int? param = null;
-            var negative = false;
-            if (_pos < _rtf.Length && _rtf[_pos] == '-')
-            {
-                negative = true;
-                _pos++;
-            }
-            if (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-            {
-                var numStart = _pos;
-                while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                    _pos++;
-                param = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart), negative);
-            }
-
-            // A single trailing space is the control-word delimiter and is consumed (not content).
-            if (_pos < _rtf.Length && _rtf[_pos] == ' ')
-                _pos++;
+            var word = _rtf.Substring(token.NameStart, token.NameLength);
+            var param = ResolveParameter(token);
+            _pos = token.End;
 
             // \uN is handled specially because its fallback bytes must be skipped.
             if (word == "u")
@@ -470,7 +441,7 @@ public static class RtfReader
                 // they are not RTF text and must not be parsed as characters or control words.
                 case "bin":
                     if (param is { } binCount && binCount > 0)
-                        _pos = Math.Min(_pos + binCount, _rtf.Length);
+                        _pos = (int)Math.Min((long)_pos + binCount, _rtf.Length);
                     break;
 
                 // ---- section columns (round 167, F2) ----
@@ -550,15 +521,13 @@ public static class RtfReader
                 if (c == '\\')
                 {
                     _pos++;
-                    if (_pos < _rtf.Length && _rtf[_pos] == 'f' && _pos + 1 < _rtf.Length && char.IsDigit(_rtf[_pos + 1]))
+                    if (RtfControlTokenizer.TryReadControlWord(_rtf.AsSpan(), _pos, out var fontToken)
+                        && fontToken.NameLength == 1 && _rtf[fontToken.NameStart] == 'f'
+                        && fontToken.Parameter is >= 0)
                     {
-                        _pos++; // 'f'
-                        var numStart = _pos;
-                        while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                            _pos++;
-                        currentId = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart));
-                        if (_pos < _rtf.Length && _rtf[_pos] == ' ')
-                            _pos++;
+                        // \fN starts a font entry.
+                        currentId = ResolveParameter(fontToken)!.Value;
+                        _pos = fontToken.End;
                     }
                     else if (_pos < _rtf.Length && _rtf[_pos] == '\'')
                     {
@@ -568,10 +537,9 @@ public static class RtfReader
                         _pos++; // consume "'"
                         if (_pos + 1 < _rtf.Length)
                         {
-                            var hex = _rtf.Substring(_pos, 2);
-                            _pos += 2;
-                            if (byte.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)
-                                && currentId >= 0)
+                            var decoded = RtfControlTokenizer.TryReadHexEscape(_rtf.AsSpan(), _pos, out var b, out var hexEnd);
+                            _pos = hexEnd;
+                            if (decoded && currentId >= 0)
                             {
                                 name.Append(_state.Encoding.GetString(new[] { b }));
                             }
@@ -633,20 +601,14 @@ public static class RtfReader
                 if (c == '\\')
                 {
                     _pos++;
-                    var start = _pos;
-                    while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
-                        _pos++;
-                    var word = _rtf.Substring(start, _pos - start);
+                    var word = string.Empty;
                     var val = 0;
-                    if (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+                    if (RtfControlTokenizer.TryReadControlWord(_rtf.AsSpan(), _pos, out var colorToken))
                     {
-                        var ns = _pos;
-                        while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                            _pos++;
-                        val = ParseControlWordParameter(_rtf.AsSpan(ns, _pos - ns));
+                        word = _rtf.Substring(colorToken.NameStart, colorToken.NameLength);
+                        val = Math.Clamp(ResolveParameter(colorToken) ?? 0, 0, 255);
+                        _pos = colorToken.End;
                     }
-                    if (_pos < _rtf.Length && _rtf[_pos] == ' ')
-                        _pos++;
                     switch (word)
                     {
                         case "red": r = val; hasComponent = true; break;
@@ -745,24 +707,17 @@ public static class RtfReader
                 else if (c == '\\')
                 {
                     _pos++; // consume backslash
-                    var start = _pos;
-                    while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
-                        _pos++;
-                    var word = _rtf.Substring(start, _pos - start);
-                    var negative = false;
-                    if (_pos < _rtf.Length && _rtf[_pos] == '-') { negative = true; _pos++; }
+                    var word = string.Empty;
                     int val = 0;
                     var hasVal = false;
-                    if (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+                    if (RtfControlTokenizer.TryReadControlWord(_rtf.AsSpan(), _pos, out var listToken))
                     {
-                        hasVal = true;
-                        var ns = _pos;
-                        while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                            _pos++;
-                        val = ParseControlWordParameter(_rtf.AsSpan(ns, _pos - ns), negative);
+                        word = _rtf.Substring(listToken.NameStart, listToken.NameLength);
+                        var listParam = ResolveParameter(listToken);
+                        hasVal = listParam.HasValue;
+                        val = listParam ?? 0;
+                        _pos = listToken.End;
                     }
-                    if (_pos < _rtf.Length && _rtf[_pos] == ' ')
-                        _pos++;
 
                     switch (word)
                     {
@@ -848,23 +803,11 @@ public static class RtfReader
         private void SkipControlInTable()
         {
             // Consume control-word letters + optional numeric param + optional trailing space.
-            while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
-                _pos++;
-            var negative = false;
-            if (_pos < _rtf.Length && _rtf[_pos] == '-')
+            if (RtfControlTokenizer.TryReadControlWord(_rtf.AsSpan(), _pos, out var token))
             {
-                negative = true;
-                _pos++;
+                _ = ResolveParameter(token);
+                _pos = token.End;
             }
-            if (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-            {
-                var numStart = _pos;
-                while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                    _pos++;
-                _ = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart), negative);
-            }
-            if (_pos < _rtf.Length && _rtf[_pos] == ' ')
-                _pos++;
         }
 
         private void PopAfterTableGroup()
@@ -881,57 +824,20 @@ public static class RtfReader
             FlushPendingBytes();
 
             // \uN takes a signed 16-bit value; negative means the code unit > 32767.
-            if (param < 0)
-                param += 65536;
             if (!_state.Ignore)
-                AppendChar((char)param);
+                AppendChar(RtfControlTokenizer.ToUtf16CodeUnit(param));
 
             // Skip the configured number of fallback bytes/chars that follow the \uN escape. Each escaped
             // sequence (\'XX, \\, etc.) and each control word counts as ONE skipped unit, as does each literal
             // char — getting this count right is what keeps non-ASCII from corrupting following text.
             var toSkip = _state.Ucskip;
+            // The shared tokenizer lexes one fallback unit (\'XX, control symbol, whole control word or one char).
             while (toSkip > 0 && _pos < _rtf.Length)
             {
-                var c = _rtf[_pos];
-                if (c == '\\')
-                {
-                    if (_pos + 1 >= _rtf.Length)
-                    {
-                        _pos++;
-                    }
-                    else if (_rtf[_pos + 1] == '\'')
-                    {
-                        // \'XX hex escape — always exactly 4 chars: \  '  H  H
-                        _pos += 4;
-                    }
-                    else if (char.IsLetter(_rtf[_pos + 1]))
-                    {
-                        // Control word: consume backslash + letter-run + optional signed numeric param + optional trailing space.
-                        // This mirrors ParseControl's lexing so every control-word fallback counts as ONE unit.
-                        _pos++; // consume backslash
-                        while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
-                            _pos++;
-                        if (_pos < _rtf.Length && _rtf[_pos] == '-')
-                            _pos++;
-                        while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                            _pos++;
-                        if (_pos < _rtf.Length && _rtf[_pos] == ' ')
-                            _pos++;
-                    }
-                    else
-                    {
-                        // Control symbol (e.g. \\ \{ \} \~ \- \'): always exactly 2 chars: \  X
-                        _pos += 2;
-                    }
-                }
-                else if (c == '{' || c == '}')
-                {
+                var next = RtfControlTokenizer.SkipFallbackUnit(_rtf.AsSpan(), _pos);
+                if (next == _pos)
                     break; // group boundaries are never fallback bytes
-                }
-                else
-                {
-                    _pos++;
-                }
+                _pos = next;
                 toSkip--;
             }
         }
@@ -940,10 +846,9 @@ public static class RtfReader
         {
             if (_pos + 1 >= _rtf.Length)
                 return;
-            var hex = _rtf.Substring(_pos, 2);
-            _pos += 2;
-            if (byte.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+            if (RtfControlTokenizer.TryReadHexEscape(_rtf.AsSpan(), _pos, out var b, out var end))
                 _pendingBytes.Add(b);
+            _pos = end;
         }
 
         /// <summary>Decodes accumulated <c>\'XX</c> bytes against the active code page and appends the text.</summary>

@@ -56,17 +56,15 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
     {
         var runner = ReadWorkspaceFile("tools", "Run-FreePMultiSelectionX11Validation.ps1");
 
-        runner.Should().Contain("Invoke-External (Get-ToolPowerShellPath) $startArgs");
+        runner.Should().Contain("Start-PhysicalValidationRunnerSession");
+        runner.Should().NotContain("Invoke-External");
         runner.Should().NotContain("Invoke-External powershell.exe",
             "the cross-platform runner must resolve the available PowerShell host through shared tooling");
         runner.Should().Contain("$manifestPath = Join-Path $sessionDirectory");
         runner.Should().Contain("probe evidence is");
         runner.Should().Contain("already present on the host");
         runner.Should().NotContain("Invoke-External docker @(\"cp\"");
-        runner.Should().Contain("if ($PublishDir) { $startArgs += @(\"-PublishDir\", $PublishDir) }");
-        runner.Should().Contain("if ($SkipPublish) { $startArgs += \"-SkipPublish\" }");
-        runner.Should().Contain("if ($SkipImageBuild) { $startArgs += \"-SkipImageBuild\" }");
-        runner.Should().Contain("if ($Replace) { $startArgs += \"-Replace\" }");
+        runner.Should().Contain("-PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace");
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>

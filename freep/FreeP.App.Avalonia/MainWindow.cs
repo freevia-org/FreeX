@@ -367,9 +367,7 @@ public sealed partial class MainWindow : Window,
     private PresentationViewColorModeState _viewColorModeState = PresentationViewColorModeState.Color;
     private MasterEditingSession? _masterEditingSession;
     private bool _masterInteractionAttached;
-    private int _slideSorterDragSourceIndex = -1;
-    private Point _slideSorterDragStart;
-    private bool _slideSorterDragging;
+    private readonly SlideShowCustomShowDragTracker _slideSorterDrag = new();
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
@@ -6780,9 +6778,8 @@ public sealed partial class MainWindow : Window,
 
         if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
         {
-            _slideSorterDragSourceIndex = sourceSlideIndex;
-            _slideSorterDragStart = e.GetPosition(_slidePaneList);
-            _slideSorterDragging = false;
+            var pressPoint = e.GetPosition(_slidePaneList);
+            _slideSorterDrag.Press(pressPoint.X, pressPoint.Y, sourceSlideIndex);
             return;
         }
 
@@ -6793,7 +6790,7 @@ public sealed partial class MainWindow : Window,
     {
         if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
         {
-            if (sender is not ListBoxItem sorterItem || _slideSorterDragSourceIndex < 0)
+            if (sender is not ListBoxItem sorterItem || _slideSorterDrag.SourceIndex < 0)
                 return;
 
             var sorterPoint = e.GetCurrentPoint(sorterItem);
@@ -6801,12 +6798,15 @@ public sealed partial class MainWindow : Window,
                 return;
 
             var pointer = e.GetPosition(_slidePaneList);
-            if (!_slideSorterDragging &&
-                Math.Abs(pointer.X - _slideSorterDragStart.X) < SlidePanePlanner.DefaultDragStartThreshold &&
-                Math.Abs(pointer.Y - _slideSorterDragStart.Y) < SlidePanePlanner.DefaultDragStartThreshold)
+            if (!_slideSorterDrag.IsActive &&
+                !_slideSorterDrag.ShouldBegin(
+                    pointer.X,
+                    pointer.Y,
+                    SlidePanePlanner.DefaultDragStartThreshold,
+                    SlidePanePlanner.DefaultDragStartThreshold))
                 return;
 
-            _slideSorterDragging = true;
+            _slideSorterDrag.MarkActive();
             e.Pointer.Capture(sorterItem);
             e.Handled = true;
             return;
@@ -6837,18 +6837,17 @@ public sealed partial class MainWindow : Window,
     {
         if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
         {
-            if (_slideSorterDragging && _slideSorterDragSourceIndex >= 0)
+            if (_slideSorterDrag.IsActive && _slideSorterDrag.SourceIndex >= 0)
             {
                 var target = FindSlideSorterInsertionIndex(e.GetPosition(_slidePaneList));
                 _workareaSession.ExecuteSlidePaneAction(
                     SlidePaneActionKind.MoveSlide,
-                    _slideSorterDragSourceIndex,
+                    _slideSorterDrag.SourceIndex,
                     target);
                 e.Pointer.Capture(null);
             }
 
-            _slideSorterDragSourceIndex = -1;
-            _slideSorterDragging = false;
+            _slideSorterDrag.Reset();
             e.Handled = true;
             return;
         }
@@ -6868,8 +6867,7 @@ public sealed partial class MainWindow : Window,
     {
         if (_viewModeState.Mode == PresentationViewMode.SlideSorter)
         {
-            _slideSorterDragSourceIndex = -1;
-            _slideSorterDragging = false;
+            _slideSorterDrag.Reset();
             return;
         }
         _workareaSession.CancelSlidePaneDrag();
@@ -6878,28 +6876,26 @@ public sealed partial class MainWindow : Window,
 
     private int FindSlideSorterInsertionIndex(Point pointer)
     {
-        var items = _slidePaneList.Items.OfType<ListBoxItem>()
-            .Where(item => item.Tag is int)
-            .Select(item => new
-            {
-                Item = item,
-                SlideIndex = item.Tag is int slideIndex ? slideIndex : -1,
-            })
-            .OrderBy(item => item.Item.TranslatePoint(new Point(), _slidePaneList)?.Y ?? 0)
-            .ThenBy(item => item.Item.TranslatePoint(new Point(), _slidePaneList)?.X ?? 0)
-            .ToArray();
-        foreach (var candidate in items)
+        // Avalonia compensation: a tile detached from the list's visual tree has no origin; skip it.
+        var tiles = new List<SlideSorterTileBounds>();
+        foreach (var item in _slidePaneList.Items.OfType<ListBoxItem>())
         {
-            var origin = candidate.Item.TranslatePoint(new Point(), _slidePaneList);
-            if (origin is null)
+            if (item.Tag is not int slideIndex ||
+                item.TranslatePoint(new Point(), _slidePaneList) is not { } origin)
                 continue;
-            if (pointer.Y < origin.Value.Y + candidate.Item.Bounds.Height / 2 ||
-                (pointer.Y < origin.Value.Y + candidate.Item.Bounds.Height &&
-                 pointer.X < origin.Value.X + candidate.Item.Bounds.Width / 2))
-                return candidate.SlideIndex;
+            tiles.Add(new SlideSorterTileBounds(
+                slideIndex,
+                origin.X,
+                origin.Y,
+                item.Bounds.Width,
+                item.Bounds.Height));
         }
 
-        return _presentation.Slides.Count;
+        return SlidePaneInputPlanner.ResolveSlideSorterInsertionIndex(
+            tiles,
+            pointer.X,
+            pointer.Y,
+            _presentation.Slides.Count);
     }
 
     internal bool TryApplySlidePaneMove(int sourceSlideIndex, int targetInsertionIndex)
@@ -6977,20 +6973,9 @@ public sealed partial class MainWindow : Window,
         KeyEventArgs e,
         out SlidePaneKeyboardIntentKind intent)
     {
-        intent = e.Key switch
-        {
-            Key.Insert when e.KeyModifiers == KeyModifiers.None =>
-                SlidePaneKeyboardIntentKind.InsertAfterCurrentSlide,
-            Key.Delete when e.KeyModifiers == KeyModifiers.None =>
-                SlidePaneKeyboardIntentKind.DeleteCurrentSlide,
-            Key.D when e.KeyModifiers == KeyModifiers.Control =>
-                SlidePaneKeyboardIntentKind.DuplicateCurrentSlide,
-            Key.Up when e.KeyModifiers == KeyModifiers.Alt =>
-                SlidePaneKeyboardIntentKind.MoveCurrentSlideEarlier,
-            Key.Down when e.KeyModifiers == KeyModifiers.Alt =>
-                SlidePaneKeyboardIntentKind.MoveCurrentSlideLater,
-            _ => default,
-        };
+        intent = SlidePaneInputPlanner.ResolveKeyboardIntent(
+            e.Key.ToString(),
+            AvaloniaKeyModifiersMapper.FromAvalonia(e.KeyModifiers, KeyModifierMetaPolicy.Keep));
 
         return intent != SlidePaneKeyboardIntentKind.None;
     }

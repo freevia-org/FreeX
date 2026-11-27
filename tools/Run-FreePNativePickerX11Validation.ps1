@@ -27,6 +27,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-native-picker-x11-wave90-probe.sh"
@@ -146,18 +147,7 @@ $manifestPath = $null
 $evidenceDirectory = $null
 $probeExitCode = 1
 try {
-    $startArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width",
-        "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit,
-        "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $initialFixturePath
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
-    if ($Replace) { $startArguments += "-Replace" }
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot
-    $started = $true
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot -DocumentPath $initialFixturePath -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace; $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
     if (-not (Test-Path -LiteralPath $sessionMetadataPath -PathType Leaf)) { throw "Generic runner did not write FreeP session metadata." }
@@ -196,15 +186,7 @@ try {
         [string]$session.containerName, "bash", "/work/run-freep-native-picker-x11-wave90-probe.sh",
         "/work/picker-x11"
     )
-    Push-Location $repoRoot
-    try {
-        $probeOutput = @(& docker @dockerArguments 2>&1)
-        $probeExitCode = $LASTEXITCODE
-    } finally {
-        Pop-Location
-    }
-    if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 }
-    else { "docker exec produced no stdout/stderr." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
+    $probeResult = Invoke-PhysicalValidationDockerProbe -DockerArguments $dockerArguments -WorkingDirectory $repoRoot -LogPath $probeLog -EmptyOutputMessage "docker exec produced no stdout/stderr."; $probeOutput = @($probeResult.Output); $probeExitCode = $probeResult.ExitCode
 
     Write-HashArtifact (Join-Path $documentsDirectory $initialName) (Join-Path $evidenceDirectory "fixture-initial-mounted-after.sha256.txt")
     Write-HashArtifact (Join-Path $documentsDirectory $selectedName) (Join-Path $evidenceDirectory "fixture-selected-mounted-after.sha256.txt")
@@ -265,16 +247,5 @@ try {
     Write-Host "Evidence: $evidenceDirectory"
     if ($probeExitCode -ne 0) { throw "Native picker probe exited with code $probeExitCode." }
 } finally {
-    if ($started -and -not $KeepContainer) {
-        try {
-            Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
-            ) -WorkingDirectory $repoRoot
-        } catch {
-            Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)"
-        }
-    } elseif ($started) {
-        Write-Host "Container retained by request on port $Port."
-    }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot -Started $started -KeepContainer:$KeepContainer -AnnounceRetained -WarningPrefix "Could not stop harness-owned FreeP container on port ${Port}"
 }

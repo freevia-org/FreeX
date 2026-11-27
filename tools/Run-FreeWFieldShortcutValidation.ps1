@@ -26,6 +26,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutputRoot = Resolve-ToolRepoPath -Path $OutputDir -RepoRoot $repoRoot
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.FieldShortcutFixture/FreeW.FieldShortcutFixture.csproj"
 $fixturePath = Join-Path $resolvedOutputRoot "fixture/field-shortcut-fixture.docx"
@@ -88,18 +89,7 @@ $sessionDirectory = $null
 $probeExitCode = 1
 $manifestPath = $null
 try {
-    $startArguments = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeW", "-Port", "$Port",
-        "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
-        "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot,
-        "-DocumentPath", $fixturePath
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }
-    if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }
-    if ($Replace) { $startArguments += "-Replace" }
-    Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeW -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot -DocumentPath $fixturePath -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace
     $started = $true
 
     $sessionMetadataPath = Join-Path $resolvedOutputRoot "freew/current-session.json"
@@ -167,14 +157,5 @@ try {
         throw "Field shortcut physical validation failed with probe exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence retained at $manifestPath."
     }
 } finally {
-    if ($started -and -not $KeepContainer) {
-        try {
-            Invoke-ToolProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-                "-Action", "Stop", "-App", "FreeW", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot
-            ) -WorkingDirectory $repoRoot
-        } catch { Write-Warning "Could not stop harness-owned FreeW container: $($_.Exception.Message)" }
-    } elseif ($started) {
-        Write-Host "Container retained by request on port $Port."
-    }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeW -Port $Port -OutputDir $resolvedOutputRoot -Started $started -KeepContainer:$KeepContainer -AnnounceRetained -WarningPrefix "Could not stop harness-owned FreeW container"
 }

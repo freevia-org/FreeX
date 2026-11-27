@@ -194,7 +194,8 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
         runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 24 } else { 45 }");
-        runner.Should().Contain("if ($App -eq \"FreeW\") { $startArguments += \"-CupsDryRun\" }");
+        runner.Should().Contain("if ($App -eq \"FreeW\") { $extraArguments += \"-CupsDryRun\" }");
+        runner.Should().Contain("Start-PhysicalValidationRunnerSession").And.Contain("Stop-PhysicalValidationRunnerSessionSafely");
         foreach (var id in new[]
         {
             "file-open-shortcut-dialog-open",

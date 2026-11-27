@@ -66,6 +66,18 @@ public sealed class CrossReferenceDialogSession
         return State;
     }
 
+    /// <summary>
+    /// Commits the control selections the dialog read at OK time, then plans acceptance. Both hosts
+    /// call this instead of repeating the three state updates before <see cref="PlanAcceptance()"/>.
+    /// </summary>
+    public CrossReferenceDialogAcceptance PlanAcceptance(int insertAsIndex, int targetIndex, bool hyperlink)
+    {
+        UpdateInsertAs(insertAsIndex);
+        UpdateTarget(targetIndex);
+        UpdateHyperlink(hyperlink);
+        return PlanAcceptance();
+    }
+
     public CrossReferenceDialogAcceptance PlanAcceptance()
     {
         if (State.TargetIndex < 0 || State.TargetIndex >= TargetChoices.Count)

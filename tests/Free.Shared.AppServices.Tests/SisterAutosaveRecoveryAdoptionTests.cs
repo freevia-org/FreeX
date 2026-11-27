@@ -33,16 +33,16 @@ public sealed class SisterAutosaveRecoveryAdoptionTests
                 new AutosaveRecoveryPlan(candidate, "Quarterly"),
                 2,
                 AutosaveRecoveryPromptMode.StartupQuotedDisplayName)
-            .Prompt.Should().Be(
-                "FreeP found unsaved changes to \"Quarterly\" from a previous session (2 unsaved presentations found). Recover this one?");
+            .Prompt.Should().StartWith(
+                "FreeP found unsaved changes to \"Quarterly\" from a previous session (2 unsaved presentations found). Recover this one? (Last autosaved: ");
 
         FreeWAutosaveProfile.Recovery
             .CreateOffer(
                 new AutosaveRecoveryPlan(candidate, "Draft"),
                 2,
                 AutosaveRecoveryPromptMode.Manual)
-            .Prompt.Should().Be(
-                "Recover unsaved changes to Draft? (2 unsaved documents found.)");
+            .Prompt.Should().StartWith(
+                "Recover unsaved changes to Draft? (2 unsaved documents found.) (Last autosaved: ");
 
         FreePAutosaveProfile.Recovery.UnnamedItemFallback.Should().Be("a presentation");
         FreeWAutosaveProfile.Recovery.UnnamedItemFallback.Should().Be("a document");

@@ -24,6 +24,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/14-smartart-live.pptx"
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
@@ -50,19 +51,9 @@ function Get-Session {
 
 function Start-Session {
     param([Parameter(Mandatory = $true)][string]$DocumentPath, [switch]$ReusePublishedImage)
-    $args = @(
-        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width",
-        "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit,
-        "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $DocumentPath,
-        "-Host", "Validation",
-        "-AppArgument", "--physical-smartart-text-pane-fixture"
-    )
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $args += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish -or $ReusePublishedImage) { $args += "-SkipPublish" }
-    if ($SkipImageBuild -or $ReusePublishedImage) { $args += "-SkipImageBuild" }
-    if ($Replace) { $args += "-Replace" }
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $args -WorkingDirectory $repoRoot
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot -DocumentPath $DocumentPath `
+        -ExtraArguments @("-Host", "Validation", "-AppArgument", "--physical-smartart-text-pane-fixture") -PublishDir $PublishDir `
+        -SkipPublish:($SkipPublish -or $ReusePublishedImage) -SkipImageBuild:($SkipImageBuild -or $ReusePublishedImage) -Replace:$Replace
     Get-Session
 }
 
@@ -103,11 +94,7 @@ function Invoke-Probe {
 }
 
 function Stop-Session {
-    try {
-        Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @(
-            "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-            "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot
-    } catch { Write-Warning "Could not stop harness-owned FreeP container: $($_.Exception.Message)" }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot -Started $true -WarningPrefix "Could not stop harness-owned FreeP container"
 }
 
 function Assert-EvidenceReference {

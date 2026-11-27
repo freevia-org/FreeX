@@ -27,6 +27,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "VisualEvidenceScriptSupport.ps1")
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutputRoot = Resolve-VisualEvidenceOutputDirectory -OutputDirectory $OutputDir -RepoRoot $repoRoot
 $fixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/21-comments-notes.pptx"
 $surface = "in-canvas-rich-text-soft-break"
@@ -236,17 +237,9 @@ if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) { throw "Probe is
 
 $started = $false; $sessionDirectory = $null; $manifestPath = $null; $probeExitCode = 1; $probeOutput = @(); $evidenceDirectory = $null
 try {
-    $startArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $fixturePath)
-    if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $startArguments += @("-PublishDir", $PublishDir) }
-    if ($SkipPublish) { $startArguments += "-SkipPublish" }; if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }; if ($Replace) { $startArguments += "-Replace" }
-    Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments $startArguments -WorkingDirectory $repoRoot; $started = $true
-    $sessionMetadataPath = Join-Path $resolvedOutputRoot "freep/current-session.json"
-    if (-not (Test-Path -LiteralPath $sessionMetadataPath -PathType Leaf)) { throw "Generic runner did not write current session metadata: $sessionMetadataPath" }
-    $session = Get-Content -LiteralPath $sessionMetadataPath -Raw | ConvertFrom-Json
-    $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
-    if (-not (Test-Path -LiteralPath $sessionDirectory -PathType Container)) { throw "Session directory does not exist: $sessionDirectory" }
-    $readyPath = Join-Path $sessionDirectory "ready.json"
-    $ready = if (Test-Path -LiteralPath $readyPath -PathType Leaf) { Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json } else { [pscustomobject]@{ windowId = ""; windowTitle = "FreeP $fixtureFileName" } }
+    Start-PhysicalValidationRunnerSession -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -Width $Width -Height $Height -Dpi $Dpi -MemoryLimit $MemoryLimit -OutputDir $resolvedOutputRoot -DocumentPath $fixturePath -PublishDir $PublishDir -SkipPublish:$SkipPublish -SkipImageBuild:$SkipImageBuild -Replace:$Replace; $started = $true
+    $sessionContext = Get-PhysicalValidationSessionContext -OutputRoot $resolvedOutputRoot -AppFolder "freep" -DefaultWindowTitle "FreeP $fixtureFileName"
+    $session = $sessionContext.Session; $sessionDirectory = $sessionContext.SessionDirectory; $ready = $sessionContext.Ready
     $probeInWork = Join-Path $sessionDirectory "freep-rich-text-shortcut-probe.sh"
     Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
     $manifestPath = Join-Path $sessionDirectory "freep-rich-text-shortcut-validation/results.json"; $evidenceDirectory = Split-Path -Parent $manifestPath
@@ -255,8 +248,7 @@ try {
     $sourceBefore = Join-Path $evidenceDirectory "fixture-source-before.sha256.txt"; $sourceAfter = Join-Path $evidenceDirectory "fixture-source-after.sha256.txt"
     (Get-ToolFileSha256 -Path $fixturePath) | Set-Content -LiteralPath $sourceBefore -Encoding ascii
     $dockerArguments = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureFileName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureFileName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", "--env", "FREEP_APP_SURFACE=$surface", "--env", "FREEP_COVERAGE_SCOPE=$scope", "--env", "FREEP_SCREEN_WIDTH=$Width", "--env", "FREEP_SCREEN_HEIGHT=$Height", "--env", "FREEP_SCREEN_DPI=$Dpi", [string]$session.containerName, "bash", "/work/freep-rich-text-shortcut-probe.sh", "/work/freep-rich-text-shortcut-validation")
-    Push-Location $repoRoot; try { $probeOutput = @(& docker @dockerArguments 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
-    if ($probeOutput.Count -gt 0) { $probeOutput | Set-Content -LiteralPath $probeLog -Encoding utf8 } else { "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence." | Set-Content -LiteralPath $probeLog -Encoding utf8 }
+    $probeResult = Invoke-PhysicalValidationDockerProbe -DockerArguments $dockerArguments -WorkingDirectory $repoRoot -LogPath $probeLog -EmptyOutputMessage "docker exec produced no stdout/stderr; inspect the manifest and runtime evidence."; $probeOutput = @($probeResult.Output); $probeExitCode = $probeResult.ExitCode
     (Get-ToolFileSha256 -Path $fixturePath) | Set-Content -LiteralPath $sourceAfter -Encoding ascii
     $mountedDocument = Join-Path $resolvedOutputRoot "freep/documents/$fixtureFileName"; $mountedAfter = Join-Path $evidenceDirectory "fixture-host-mounted-after.sha256.txt"
     $hostMountedAfterAvailable = $false
@@ -303,5 +295,5 @@ try {
     Write-Host "Manifest contract validation: $($manifest.contractValidation.status)"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Fixture: $fixturePath"
     if ($probeExitCode -ne 0 -or $manifest.summary.failed -gt 0) { throw "FreeP rich-text shortcut validation failed with probe exit code $probeExitCode and $($manifest.summary.failed) failed result(s). Evidence retained at $manifestPath." }
 } finally {
-    if ($started -and -not $KeepContainer) { try { Invoke-VisualEvidenceProcess -FilePath (Get-ToolPowerShellPath) -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot } catch { Write-Warning "Could not stop harness-owned FreeP container on port ${Port}: $($_.Exception.Message)" } } elseif ($started) { Write-Host "Container retained by request on port $Port." }
+    Stop-PhysicalValidationRunnerSessionSafely -RunnerPath $genericRunner -RepoRoot $repoRoot -App FreeP -Port $Port -OutputDir $resolvedOutputRoot -Started $started -KeepContainer:$KeepContainer -AnnounceRetained -WarningPrefix "Could not stop harness-owned FreeP container on port ${Port}"
 }

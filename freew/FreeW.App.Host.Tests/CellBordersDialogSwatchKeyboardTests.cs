@@ -86,13 +86,15 @@ public sealed class CellBordersDialogSwatchKeyboardTests
         return [.. colorPanel.Children.OfType<Button>()];
     }
 
-    private static int ColorIndex(CellBordersDialog dialog) =>
-        (int)typeof(CellBordersDialog).GetField("_colorIndex", BindingFlags.Instance | BindingFlags.NonPublic)!
+    // The selection state lives in the shared CellBordersDialogSession the dialog owns.
+    private static FreeW.App.Presentation.Dialogs.CellBordersDialogSession Session(CellBordersDialog dialog) =>
+        (FreeW.App.Presentation.Dialogs.CellBordersDialogSession)typeof(CellBordersDialog)
+            .GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(dialog)!;
 
-    private static int PresetIndex(CellBordersDialog dialog) =>
-        (int)typeof(CellBordersDialog).GetField("_presetIndex", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(dialog)!;
+    private static int ColorIndex(CellBordersDialog dialog) => Session(dialog).ColorIndex;
+
+    private static int PresetIndex(CellBordersDialog dialog) => Session(dialog).PresetIndex;
 
     private static void PressAndReleaseSpace(Button button)
     {

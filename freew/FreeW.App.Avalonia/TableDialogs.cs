@@ -180,6 +180,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     private readonly TablePropertiesDialogSession _session;
     private readonly IUserMessageService _messageService;
+    private readonly Dictionary<string, Control> _controls = new(StringComparer.Ordinal);
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
@@ -328,10 +329,18 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             // over the buttons when the fixed evidence surface is shorter than the tab.
             ClipToBounds = true,
         };
-        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.TableTabLabel, TablePropertiesDialogPlanner.TableTabAutomationId, BuildTableTab()));
-        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));
-        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.ColumnTabLabel, TablePropertiesDialogPlanner.ColumnTabAutomationId, BuildColumnTab()));
-        _tabs.Items.Add(TabPage(TablePropertiesDialogPlanner.CellTabLabel, TablePropertiesDialogPlanner.CellTabAutomationId, BuildCellTab()));
+        RegisterControls(
+            _preferredWidthOn, _preferredWidth, _alignment, _wrapping, _allowFloatingOverlap,
+            _floatingHorizontalAnchor, _floatingHorizontalMode, _floatingHorizontalOffset,
+            _floatingVerticalAnchor, _floatingVerticalMode, _floatingVerticalOffset,
+            _floatingDistanceTop, _floatingDistanceLeft, _floatingDistanceBottom, _floatingDistanceRight,
+            _indent, _cellMarginTop, _cellMarginLeft, _cellMarginBottom, _cellMarginRight,
+            _cellSpacingOn, _cellSpacing, _rowHeightOn, _rowHeight, _rowRule, _allowRowBreak, _repeatHeader,
+            _columnWidthOn, _columnWidth, _cellWidthOn, _cellWidth, _cellVAlign, _cellMarginsOn,
+            _cmTop, _cmLeft, _cmBottom, _cmRight, _cellWrapText, _cellFitText);
+        foreach (var tab in TablePropertiesSurfacePlanner.Tabs)
+            _tabs.Items.Add(TabPage(tab.Label, tab.AutomationId, BuildStack(tab.Content)));
+        UpdateFloatingPositionControls();
         _tabs.SelectionChanged += (_, _) =>
         {
             if (_tabs.SelectedIndex is >= 0 and < 4)
@@ -387,56 +396,77 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
     }
 
     internal IReadOnlyList<string> FocusTraceForValidation => _focusTrace;
-    private Control BuildTableTab()
+    private void RegisterControls(params Control[] controls)
     {
-        var grid = TwoColumnGrid(4, Layout.AvaloniaMainLabelColumnWidth);
-        AddRow(grid, 0, _preferredWidthOn, _preferredWidth);
-        AddRow(grid, 1, TablePropertiesDialogPlanner.AlignmentLabel, _alignment);
-        AddRow(grid, 2, TablePropertiesDialogPlanner.TextWrappingLabel, _wrapping);
-        AddRow(grid, 3, TablePropertiesDialogPlanner.IndentFromLeftLabel, _indent);
-
-        var margins = TwoColumnGrid(4, Layout.AvaloniaMarginLabelColumnWidth);
-        AddRow(margins, 0, TablePropertiesDialogPlanner.TopLabel, _cellMarginTop);
-        AddRow(margins, 1, TablePropertiesDialogPlanner.LeftLabel, _cellMarginLeft);
-        AddRow(margins, 2, TablePropertiesDialogPlanner.BottomLabel, _cellMarginBottom);
-        AddRow(margins, 3, TablePropertiesDialogPlanner.RightLabel, _cellMarginRight);
-        var spacing = TwoColumnGrid(1, Layout.AvaloniaCellSpacingLabelColumnWidth);
-        AddRow(spacing, 0, _cellSpacingOn, _cellSpacing);
-
-        return Stack(
-            grid,
-            Header(TablePropertiesDialogPlanner.DefaultCellMarginsLabel),
-            margins,
-            spacing);
+        foreach (var control in controls)
+            _controls[AutomationProperties.GetAutomationId(control)!] = control;
     }
 
-    private Control BuildFloatingPositioningPanel()
+    private StackPanel BuildStack(IReadOnlyList<TablePropertiesSurfaceNode> nodes, double? inset = null)
     {
-        var position = TwoColumnGrid(6, Layout.AvaloniaMainLabelColumnWidth);
-        position.Margin = new Thickness(0, 0, Layout.AvaloniaPositionGridRightInset, 0);
-        AddRow(position, 0, TablePropertiesDialogPlanner.HorizontalRelativeToLabel, _floatingHorizontalAnchor);
-        AddRow(position, 1, TablePropertiesDialogPlanner.HorizontalAlignmentLabel, _floatingHorizontalMode);
-        AddRow(position, 2, TablePropertiesDialogPlanner.HorizontalPositionLabel, _floatingHorizontalOffset);
-        AddRow(position, 3, TablePropertiesDialogPlanner.VerticalRelativeToLabel, _floatingVerticalAnchor);
-        AddRow(position, 4, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _floatingVerticalMode);
-        AddRow(position, 5, TablePropertiesDialogPlanner.VerticalPositionLabel, _floatingVerticalOffset);
+        var panel = new StackPanel { Margin = new Thickness(inset ?? Layout.ContentInset) };
+        foreach (var node in nodes)
+            panel.Children.Add(BuildNode(node));
+        return panel;
+    }
 
-        var distances = TwoColumnGrid(4, Layout.AvaloniaMarginLabelColumnWidth);
-        AddRow(distances, 0, TablePropertiesDialogPlanner.TopLabel, _floatingDistanceTop);
-        AddRow(distances, 1, TablePropertiesDialogPlanner.LeftLabel, _floatingDistanceLeft);
-        AddRow(distances, 2, TablePropertiesDialogPlanner.BottomLabel, _floatingDistanceBottom);
-        AddRow(distances, 3, TablePropertiesDialogPlanner.RightLabel, _floatingDistanceRight);
+    private Control BuildNode(TablePropertiesSurfaceNode node) =>
+        node switch
+        {
+            TablePropertiesFieldGridNode grid => BuildGrid(grid),
+            TablePropertiesHeaderNode header => Header(
+                header.Text,
+                top: header.IsSecondary ? Layout.SecondarySectionTopInset : null),
+            TablePropertiesControlNode control => _controls[control.AutomationId],
+            TablePropertiesCheckStackNode checks => BuildCheckStack(checks),
+            TablePropertiesExpanderNode expander => BuildExpander(expander),
+            _ => throw new InvalidOperationException($"Unknown Table Properties surface node {node}."),
+        };
 
-        var stack = new StackPanel { Margin = new Thickness(Layout.ExpanderContentInset) };
-        stack.Children.Add(position);
-        stack.Children.Add(Header(
-            TablePropertiesDialogPlanner.DistanceFromTextLabel,
-            top: Layout.SecondarySectionTopInset));
-        stack.Children.Add(distances);
-        stack.Children.Add(_allowFloatingOverlap);
-        var expander = new Expander { Header = TablePropertiesDialogPlanner.PositioningLabel, IsExpanded = true, Content = stack };
+    private Grid BuildGrid(TablePropertiesFieldGridNode node)
+    {
+        var grid = TwoColumnGrid(node.Rows.Count, LabelColumnWidth(node.LabelColumn));
+        if (node.IsPositionGrid)
+            grid.Margin = new Thickness(0, 0, Layout.AvaloniaPositionGridRightInset, 0);
+        for (var row = 0; row < node.Rows.Count; row++)
+        {
+            var spec = node.Rows[row];
+            var field = _controls[spec.FieldAutomationId];
+            if (spec.ToggleAutomationId is { } toggle)
+                AddRow(grid, row, (CheckBox)_controls[toggle], field);
+            else
+                AddRow(grid, row, spec.Label!, field);
+        }
+
+        return grid;
+    }
+
+    private static double LabelColumnWidth(TablePropertiesLabelColumn column) =>
+        column switch
+        {
+            TablePropertiesLabelColumn.Row => Layout.AvaloniaRowLabelColumnWidth,
+            TablePropertiesLabelColumn.Margin => Layout.AvaloniaMarginLabelColumnWidth,
+            TablePropertiesLabelColumn.CellSpacing => Layout.AvaloniaCellSpacingLabelColumnWidth,
+            _ => Layout.AvaloniaMainLabelColumnWidth,
+        };
+
+    private StackPanel BuildCheckStack(TablePropertiesCheckStackNode node)
+    {
+        var checks = new StackPanel { Margin = new Thickness(0, Layout.SecondarySectionTopInset, 0, 0) };
+        foreach (var id in node.AutomationIds)
+            checks.Children.Add(_controls[id]);
+        return checks;
+    }
+
+    private Expander BuildExpander(TablePropertiesExpanderNode node)
+    {
+        var expander = new Expander
+        {
+            Header = node.Header,
+            IsExpanded = true,
+            Content = BuildStack(node.Content, Layout.ExpanderContentInset),
+        };
         AvaloniaCompactDialogChrome.ApplyWpfExpander(expander, DialogChromeStyle);
-        UpdateFloatingPositionControls();
         return expander;
     }
 
@@ -446,19 +476,9 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             _wrapping.SelectedIndex,
             _floatingHorizontalMode.SelectedIndex,
             _floatingVerticalMode.SelectedIndex);
-        _allowFloatingOverlap.IsEnabled = state.FloatingControlsEnabled;
-        _floatingHorizontalAnchor.IsEnabled = state.FloatingControlsEnabled;
-        _floatingHorizontalMode.IsEnabled = state.FloatingControlsEnabled;
-        _floatingHorizontalOffset.IsEnabled = state.HorizontalOffsetEnabled;
-        _floatingVerticalAnchor.IsEnabled = state.FloatingControlsEnabled;
-        _floatingVerticalMode.IsEnabled = state.FloatingControlsEnabled;
-        _floatingVerticalOffset.IsEnabled = state.VerticalOffsetEnabled;
-        _floatingDistanceTop.IsEnabled = state.FloatingControlsEnabled;
-        _floatingDistanceLeft.IsEnabled = state.FloatingControlsEnabled;
-        _floatingDistanceBottom.IsEnabled = state.FloatingControlsEnabled;
-        _floatingDistanceRight.IsEnabled = state.FloatingControlsEnabled;
+        foreach (var (automationId, enabled) in TablePropertiesSurfacePlanner.ControlEnabledStates(state))
+            _controls[automationId].IsEnabled = enabled;
     }
-
     private void NormalizeCellComboSurfaces()
     {
         AvaloniaCompactDialogChrome.ApplyWpfDisabledComboSurface(_floatingHorizontalAnchor);
@@ -472,44 +492,6 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         var tab = new TabItem { Header = header, Content = content };
         AutomationProperties.SetAutomationId(tab, automationId);
         return tab;
-    }
-
-    private Control BuildRowTab()
-    {
-        var grid = TwoColumnGrid(2, Layout.AvaloniaRowLabelColumnWidth);
-        AddRow(grid, 0, _rowHeightOn, _rowHeight);
-        AddRow(grid, 1, TablePropertiesDialogPlanner.RowHeightRuleLabel, _rowRule);
-        var checks = new StackPanel { Margin = new Thickness(0, Layout.SecondarySectionTopInset, 0, 0) };
-        checks.Children.Add(_allowRowBreak);
-        checks.Children.Add(_repeatHeader);
-        return Stack(grid, checks);
-    }
-
-    private Control BuildColumnTab()
-    {
-        var grid = TwoColumnGrid(1, Layout.AvaloniaMainLabelColumnWidth);
-        AddRow(grid, 0, _columnWidthOn, _columnWidth);
-        return Stack(grid);
-    }
-
-    private Control BuildCellTab()
-    {
-        var grid = TwoColumnGrid(2, Layout.AvaloniaMainLabelColumnWidth);
-        AddRow(grid, 0, _cellWidthOn, _cellWidth);
-        AddRow(grid, 1, TablePropertiesDialogPlanner.VerticalAlignmentLabel, _cellVAlign);
-        var margins = TwoColumnGrid(4, Layout.AvaloniaMarginLabelColumnWidth);
-        AddRow(margins, 0, TablePropertiesDialogPlanner.TopLabel, _cmTop);
-        AddRow(margins, 1, TablePropertiesDialogPlanner.LeftLabel, _cmLeft);
-        AddRow(margins, 2, TablePropertiesDialogPlanner.BottomLabel, _cmBottom);
-        AddRow(margins, 3, TablePropertiesDialogPlanner.RightLabel, _cmRight);
-        return Stack(
-            grid,
-            BuildFloatingPositioningPanel(),
-            _cellWrapText,
-            _cellFitText,
-            _cellMarginsOn,
-            Header(TablePropertiesDialogPlanner.CellMarginsLabel),
-            margins);
     }
 
     private void Accept() => AvaloniaUiTaskGuard.Run(AcceptAsync, ex =>
@@ -580,14 +562,6 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
             TablePropertiesDialogPlanner.CellWidthAutomationId => _cellWidth,
             _ => _preferredWidth,
         };
-
-    private static StackPanel Stack(params Control[] controls)
-    {
-        var panel = new StackPanel { Margin = new Thickness(Layout.ContentInset) };
-        foreach (var control in controls)
-            panel.Children.Add(control);
-        return panel;
-    }
 
     private static TextBlock Header(string text, double? top = null) => new()
     {

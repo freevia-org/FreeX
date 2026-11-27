@@ -484,7 +484,7 @@ public sealed class CanvasEditingTests
         transform.Should().NotContain("private const double EmuPerDip");
         transform.Should().NotContain("Math.Min(renderW / slideWidthDip");
 
-        canvas.Should().Contain("PresentationViewZoomPlanner.PlanStageTransform(");
+        canvas.Should().Contain("PresentationViewZoomPlanner.PlanViewTransform(");
         canvas.Should().Contain("return new SlideTransform(");
         gestures.Should().Contain("=> xf.Core;");
         gestures.Should().NotContain("new(xf.Scale, xf.OffsetX");

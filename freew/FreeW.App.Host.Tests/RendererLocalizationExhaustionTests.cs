@@ -40,7 +40,6 @@ public sealed class RendererLocalizationExhaustionTests
             ["Aa"] = "theme preview sample glyph",
             ["Fx"] = "theme preview sample glyph",
             ["1"] = "chart preview sample value",
-            ["0.5"] = "culture-parsed default border width seed",
             ["{item.Author} – {kindLabel}"] = "localized parts composed with punctuation only",
             ["\u25c0 {MailMergeDialogMetadata.PreviousLabel}"] = "localized label composed with a navigation glyph",
             ["{MailMergeDialogMetadata.NextLabel} \u25b6"] = "localized label composed with a navigation glyph",

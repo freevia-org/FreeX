@@ -65,14 +65,14 @@ public sealed class NativePickerHarnessContractTests
 
         runner.Should().Contain("Run-LinuxInteractiveDocker.ps1");
         runner.Should().Contain("-DocumentPath");
-        runner.Should().Contain("docker @dockerArguments");
+        runner.Should().Contain("Invoke-PhysicalValidationDockerProbe -DockerArguments $dockerArguments");
         runner.Should().Contain("FREEP_PICKER_OPEN_SELECTED_PATH");
         runner.Should().Contain("FREEP_PICKER_COLLISION_PATH");
         runner.Should().Contain("FREEP_PICKER_INVALID_PATH");
         runner.Should().Contain("Assert-ManifestContract");
         runner.Should().Contain("Assert-PackageState");
         runner.Should().Contain("Get-ManifestEvidenceFileMap");
-        runner.Should().Contain("-Action", "Stop");
+        runner.Should().Contain("Stop-PhysicalValidationRunnerSessionSafely");
         runner.Should().Contain("tools/LinuxInteractiveDocker/freep-native-picker-x11-wave90-validation.schema.json");
         runner.Should().NotContain("FreeX");
         runner.Should().NotContain("FreeW");

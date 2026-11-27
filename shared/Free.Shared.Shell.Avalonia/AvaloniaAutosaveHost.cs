@@ -132,7 +132,8 @@ public sealed class AvaloniaAutosaveHost<TDocument> : IDisposable
             createOffer: (recovery, remainingCount) => _profile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                _startupPromptMode),
+                _startupPromptMode,
+                _getText),
             promptAsync: offer => PromptAsync(owner, offer),
             recoverInCurrentWindow: RecoverInCurrentWindow,
             recoverInNewWindowAsync: RecoverInNewWindowAsync,
@@ -157,7 +158,8 @@ public sealed class AvaloniaAutosaveHost<TDocument> : IDisposable
             createOffer: (recovery, remainingCount) => _profile.Recovery.CreateOffer(
                 recovery,
                 remainingCount,
-                AutosaveRecoveryPromptMode.Manual),
+                AutosaveRecoveryPromptMode.Manual,
+                _getText),
             promptAsync: offer => PromptAsync(owner, offer),
             _callbacks.ConfirmDiscardOrSaveAsync,
             recoverInCurrentWindow: RecoverInCurrentWindow,
