@@ -92,6 +92,7 @@ public sealed class FindReplaceDialogSession
     private readonly FindReplacePolicyTextSpec _policyText;
     private readonly FindReplaceDialogText _dialogText;
     private readonly Func<TextDocument?>? _document;
+    private readonly Func<string?>? _clipboardText;
     private FindReplaceOpenMode _openMode;
     private string _query = string.Empty;
     private string _replacement = string.Empty;
@@ -105,8 +106,10 @@ public sealed class FindReplaceDialogSession
         FindReplaceOpenMode openMode = FindReplaceOpenMode.Find,
         FindReplacePolicyTextSpec? policyText = null,
         FindReplaceDialogText? dialogText = null,
-        Func<TextDocument?>? document = null)
+        Func<TextDocument?>? document = null,
+        Func<string?>? clipboardText = null)
     {
+        _clipboardText = clipboardText;
         _commandHost = commandHost ?? throw new ArgumentNullException(nameof(commandHost));
         _openMode = openMode;
         _policyText = policyText ?? FindReplacePolicyTextSpec.NeutralEnglish;
@@ -270,8 +273,9 @@ public sealed class FindReplaceDialogSession
 
     private bool TryCreateReplaceRequest(
         out FindReplaceReplaceRequest? request,
-        out FindReplaceValidationError? error) =>
-        FindReplaceDialogPlanner.TryCreateReplaceRequest(
+        out FindReplaceValidationError? error)
+    {
+        var created = FindReplaceDialogPlanner.TryCreateReplaceRequest(
             _query,
             _replacement,
             _options,
@@ -279,6 +283,10 @@ public sealed class FindReplaceDialogSession
             _replaceFormat,
             out request,
             out error);
+        if (created && request is not null && _clipboardText is not null)
+            request = request with { ClipboardText = _clipboardText };
+        return created;
+    }
 
     private FindReplaceDialogState BuildState()
     {

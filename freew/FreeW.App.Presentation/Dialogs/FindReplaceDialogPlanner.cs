@@ -123,12 +123,17 @@ public sealed record FindReplaceSearchRequest(
     public FindCriteria ToCriteria() => new(Term, Options.ToTextSearchOptions(), Format);
 }
 
+/// <param name="ClipboardText">
+/// Reads the clipboard's text for the <c>^c</c> (Clipboard Contents) code of Replace with; the host
+/// supplies it so the shared engine has no clipboard dependency. Null leaves <c>^c</c> literal.
+/// </param>
 public sealed record FindReplaceReplaceRequest(
     string Term,
     string Replacement,
     FindReplaceSearchOptions Options,
     FindFormat? FindFormat = null,
-    FindFormat? ReplaceFormat = null)
+    FindFormat? ReplaceFormat = null,
+    Func<string?>? ClipboardText = null)
 {
     public FindReplaceSearchRequest ToSearchRequest() => new(Term, Options, FindFormat);
 
@@ -315,6 +320,7 @@ public static class FindReplaceDialogPlanner
     [
         (FindReplaceTextId.SpecialParagraphMark, "^p", true, true),
         (FindReplaceTextId.SpecialTabCharacter, "^t", true, true),
+        (FindReplaceTextId.SpecialCommentMark, "^a", true, false),
         (FindReplaceTextId.SpecialAnyCharacter, "^?", true, false),
         (FindReplaceTextId.SpecialAnyDigit, "^#", true, false),
         (FindReplaceTextId.SpecialAnyLetter, "^$", true, false),
@@ -322,12 +328,18 @@ public static class FindReplaceDialogPlanner
         (FindReplaceTextId.SpecialColumnBreak, "^n", true, false),
         (FindReplaceTextId.SpecialEmDash, "^+", true, true),
         (FindReplaceTextId.SpecialEnDash, "^=", true, true),
+        (FindReplaceTextId.SpecialEndnoteMark, "^e", true, false),
+        (FindReplaceTextId.SpecialField, "^d", true, false),
+        (FindReplaceTextId.SpecialFootnoteMark, "^f", true, false),
+        (FindReplaceTextId.SpecialGraphic, "^g", true, false),
+        (FindReplaceTextId.SpecialClipboardContents, "^c", false, true),
         (FindReplaceTextId.SpecialFindWhatText, "^&", false, true),
         (FindReplaceTextId.SpecialManualLineBreak, "^l", true, true),
         (FindReplaceTextId.SpecialManualPageBreak, "^m", true, false),
         (FindReplaceTextId.SpecialNonbreakingHyphen, "^~", true, true),
         (FindReplaceTextId.SpecialNonbreakingSpace, "^s", true, true),
         (FindReplaceTextId.SpecialOptionalHyphen, "^-", true, true),
+        (FindReplaceTextId.SpecialSectionBreak, "^b", true, false),
         (FindReplaceTextId.SpecialWhiteSpace, "^w", true, false),
     ];
 
@@ -665,7 +677,7 @@ public static class FindReplaceDialogPlanner
             ? new FindReplaceReplacementPlan(ReplacesText: false, foundText ?? string.Empty, format)
             : new FindReplaceReplacementPlan(
                 ReplacesText: true,
-                FindSpecialCodes.ExpandReplacement(request.Replacement, foundText),
+                FindSpecialCodes.ExpandReplacement(request.Replacement, foundText, request.ClipboardText),
                 format);
     }
 

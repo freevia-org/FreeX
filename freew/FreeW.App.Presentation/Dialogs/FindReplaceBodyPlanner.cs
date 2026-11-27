@@ -33,7 +33,7 @@ public static class FindReplaceBodyPlanner
         foreach (var unit in Units(document.Blocks))
         {
             foreach (var flow in unit.Flows())
-                count += FlowProjection.Build(document, flow.Paragraphs, criteria.HasFormat).FindAll(criteria).Count;
+                count += FlowProjection.Build(document, flow.Paragraphs, criteria).FindAll(criteria).Count;
         }
 
         return count;
@@ -68,7 +68,7 @@ public static class FindReplaceBodyPlanner
         {
             if (!unit.MayBeInside(range)
                 || !unit.Flows().Any(flow =>
-                    FlowProjection.Build(document, flow.Paragraphs, criteria.HasFormat)
+                    FlowProjection.Build(document, flow.Paragraphs, criteria)
                         .FindAll(criteria)
                         .Any()))
             {
@@ -80,7 +80,7 @@ public static class FindReplaceBodyPlanner
             var clone = unit.Clone();
             foreach (var flow in clone.Flows().ToList())
             {
-                var projection = FlowProjection.Build(document, flow.Paragraphs, criteria.HasFormat);
+                var projection = FlowProjection.Build(document, flow.Paragraphs, criteria);
                 var matches = projection.FindAll(criteria);
                 var joined = new Dictionary<Paragraph, Paragraph>(ReferenceEqualityComparer.Instance);
                 for (var i = matches.Count - 1; i >= 0; i--)
@@ -159,7 +159,7 @@ public static class FindReplaceBodyPlanner
         if (flow is null)
             return none;
 
-        var projection = FlowProjection.Build(document, flow.Paragraphs, criteria.HasFormat);
+        var projection = FlowProjection.Build(document, flow.Paragraphs, criteria);
         var endOffset = location.EndOffset ?? location.Start + location.Length;
         foreach (var match in projection.FindAll(criteria))
         {
@@ -218,7 +218,7 @@ public static class FindReplaceBodyPlanner
                 {
                     var paragraphs = unit.Blocks.Cast<Paragraph>().ToList();
                     AddSpanning(
-                        FlowProjection.Build(document, paragraphs, criteria.HasFormat),
+                        FlowProjection.Build(document, paragraphs, criteria),
                         criteria,
                         result,
                         (first, last, start, end) => new FindReplaceMatch(
@@ -241,7 +241,7 @@ public static class FindReplaceBodyPlanner
                         var rowIndex = row;
                         var column = projected.StartColumn;
                         AddSpanning(
-                            FlowProjection.Build(document, projected.Cell.Paragraphs.ToList(), criteria.HasFormat),
+                            FlowProjection.Build(document, projected.Cell.Paragraphs.ToList(), criteria),
                             criteria,
                             result,
                             (first, last, start, end) => new FindReplaceMatch(
@@ -371,7 +371,24 @@ public static class FindReplaceBodyPlanner
 
     // ---- projection --------------------------------------------------------------------------
 
-    private readonly record struct Piece(int Hay, int HayLength, int Plain, bool ZeroWidth, int BreakOrdinal = -1);
+    /// <summary>
+    /// One stretch of a paragraph's haystack. A zero-width piece is a single structural character that
+    /// stands for a run (a break, a note or comment mark, a graphic, the start of a field); its
+    /// <paramref name="MarkOrdinal"/> is that run's position among the paragraph's removable mark runs.
+    /// </summary>
+    private readonly record struct Piece(int Hay, int HayLength, int Plain, bool ZeroWidth, int MarkOrdinal = -1);
+
+    /// <summary>
+    /// Whether a run is one the haystack represents by a structural character a Replace can consume:
+    /// manual breaks, note / comment reference marks, inline graphics and (when the search projects
+    /// field marks) fields. Tracked-deleted runs are masked instead, so are never removable.
+    /// </summary>
+    private static bool IsMarkRun(Run run, bool fieldMarks) =>
+        run.IsPageBreak
+        || run.IsColumnBreak
+        || (run.Revision != RevisionKind.Deleted
+            && (FormattedTextSearch.StructuralMarkFor(run) is not null
+                || (fieldMarks && FormattedTextSearch.IsField(run))));
 
     private sealed class ParagraphMap(Paragraph paragraph, int hayStart)
     {
@@ -398,28 +415,47 @@ public static class FindReplaceBodyPlanner
         }
 
         /// <summary>
-        /// Removes the manual breaks a match covers. They are addressed by ordinal among the
-        /// paragraph's break runs, highest first: matches are applied back to front, so the ordinals
-        /// of earlier breaks stay valid even after later edits have rebuilt the run objects.
+        /// Removes the mark runs a match covers (breaks, note / comment marks, graphics, fields). They
+        /// are addressed by ordinal among the paragraph's mark runs, highest first: matches are
+        /// applied back to front, so the ordinals of earlier marks stay valid even after later edits
+        /// have rebuilt the run objects. Returns what was removed, so a caller that then declines the
+        /// match can put it back with <see cref="Restore"/>, and the PlainText width removed.
         /// </summary>
-        public void RemoveBreaksIn(Paragraph paragraph, int hayStart, int hayEnd)
+        public (List<(int Index, Run Run)> Removed, int PlainWidth) RemoveMarkRunsIn(
+            Paragraph paragraph,
+            int hayStart,
+            int hayEnd,
+            bool fieldMarks)
         {
+            var removed = new List<(int Index, Run Run)>();
+            var width = 0;
             foreach (var ordinal in Pieces
-                         .Where(piece => piece.BreakOrdinal >= 0 && piece.Hay >= hayStart && piece.Hay < hayEnd)
-                         .Select(piece => piece.BreakOrdinal)
+                         .Where(piece => piece.MarkOrdinal >= 0 && piece.Hay >= hayStart && piece.Hay < hayEnd)
+                         .Select(piece => piece.MarkOrdinal)
                          .OrderByDescending(ordinal => ordinal))
             {
                 var seen = -1;
                 for (var index = 0; index < paragraph.Runs.Count; index++)
                 {
                     var run = paragraph.Runs[index];
-                    if ((run.IsPageBreak || run.IsColumnBreak) && ++seen == ordinal)
+                    if (IsMarkRun(run, fieldMarks) && ++seen == ordinal)
                     {
+                        removed.Add((index, run));
+                        width += run.Text.Length;
                         paragraph.Runs.RemoveAt(index);
                         break;
                     }
                 }
             }
+
+            return (removed, width);
+        }
+
+        /// <summary>Puts back runs <see cref="RemoveMarkRunsIn"/> removed (lowest index first).</summary>
+        public static void Restore(Paragraph paragraph, List<(int Index, Run Run)> removed)
+        {
+            foreach (var (index, run) in removed.OrderBy(entry => entry.Index))
+                paragraph.Runs.Insert(Math.Min(index, paragraph.Runs.Count), run);
         }
     }
 
@@ -434,27 +470,70 @@ public static class FindReplaceBodyPlanner
 
         public IReadOnlyList<ParagraphMap> Maps => _maps;
 
-        public static FlowProjection Build(TextDocument document, List<Paragraph> paragraphs, bool resolveFormatting)
+        /// <summary>
+        /// Whether this projection carries <see cref="FindSpecialCodes.FieldStart"/> /
+        /// <see cref="FindSpecialCodes.FieldEnd"/> around each field (only when the search uses <c>^d</c>).
+        /// </summary>
+        public bool FieldMarks { get; private init; }
+
+        public static FlowProjection Build(TextDocument document, List<Paragraph> paragraphs, FindCriteria criteria)
         {
-            var projection = new FlowProjection();
+            var resolveFormatting = criteria.HasFormat;
+            var fieldMarks = FindSpecialCodes.RequiresFieldMarks(criteria.Term, criteria.Options);
+            var projection = new FlowProjection { FieldMarks = fieldMarks };
             for (var index = 0; index < paragraphs.Count; index++)
             {
                 var paragraph = paragraphs[index];
                 var map = new ParagraphMap(paragraph, projection._text.Length);
                 var plain = 0;
-                var breaks = 0;
+                var marks = 0;
                 foreach (var run in paragraph.Runs)
                 {
                     if (run.IsPageBreak || run.IsColumnBreak)
                     {
                         var mark = run.IsPageBreak ? FindSpecialCodes.ManualPageBreak : FindSpecialCodes.ColumnBreak;
-                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, breaks++));
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++));
                         projection.Add(new FindTextSegment(mark.ToString(), RunFormatting.Default, paragraph.StyleId, true));
                         plain += run.Text.Length;
                         continue;
                     }
 
+                    if (run.Revision != RevisionKind.Deleted && FormattedTextSearch.StructuralMarkFor(run) is { } objectMark)
+                    {
+                        // One haystack character stands for the whole run, whatever text it mirrors.
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++));
+                        projection.Add(new FindTextSegment(objectMark.ToString(), RunFormatting.Default, paragraph.StyleId, true));
+                        plain += run.Text.Length;
+                        continue;
+                    }
+
                     var text = run.Text;
+                    var isFieldRun = fieldMarks && run.Revision != RevisionKind.Deleted && FormattedTextSearch.IsField(run);
+                    if (isFieldRun)
+                    {
+                        // The field's cached result sits between its start and end marks, so ^d spans
+                        // the whole field while ordinary text still reads through it when no mark is projected.
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++));
+                        projection.Add(new FindTextSegment(
+                            FindSpecialCodes.FieldStart.ToString(), RunFormatting.Default, paragraph.StyleId, true));
+                        if (text.Length > 0)
+                        {
+                            map.Pieces.Add(new Piece(projection._text.Length, text.Length, plain, ZeroWidth: false));
+                            projection.Add(new FindTextSegment(
+                                text,
+                                resolveFormatting
+                                    ? FindFormat.EffectiveFormatting(document, paragraph, run)
+                                    : run.Formatting,
+                                paragraph.StyleId));
+                            plain += text.Length;
+                        }
+
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true));
+                        projection.Add(new FindTextSegment(
+                            FindSpecialCodes.FieldEnd.ToString(), RunFormatting.Default, paragraph.StyleId, true));
+                        continue;
+                    }
+
                     if (text.Length == 0)
                         continue;
 
@@ -478,7 +557,7 @@ public static class FindReplaceBodyPlanner
                 map.PlainLength = plain;
                 projection._maps.Add(map);
                 projection.Add(new FindTextSegment(
-                    (index < paragraphs.Count - 1 ? FindSpecialCodes.ParagraphMark : FindSpecialCodes.CellMark).ToString(),
+                    EndMark(paragraph, last: index == paragraphs.Count - 1).ToString(),
                     RunFormatting.Default,
                     paragraph.StyleId,
                     IsStructural: true));
@@ -486,6 +565,26 @@ public static class FindReplaceBodyPlanner
 
             return projection;
         }
+
+        /// <summary>
+        /// The character that ends a paragraph in the haystack: a section break for the paragraph that
+        /// ends a section (the break terminates it, as in a Word document), otherwise a paragraph mark,
+        /// or the cell mark nothing matches when it is the last paragraph of its flow.
+        /// </summary>
+        private static char EndMark(Paragraph paragraph, bool last) =>
+            paragraph.SectionBreak is not null
+                ? FindSpecialCodes.SectionBreakMark
+                : last ? FindSpecialCodes.CellMark : FindSpecialCodes.ParagraphMark;
+
+        /// <summary>True when a haystack span covers a character that stands for an object (not text).</summary>
+        public bool CoversObjectMark(int start, int length) =>
+            Text.AsSpan(start, length).IndexOfAny(
+                [FindSpecialCodes.GraphicMark, FindSpecialCodes.FootnoteMark, FindSpecialCodes.EndnoteMark,
+                 FindSpecialCodes.CommentMark, FindSpecialCodes.FieldStart]) >= 0;
+
+        /// <summary>True when the haystack character at <paramref name="hay"/> is the section break that ends the flow.</summary>
+        public bool IsFlowFinalSectionBreak(int hay) =>
+            hay == Text.Length - 1 && Text[hay] == FindSpecialCodes.SectionBreakMark;
 
         public IReadOnlyList<(int Start, int Length)> FindAll(FindCriteria criteria) =>
             FormattedTextSearch.FindAll(_segments, criteria);
@@ -566,11 +665,36 @@ public static class FindReplaceBodyPlanner
             return true;
         }
 
+        // A section break that ends its flow has no paragraph after it to join, so it cannot be
+        // consumed. Under Track Changes an object cannot be struck through either (only text can).
+        if (end == projection.Text.Length && projection.IsFlowFinalSectionBreak(end - 1))
+            return false;
+        if (tracked is not null && projection.CoversObjectMark(match.Start, match.Length))
+            return false;
+
+        // The mark runs the match covers (breaks, note / comment marks, graphics, fields) are consumed
+        // with it. They are taken out first so the text check below sees only what is left; if the
+        // match is then declined they go back exactly where they were.
+        var removedMarks = new List<(Paragraph Paragraph, List<(int Index, Run Run)> Removed)>();
+        if (tracked is null)
+        {
+            for (var index = last; index >= first; index--)
+            {
+                var slot = index - first;
+                var (removed, width) = maps[index].RemoveMarkRunsIn(
+                    ranges[slot].Paragraph, match.Start, end, projection.FieldMarks);
+                removedMarks.Add((ranges[slot].Paragraph, removed));
+                ranges[slot] = (ranges[slot].Paragraph, ranges[slot].From, Math.Max(ranges[slot].From, ranges[slot].To - width));
+            }
+        }
+
         // A field's text is a cached result and an object has none; leave such a match alone.
         if (ranges.Any(range =>
                 range.To > range.From
                 && !RevisionEditPlanner.CanReplacePlainTextRange(range.Paragraph, range.From, range.To - range.From)))
         {
+            foreach (var (paragraph, removed) in removedMarks)
+                ParagraphMap.Restore(paragraph, removed);
             return false;
         }
 
@@ -588,9 +712,6 @@ public static class FindReplaceBodyPlanner
 
         if (tracked is null)
         {
-            for (var index = last; index >= first; index--)
-                maps[index].RemoveBreaksIn(ranges[index - first].Paragraph, match.Start, end);
-
             for (var i = ranges.Count - 1; i >= 0; i--)
             {
                 var range = ranges[i];

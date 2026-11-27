@@ -299,6 +299,51 @@ public static class FormattedTextSearch
         || run.DrawingGroup is not null
         || run.Equation is not null;
 
+    /// <summary>
+    /// The single structural character a run stands for in a Find haystack, or null for text and for
+    /// objects that have none: a footnote or endnote reference, a comment reference, or an inline
+    /// graphic. A floating object lives in the drawing layer, not the text stream, so Word's
+    /// <c>^g</c> does not find it and neither does this.
+    /// </summary>
+    public static char? StructuralMarkFor(Run run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.FootnoteId is not null)
+            return FindSpecialCodes.FootnoteMark;
+        if (run.EndnoteId is not null)
+            return FindSpecialCodes.EndnoteMark;
+        if (run.IsCommentReference)
+            return FindSpecialCodes.CommentMark;
+        return IsInlineGraphic(run) ? FindSpecialCodes.GraphicMark : null;
+    }
+
+    /// <summary>True for a picture, shape, WordArt, chart, SmartArt, embedded object or preserved drawing set inline in the text.</summary>
+    public static bool IsInlineGraphic(Run run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return run.Image is { IsFloating: false }
+            || run.Shape is { IsFloating: false }
+            || run.WordArt is { IsFloating: false }
+            || run.Chart is { IsFloating: false }
+            || run.SmartArt is { IsFloating: false }
+            || run.EmbeddedObject is not null
+            || run.PreservedDrawing is not null;
+    }
+
+    /// <summary>
+    /// True when a run is a field (Word's <c>^d</c>): a simple field, a complex field, a table formula,
+    /// a cross-reference or a hidden citation mark. Its <see cref="Run.Text"/> is the cached result.
+    /// </summary>
+    public static bool IsField(Run run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        return run.FieldKind != RunFieldKind.None
+            || run.ComplexField is not null
+            || run.TableFormula is not null
+            || run.CrossReference is not null
+            || run.Citation is not null;
+    }
+
     private static List<(int Start, int Length)> FindFormattedSpans(
         IReadOnlyList<FindTextSegment> segments,
         FindFormat format)

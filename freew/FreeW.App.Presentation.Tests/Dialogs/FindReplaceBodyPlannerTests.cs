@@ -86,6 +86,178 @@ public sealed class FindReplaceBodyPlannerTests
         Text(document).Should().Equal(expected);
     }
 
+    // ---- object marks: notes, comments, graphics, fields, section breaks --------------------------
+
+    private static Paragraph WithObjects(Run before, Run mark, Run after) => Runs(before, mark, after);
+
+    private static int Count(TextDocument document, string find) =>
+        FindReplaceBodyPlanner.CountMatches(document, new FindReplaceSearchRequest(find, NoOptions));
+
+    private static Run Graphic() => Run.FromImage(new InlineImage([1, 2, 3], 10, 10));
+
+    [Theory]
+    [InlineData("^f")]
+    [InlineData("^e")]
+    [InlineData("^a")]
+    [InlineData("^5")]
+    [InlineData("^g")]
+    public void ObjectCodes_FindTheirOwnObjectOnly(string code)
+    {
+        var document = Doc(Runs(
+            new Run("A"),
+            Run.FootnoteReference(1),
+            new Run("B"),
+            Run.EndnoteReference(2),
+            new Run("C"),
+            Run.CommentReference(3),
+            new Run("D"),
+            Graphic(),
+            new Run("E")));
+
+        Count(document, code).Should().Be(1);
+    }
+
+    [Fact]
+    public void NoteMarkNumber_IsNotSearchableText()
+    {
+        // The reference run mirrors its id as text, but in Word the mark is one character that no text finds.
+        var document = Doc(Runs(new Run("a"), Run.FootnoteReference(7), new Run("b 7")));
+
+        Count(document, "7").Should().Be(1);
+        Replace(document, Request("7", "x")).ReplacedCount.Should().Be(1);
+        Text(document).Should().Equal("a7b x");
+    }
+
+    [Fact]
+    public void ReplacingANoteMark_RemovesTheReferenceAndLeavesTheNeighbours()
+    {
+        var document = Doc(WithObjects(new Run("one"), Run.FootnoteReference(1), new Run("two")));
+
+        Replace(document, Request("^f", "|")).ReplacedCount.Should().Be(1);
+
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.Runs.Any(run => run.FootnoteId is not null).Should().BeFalse();
+        paragraph.PlainText.Should().Be("one|two");
+    }
+
+    [Fact]
+    public void ReplacingGraphicAndCommentMarks_WithNothing_DeletesThem()
+    {
+        var document = Doc(Runs(new Run("a"), Graphic(), new Run("b"), Run.CommentReference(4), new Run("c")));
+
+        Replace(document, Request("^g", "")).ReplacedCount.Should().Be(1);
+        Replace(document, Request("^a", "")).ReplacedCount.Should().Be(1);
+
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.Runs.Should().OnlyContain(run => run.Image == null && !run.IsCommentReference);
+        paragraph.PlainText.Should().Be("abc");
+    }
+
+    [Fact]
+    public void ReplaceAllOfMarks_ComesBackToFrontWithoutDisturbingEarlierOnes()
+    {
+        var document = Doc(Runs(
+            new Run("a"), Run.FootnoteReference(1), new Run("b"), Run.FootnoteReference(2), new Run("c")));
+
+        Replace(document, Request("^f", "")).ReplacedCount.Should().Be(2);
+
+        ((Paragraph)document.Blocks[0]).Runs.Select(run => run.Text).Should().Equal("a", "b", "c");
+    }
+
+    [Fact]
+    public void ObjectMarks_UnderTrackChanges_AreLeftAlone()
+    {
+        var document = Doc(WithObjects(new Run("one"), Run.FootnoteReference(1), new Run("two")));
+
+        Replace(document, Request("^f", ""), new FindReplaceRevisionContext("Ann", null)).ReplacedCount.Should().Be(0);
+
+        ((Paragraph)document.Blocks[0]).Runs.Any(run => run.FootnoteId == 1).Should().BeTrue();
+    }
+
+    [Fact]
+    public void FieldCode_FindsTheWholeField_AndOrdinarySearchStillReadsThroughItsResult()
+    {
+        var document = Doc(Runs(new Run("Page "), Run.PageNumberField(), new Run(" of 9")));
+
+        Count(document, "^d").Should().Be(1);
+        Count(document, "Page ^d of").Should().Be(1);
+        // Without ^d no field marks are projected, so text searches straight through the cached result.
+        Count(document, "Page 1 of 9").Should().Be(1);
+    }
+
+    [Fact]
+    public void ReplacingAField_RemovesTheFieldAndWritesTheReplacement()
+    {
+        var document = Doc(Runs(new Run("Page "), Run.PageNumberField(), new Run(" of 9")));
+
+        Replace(document, Request("^d", "N")).ReplacedCount.Should().Be(1);
+
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.Runs.Any(run => run.FieldKind != RunFieldKind.None).Should().BeFalse();
+        paragraph.PlainText.Should().Be("Page N of 9");
+    }
+
+    [Fact]
+    public void SectionBreak_EndsItsParagraph_AndIsNotAParagraphMark()
+    {
+        var document = Doc(
+            new Paragraph("first") { SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage) },
+            new Paragraph("second"),
+            new Paragraph("third"));
+
+        Count(document, "^b").Should().Be(1);
+        Count(document, "^p").Should().Be(1);
+        Count(document, "first^b").Should().Be(1);
+    }
+
+    [Fact]
+    public void ReplacingASectionBreak_JoinsTheParagraphsAndMergesTheSections()
+    {
+        var document = Doc(
+            new Paragraph("first") { SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage) },
+            new Paragraph("second"));
+
+        Replace(document, Request("^b", " ")).ReplacedCount.Should().Be(1);
+
+        document.Blocks.Should().ContainSingle();
+        var merged = (Paragraph)document.Blocks[0];
+        merged.PlainText.Should().Be("first second");
+        merged.SectionBreak.Should().BeNull();
+    }
+
+    [Fact]
+    public void ASectionBreakThatEndsItsFlow_CannotBeConsumed()
+    {
+        var document = Doc(
+            new Paragraph("only") { SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage) });
+
+        Count(document, "^b").Should().Be(1);
+        Replace(document, Request("^b", "")).ReplacedCount.Should().Be(0);
+
+        ((Paragraph)document.Blocks[0]).SectionBreak.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ReplaceWithClipboardContents_UsesTheInjectedProvider()
+    {
+        var document = Doc(new Paragraph("a cat sat"));
+        var request = new FindReplaceReplaceRequest("cat", "[^c]", NoOptions, ClipboardText: () => "dog");
+
+        Replace(document, request).ReplacedCount.Should().Be(1);
+
+        Text(document).Should().Equal("a [dog] sat");
+    }
+
+    [Fact]
+    public void ReplaceWithFoundText_KeepsTheTextOfWhatWasFound()
+    {
+        var document = Doc(new Paragraph("a cat sat"));
+
+        Replace(document, Request("cat", "<^&^&>")).ReplacedCount.Should().Be(1);
+
+        Text(document).Should().Equal("a <catcat> sat");
+    }
+
     [Fact]
     public void ParagraphMarkMatches_JoinParagraphs_IncludingAdjacentOnes()
     {

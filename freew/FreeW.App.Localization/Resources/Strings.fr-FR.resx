@@ -632,6 +632,13 @@
   <data name="FreeW_FindReplace_Special_OptionalHyphen" xml:space="preserve"><value>Trait d'union conditionnel</value></data>
   <data name="FreeW_FindReplace_Special_WhiteSpace" xml:space="preserve"><value>Espace</value></data>
   <data name="FreeW_FindReplace_Special_EmDash" xml:space="preserve"><value>Tiret cadratin</value></data>
+  <data name="FreeW_FindReplace_Special_ClipboardContents" xml:space="preserve"><value>Contenu du Presse-papiers</value></data>
+  <data name="FreeW_FindReplace_Special_CommentMark" xml:space="preserve"><value>Marque de commentaire</value></data>
+  <data name="FreeW_FindReplace_Special_EndnoteMark" xml:space="preserve"><value>Marque de note de fin</value></data>
+  <data name="FreeW_FindReplace_Special_Field" xml:space="preserve"><value>Champ</value></data>
+  <data name="FreeW_FindReplace_Special_FootnoteMark" xml:space="preserve"><value>Marque de note de bas de page</value></data>
+  <data name="FreeW_FindReplace_Special_Graphic" xml:space="preserve"><value>Graphique</value></data>
+  <data name="FreeW_FindReplace_Special_SectionBreak" xml:space="preserve"><value>Saut de section</value></data>
   <data name="FreeW_FindReplace_Special_EnDash" xml:space="preserve"><value>Tiret demi-cadratin</value></data>
   <data name="FreeW_FindReplace_Special_FindWhatText" xml:space="preserve"><value>Texte recherch&#xE9;</value></data>
   <data name="FreeW_FindReplace_Special_BeginningOfWord" xml:space="preserve"><value>D&#xE9;but de mot</value></data>

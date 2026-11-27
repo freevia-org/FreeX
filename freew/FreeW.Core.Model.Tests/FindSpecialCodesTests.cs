@@ -121,7 +121,7 @@ public class FindSpecialCodesTests
     [InlineData("^&^&", "ab", "abab")]
     [InlineData("^^", "x", "^")]
     [InlineData("^s^-^~", "x", " ­‑")]
-    [InlineData("^c", "x", "^c")]
+    [InlineData("^c", "x", "^c")] // no clipboard provider supplied: left literal
     [InlineData("tail^", "x", "tail^")]
     [InlineData("plain", "x", "plain")]
     public void ExpandReplacement_ExpandsWordReplaceCodes(string replacement, string found, string expected)
@@ -133,5 +133,64 @@ public class FindSpecialCodesTests
     public void ExpandReplacement_OfNothing_IsEmpty()
     {
         FindSpecialCodes.ExpandReplacement(null, "x").Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("a\u0005b", "^a", 1)]
+    [InlineData("a\u0005b", "^5", 1)]
+    [InlineData("a\u0003b", "^e", 1)]
+    [InlineData("a\u0002b", "^f", 1)]
+    [InlineData("a\u0001b", "^g", 1)]
+    [InlineData("a\u0016b", "^b", 1)]
+    public void ObjectCodes_MatchTheirStructuralMarkAndNothingElse(string haystack, string needle, int start)
+    {
+        Find(haystack, needle).Should().Equal((start, 1));
+        foreach (var other in new[] { "^a", "^e", "^f", "^g", "^b", "^p", "^m" }.Where(code => code != needle && !(needle == "^5" && code == "^a")))
+            Find(haystack, other).Should().BeEmpty(other);
+    }
+
+    [Fact]
+    public void AnyCharacter_NeverMatchesAnObjectMark()
+    {
+        Find("c\u0001t c\u0002t c\u0003t c\u0005t c\u0013t c\u0016t cat", "c^?t").Should().Equal((24, 3));
+    }
+
+    [Fact]
+    public void FieldCode_SpansTheWholeFieldFromStartToEndMark()
+    {
+        Find("Page \u0013 3 \u0015 of \u0013\u0015", "^d").Should().Equal((5, 5), (14, 2));
+        Find("Page \u0013 3 \u0015", "Page ^d").Should().Equal((0, 10));
+    }
+
+    [Theory]
+    [InlineData("^d", true)]
+    [InlineData("see ^D", true)]
+    [InlineData("^^d", false)]
+    [InlineData("^p", false)]
+    [InlineData("d", false)]
+    public void FieldMarks_AreOnlyRequiredWhenFindWhatUsesTheFieldCode(string needle, bool expected)
+    {
+        FindSpecialCodes.RequiresFieldMarks(needle, default).Should().Be(expected);
+        FindSpecialCodes.RequiresFieldMarks(needle, new TextSearchOptions(UseWildcards: true)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExpandReplacement_ClipboardContents_ReadsTheInjectedProviderOnlyWhenTheCodeIsUsed()
+    {
+        var reads = 0;
+        string? Provider() { reads++; return "line1\r\nline2\nx\ty\u0001"; }
+
+        FindSpecialCodes.ExpandReplacement("[^c]", "found", Provider).Should().Be("[line1\rline2\rx\ty]");
+        reads.Should().Be(1);
+        FindSpecialCodes.ExpandReplacement("no codes", "found", Provider).Should().Be("no codes");
+        FindSpecialCodes.ExpandReplacement("^^c", "found", Provider).Should().Be("^c");
+        reads.Should().Be(1);
+        FindSpecialCodes.ExpandReplacement("a^cb", "found", () => null).Should().Be("ab");
+    }
+
+    [Fact]
+    public void ExpandReplacement_FoundText_DropsTheStructuralMarksOfObjectsItSpanned()
+    {
+        FindSpecialCodes.ExpandReplacement("<^&>", "a\u0002b\u0001c\u0013d\u0015").Should().Be("<abcd>");
     }
 }

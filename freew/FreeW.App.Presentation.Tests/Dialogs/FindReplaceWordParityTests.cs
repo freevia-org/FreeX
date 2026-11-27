@@ -26,7 +26,9 @@ public sealed class FindReplaceWordParityTests
     {
         FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Find, useWildcards: false)
             .Select(item => item.Insert)
-            .Should().Equal("^p", "^t", "^?", "^#", "^$", "^^", "^n", "^+", "^=", "^l", "^m", "^~", "^s", "^-", "^w");
+            .Should().Equal(
+                "^p", "^t", "^a", "^?", "^#", "^$", "^^", "^n", "^+", "^=", "^e", "^d", "^f", "^g",
+                "^l", "^m", "^~", "^s", "^-", "^b", "^w");
     }
 
     [Fact]
@@ -112,7 +114,7 @@ public sealed class FindReplaceWordParityTests
         var items = FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Replace, useWildcards: false);
 
         items.Select(item => item.Insert)
-            .Should().Equal("^p", "^t", "^^", "^+", "^=", "^&", "^l", "^~", "^s", "^-");
+            .Should().Equal("^p", "^t", "^^", "^+", "^=", "^c", "^&", "^l", "^~", "^s", "^-");
         items.Should().Contain(item => item.Label == "Find What Text  (^&)");
     }
 
