@@ -614,6 +614,11 @@
   <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved documents were found.</value></data>
   <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the document.&#xA;&#xA;{0}</value></data>
   <data name="Autosave_Recovery_DirtyGate_Action" xml:space="preserve"><value>recovering an unsaved document</value></data>
+  <data name="SaveChanges_Prompt_Message_Format" xml:space="preserve"><value>Do you want to save changes to {0} before {1}?</value></data>
+  <data name="SaveChanges_Prompt_Message_Quoted_Format" xml:space="preserve"><value>Do you want to save changes to "{0}" before {1}?</value></data>
+  <data name="SaveChanges_Prompt_Save_Button" xml:space="preserve"><value>Save</value></data>
+  <data name="SaveChanges_Prompt_DontSave_Button" xml:space="preserve"><value>Don't save</value></data>
+  <data name="SaveChanges_Prompt_Cancel_Button" xml:space="preserve"><value>Cancel</value></data>
   <data name="Autosave_Recovery_Prompt_Startup" xml:space="preserve"><value>FreeW found unsaved changes to {0} from a previous session. Recover them? (Last autosaved: {2})</value></data>
   <data name="Autosave_Recovery_Prompt_Startup_Multiple" xml:space="preserve"><value>FreeW found unsaved changes to {0} from a previous session ({1} unsaved documents found). Recover this one? (Last autosaved: {2})</value></data>
   <data name="Autosave_Recovery_Prompt_StartupQuotedDisplayName" xml:space="preserve"><value>FreeW found unsaved changes to "{0}" from a previous session. Recover them? (Last autosaved: {2})</value></data>

@@ -56,6 +56,16 @@ public sealed class FreePAutosaveRecoveryPromptLocalizationTests
         translated.DirtyGateAction.Should().Be("translated action");
     }
 
+    [Fact]
+    public void SaveChangesPrompt_NeutralCatalogOwnsTheSentenceAndButtonsWithTheSharedDefaults()
+    {
+        var neutralKeys = Loc.GetNeutralResourceKeys();
+        SaveChangesPromptTextResources.RequiredResourceKeys.Should().OnlyContain(key => neutralKeys.Contains(key));
+
+        foreach (var descriptor in SaveChangesPromptTextResources.All)
+            Loc.GetNeutral(descriptor.ResourceKey).Should().Be(descriptor.FallbackText);
+    }
+
     [Theory]
     [InlineData("en-US")]
     [InlineData("fr-FR")]

@@ -37,7 +37,8 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("_workflow.Save(");
         source.Should().Contain("_workflow.ConfirmCloseAllowed(");
         source.Should().Contain("IUserMessageService? messageService = null");
-        source.Should().Contain("messageService);");
+        source.Should().Contain("messageService,");
+        source.Should().Contain("getText: UiText.Get);");
         source.Should().Contain("_workflow.ShowError(summary, ex");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
@@ -93,7 +94,8 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("new WpfUserMessageService()");
         source.Should().Contain("new FileCommandWorkflow(");
         source.Should().Contain("PromptSaveChanges,");
-        source.Should().Contain("_messageService.PromptSaveChanges(DisplayName, action, _applicationName)");
+        source.Should().Contain("_messageService.PromptSaveChanges(");
+        source.Should().Contain("SaveChangesPromptTextResources.Resolve(_getText)");
         source.Should().Contain("_messageService.ShowFileCommandError(summary, exception, _applicationName)");
         source.Should().Contain("public void ShowError(string summary, Exception exception)");
     }
@@ -110,7 +112,9 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("public static class UserMessageServiceFileCommandExtensions");
         source.Should().Contain("PromptSaveChanges(");
         source.Should().Contain("ShowFileCommandError(");
-        source.Should().Contain("Do you want to save changes to {displayName} before {action}?");
+        source.Should().Contain("SaveChangesPromptTextResources.Resolve()");
+        source.Should().Contain(".FormatMessage(displayName, action)");
+        source.Should().NotContain("Do you want to save changes to");
         source.Should().Contain("UserMessageButtons.YesNoCancel");
         source.Should().Contain("UserMessageIcon.Warning");
         source.Should().Contain("UserMessageButtons.Ok");

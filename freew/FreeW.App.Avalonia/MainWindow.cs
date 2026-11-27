@@ -270,7 +270,8 @@ public sealed partial class MainWindow : Window
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus,
-            messageService: messageService);
+            messageService: messageService,
+            getText: UiText.Get);
         RefreshDocumentWindowTitle();
         _documentFileWorkflow = new FreeWDocumentFileWorkflow(
             _fileWorkflow.Workflow,

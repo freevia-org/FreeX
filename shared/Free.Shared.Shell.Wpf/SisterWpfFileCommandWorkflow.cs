@@ -11,6 +11,7 @@ namespace Free.Shared.Shell.Wpf;
 public sealed class SisterWpfFileCommandWorkflow
 {
     private readonly string _applicationName;
+    private readonly Func<string, string?>? _getText;
     private readonly IUserMessageService _messageService;
     private readonly FileCommandWorkflow _workflow;
 
@@ -21,7 +22,8 @@ public sealed class SisterWpfFileCommandWorkflow
         Func<bool> save,
         Func<RecentFilesStore>? loadRecentFilesStore = null,
         IUserMessageService? messageService = null,
-        string untitledDisplayName = FileCommandSession.DefaultUntitledDisplayName)
+        string untitledDisplayName = FileCommandSession.DefaultUntitledDisplayName,
+        Func<string, string?>? getText = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationName);
         ArgumentNullException.ThrowIfNull(maxRecentEntries);
@@ -30,6 +32,7 @@ public sealed class SisterWpfFileCommandWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(untitledDisplayName);
 
         _applicationName = applicationName;
+        _getText = getText;
         _messageService = messageService ?? new WpfUserMessageService();
         _workflow = new FileCommandWorkflow(
             maxRecentEntries,
@@ -106,7 +109,11 @@ public sealed class SisterWpfFileCommandWorkflow
         _workflow.MarkSavedWithPath(path, suppressRecentFiles, beforeChanged);
 
     private SaveChangesPrompt PromptSaveChanges(string action) =>
-        _messageService.PromptSaveChanges(DisplayName, action, _applicationName);
+        _messageService.PromptSaveChanges(
+            DisplayName,
+            action,
+            _applicationName,
+            SaveChangesPromptTextResources.Resolve(_getText));
 
     public void ShowError(string summary, Exception exception) =>
         _messageService.ShowFileCommandError(summary, exception, _applicationName);

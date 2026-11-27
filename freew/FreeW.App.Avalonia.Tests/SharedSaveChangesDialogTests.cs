@@ -26,6 +26,28 @@ public sealed class SharedSaveChangesDialogTests
     }
 
     [Fact]
+    public void PromptText_ForDocumentAction_ResolvesMessageAndButtonsThroughTheCatalog()
+    {
+        var text = AvaloniaSaveChangesPromptText.ForDocumentAction(
+            "FreeW",
+            "Draft.docx",
+            "closing",
+            key => key switch
+            {
+                "SaveChanges_Prompt_Message_Quoted_Format" => "Q[{0}|{1}]",
+                "SaveChanges_Prompt_Save_Button" => "S!",
+                "SaveChanges_Prompt_DontSave_Button" => "D!",
+                "SaveChanges_Prompt_Cancel_Button" => "C!",
+                _ => null,
+            });
+
+        text.Message.Should().Be("Q[Draft.docx|closing]");
+        text.SaveButtonText.Should().Be("S!");
+        text.DontSaveButtonText.Should().Be("D!");
+        text.CancelButtonText.Should().Be("C!");
+    }
+
+    [Fact]
     public async Task Dialog_BuildsExpectedButtonShape()
     {
         string? title = null;

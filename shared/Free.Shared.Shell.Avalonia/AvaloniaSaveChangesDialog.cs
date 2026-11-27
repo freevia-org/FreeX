@@ -16,13 +16,17 @@ public sealed record AvaloniaSaveChangesPromptText(
     public static AvaloniaSaveChangesPromptText ForDocumentAction(
         string windowTitle,
         string documentName,
-        string action) =>
-        new(
+        string action,
+        Func<string, string?>? getText = null)
+    {
+        var text = SaveChangesPromptTextResources.Resolve(getText);
+        return new(
             windowTitle,
-            $"Do you want to save changes to \"{documentName}\" before {action}?",
-            "Save",
-            "Don't save",
-            "Cancel");
+            text.FormatQuotedMessage(documentName, action),
+            text.SaveButton,
+            text.DontSaveButton,
+            text.CancelButton);
+    }
 }
 
 /// <summary>

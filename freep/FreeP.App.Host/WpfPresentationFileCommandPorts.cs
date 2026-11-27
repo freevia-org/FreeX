@@ -50,7 +50,8 @@ internal static class WpfPresentationFileCommandSessionFactory
             onChanged,
             () => session?.SaveAsync().GetAwaiter().GetResult().Succeeded == true,
             loadRecentFilesStore,
-            messageService);
+            messageService,
+            getText: UiText.Get);
         var lifecycle = new PresentationFileLifecycleAdapter(workflow.Workflow);
         var picker = new WpfPresentationFilePickerPort(window);
         var render = new WpfPresentationFileRenderPort();

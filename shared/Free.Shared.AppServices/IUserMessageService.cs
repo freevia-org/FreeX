@@ -52,12 +52,13 @@ public static class UserMessageServiceFileCommandExtensions
         this IUserMessageService messageService,
         string displayName,
         string action,
-        string appTitle)
+        string appTitle,
+        SaveChangesPromptTextValues? text = null)
     {
         ArgumentNullException.ThrowIfNull(messageService);
 
         var result = messageService.ShowMessage(
-            $"Do you want to save changes to {displayName} before {action}?",
+            (text ?? SaveChangesPromptTextResources.Resolve()).FormatMessage(displayName, action),
             appTitle,
             UserMessageButtons.YesNoCancel,
             UserMessageIcon.Warning);

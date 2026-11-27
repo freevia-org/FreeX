@@ -609,8 +609,9 @@ public sealed partial class MainWindow : Window,
             // captured GroupSuffix cannot express. Save itself is diverted to Save-As inside
             // PresentationFileCommandSession.
             groupSuffixProvider: () => PresentationDocumentWindowPlanner.FormatReadOnlySuffix(
-                IsCurrentPresentationReadOnly()));
-        _fileSession = PresentationFileCommandSessionFactory.Create(
+                IsCurrentPresentationReadOnly()),
+            getText: UiText.Get);
+        _fileSession =PresentationFileCommandSessionFactory.Create(
             new PresentationFileCommandSessionComposition(
                 () => _presentation,
                 LoadPresentationContent,

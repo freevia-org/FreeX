@@ -37,6 +37,7 @@ public sealed record SisterAvaloniaFileTitleSpec(
 public sealed class SisterAvaloniaFileCommandWorkflow
 {
     private readonly Window _owner;
+    private readonly Func<string, string?>? _getText;
     private readonly SisterAvaloniaFileTitleSpec _titleSpec;
     private readonly Action _onChanged;
     private readonly FileCommandWorkflow _workflow;
@@ -66,7 +67,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         // queried on every title refresh instead. It is invoked from the constructor's own
         // RefreshTitle, so an app whose state object is built AFTER this workflow must tolerate
         // that (see FreeP's MainWindow.IsCurrentPresentationReadOnly).
-        Func<string>? groupSuffixProvider = null)
+        Func<string>? groupSuffixProvider = null,
+        Func<string, string?>? getText = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(titleSpec);
@@ -79,6 +81,7 @@ public sealed class SisterAvaloniaFileCommandWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(titleSpec.UntitledDisplayName);
 
         _owner = owner;
+        _getText = getText;
         _titleSpec = titleSpec;
         _onChanged = onChanged;
         _promptSaveChangesAsync = promptSaveChangesAsync ?? PromptSaveChangesAsync;
@@ -244,7 +247,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
                 AvaloniaSaveChangesPromptText.ForDocumentAction(
                     _titleSpec.ApplicationName,
                     _workflow.DisplayName,
-                    action))
+                    action,
+                    _getText))
             .GetAwaiter().GetResult();
 
     private Task<SaveChangesPrompt> PromptSaveChangesAsync(string action) =>
@@ -253,7 +257,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
             AvaloniaSaveChangesPromptText.ForDocumentAction(
                 _titleSpec.ApplicationName,
                 _workflow.DisplayName,
-                action));
+                action,
+                _getText));
 
     private Task ShowFileCommandErrorCoreAsync(string summary, Exception exception) =>
         AvaloniaUserMessageDialog.ShowErrorAsync(

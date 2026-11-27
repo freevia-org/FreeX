@@ -81,7 +81,8 @@ internal sealed class FileCommands
             onChanged,
             Save,
             loadRecentFilesStore,
-            messageService);
+            messageService,
+            getText: UiText.Get);
         var confirmCompatibility = confirmSaveCompatibility ??
             (plan => SaveCompatibilityWarningDialog.Show(_window, plan));
         _documentWorkflow = new FreeWDocumentFileWorkflow(
