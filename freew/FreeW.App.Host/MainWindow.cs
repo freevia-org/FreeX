@@ -3110,22 +3110,15 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 8, 0, 4)
         };
 
-        _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
-            FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
-            FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
-            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
+        var chrome = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(_viewSession.PagePairNavigation);
+        _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(chrome.Previous);
         _sideToSidePairStatusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0)
         };
-        AutomationProperties.SetAutomationId(
-            _sideToSidePairStatusText,
-            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId);
-        _sideToSideNextPairButton = MakeSideToSideNavigationButton(
-            FreeWApplicationFrameTextCatalog.NextPagePairLabel,
-            FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
-            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
+        AutomationProperties.SetAutomationId(_sideToSidePairStatusText, chrome.StatusAutomationId);
+        _sideToSideNextPairButton = MakeSideToSideNavigationButton(chrome.Next);
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
         toolbar.Children.Add(_sideToSidePairStatusText);
@@ -3138,21 +3131,18 @@ public sealed partial class MainWindow : Window
         return host;
     }
 
-    private static Button MakeSideToSideNavigationButton(
-        string text,
-        FreeWSemanticIdentity semantic,
-        Action action)
+    private Button MakeSideToSideNavigationButton(FreeWPagePairNavigationButtonPlan plan)
     {
         var button = new Button
         {
-            Content = text,
+            Content = plan.Label,
             Padding = new Thickness(10, 4, 10, 4),
             MinWidth = 96,
-            ToolTip = semantic.AutomationName
+            ToolTip = plan.ToolTip
         };
-        button.Click += (_, _) => action();
-        AutomationProperties.SetAutomationId(button, semantic.AutomationId);
-        AutomationProperties.SetName(button, semantic.AutomationName);
+        button.Click += (_, _) => NavigateSideToSidePagePair(plan.Command);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AutomationProperties.SetName(button, plan.AutomationName);
         return button;
     }
 
@@ -3181,12 +3171,13 @@ public sealed partial class MainWindow : Window
 
     private void SyncSideToSideNavigationControls()
     {
+        var chrome = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(_viewSession.PagePairNavigation);
         if (_sideToSidePreviousPairButton is not null)
-            _sideToSidePreviousPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToPreviousPair;
+            _sideToSidePreviousPairButton.IsEnabled = chrome.Previous.IsEnabled;
         if (_sideToSideNextPairButton is not null)
-            _sideToSideNextPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToNextPair;
+            _sideToSideNextPairButton.IsEnabled = chrome.Next.IsEnabled;
         if (_sideToSidePairStatusText is not null)
-            _sideToSidePairStatusText.Text = _viewSession.PagePairNavigation.StatusText;
+            _sideToSidePairStatusText.Text = chrome.StatusText;
     }
 
     private void ResetSideToSideNavigation()

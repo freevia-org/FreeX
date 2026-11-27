@@ -271,4 +271,64 @@ public sealed class FreeWViewDepthPlannerTests
         FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId.Should()
             .Be("FreeW.SideToSidePagePairStatus");
     }
+
+    [Fact]
+    public void Page_pair_chrome_plan_owns_labels_tooltips_identities_and_enabled_state()
+    {
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
+        var middle = FreeWViewDepthPlanner.BuildPagePairNavigation(plan, 3, totalPages: 6);
+
+        var chrome = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(middle);
+
+        chrome.Previous.Should().Be(new FreeWPagePairNavigationButtonPlan(
+            FreeWViewDepthPagePairNavigationCommand.PreviousPair,
+            "Previous pair",
+            "Previous Side-to-Side page pair",
+            "FreeW.SideToSide.Previouspair",
+            "Previous Side-to-Side page pair",
+            IsEnabled: true));
+        chrome.Next.Should().Be(new FreeWPagePairNavigationButtonPlan(
+            FreeWViewDepthPagePairNavigationCommand.NextPair,
+            "Next pair",
+            "Next Side-to-Side page pair",
+            "FreeW.SideToSide.Nextpair",
+            "Next Side-to-Side page pair",
+            IsEnabled: true));
+        chrome.StatusText.Should().Be("Side to Side pages 3-4 of 6.");
+        chrome.StatusAutomationId.Should().Be("FreeW.SideToSidePagePairStatus");
+    }
+
+    [Fact]
+    public void Page_pair_chrome_plan_maps_edge_pairs_to_disabled_buttons()
+    {
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
+
+        var first = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(
+            FreeWViewDepthPlanner.BuildPagePairNavigation(plan, 1, totalPages: 5));
+        var last = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(
+            FreeWViewDepthPlanner.BuildPagePairNavigation(plan, 5, totalPages: 5));
+
+        first.Previous.IsEnabled.Should().BeFalse();
+        first.Next.IsEnabled.Should().BeTrue();
+        last.Previous.IsEnabled.Should().BeTrue();
+        last.Next.IsEnabled.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Page_pair_scroll_stride_and_offset_come_from_the_plan()
+    {
+        var plan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.SideToSidePreview);
+        var gap = plan.Layout.InterPageGapDip;
+
+        var stride = FreeWViewDepthPlanner.BuildPagePairScrollStrideDip(plan, 600, 1.5);
+        var third = FreeWViewDepthPlanner.BuildPagePairNavigation(plan, 5, totalPages: 6);
+
+        stride.Should().BeApproximately(plan.Layout.PagesAcross * (600 + gap) * 1.5, 0.0001);
+        third.PairIndex.Should().Be(2);
+        FreeWViewDepthPlanner.BuildPagePairHorizontalOffsetDip(third, stride)
+            .Should().BeApproximately(2 * stride, 0.0001);
+        FreeWViewDepthPlanner.BuildPagePairHorizontalOffsetDip(third, -10).Should().Be(0);
+        FreeWViewDepthPlanner.BuildPagePairScrollStrideDip(
+            FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor), 600, 1.5).Should().Be(0);
+    }
 }

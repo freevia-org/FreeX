@@ -86,7 +86,29 @@ public sealed record FreeWViewDepthPagePairNavigationState(
     string StatusText)
 {
     public bool IsSideToSideNavigationActive => Mode == FreeWViewDepthMode.SideToSidePreview;
+
+    /// <summary>Zero-based index of the visible pair, derived from the planned first page and pair size.</summary>
+    public int PairIndex => (Math.Max(1, FirstVisiblePageNumber) - 1) / Math.Max(1, PagesPerPair);
 }
+
+/// <summary>One native button of the Side to Side pair-navigation toolbar.</summary>
+public sealed record FreeWPagePairNavigationButtonPlan(
+    FreeWViewDepthPagePairNavigationCommand Command,
+    string Label,
+    string ToolTip,
+    string AutomationId,
+    string AutomationName,
+    bool IsEnabled);
+
+/// <summary>
+/// Toolkit-neutral content of the Side to Side pair-navigation toolbar. Hosts lay the three items
+/// out left to right in declared order: <see cref="Previous"/>, the status text, <see cref="Next"/>.
+/// </summary>
+public sealed record FreeWPagePairNavigationChromePlan(
+    FreeWPagePairNavigationButtonPlan Previous,
+    string StatusText,
+    string StatusAutomationId,
+    FreeWPagePairNavigationButtonPlan Next);
 
 public static class FreeWViewDepthPlanner
 {
@@ -255,6 +277,65 @@ public static class FreeWViewDepthPlanner
 
         return BuildPagePairNavigation(plan, requested, current.TotalPages);
     }
+
+    /// <summary>
+    /// Builds the toolbar content (labels, tooltips, automation identities, enabled state) for the
+    /// current pair-navigation state. Tooltips use the automation name.
+    /// </summary>
+    public static FreeWPagePairNavigationChromePlan BuildPagePairNavigationChrome(
+        FreeWViewDepthPagePairNavigationState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return new FreeWPagePairNavigationChromePlan(
+            BuildPagePairButton(
+                FreeWViewDepthPagePairNavigationCommand.PreviousPair,
+                FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
+                FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
+                state.CanGoToPreviousPair),
+            state.StatusText,
+            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId,
+            BuildPagePairButton(
+                FreeWViewDepthPagePairNavigationCommand.NextPair,
+                FreeWApplicationFrameTextCatalog.NextPagePairLabel,
+                FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
+                state.CanGoToNextPair));
+    }
+
+    /// <summary>
+    /// Distance in logical-then-scaled DIPs between two consecutive pairs: one page stride
+    /// (page width plus inter-page gap) per page in the pair, scaled by the current zoom.
+    /// </summary>
+    public static double BuildPagePairScrollStrideDip(
+        FreeWViewDepthPlan plan,
+        double pageWidthDip,
+        double scale)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.IsSideToSideActive)
+            return 0;
+
+        var pagesPerPair = Math.Max(1, plan.Layout.PagesAcross);
+        return pagesPerPair * (pageWidthDip + plan.Layout.InterPageGapDip) * scale;
+    }
+
+    /// <summary>Horizontal scroll offset that brings the planned pair into view.</summary>
+    public static double BuildPagePairHorizontalOffsetDip(
+        FreeWViewDepthPagePairNavigationState state,
+        double pairScrollStrideDip)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return Math.Max(0, state.PairIndex * pairScrollStrideDip);
+    }
+
+    private static FreeWPagePairNavigationButtonPlan BuildPagePairButton(
+        FreeWViewDepthPagePairNavigationCommand command,
+        string label,
+        FreeWSemanticIdentity semantic,
+        bool isEnabled) =>
+        new(command, label, semantic.AutomationName, semantic.AutomationId, semantic.AutomationName, isEnabled);
 
     private static int NormalizePairStart(int requestedFirstVisiblePageNumber, int totalPages, int pagesPerPair)
     {

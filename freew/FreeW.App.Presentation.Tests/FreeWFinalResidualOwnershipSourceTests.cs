@@ -27,13 +27,45 @@ public sealed class FreeWFinalResidualOwnershipSourceTests
         var wpf = Read("freew", "FreeW.App.Host", "MainWindow.cs");
         var avalonia = Read("freew", "FreeW.App.Avalonia", "MainWindow.cs");
 
+        var planner = Read("freew", "FreeW.App.Presentation", "Shell", "FreeWViewDepthPlanner.cs");
+
+        planner.Should().Contain("FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic");
+        planner.Should().Contain("FreeWApplicationFrameTextCatalog.NextPagePairSemantic");
+        planner.Should().Contain("FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId");
+
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic");
-            source.Should().Contain("FreeWApplicationFrameTextCatalog.NextPagePairSemantic");
-            source.Should().Contain("FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId");
+            source.Should().Contain("FreeWViewDepthPlanner.BuildPagePairNavigationChrome(");
+            source.Should().NotContain("FreeWApplicationFrameTextCatalog.PreviousPagePair");
+            source.Should().NotContain("FreeWApplicationFrameTextCatalog.NextPagePair");
+            source.Should().NotContain("FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId");
             source.Should().NotContain("\"FreeW.SideToSidePagePairStatus\"");
         }
+    }
+
+    [Fact]
+    public void Side_to_side_hosts_use_planned_pair_stride_index_and_status()
+    {
+        var wpf = Read("freew", "FreeW.App.Host", "MainWindow.cs");
+        var avalonia = Read("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+
+        avalonia.Should().Contain("FreeWViewDepthPlanner.BuildPagePairScrollStrideDip(");
+        avalonia.Should().Contain("FreeWViewDepthPlanner.BuildPagePairHorizontalOffsetDip(");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().NotContain("2 * (pageWidthDip");
+            source.Should().NotContain("InterPageGapDip) *");
+            source.Should().NotContain("PagePairNavigation.FirstVisiblePageNumber - 1");
+            source.Should().NotContain("PagePairNavigation.PagesPerPair");
+            source.Should().NotContain("PagePairNavigation.CanGoTo");
+            source.Should().NotContain("PagePairNavigation.StatusText");
+        }
+
+        // WPF is the reference: pair navigation never mirrors its status into the shared status bar.
+        var navigate = avalonia[avalonia.IndexOf("private void NavigateSideToSidePagePair(", StringComparison.Ordinal)..];
+        navigate = navigate[..navigate.IndexOf("private void ApplySideToSideNavigationToScrollViewer", StringComparison.Ordinal)];
+        navigate.Should().NotContain("_status.Text");
     }
 
     [Fact]

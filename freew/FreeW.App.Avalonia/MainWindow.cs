@@ -1756,9 +1756,7 @@ public sealed partial class MainWindow : Window
 
         _editor.ApplyViewDepthLayout(plan.Layout);
         if (updateStatus)
-            _status.Text = plan.IsSideToSideActive
-                ? _viewSession.PagePairNavigation.StatusText
-                : plan.StatusText;
+            _status.Text = plan.StatusText;
     }
 
 
@@ -1919,7 +1917,7 @@ public sealed partial class MainWindow : Window
         // crosses two full page strides, and the LayoutTransform applies the current zoom to that
         // logical distance. Recompute it whenever zoom changes so navigation stays page-aligned.
         _sideToSidePairScrollStrideDip =
-            2 * (pageWidthDip + plan.Layout.InterPageGapDip) * _zoomScale;
+            FreeWViewDepthPlanner.BuildPagePairScrollStrideDip(plan, pageWidthDip, _zoomScale);
     }
 
     private Control BuildReadOnlyPagePreviewSurface(FreeWViewDepthPlan plan, bool compact)
@@ -1961,7 +1959,8 @@ public sealed partial class MainWindow : Window
         {
             _viewSession.StartPagePairNavigation(totalPages: snapshot.PageCount);
             _sideToSidePreviewScrollViewer = scroller;
-            _sideToSidePairScrollStrideDip = 2 * (pageWidthDip + plan.Layout.InterPageGapDip) * viewport.Scale;
+            _sideToSidePairScrollStrideDip =
+                FreeWViewDepthPlanner.BuildPagePairScrollStrideDip(plan, pageWidthDip, viewport.Scale);
             return BuildSideToSideNavigationHost(scroller);
         }
 
@@ -1979,22 +1978,15 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(0, 8, 0, 4)
         };
 
-        _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(
-            FreeWApplicationFrameTextCatalog.PreviousPagePairLabel,
-            FreeWApplicationFrameTextCatalog.PreviousPagePairSemantic,
-            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair));
+        var chrome = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(_viewSession.PagePairNavigation);
+        _sideToSidePreviousPairButton = MakeSideToSideNavigationButton(chrome.Previous);
         _sideToSidePairStatusText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(12, 0, 12, 0)
         };
-        AutomationProperties.SetAutomationId(
-            _sideToSidePairStatusText,
-            FreeWApplicationFrameTextCatalog.PagePairStatusAutomationId);
-        _sideToSideNextPairButton = MakeSideToSideNavigationButton(
-            FreeWApplicationFrameTextCatalog.NextPagePairLabel,
-            FreeWApplicationFrameTextCatalog.NextPagePairSemantic,
-            () => NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair));
+        AutomationProperties.SetAutomationId(_sideToSidePairStatusText, chrome.StatusAutomationId);
+        _sideToSideNextPairButton = MakeSideToSideNavigationButton(chrome.Next);
 
         toolbar.Children.Add(_sideToSidePreviousPairButton);
         toolbar.Children.Add(_sideToSidePairStatusText);
@@ -2007,21 +1999,18 @@ public sealed partial class MainWindow : Window
         return host;
     }
 
-    private static Button MakeSideToSideNavigationButton(
-        string text,
-        FreeWSemanticIdentity semantic,
-        Action action)
+    private Button MakeSideToSideNavigationButton(FreeWPagePairNavigationButtonPlan plan)
     {
         var button = new Button
         {
-            Content = text,
+            Content = plan.Label,
             Padding = new Thickness(10, 4),
             MinWidth = 96
         };
-        ToolTip.SetTip(button, text);
-        AutomationProperties.SetAutomationId(button, semantic.AutomationId);
-        AutomationProperties.SetName(button, semantic.AutomationName);
-        button.Click += (_, _) => action();
+        ToolTip.SetTip(button, plan.ToolTip);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        AutomationProperties.SetName(button, plan.AutomationName);
+        button.Click += (_, _) => NavigateSideToSidePagePair(plan.Command);
         return button;
     }
 
@@ -2033,7 +2022,6 @@ public sealed partial class MainWindow : Window
         _viewSession.NavigatePagePair(command);
         ApplySideToSideNavigationToScrollViewer(_viewSession.CurrentDepth);
         SyncSideToSideNavigationControls();
-        _status.Text = _viewSession.PagePairNavigation.StatusText;
     }
 
     private void ApplySideToSideNavigationToScrollViewer(FreeWViewDepthPlan plan)
@@ -2041,21 +2029,22 @@ public sealed partial class MainWindow : Window
         if (!plan.IsSideToSideActive || _sideToSidePreviewScrollViewer is null)
             return;
 
-        var pairIndex = (_viewSession.PagePairNavigation.FirstVisiblePageNumber - 1) /
-            Math.Max(1, _viewSession.PagePairNavigation.PagesPerPair);
-        var horizontalOffset = Math.Max(0, pairIndex * _sideToSidePairScrollStrideDip);
+        var horizontalOffset = FreeWViewDepthPlanner.BuildPagePairHorizontalOffsetDip(
+            _viewSession.PagePairNavigation,
+            _sideToSidePairScrollStrideDip);
         _sideToSidePlannedHorizontalOffsetDip = horizontalOffset;
         _sideToSidePreviewScrollViewer.Offset = new Vector(horizontalOffset, 0);
     }
 
     private void SyncSideToSideNavigationControls()
     {
+        var chrome = FreeWViewDepthPlanner.BuildPagePairNavigationChrome(_viewSession.PagePairNavigation);
         if (_sideToSidePreviousPairButton is not null)
-            _sideToSidePreviousPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToPreviousPair;
+            _sideToSidePreviousPairButton.IsEnabled = chrome.Previous.IsEnabled;
         if (_sideToSideNextPairButton is not null)
-            _sideToSideNextPairButton.IsEnabled = _viewSession.PagePairNavigation.CanGoToNextPair;
+            _sideToSideNextPairButton.IsEnabled = chrome.Next.IsEnabled;
         if (_sideToSidePairStatusText is not null)
-            _sideToSidePairStatusText.Text = _viewSession.PagePairNavigation.StatusText;
+            _sideToSidePairStatusText.Text = chrome.StatusText;
     }
 
     private void ResetSideToSideNavigation()
