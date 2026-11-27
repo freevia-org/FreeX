@@ -261,6 +261,49 @@ public static class FindReplaceBodyPlanner
         return result;
     }
 
+    /// <summary>
+    /// Whether a paragraph holds a run the haystack represents by an object mark (a note or comment
+    /// reference, an inline graphic, or - when the search uses <c>^d</c> - a field). Such a paragraph
+    /// must be searched through <see cref="FindInParagraph"/>, not as bare <see cref="Paragraph.PlainText"/>.
+    /// </summary>
+    public static bool HasObjectMarks(Paragraph paragraph, FindCriteria criteria)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        var fieldMarks = FindSpecialCodes.RequiresFieldMarks(criteria.Term, criteria.Options);
+        return paragraph.Runs.Any(run =>
+            FormattedTextSearch.StructuralMarkFor(run) is not null
+            || (fieldMarks && FormattedTextSearch.IsField(run)));
+    }
+
+    /// <summary>
+    /// The matches that lie inside one paragraph, as spans over <see cref="Paragraph.PlainText"/>,
+    /// found in the same haystack Replace All uses (so an object mark is one matchable character and a
+    /// note reference's number is not text). A match with no PlainText extent -- a graphic or a comment
+    /// mark -- cannot be expressed as a selectable span and is left out.
+    /// </summary>
+    public static IReadOnlyList<(int Start, int Length)> FindInParagraph(
+        TextDocument document,
+        Paragraph paragraph,
+        FindCriteria criteria)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(criteria);
+
+        var projection = FlowProjection.Build(document, [paragraph], criteria);
+        var map = projection.Maps[0];
+        var spans = new List<(int Start, int Length)>();
+        foreach (var (start, length) in projection.FindAll(criteria))
+        {
+            var from = map.ToPlain(start);
+            var to = map.ToPlain(start + length);
+            if (to > from)
+                spans.Add((from, to - from));
+        }
+
+        return spans;
+    }
+
     private static void AddSpanning(
         FlowProjection projection,
         FindCriteria criteria,

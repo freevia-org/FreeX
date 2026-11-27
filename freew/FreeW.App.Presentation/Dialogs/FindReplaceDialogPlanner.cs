@@ -774,6 +774,27 @@ public static class FindReplaceDialogPlanner
         return TextSearch.FindAll(text, term, NormalizeOptions(options).ToTextSearchOptions());
     }
 
+    /// <summary>
+    /// A body paragraph's matches as spans over its PlainText. A paragraph that holds an object mark
+    /// (a note or comment reference, an inline graphic, a field under <c>^d</c>) is searched in the
+    /// projected haystack Replace All uses, so Find Next agrees with it; any other is searched as text.
+    /// </summary>
+    private static IEnumerable<(int Start, int Length)> ParagraphMatches(
+        TextDocument document,
+        Paragraph paragraph,
+        string? term,
+        FindReplaceSearchOptions options)
+    {
+        if (string.IsNullOrEmpty(term))
+            return [];
+
+        var normalized = NormalizeOptions(options);
+        var criteria = new FindCriteria(term, normalized.ToTextSearchOptions(), null);
+        return FindReplaceBodyPlanner.HasObjectMarks(paragraph, criteria)
+            ? FindReplaceBodyPlanner.FindInParagraph(document, paragraph, criteria)
+            : EnumerateMatches(paragraph.PlainText, term, options);
+    }
+
     public static bool MatchesExactly(
         string? text,
         string? term,
@@ -805,7 +826,7 @@ public static class FindReplaceDialogPlanner
 
         return FindNextMatchCore(
             document,
-            paragraph => EnumerateMatches(paragraph.PlainText, term, options),
+            paragraph => ParagraphMatches(document, paragraph, term, options),
             FindReplaceBodyPlanner.FindParagraphSpanningMatches(
                 document, new FindReplaceSearchRequest(term, NormalizeOptions(options))),
             fromBlock,
@@ -880,7 +901,7 @@ public static class FindReplaceDialogPlanner
             return false;
 
         var matches = request.Format is null
-            ? EnumerateMatches(paragraph.PlainText, request.Term, request.Options)
+            ? ParagraphMatches(document, paragraph, request.Term, request.Options)
             : FormattedTextSearch.FindAll(document, paragraph, criteria);
         return matches.Any(match => match.Start == location.Start && match.Length == location.Length);
     }

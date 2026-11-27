@@ -37,6 +37,19 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
     private readonly FindReplaceDialogText _text = new(UiText.Get);
     private readonly FindReplaceDialogSession _session;
 
+    /// <summary>The clipboard's text for the <c>^c</c> (Clipboard Contents) code; null when it holds none or is busy.</summary>
+    private static string? ReadClipboardText()
+    {
+        try
+        {
+            return Clipboard.ContainsText() ? Clipboard.GetText() : null;
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
+    }
+
     public FindReplaceDialog(
         Window owner,
         DocumentView editor,
@@ -48,7 +61,8 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             openMode,
             FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get),
             _text,
-            () => editor.Model);
+            () => editor.Model,
+            ReadClipboardText);
         Owner = owner;
         Title = Surface.Title;
         Width = Surface.Metrics.WindowWidth;
@@ -582,7 +596,9 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         }
 
         private FindReplaceBodyProjection Project(FindReplaceSearchRequest request) =>
-            editor.BuildFindReplaceProjection(includeFormatting: request.Format is not null);
+            editor.BuildFindReplaceProjection(
+                includeFormatting: request.Format is not null,
+                fieldMarks: FindSpecialCodes.RequiresFieldMarks(request.Term, request.Options.ToTextSearchOptions()));
 
         private bool SelectBody(FindReplaceBodyProjection projection, FindReplaceSearchRequest request, int from)
         {
@@ -647,7 +663,13 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             var found = projection.Text.Substring(match.Start, match.Length);
             var plan = FindReplaceDialogPlanner.PlanReplacement(request, found);
             var includeFormatting = request.FindFormat is not null;
+            var fieldMarks = FindSpecialCodes.RequiresFieldMarks(request.Term, request.Options.ToTextSearchOptions());
             var regionLength = match.Length;
+
+            // A comment reference is a textless run: selecting it selects nothing, so the surface cannot
+            // delete it. Replace All (the shared body planner) removes it; one match steps over it.
+            if (found.Contains(FindSpecialCodes.CommentMark))
+                return skip;
 
             // Inside a table cell the surface cannot format the written text, so a Replace with
             // formatting (or one that only reformats the found text) is the shared body planner's edit --
@@ -662,7 +684,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 {
                     var before = projection;
                     editor.Commands.Execute(command);
-                    projection = editor.BuildFindReplaceProjection(includeFormatting);
+                    projection = editor.BuildFindReplaceProjection(includeFormatting, fieldMarks);
                     replaced = true;
                     return match.Start + (plan.ReplacesText
                         ? Math.Max(0, match.Length + projection.Length - before.Length)
@@ -678,7 +700,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 var before = projection;
                 editor.Selection.Select(matchStart, matchEnd);
                 editor.ReplaceSelectionForFind(plan.Text);
-                projection = editor.BuildFindReplaceProjection(includeFormatting);
+                projection = editor.BuildFindReplaceProjection(includeFormatting, fieldMarks);
 
                 // Unchanged text means the editor refused the edit (a locked region, say): step over
                 // the match rather than report a replacement that did not happen.
@@ -695,13 +717,13 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 if (format.ParagraphStyleId is { Length: > 0 } styleId && Select(projection, start, length))
                 {
                     editor.SetParagraphStyle(styleId);
-                    projection = editor.BuildFindReplaceProjection(includeFormatting);
+                    projection = editor.BuildFindReplaceProjection(includeFormatting, fieldMarks);
                 }
 
                 if (format.HasCharacterFormatting && Select(projection, start, length))
                 {
                     editor.ApplyFindCharacterFormatToSelection(format);
-                    projection = editor.BuildFindReplaceProjection(includeFormatting);
+                    projection = editor.BuildFindReplaceProjection(includeFormatting, fieldMarks);
                 }
             }
 

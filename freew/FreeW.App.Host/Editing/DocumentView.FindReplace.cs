@@ -33,6 +33,12 @@ internal sealed class FindReplaceBodyProjection
 
     public int Length => _text.Length;
 
+    /// <summary>
+    /// Whether each field is bracketed by <see cref="FindSpecialCodes.FieldStart"/> /
+    /// <see cref="FindSpecialCodes.FieldEnd"/> (only when the search uses <c>^d</c>).
+    /// </summary>
+    public bool FieldMarks { get; init; }
+
     internal void AddText(WpfRun run, string text, RunFormatting formatting, string? styleId)
     {
         _entries.Add(new Entry(_text.Length, text.Length, run.ContentStart, run.ContentEnd, IsText: true));
@@ -131,16 +137,19 @@ public sealed partial class DocumentView
     /// </summary>
     /// <remarks>
     /// A paragraph mark between two consecutive paragraphs of one flow is a matchable
-    /// <see cref="FindSpecialCodes.ParagraphMark"/>; the last paragraph of a cell, or one followed by a
+    /// <see cref="FindSpecialCodes.ParagraphMark"/> (or a <see cref="FindSpecialCodes.SectionBreakMark"/>
+    /// for the paragraph that ends a section); the last paragraph of a cell, or one followed by a
     /// table, ends in a <see cref="FindSpecialCodes.CellMark"/> that nothing matches. Tabs (rendered
-    /// as tab-stop elements) and manual page/column breaks are single matchable characters; note
-    /// references, pictures, other inline objects and tracked-deleted text are placeholders that no
-    /// search matches, so a match can neither span nor rewrite them.
+    /// as tab-stop elements) and manual page/column breaks are single matchable characters, and so are
+    /// footnote / endnote / comment reference marks and inline graphics (one structural character each,
+    /// found by <c>^f ^e ^a ^g</c>); other inline objects (an equation) and tracked-deleted text are
+    /// placeholders that no search matches, so a match can neither span nor rewrite them. A field is
+    /// bracketed by field marks only when the search uses <c>^d</c>.
     /// </remarks>
-    internal FindReplaceBodyProjection BuildFindReplaceProjection(bool includeFormatting)
+    internal FindReplaceBodyProjection BuildFindReplaceProjection(bool includeFormatting, bool fieldMarks = false)
     {
         FindReplaceProjectionBuildCount++;
-        var projection = new FindReplaceBodyProjection();
+        var projection = new FindReplaceBodyProjection { FieldMarks = fieldMarks };
         WpfParagraph? pending = null;
         ProjectFindBlocks(Document.Blocks, projection, includeFormatting, ref pending);
         EndFindFlow(projection, ref pending);
@@ -224,7 +233,7 @@ public sealed partial class DocumentView
                     if (pending is not null)
                     {
                         projection.AddAtomic(
-                            FindSpecialCodes.ParagraphMark.ToString(),
+                            FindEndMark(pending, FindSpecialCodes.ParagraphMark).ToString(),
                             pending.ContentEnd,
                             paragraph.ContentStart.GetInsertionPosition(LogicalDirection.Forward) ?? paragraph.ContentStart);
                     }
@@ -271,9 +280,17 @@ public sealed partial class DocumentView
         if (pending is null)
             return;
 
-        projection.AddAtomic(FindSpecialCodes.CellMark.ToString(), pending.ContentEnd, pending.ContentEnd);
+        projection.AddAtomic(
+            FindEndMark(pending, FindSpecialCodes.CellMark).ToString(), pending.ContentEnd, pending.ContentEnd);
         pending = null;
     }
+
+    /// <summary>
+    /// The character that ends a paragraph in the haystack: the section break for the paragraph that
+    /// ends a section (the break terminates it, as in a Word document), otherwise <paramref name="plain"/>.
+    /// </summary>
+    private static char FindEndMark(WpfParagraph paragraph, char plain) =>
+        (paragraph.Tag as ParagraphTag)?.SectionBreak is not null ? FindSpecialCodes.SectionBreakMark : plain;
 
     private static void ProjectFindInlines(
         InlineCollection inlines,
@@ -295,6 +312,42 @@ public sealed partial class DocumentView
                 case WpfRun { Tag: ColumnBreakMarker } columnBreak:
                     projection.AddAtomic(
                         FindSpecialCodes.ColumnBreak.ToString(), columnBreak.ElementStart, columnBreak.ElementEnd);
+                    break;
+                case WpfRun { Tag: FootnoteMarker } footnote:
+                    projection.AddAtomic(
+                        FindSpecialCodes.FootnoteMark.ToString(), footnote.ElementStart, footnote.ElementEnd);
+                    break;
+                case WpfRun { Tag: EndnoteMarker } endnote:
+                    projection.AddAtomic(
+                        FindSpecialCodes.EndnoteMark.ToString(), endnote.ElementStart, endnote.ElementEnd);
+                    break;
+                case WpfRun { Tag: RunMarkers { Comment: { IsReference: true } } } comment:
+                    // The comment reference run is textless; its mark is still one matchable character.
+                    projection.AddAtomic(
+                        FindSpecialCodes.CommentMark.ToString(), comment.ElementStart, comment.ElementEnd);
+                    break;
+                case WpfRun { Tag: CitationMarker } citation when projection.FieldMarks:
+                    // A hidden Mark Citation (TA) field has no result text but is still a field.
+                    projection.AddAtomic(
+                        FindSpecialCodes.FieldStart.ToString(), citation.ElementStart, citation.ElementStart);
+                    projection.AddAtomic(
+                        FindSpecialCodes.FieldEnd.ToString(), citation.ElementEnd, citation.ElementEnd);
+                    break;
+                case WpfRun { Tag: FieldMarker or ComplexFieldMarker or CrossReferenceMarker or TableFormulaMarker } field
+                    when projection.FieldMarks:
+                    projection.AddAtomic(
+                        FindSpecialCodes.FieldStart.ToString(), field.ElementStart, field.ElementStart);
+                    if (field.Text.Length > 0)
+                    {
+                        projection.AddText(
+                            field,
+                            field.Text,
+                            includeFormatting ? EffectiveFindFormatting(field) : RunFormatting.Default,
+                            styleId);
+                    }
+
+                    projection.AddAtomic(
+                        FindSpecialCodes.FieldEnd.ToString(), field.ElementEnd, field.ElementEnd);
                     break;
                 case WpfRun run when run.Text.Length > 0:
                     if (IsFindableRun(run))
@@ -334,8 +387,14 @@ public sealed partial class DocumentView
                 case InlineUIContainer { Child: FrameworkElement { Tag: RenderedBookmarkBoundary } }:
                     break;
                 case InlineUIContainer container:
+                    // An inline graphic is one matchable character (^g); any other inline object (an
+                    // equation) stays a placeholder nothing matches.
                     projection.AddAtomic(
-                        FindSpecialCodes.ObjectPlaceholder.ToString(), container.ElementStart, container.ElementEnd);
+                        (IsInlineGraphicHost((container.Child as FrameworkElement)?.Tag)
+                            ? FindSpecialCodes.GraphicMark
+                            : FindSpecialCodes.ObjectPlaceholder).ToString(),
+                        container.ElementStart,
+                        container.ElementEnd);
                     break;
                 case AnchoredBlock anchored:
                     // A floater/figure is its own little flow (for example a floating table); text
@@ -352,6 +411,23 @@ public sealed partial class DocumentView
             }
         }
     }
+
+    /// <summary>
+    /// True when the model object an inline host element carries is a graphic that sits in the text
+    /// (a picture, shape, WordArt, chart, SmartArt, embedded or preserved drawing), as opposed to an
+    /// equation or a floating object.
+    /// </summary>
+    private static bool IsInlineGraphicHost(object? modelObject) => modelObject switch
+    {
+        InlineImage image => !image.IsFloating,
+        Shape shape => !shape.IsFloating,
+        WordArt wordArt => !wordArt.IsFloating,
+        Chart chart => !chart.IsFloating,
+        SmartArt smartArt => !smartArt.IsFloating,
+        EmbeddedObject => true,
+        PreservedDrawing => true,
+        _ => false,
+    };
 
     /// <summary>
     /// Ordinary text and field results can be found. Note and comment reference marks and other

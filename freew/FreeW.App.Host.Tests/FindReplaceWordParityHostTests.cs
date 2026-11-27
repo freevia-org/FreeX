@@ -127,6 +127,54 @@ public sealed class FindReplaceWordParityHostTests
     }
 
     [StaFact]
+    public void ReplaceAll_FootnoteMarkCode_RemovesTheReferenceNotTheNeighbouringText()
+    {
+        var view = BuildView(Runs(new Run("one"), Run.FootnoteReference(1), new Run("two")));
+        view.Model.Footnotes[1] = new Footnote(1, "A note");
+
+        ReplaceAll(view, "^f", "|").Should().Contain("1");
+
+        BodyText(view).Should().Equal("one|two");
+        view.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.FootnoteId != null);
+    }
+
+    [StaFact]
+    public void FindNext_FootnoteMarkCode_SelectsTheRenderedMarker_AndItsNumberIsNotText()
+    {
+        var view = BuildView(Runs(new Run("see"), Run.FootnoteReference(1), new Run(" here")));
+        view.Model.Footnotes[1] = new Footnote(1, "A note");
+
+        WithDialog(view, "^f", "", dialog => dialog.FindNextForTest());
+        view.Selection.IsEmpty.Should().BeFalse();
+
+        view.Selection.Select(view.Document.ContentStart, view.Document.ContentStart);
+        WithDialog(view, "1", "", dialog => dialog.FindNextForTest());
+        view.Selection.IsEmpty.Should().BeTrue("the footnote number is a mark, not searchable text");
+    }
+
+    [StaFact]
+    public void ReplaceAll_FieldCode_ReplacesTheWholeField()
+    {
+        var view = BuildView(Runs(new Run("Page "), Run.PageNumberField(), new Run(" of 9")));
+
+        ReplaceAll(view, "^d", "N");
+
+        BodyText(view).Should().Equal("Page N of 9");
+    }
+
+    [StaFact]
+    public void ReplaceAll_SectionBreakCode_MergesTheSections()
+    {
+        var first = new Paragraph("first") { SectionBreak = new Section(new PageSettings()) };
+        var view = BuildView(first, new Paragraph("second"));
+
+        ReplaceAll(view, "^b", " ");
+
+        BodyText(view).Should().Equal("first second");
+    }
+
+    [StaFact]
     public void ReplaceAll_FindWhatTextCode_ReinsertsTheMatch()
     {
         var view = BuildView(new Paragraph("cat and Cat"));

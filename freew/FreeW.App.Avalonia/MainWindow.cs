@@ -329,7 +329,8 @@ public sealed partial class MainWindow : Window
             FileText);
         _inlineFindReplaceSession = new FindReplaceDialogSession(
             new AvaloniaFindReplaceCommandHost(_editor),
-            policyText: FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get));
+            policyText: FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get),
+            clipboardText: () => _inlineFindClipboardText);
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: NewDocument,
             OpenDocument: () => RunUiTask(OpenAsync),
@@ -3462,7 +3463,28 @@ public sealed partial class MainWindow : Window
     private void DoReplaceAll()
         => ExecuteInlineFindReplace(FindReplaceDialogActionKind.ReplaceAll);
 
-    private void ExecuteInlineFindReplace(FindReplaceDialogActionKind action) =>
+    // Snapshot of the clipboard's text for the ^c (Clipboard Contents) replace code; the shared replace
+    // path is synchronous, so an action that uses ^c reads the clipboard first.
+    private string? _inlineFindClipboardText;
+
+    private void ExecuteInlineFindReplace(FindReplaceDialogActionKind action)
+    {
+        if (action != FindReplaceDialogActionKind.FindNext
+            && (_replaceBox.Text ?? string.Empty).Contains("^c", StringComparison.OrdinalIgnoreCase))
+        {
+            RunUiTask(async () =>
+            {
+                var read = await _platformClipboard.ReadTextAsync();
+                _inlineFindClipboardText = read.IsSuccess ? read.Value : null;
+                ExecuteInlineFindReplaceNow(action);
+            });
+            return;
+        }
+
+        ExecuteInlineFindReplaceNow(action);
+    }
+
+    private void ExecuteInlineFindReplaceNow(FindReplaceDialogActionKind action) =>
         _status.Text = _inlineFindReplaceSession.Execute(
             action,
             new FindReplaceDialogInput(

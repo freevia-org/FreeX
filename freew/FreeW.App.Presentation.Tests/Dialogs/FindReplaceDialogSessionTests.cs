@@ -67,6 +67,33 @@ public sealed class FindReplaceDialogSessionTests
     }
 
     [Fact]
+    public void ReplaceRequests_CarryTheHostsClipboardProvider_AndFindRequestsDoNot()
+    {
+        var host = new RecordingCommandHost { ReplaceResult = true, ReplaceAllResult = new FindReplaceAllExecutionResult(1) };
+        var session = new FindReplaceDialogSession(host, clipboardText: () => "clip");
+        session.SetInput("fox", "[^c]", false, false, false);
+
+        session.ReplaceNext();
+        host.ReplaceRequest!.ClipboardText.Should().NotBeNull();
+        FindReplaceDialogPlanner.PlanReplacement(host.ReplaceRequest, "fox").Text.Should().Be("[clip]");
+
+        session.ReplaceAll();
+        FindReplaceDialogPlanner.PlanReplacement(host.ReplaceAllRequest!, "fox").Text.Should().Be("[clip]");
+    }
+
+    [Fact]
+    public void ReplaceRequests_WithoutAClipboardProvider_LeaveTheCodeLiteral()
+    {
+        var host = new RecordingCommandHost { ReplaceResult = true };
+        var session = new FindReplaceDialogSession(host);
+        session.SetInput("fox", "[^c]", false, false, false);
+
+        session.ReplaceNext();
+
+        FindReplaceDialogPlanner.PlanReplacement(host.ReplaceRequest!, "fox").Text.Should().Be("[^c]");
+    }
+
+    [Fact]
     public void Commands_UseInjectedPolicyTextForValidationAndResults()
     {
         var host = new RecordingCommandHost

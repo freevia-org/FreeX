@@ -78,6 +78,11 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
     private TextBox _lastFocusedBox = null!;
     private readonly FindReplaceDialogSession _session;
 
+    // The clipboard is read asynchronously, but the shared replace path is synchronous: an action whose
+    // Replace with box uses ^c (Clipboard Contents) reads the clipboard first and then runs against this snapshot.
+    private IPlatformClipboard _platformClipboard;
+    private string? _clipboardText;
+
     // Shows the Format dialog; null means cancelled. A seam so tests can answer without a modal window.
     private Func<FindReplaceDialogFieldKind, FindFormat?, Task<FindFormat?>> _chooseFormat;
 
@@ -93,7 +98,9 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
             openMode,
             FindReplaceDialogPlanner.ResolvePolicyText(UiText.Get),
             _text,
-            () => _editor.Document);
+            () => _editor.Document,
+            () => _clipboardText);
+        _platformClipboard = new AvaloniaPlatformClipboard(() => TopLevel.GetTopLevel(this)?.Clipboard);
         _chooseFormat = ChooseFormatWithDialogAsync;
 
         Title = Surface.Title;
@@ -367,8 +374,40 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
 
     // ── Find / Replace logic ──────────────────────────────────────────────────
 
-    private void Execute(FindReplaceDialogActionKind action) =>
+    private void Execute(FindReplaceDialogActionKind action)
+    {
+        if (action != FindReplaceDialogActionKind.FindNext
+            && (_replaceBox.Text ?? string.Empty).Contains("^c", StringComparison.OrdinalIgnoreCase))
+        {
+            _ = ExecuteWithClipboardAsync(action);
+            return;
+        }
+
+        ExecuteNow(action);
+    }
+
+    private void ExecuteNow(FindReplaceDialogActionKind action) =>
         _status.Text = _session.Execute(action, ReadInput()).StatusText;
+
+    private async Task ExecuteWithClipboardAsync(FindReplaceDialogActionKind action)
+    {
+        _clipboardText = await ReadClipboardTextAsync();
+        ExecuteNow(action);
+    }
+
+    private async Task<string?> ReadClipboardTextAsync()
+    {
+        try
+        {
+            var read = await _platformClipboard.ReadTextAsync();
+            return read.IsSuccess ? read.Value : null;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // An unavailable clipboard reads as an empty one, as in Word.
+            return null;
+        }
+    }
 
     private FindReplaceDialogState SyncSessionInput() =>
         _session.SetInput(ReadInput());

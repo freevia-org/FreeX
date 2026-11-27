@@ -118,6 +118,29 @@ public sealed class FindReplaceBodyPlannerTests
     }
 
     [Fact]
+    public void FindNext_LocatesANoteMarkByItsPlainTextExtent_AndNeverByItsNumber()
+    {
+        var document = Doc(Runs(new Run("see"), Run.FootnoteReference(1), new Run(" here 1")));
+
+        var mark = FindReplaceDialogPlanner.FindNextMatch(document, "see^f", NoOptions, 0, 0);
+        mark.Should().NotBeNull();
+        (mark!.Value.Start, mark.Value.Length).Should().Be((0, 4));
+
+        var number = FindReplaceDialogPlanner.FindNextMatch(document, "1", NoOptions, 0, 0);
+        (number!.Value.Start, number.Value.Length).Should().Be((10, 1));
+    }
+
+    [Fact]
+    public void FindNext_CannotSelectAGraphic_ButItIsCountedAndReplaceable()
+    {
+        // A graphic has no PlainText extent, so no selectable span exists for Find Next to report.
+        var document = Doc(Runs(new Run("a"), Graphic(), new Run("b")));
+
+        Count(document, "^g").Should().Be(1);
+        FindReplaceDialogPlanner.FindNextMatch(document, "^g", NoOptions, 0, 0).Should().BeNull();
+    }
+
+    [Fact]
     public void NoteMarkNumber_IsNotSearchableText()
     {
         // The reference run mirrors its id as text, but in Word the mark is one character that no text finds.
