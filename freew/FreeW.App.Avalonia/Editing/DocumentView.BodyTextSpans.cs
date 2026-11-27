@@ -76,7 +76,8 @@ public sealed partial class DocumentView
         _laidOutWidth = -1;
         base.OnDetachedFromVisualTree(e);
     }
-    private sealed record BodyTextPiece(Run Source, int Start, int End, RunFormatting Formatting);
+    private sealed record BodyTextPiece(Run Source, int Start, int End, RunFormatting Formatting, LinkInfo? Link, int? CommentId);
+    private readonly record struct BodySoftMetadata(string? Url, string? Anchor, string? Tooltip, int? CommentId);
     private sealed record PreparedBodyLine(TextLine Line, double ExtraInset, double Width, double Height);
     private sealed record BodyParagraphPlan(string Text, int[] Stops, List<BodyTextPiece> Pieces, List<PreparedBodyLine> Lines, TextRunCache ShapeCache);
     private sealed record BodyTextLine(int Block, string Text, int[] Boundaries, TextLine Line,
@@ -108,17 +109,30 @@ public sealed partial class DocumentView
         var index = 0;
         var sourcePosition = 0;
         RunFormatting? previousVisibleFormatting = null;
+        BodySoftMetadata? previousVisibleMetadata = null;
         double? uniformTracking = null;
         foreach (var run in paragraph.Runs)
         {
             if (!IsUnicodeLiteralRun(run) || run.Control is not null || run.TableFormula is not null
                 || run.CrossReference is not null || run.Citation is not null || run.Ruby is not null
-                || run.PreservedDrawing is not null || run.SubDocument is not null || run.IsCommentReference
+                || run.PreservedDrawing is not null || run.SubDocument is not null
                 || run.IsPageBreak || run.IsColumnBreak || run.Revision != RevisionKind.None
-                || run.FormatRevision is not null || run.NestedRevision is not null || run.MoveRevisionId is not null || run.CommentId is not null
-                || run.HyperlinkUrl is not null || run.HyperlinkAnchor is not null)
+                || run.FormatRevision is not null || run.NestedRevision is not null || run.MoveRevisionId is not null)
                 return false;
+            if (ResolveRunDisplayProjection(paragraph, run, index++, -1, isTableCell: false).DisplayText != run.Text)
+                return false;
+            if (run.IsCommentReference)
+            {
+                // Comment commands/imports retain an explicit, textless source marker. Its
+                // character style has no glyph, but its raw position must be a legal stop.
+                if (run.Text.Length != 0 || run.CommentId is null
+                    || run.HyperlinkUrl is not null || run.HyperlinkAnchor is not null || run.HyperlinkTooltip is not null
+                    || sourcePosition != text.Length && Array.BinarySearch(boundaries, sourcePosition) < 0)
+                    return false;
+                continue;
+            }
             var formatting = ResolveRunFmt(run, paragraph);
+            var metadata = new BodySoftMetadata(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip, run.CommentId);
             if (IsTextHiddenInCurrentView(formatting) || formatting.Rtl || formatting.VerticalAlign != VerticalAlign.Baseline
                 || RunBaselinePositionPlanner.ResolveOffsetDip(formatting, PxPerPoint) != 0
                 || formatting.CharacterBorder is not null || formatting.DoubleStrikethrough)
@@ -130,14 +144,13 @@ public sealed partial class DocumentView
                 uniformTracking = tracking;
                 if (tracking != 0 && (formatting.Ligatures != LigatureMode.None || formatting.StylisticSet is not null)) return false;
             }
-            if (ResolveRunDisplayProjection(paragraph, run, index++, -1, isTableCell: false).DisplayText != run.Text)
-                return false;
             if (run.Text.Length > 0)
             {
                 if (sourcePosition > 0 && Array.BinarySearch(boundaries, sourcePosition) < 0
-                    && previousVisibleFormatting != formatting)
-                    return false; // A style change inside one grapheme needs an explicit authored-style policy.
+                    && (previousVisibleFormatting != formatting || previousVisibleMetadata != metadata))
+                    return false; // An authored style/semantic change inside one grapheme needs its own policy.
                 previousVisibleFormatting = formatting;
+                previousVisibleMetadata = metadata;
                 sourcePosition += run.Text.Length;
             }
         }
@@ -203,19 +216,68 @@ public sealed partial class DocumentView
         foreach (var run in paragraph.Runs)
         {
             var formatting = ResolveRunFmt(run, paragraph);
+            var link = BodyHyperlink(run);
+            var displayFormatting = BodyDisplayFormatting(formatting, link);
             var end = position + run.Text.Length;
-            pieces.Add(new(run, position, end, formatting));
+            pieces.Add(new(run, position, end, formatting, link, run.CommentId));
             if (end > position)
             {
-                if (previous == formatting && spans.Count > 0)
+                if (previous == displayFormatting && spans.Count > 0)
                     spans[^1] = (spans[^1].Start, end, spans[^1].Properties);
                 else
-                    spans.Add((position, end, BodyTextProperties(formatting)));
-                previous = formatting;
+                    spans.Add((position, end, BodyTextProperties(displayFormatting)));
+                previous = displayFormatting;
             }
             position = end;
         }
         return (pieces, spans);
+    }
+
+    private static LinkInfo? BodyHyperlink(Run run) =>
+        run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
+            ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip) : null;
+
+    // Keep the model/base formatting in placements for caret formatting and subsequent edits.
+    // The existing scalar painter applies this same local hyperlink display rule.
+    private static RunFormatting BodyDisplayFormatting(RunFormatting formatting, LinkInfo? link) =>
+        link is { HasTarget: true } ? formatting with
+        {
+            ColorHex = string.IsNullOrWhiteSpace(formatting.ColorHex) ? HyperlinkColorHex : formatting.ColorHex,
+            Underline = true,
+        } : formatting;
+
+    private static BodyTextPiece BodyPieceAtOffset(IReadOnlyList<BodyTextPiece> pieces, int offset) =>
+        pieces.FirstOrDefault(piece => offset >= piece.Start && offset < piece.End)
+        ?? pieces.LastOrDefault(piece => !piece.Source.IsCommentReference) ?? pieces[^1];
+
+    private static IEnumerable<(int Start, int End, T Value)> BodyMetadataRanges<T>(
+        IReadOnlyList<BodyTextPiece> pieces, Func<BodyTextPiece, T?> valueFor) where T : struct
+    {
+        (int Start, int End, T Value)? pending = null;
+        foreach (var piece in pieces)
+        {
+            if (piece.End <= piece.Start) continue;
+            var value = valueFor(piece);
+            if (pending is { } previous && value is { } next
+                && previous.End == piece.Start && EqualityComparer<T>.Default.Equals(previous.Value, next))
+            {
+                pending = (previous.Start, piece.End, previous.Value);
+                continue;
+            }
+            if (pending is { } completed) yield return completed;
+            pending = value is { } current ? (piece.Start, piece.End, current) : null;
+        }
+        if (pending is { } last) yield return last;
+    }
+
+    private static bool ClipBodyMetadataToLine(BodyTextLine item, ref int start, ref int end)
+    {
+        var lineStart = Math.Min(item.Text.Length, item.Line.FirstTextSourceIndex);
+        var visibleEnd = Math.Max(lineStart, Math.Min(item.Text.Length, item.Line.FirstTextSourceIndex + item.Line.Length) - item.Line.NewLineLength);
+        while (visibleEnd > lineStart && IsBodySoftLineBreak(item.Text[visibleEnd - 1])) visibleEnd--;
+        start = Math.Max(start, lineStart);
+        end = Math.Min(end, visibleEnd);
+        return end > start;
     }
 
     private BodyParagraphPlan FormatBodyTextLines(string text, int[] stops, List<BodyTextPiece> pieces,
@@ -394,21 +456,22 @@ public sealed partial class DocumentView
                     var length = Math.Max(0, Math.Min(visibleEnd, next) - stop);
                     var distance = BodyInsertionDistance(line, stops, stop);
                     var advance = length > 0 ? BodyInsertionDistance(line, stops, stop + length) - distance : 0;
-                    var formatting = pieces.FirstOrDefault(piece => stop >= piece.Start && stop < piece.End)?.Formatting ?? pieces[^1].Formatting;
+                    var piece = BodyPieceAtOffset(pieces, stop);
                     _placed.Add(new PlacedChar(block, stop, x + distance, y, Math.Max(0, advance), item.Height,
-                        formatting, length > 0 ? text[stop] : '\0', Sentinel: length == 0,
+                        piece.Formatting, length > 0 ? text[stop] : '\0', Sentinel: length == 0,
+                        CommentId: length > 0 ? piece.CommentId : null, Link: length > 0 ? piece.Link : null,
                         ShapedText: text.Substring(stop, length)));
                 }
                 if (_placed.Count == anchorIndex)
                     _placed.Add(new PlacedChar(block, start, x + startDistance, y, 0, item.Height,
-                        pieces[^1].Formatting, '\0', Sentinel: true, ShapedText: ""));
+                        BodyPieceAtOffset(pieces, start).Formatting, '\0', Sentinel: true, ShapedText: ""));
                 _bodyTextLines.Add(new(block, text, stops, line, pieces, anchorIndex, startDistance, item.Height,
                     leftInset + pf.IndentLeftPt * PxPerPoint + item.ExtraInset));
                 if (!string.IsNullOrWhiteSpace(pf.ShadingColorHex) || pf.Border is not null)
                     _paragraphDecorations.Add((new Rect(x - 2, y, item.Width + 4, item.Height), pf.ShadingColorHex, pf.Border));
                 if (lineIndex == 0 && marker is not null)
                 {
-                    var fmt = pieces[0].Formatting;
+                    var fmt = pieces.First(piece => !piece.Source.IsCommentReference).Formatting;
                     _markers.Add((x - Build(marker, fmt).WidthIncludingTrailingWhitespace - 6, y, marker, fmt));
                 }
                 _layoutContentY = contentY + item.Height;
@@ -505,6 +568,17 @@ public sealed partial class DocumentView
                     foreach (var bounds in item.Line.GetTextBounds(start, end - start))
                         if (bounds.Rectangle.Width > 0) context.FillRectangle(SelectionBrush, bounds.Rectangle.Translate(new Vector(origin.X, origin.Y)));
             }
+            if (CurrentReviewDisplayPolicy.ShouldHighlightComments)
+                foreach (var commentRange in BodyMetadataRanges<int>(item.Pieces, static piece => piece.CommentId))
+                {
+                    var start = commentRange.Start; var end = commentRange.End;
+                    if (!ClipBodyMetadataToLine(item, ref start, ref end)) continue;
+                    var left = BodyInsertionDistance(item.Line, item.Boundaries, start);
+                    var right = BodyInsertionDistance(item.Line, item.Boundaries, end);
+                    if (right <= left) continue;
+                    var tint = IsCommentResolved(commentRange.Value) ? ResolvedCommentTintBrush : CommentTintBrush;
+                    context.FillRectangle(tint, new Rect(origin.X + left, origin.Y, right - left, item.AdvanceHeight));
+                }
             item.Line.Draw(context, origin);
         }
         var proofing = BuildProofingOffsetSet();
@@ -626,7 +700,7 @@ public sealed partial class DocumentView
         }
     }
 
-    private void AppendShapedBodyPdfText(List<List<PdfDrawOp>> pages, double pageHeightPt)
+    private void AppendShapedBodyPdfText(List<List<PdfDrawOp>> pages, List<List<PdfLinkOverlay>> pageLinkOverlays, double pageHeightPt)
     {
         foreach (var item in _bodyTextLines)
         {
@@ -639,7 +713,8 @@ public sealed partial class DocumentView
                 var x = origin.X + span.X;
                 var sourceOffset = span.Start;
                 var text = span.Text;
-                var formatting = item.Pieces.FirstOrDefault(piece => sourceOffset >= piece.Start && sourceOffset < piece.End)?.Formatting ?? item.Pieces[^1].Formatting;
+                var piece = BodyPieceAtOffset(item.Pieces, sourceOffset);
+                var formatting = BodyDisplayFormatting(piece.Formatting, piece.Link);
                 var size = formatting.FontSizePt ?? DefaultFontSizePt;
                 var face = (formatting.Bold, formatting.Italic) switch
                 {
@@ -664,6 +739,24 @@ public sealed partial class DocumentView
                 if (formatting.Strikethrough)
                     pages[page].Add(new PdfLine(xPt, yPt - item.AdvanceHeight * 0.5 / PxPerPoint,
                         xPt + widthPt, yPt - item.AdvanceHeight * 0.5 / PxPerPoint, ParseColor(formatting.ColorHex), Math.Max(0.5, size / 14)));
+            }
+            // Shaping can coalesce adjacent links with identical display formatting. Their
+            // semantic targets/ScreenTips remain independent of those painted font spans.
+            foreach (var range in BodyMetadataRanges<LinkInfo>(item.Pieces, static piece => piece.Link))
+            {
+                var start = range.Start; var end = range.End;
+                if (!ClipBodyMetadataToLine(item, ref start, ref end)) continue;
+                var left = BodyInsertionDistance(item.Line, item.Boundaries, start);
+                var right = BodyInsertionDistance(item.Line, item.Boundaries, end);
+                if (right <= left) continue;
+                while (pageLinkOverlays.Count <= page) pageLinkOverlays.Add([]);
+                var link = range.Value;
+                pageLinkOverlays[page].Add(new PdfLinkOverlay(
+                    Math.Max(0, (origin.X + left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt),
+                    Math.Max(0, (origin.Y - _surfacePlan.PageTopDip(page)) / PxPerPoint),
+                    (right - left) / PxPerPoint, item.AdvanceHeight / PxPerPoint,
+                    link.IsExternal ? link.Url : null, link.Tooltip,
+                    link.IsInternal ? link.Anchor?.TrimStart('#').Trim() : null));
             }
         }
     }

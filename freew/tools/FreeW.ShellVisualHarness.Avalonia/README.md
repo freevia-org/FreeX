@@ -18,8 +18,19 @@ It exits nonzero on behavioral failures and saves actual/reference PNGs and JSON
 Explicit LF/CRLF reference cases preserve source-length line controls through an
 `ITextSource`. The shared PDF backend's complex shaping is a separate concern.
 
-The first production slice covers ordinary LTR body paragraphs containing a
-multi-unit text element. Rich/RTL/tab/float/character-spacing/automatic-hyphenation
-paths and style changes inside one grapheme remain outside this lane's claim.
+The lane covers ordinary LTR body paragraphs containing a multi-unit text element,
+including hyperlink/comment marks whose semantic boundaries are legal grapheme
+stops. Fields, objects, revisions, RTL, tabs, float wrapping, automatic hyphenation,
+and authored style or semantic changes inside one grapheme retain separate paths.
 
 Uniform tracking is also checked with positive and condensed advances, including zero-advance noncomposed marks and clamping. Its independent untracked reference checks glyph choices and ink positions within each source text element separately from added advance. Mixed tracking and authored or actual multi-element ligature clusters retain the separate legacy policy.
+
+Soft-metadata cases exercise public hyperlink/comment edits and imported split
+source runs, default and explicit link colours, actual underline fragments,
+active/resolved/hidden comment tint, adjacent distinct link targets and ScreenTips,
+and linked tracking. The new metadata fixtures author exact 40-point line spacing;
+the original 40 controls keep their existing metrics. PDF annotation expectations
+come from authored semantic intervals, independent whole-layout bounds checked
+against legal reference character hits, and model margins/indent/line spacing.
+Only each line's intersecting source interval is queried. These adapter checks do
+not establish complex PDF font shaping or fidelity against Microsoft Word.

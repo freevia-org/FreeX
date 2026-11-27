@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -35,6 +36,11 @@ internal static class BodyTextSpanRegression
                 ("zwj-split", ["a👩", "\u200d", "💻b"]),
                 ("latin-context", ["AV😀To"]), ("soft-breaks", ["a😀\n\nb\n"]),
                 ("crlf", ["a😀\r\n\r\nb\r\n"]), ("styled", ["a", "😀", "b"]),
+                ("hyperlink-default-emoji", ["a😀b"]), ("hyperlink-combining", ["ae\u035Cb"]), ("hyperlink-zwj", ["a👩‍💻b"]),
+                ("hyperlink-split", ["a\uD83D", "\uDE00b"]), ("hyperlink-mixed", ["a", "😀", "b"]),
+                ("hyperlink-adjacent", ["a", "😀", "e\u035C", "👩‍💻", "b"]),
+                ("comment-emoji", ["a😀b"]), ("comment-zwj", ["a👩‍💻b"]),
+                ("comment-resolved", ["ae\u035Cb"]), ("comment-hidden", ["a😀b"]), ("hyperlink-comment", ["a😀b"]),
             };
             foreach (var test in cases)
                 foreach (var width in new[] { 416d, 60d })
@@ -43,7 +49,8 @@ internal static class BodyTextSpanRegression
                     var document = TextDocument.CreateEmpty(); document.Blocks.Clear();
                     var paragraph = new Paragraph();
                     for (var i = 0; i < test.Pieces.Length; i++)
-                        paragraph.Runs.Add(new Run(test.Pieces[i], test.Id == "empty-style" && i == 1
+                        paragraph.Runs.Add(new Run(test.Pieces[i], test.Id == "hyperlink-default-emoji" ? format with { ColorHex = null }
+                            : test.Id == "empty-style" && i == 1
                             ? format with { Bold = true, ColorHex = "#9b2226" }
                             : test.Id == "styled" && i > 0
                             ? format with { ColorHex = i == 1 ? "#226644" : "#9b2226", Bold = i == 2 } : format));
@@ -54,6 +61,8 @@ internal static class BodyTextSpanRegression
                     document.Page.MarginLeftPt = document.Page.MarginRightPt = width == 416 ? 24 : 75;
                     document.Page.MarginTopPt = document.Page.MarginBottomPt = 24;
                     paragraph.Formatting = paragraph.Formatting with { IndentLeftPt = width == 416 ? 0 : 45 };
+                    if (test.Id.StartsWith("hyperlink", StringComparison.Ordinal) || test.Id.StartsWith("comment", StringComparison.Ordinal))
+                        paragraph.Formatting = paragraph.Formatting with { LineRule = LineSpacingRule.Exact, LineHeightPt = 40 };
                     // Small-page content is floored at 120 DIP; the authored 60 DIP indent
                     // gives the actual 60 DIP narrow line, without altering Unicode advances.
                     var constructor = typeof(DocumentView).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic,
@@ -64,21 +73,61 @@ internal static class BodyTextSpanRegression
                     try
                     {
                         window.Show(); view.Focus(); view.Measure(new Size(700, 500)); view.Arrange(new Rect(0, 0, 700, 500));
+                        int? commentId = null; var commentStart = 0; var commentEnd = 0;
+                        if (test.Id.StartsWith("hyperlink", StringComparison.Ordinal))
+                        {
+                            if (test.Id is "hyperlink-split" or "hyperlink-adjacent")
+                            {
+                                for (var i = 0; i < paragraph.Runs.Count; i++)
+                                {
+                                    if (test.Id == "hyperlink-adjacent" && (i == 0 || i == paragraph.Runs.Count - 1)) continue;
+                                    paragraph.Runs[i].HyperlinkUrl = test.Id == "hyperlink-adjacent" && i == 3 ? null : "https://example.invalid/" + (test.Id == "hyperlink-adjacent" ? i : 0);
+                                    paragraph.Runs[i].HyperlinkAnchor = test.Id == "hyperlink-adjacent" && i == 3 ? "SyntheticTarget" : null;
+                                    paragraph.Runs[i].HyperlinkTooltip = "Synthetic target " + (test.Id == "hyperlink-adjacent" ? i : 0);
+                                }
+                                view.InvalidateAfterExternalMutation();
+                            }
+                            else
+                            {
+                                var stops = StringInfo.ParseCombiningCharacters(paragraph.PlainText).Append(paragraph.PlainText.Length).ToArray();
+                                var start = test.Id == "hyperlink-mixed" ? stops[1] : 0;
+                                var end = test.Id == "hyperlink-mixed" ? stops[2] : paragraph.PlainText.Length;
+                                SelectRange(view, start, end);
+                                view.InsertHyperlink(paragraph.PlainText[start..end], "https://example.invalid");
+                            }
+                        }
+                        if (test.Id.StartsWith("comment", StringComparison.Ordinal) || test.Id == "hyperlink-comment")
+                        {
+                            var stops = StringInfo.ParseCombiningCharacters(paragraph.PlainText).Append(paragraph.PlainText.Length).ToArray();
+                            commentStart = stops[1]; commentEnd = stops[2];
+                            SelectRange(view, commentStart, commentEnd);
+                            commentId = view.AddComment("Synthetic note", "Reviewer", "R");
+                            Check(commentId is not null, id + ": public comment did not create a thread");
+                            if (test.Id == "comment-resolved" && commentId is { } resolved) view.SetCommentResolved(resolved, true);
+                            if (test.Id == "comment-hidden") view.ApplyShowMarkupComments(false);
+                        }
+                        if (test.Id.StartsWith("hyperlink", StringComparison.Ordinal) || test.Id.StartsWith("comment", StringComparison.Ordinal))
+                            originals = paragraph.Runs.ToArray(); // Public metadata edits legitimately replace source runs before rendering.
+                        Check(paragraph.PlainText == string.Concat(test.Pieces), id + ": public metadata edit changed the input text");
+                        view.Measure(new Size(700, 500)); view.Arrange(new Rect(0, 0, 700, 500));
                         var text = paragraph.PlainText;
                         var boundaries = StringInfo.ParseCombiningCharacters(text).Append(text.Length).ToArray();
                         var drawing = new DrawingGroup(); using (var context = drawing.Open()) view.Render(context);
-                        var glyphs = Flatten(drawing).OfType<GlyphRunDrawing>().Where(glyph => glyph.Foreground is ISolidColorBrush brush
-                            && paragraph.Runs.Any(run => Color.Parse(run.Formatting.ColorHex!) == brush.Color)).Select(glyph => glyph.GlyphRun!).ToArray();
+                        var painted = Flatten(drawing).OfType<GlyphRunDrawing>().Where(glyph => glyph.Foreground is ISolidColorBrush brush
+                            && paragraph.Runs.Any(run => run.Text.Length > 0 && DisplayColor(run) == brush.Color)).ToArray();
+                        var glyphs = painted.Select(glyph => glyph.GlyphRun!).ToArray();
                         Check(glyphs.All(glyph => IsValid(glyph.Characters.Span.ToString())), id + ": isolated surrogate sent to painted glyph run");
                         var styles = new List<ValueSpan<TextRunProperties>>(); var offset = 0;
                         RunFormatting? previousStyle = null;
                         foreach (var run in paragraph.Runs)
                         {
                             if (run.Text.Length == 0) continue;
-                            var f = run.Formatting;
+                            var linked = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 };
+                            var f = run.Formatting with { ColorHex = DisplayColor(run).ToString(), Underline = run.Formatting.Underline || linked };
                             var properties = new GenericTextRunProperties(new Typeface(DocumentFontFamilyResolver.Resolve(f.FontFamily),
                                 f.Italic ? FontStyle.Italic : FontStyle.Normal, f.Bold ? FontWeight.Bold : FontWeight.Normal),
-                                (f.FontSizePt ?? 11) * 4 / 3, foregroundBrush: Brush.Parse(f.ColorHex!));
+                                (f.FontSizePt ?? 11) * 4 / 3, textDecorations: f.Underline ? TextDecorations.Underline : null,
+                                foregroundBrush: Brush.Parse(f.ColorHex!));
                             if (previousStyle == f && styles.Count > 0)
                                 styles[^1] = new(styles[^1].Start, styles[^1].Length + run.Text.Length, styles[^1].Value);
                             else styles.Add(new(offset, run.Text.Length, properties));
@@ -97,6 +146,35 @@ internal static class BodyTextSpanRegression
                             .Select(run => Signature(run.GlyphRun)).ToArray();
                         var actual = glyphs.Select(Signature).ToArray();
                         Check(actual.SequenceEqual(expected), id + ": actual painted glyphs differ from independent whole-span reference");
+                        var expectedColors = reference.TextLines.SelectMany(line => line.TextRuns.OfType<ShapedTextRun>())
+                            .Select(run => (run.Properties.ForegroundBrush as ISolidColorBrush)?.Color).ToArray();
+                        Check(painted.Select(glyph => (glyph.Foreground as ISolidColorBrush)?.Color).SequenceEqual(expectedColors),
+                            id + ": painted glyph colours differ from independent display-style reference");
+                        var referenceDrawing = new DrawingGroup(); using (var context = referenceDrawing.Open()) reference.Draw(context, new Point());
+                        var expectedUnderlines = PaintLines(referenceDrawing, paragraph.Runs.Where(run => run.Text.Length > 0).Select(DisplayColor).ToArray()).ToArray();
+                        var actualUnderlines = PaintLines(drawing, paragraph.Runs.Where(run => run.Text.Length > 0).Select(DisplayColor).ToArray()).ToArray();
+                        if (test.Id.StartsWith("hyperlink", StringComparison.Ordinal)) Check(expectedUnderlines.Length > 0, id + ": underline reference did not paint any lines");
+                        Check(actualUnderlines.Length == expectedUnderlines.Length, id + ": hyperlink underline fragments differ from independent reference");
+                        for (var underline = 0; underline < Math.Min(actualUnderlines.Length, expectedUnderlines.Length); underline++)
+                            Check(Math.Abs(actualUnderlines[underline].Width - expectedUnderlines[underline].Width) < 0.01
+                                && actualUnderlines[underline].Color == expectedUnderlines[underline].Color,
+                                id + ": hyperlink underline width/colour differs from independent reference");
+                        if (commentId is not null)
+                        {
+                            var tintColor = test.Id == "comment-resolved" ? Color.FromArgb(0x1F, 0x9E, 0x9E, 0x9E) : Color.FromArgb(0x33, 0xFF, 0xC1, 0x07);
+                            var tintBounds = Flatten(drawing).OfType<GeometryDrawing>()
+                                .Where(item => item.Brush is ISolidColorBrush brush && brush.Color == tintColor).Select(item => item.Geometry!.Bounds).ToArray();
+                            var expectedTint = reference.TextLines.SelectMany(line =>
+                            {
+                                var start = Math.Max(commentStart, line.FirstTextSourceIndex);
+                                var end = Math.Min(commentEnd, line.FirstTextSourceIndex + line.Length);
+                                return end > start && test.Id != "comment-hidden" ? line.GetTextBounds(start, end - start) : [];
+                            }).Where(bounds => bounds.Rectangle.Width > 0).ToArray();
+                            Check(tintBounds.Length == expectedTint.Length, id + ": comment tint fragments differ from independent shaped range");
+                            for (var tint = 0; tint < Math.Min(tintBounds.Length, expectedTint.Length); tint++)
+                                Check(Math.Abs(tintBounds[tint].Width - expectedTint[tint].Rectangle.Width) < 0.01,
+                                    id + ": comment tint width differs from independent shaped range");
+                        }
                         for (var frame = 0; frame < 3; frame++)
                         {
                             // Allocate unrelated formatting/ruler glyphs between paints. Narrow
@@ -105,7 +183,7 @@ internal static class BodyTextSpanRegression
                             _ = noise.Width;
                             var repeat = new DrawingGroup(); using (var context = repeat.Open()) view.Render(context);
                             var signature = Flatten(repeat).OfType<GlyphRunDrawing>().Where(glyph => glyph.Foreground is ISolidColorBrush brush
-                                && paragraph.Runs.Any(run => Color.Parse(run.Formatting.ColorHex!) == brush.Color)).Select(glyph => Signature(glyph.GlyphRun!));
+                                && paragraph.Runs.Any(run => run.Text.Length > 0 && DisplayColor(run) == brush.Color)).Select(glyph => Signature(glyph.GlyphRun!));
                             Check(signature.SequenceEqual(expected), id + ": retained shaped buffers changed after unrelated formatting");
                         }
                         Send(view, Key.Home, KeyModifiers.Control);
@@ -146,7 +224,10 @@ internal static class BodyTextSpanRegression
                             Check(Math.Abs(selectedBounds[selectedIndex].Width - referenceBounds[selectedIndex].Width) < 0.01
                                 && Math.Abs(selectedBounds[selectedIndex].X - x - referenceBounds[selectedIndex].X) < 0.01,
                                 id + ": selection geometry differs from rendered shaped span");
-                        var pdfPieces = view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<Free.Shared.Pdf.PdfText>().Select(op => op.Text).ToArray();
+                        var exported = view.BuildPdfContent();
+                        var pdfPieces = exported.Pages.SelectMany(page => page.Ops).OfType<Free.Shared.Pdf.PdfText>().Select(op => op.Text).ToArray();
+                        if (test.Id.StartsWith("hyperlink", StringComparison.Ordinal) || test.Id.StartsWith("comment", StringComparison.Ordinal))
+                            VerifyMetadataPdfLinks(id, test.Id, string.Concat(test.Pieces), reference, document, exported, Check);
                         var pdfText = string.Concat(pdfPieces);
                         Check(pdfPieces.All(IsValid), id + ": individual PDF text primitive split a Unicode scalar");
                         Check(IsValid(pdfText), id + ": PDF adapter emitted isolated surrogate text");
@@ -156,7 +237,9 @@ internal static class BodyTextSpanRegression
                         { bitmap.Render(view); bitmap.Save(Path.Combine(output, id + "-actual.png")); }
                         using (var bitmap = new RenderTargetBitmap(new PixelSize(700, 500), new Vector(96, 96)))
                         {
-                            var control = new ReferenceControl(reference) { Width = 700, Height = 500 };
+                            var exactAdvance = test.Id.StartsWith("hyperlink", StringComparison.Ordinal) || test.Id.StartsWith("comment", StringComparison.Ordinal)
+                                ? 40d * 4 / 3 : (double?)null;
+                            var control = new ReferenceControl(reference, exactAdvance) { Width = 700, Height = 500 };
                             control.Measure(new Size(700, 500)); control.Arrange(new Rect(0, 0, 700, 500));
                             bitmap.Render(control); bitmap.Save(Path.Combine(output, id + "-reference.png"));
                         }
@@ -169,7 +252,7 @@ internal static class BodyTextSpanRegression
             // Tracking oracle starts from independently shaped, UNTRACKED complete text. It
             // compares retained ink positions within each raw-source grapheme and the inter-element
             // advance separately; the framework's per-glyph LetterSpacing is not the oracle.
-            foreach (var sample in new[] { ("emoji", "a😀b"), ("noncomposed", "ae\u035Cb"), ("zwj", "a👩‍💻b") })
+            foreach (var sample in new[] { ("emoji", "a😀b"), ("noncomposed", "ae\u035Cb"), ("zwj", "a👩‍💻b"), ("linked-emoji", "a😀b") })
                 foreach (var spacing in new[] { 2d, -2d, -100d })
                     foreach (var width in new[] { 416d, 60d })
                     {
@@ -179,6 +262,7 @@ internal static class BodyTextSpanRegression
                             Brush.Parse(format.ColorHex!), textWrapping: TextWrapping.NoWrap);
                         var expected = GlyphEntries(reference.TextLines.SelectMany(line => line.TextRuns.OfType<ShapedTextRun>()).Select(run => run.GlyphRun)).ToArray();
                         var paragraph = new Paragraph(); paragraph.Runs.Add(new Run(text, format with { CharacterSpacingPt = spacing }));
+                        if (sample.Item1 == "linked-emoji") paragraph.Runs[0].HyperlinkUrl = "https://tracked.invalid";
                         var source = paragraph.Runs[0];
                         var document = TextDocument.CreateEmpty(); document.Blocks.Clear(); document.Blocks.Add(paragraph);
                         document.Page.WidthPt = width == 416 ? 360 : 240; document.Page.HeightPt = 300;
@@ -262,9 +346,12 @@ internal static class BodyTextSpanRegression
                         finally { window.Close(); }
                     }
         }, CancellationToken.None);
+        var application = typeof(DocumentView).Assembly;
         File.WriteAllText(Path.Combine(output, "text-span-regression.json"), JsonSerializer.Serialize(new { Result = failures.Count == 0 ? "passed" : "failed",
+            ApplicationAssembly = new { Path = application.Location, Sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(application.Location))).ToLowerInvariant(),
+                InformationalVersion = application.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion },
             Renderer = "Avalonia.Skia; UseHeadlessDrawing=false", Cases = results, Failures = failures,
-            PdfQualification = "Logical Unicode text collection checked; shared PDF complex shaping is not covered." }, new JsonSerializerOptions { WriteIndented = true }));
+            PdfQualification = "Logical Unicode text and independently referenced soft-metadata annotation geometry/style checked; shared PDF complex shaping is not covered." }, new JsonSerializerOptions { WriteIndented = true }));
         foreach (var failure in failures) Console.Error.WriteLine(failure);
         Console.WriteLine($"Real Skia text-span cases: {results.Count}; failures: {failures.Count}");
         return failures.Count == 0 ? 0 : 1;
@@ -273,6 +360,85 @@ internal static class BodyTextSpanRegression
     }
 
     private sealed record GlyphEntry(int Source, string Font, ushort Glyph, double Advance, double X, double Y);
+
+    private static void VerifyMetadataPdfLinks(string id, string fixture, string text, TextLayout reference,
+        TextDocument document, Free.Shared.Pdf.PdfContentDocument exported, Action<bool, string> check)
+    {
+        var stops = StringInfo.ParseCombiningCharacters(text).Append(text.Length).ToArray();
+        var ranges = new List<(int Start, int End, string? Uri, string? Destination, string? Tooltip)>();
+        if (fixture == "hyperlink-adjacent")
+        {
+            ranges.Add((1, 3, "https://example.invalid/1", null, "Synthetic target 1"));
+            ranges.Add((3, 5, "https://example.invalid/2", null, "Synthetic target 2"));
+            ranges.Add((5, 10, null, "SyntheticTarget", "Synthetic target 3"));
+        }
+        else if (fixture == "hyperlink-split") ranges.Add((0, text.Length, "https://example.invalid/0", null, "Synthetic target 0"));
+        else if (fixture == "hyperlink-mixed") ranges.Add((stops[1], stops[2], "https://example.invalid", null, null));
+        else if (fixture.StartsWith("hyperlink", StringComparison.Ordinal)) ranges.Add((0, text.Length, "https://example.invalid", null, null));
+        var expected = new List<Free.Shared.Pdf.PdfLinkOverlay>();
+        for (var lineIndex = 0; lineIndex < reference.TextLines.Count; lineIndex++)
+        {
+            var line = reference.TextLines[lineIndex];
+            foreach (var range in ranges)
+            {
+                var start = Math.Max(range.Start, line.FirstTextSourceIndex);
+                var end = Math.Min(range.End, Math.Min(text.Length, line.FirstTextSourceIndex + line.Length));
+                while (end > start && IsBreak(text[end - 1])) end--;
+                if (end <= start) continue;
+                // The complete independent layout supplies glyph/fallback geometry. Query only
+                // the source interval owned by this line, never an out-of-line metadata range.
+                var bounds = line.GetTextBounds(start, end - start).Select(item => item.Rectangle).Where(rect => rect.Width > 0).ToArray();
+                if (bounds.Length == 0) continue;
+                var left = bounds.Min(rect => rect.Left); var right = bounds.Max(rect => rect.Right);
+                var leftHit = line.GetDistanceFromCharacterHit(new CharacterHit(start));
+                var previousStop = stops.Last(stop => stop < end);
+                var rightHit = line.GetDistanceFromCharacterHit(new CharacterHit(previousStop, end - previousStop));
+                check(Math.Abs(left - leftHit) < 0.01 && Math.Abs(right - rightHit) < 0.01,
+                    id + ": independent bounds include text outside the legal semantic interval");
+                var paragraph = (Paragraph)document.Blocks[0];
+                // New metadata fixtures author exact 40pt spacing. Page margins/indent and
+                // reference line ordinal determine the transform without product caret helpers.
+                expected.Add(new Free.Shared.Pdf.PdfLinkOverlay(document.Page.MarginLeftPt + paragraph.Formatting.IndentLeftPt + left * 3 / 4,
+                    document.Page.MarginTopPt + lineIndex * 40, (right - left) * 3 / 4, 40,
+                    range.Uri, range.Tooltip, range.Destination));
+            }
+        }
+        var actual = exported.Pages.SelectMany(page => page.LinkOverlays ?? []).ToArray();
+        check(actual.Length == expected.Count, id + ": PDF semantic link fragment count differs from authored/reference ranges");
+        for (var index = 0; index < Math.Min(actual.Length, expected.Count); index++)
+        {
+            var observed = actual[index]; var target = expected[index];
+            check(observed.Uri == target.Uri && observed.DestinationName == target.DestinationName && observed.Tooltip == target.Tooltip,
+                id + ": PDF target or ScreenTip differs from authored semantic range");
+            check(Math.Abs(observed.X - target.X) < 0.01 && Math.Abs(observed.Y - target.Y) < 0.01
+                && Math.Abs(observed.Width - target.Width) < 0.01 && Math.Abs(observed.Height - target.Height) < 0.01,
+                id + ": PDF annotation rectangle differs from independent layout/model transform");
+        }
+    }
+
+    private static Color DisplayColor(Run run) => Color.Parse(string.IsNullOrWhiteSpace(run.Formatting.ColorHex)
+        ? run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 } ? "#0563C1" : "#000000"
+        : run.Formatting.ColorHex);
+
+    private static IEnumerable<(double Width, Color Color)> PaintLines(DrawingGroup drawing, Color[] colors) =>
+        Flatten(drawing).OfType<GeometryDrawing>()
+            .Where(item => item.Pen?.Brush is ISolidColorBrush brush && colors.Contains(brush.Color) && item.Geometry is not null)
+            .Select(item => (item.Geometry!.Bounds.Width, ((ISolidColorBrush)item.Pen!.Brush!).Color));
+
+    private static void SelectRange(DocumentView view, int start, int end)
+    {
+        // Production keyboard/public surfaces also exist in the published pre-fix DLL;
+        // conditional host-test selection helpers do not belong in this durable lane.
+        var text = ((Paragraph)view.Document.Blocks[0]).PlainText;
+        var stops = StringInfo.ParseCombiningCharacters(text).Append(text.Length).ToArray();
+        if (!stops.Contains(start) || !stops.Contains(end) || end < start)
+            throw new ArgumentException("The synthetic metadata range must use legal grapheme stops.");
+        Send(view, Key.Home, KeyModifiers.Control);
+        foreach (var _ in stops.Where(stop => stop > 0 && stop <= start)) Send(view, Key.Right);
+        foreach (var _ in stops.Where(stop => stop > start && stop <= end)) Send(view, Key.Right, KeyModifiers.Shift);
+        if (view.SelectedText != text[start..end])
+            throw new InvalidOperationException("Production keyboard did not establish the synthetic metadata range.");
+    }
     private static IEnumerable<GlyphEntry> GlyphEntries(IEnumerable<GlyphRun> runs)
     {
         double x = 0; var source = 0;
@@ -289,12 +455,15 @@ internal static class BodyTextSpanRegression
         }
     }
 
-    private sealed class ReferenceControl(TextLayout layout) : Control
+    private sealed class ReferenceControl(TextLayout layout, double? exactAdvance = null) : Control
     {
         public override void Render(DrawingContext context)
         {
             context.FillRectangle(Brushes.White, new Rect(0, 0, 700, 500));
-            layout.Draw(context, new Point(20, 20));
+            if (exactAdvance is { } advance)
+                for (var index = 0; index < layout.TextLines.Count; index++)
+                    layout.TextLines[index].Draw(context, new Point(20, 20 + index * advance));
+            else layout.Draw(context, new Point(20, 20));
         }
     }
 

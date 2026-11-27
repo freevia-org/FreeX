@@ -3354,7 +3354,7 @@ public sealed partial class DocumentView : Control
         }
 
         Flush();
-        AppendShapedBodyPdfText(pagesOps, pageHeightPt);
+        AppendShapedBodyPdfText(pagesOps, pageLinkOverlays, pageHeightPt);
 
         var emittedDestinationNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var location in Bookmarks.List(_doc))
