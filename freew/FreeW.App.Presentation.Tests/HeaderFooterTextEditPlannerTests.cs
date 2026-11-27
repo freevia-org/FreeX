@@ -51,6 +51,25 @@ public sealed class HeaderFooterTextEditPlannerTests
     }
 
     [Fact]
+    public void PlanDelete_distinguishes_paragraph_slots_even_when_their_instances_are_aliased()
+    {
+        var paragraph = new Paragraph("abc");
+        var story = new HeaderFooter();
+        story.Paragraphs.AddRange([paragraph, paragraph]);
+
+        var plan = HeaderFooterTextEditPlanner.PlanDelete(story,
+            new HeaderFooterTextRange(new HeaderFooterTextPosition(0, 1), new HeaderFooterTextPosition(1, 2)));
+
+        plan.Should().NotBeNull();
+        plan!.FirstParagraphIndex.Should().Be(0);
+        plan.RemoveCount.Should().Be(2);
+        plan.ReplacementParagraphs.Should().ContainSingle().Which.PlainText.Should().Be("ac");
+        plan.Caret.Should().Be(new HeaderFooterTextPosition(0, 1));
+        paragraph.PlainText.Should().Be("abc");
+        story.Paragraphs.Should().Equal(paragraph, paragraph);
+    }
+
+    [Fact]
     public void PlanDelete_snaps_a_partial_field_selection_to_the_whole_field()
     {
         var story = new HeaderFooter();

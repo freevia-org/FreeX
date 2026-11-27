@@ -1800,33 +1800,6 @@ public sealed partial class DocumentView : Control
         return (atoms.Count, false);
     }
 
-    /// <summary>The active run formatting for a typed character at <paramref name="modelOffset"/> (inherits the char before, else after, else default).</summary>
-    private static RunFormatting HfActiveFormatting(List<HfAtom> atoms, int modelOffset)
-    {
-        var (idx, _) = HfAtomIndexForOffset(atoms, modelOffset);
-        if (idx > 0 && idx - 1 < atoms.Count && !atoms[idx - 1].IsField)
-            return atoms[idx - 1].Fmt;
-        if (idx < atoms.Count && !atoms[idx].IsField)
-            return atoms[idx].Fmt;
-        // Fall back to the first literal atom's formatting, else default.
-        var firstLiteral = atoms.FirstOrDefault(a => !a.IsField);
-        return atoms.Any(a => !a.IsField) ? firstLiteral.Fmt : RunFormatting.Default;
-    }
-
-    /// <summary>
-    /// AV-CCEDIT: the content control a character typed at <paramref name="atomIndex"/> belongs to — the
-    /// atom before the caret, else the one after it. Mirrors <see cref="HfActiveFormatting"/>, and the
-    /// body's neighbour-inheritance rule for typed cells.
-    /// </summary>
-    private static ModelContentControl? HfActiveContentControl(List<HfAtom> atoms, int atomIndex)
-    {
-        if (atomIndex > 0 && atomIndex - 1 < atoms.Count && !atoms[atomIndex - 1].IsField)
-            return atoms[atomIndex - 1].Control;
-        if (atomIndex >= 0 && atomIndex < atoms.Count && !atoms[atomIndex].IsField)
-            return atoms[atomIndex].Control;
-        return null;
-    }
-
     /// <summary>
     /// AV-CCEDIT: whether characters typed at <paramref name="offset"/> may join the field they would be
     /// inherited into. Nothing to allow when the caret is not in a field at all.
@@ -1836,9 +1809,10 @@ public sealed partial class DocumentView : Control
         if (GetHfParagraph(target) is not { } paragraph)
             return true;
 
-        var atoms = HfAtoms(paragraph);
-        var (index, _) = HfAtomIndexForOffset(atoms, offset);
-        if (HfActiveContentControl(atoms, index) is not { } control)
+        if (ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl))
+            return false;
+
+        if (StoryParagraphRunEditPlanner.TypingRun(paragraph, offset, string.Empty).Control is not { } control)
             return true;
 
         return paragraph.Runs
@@ -1856,6 +1830,9 @@ public sealed partial class DocumentView : Control
     {
         if (GetHfParagraph(target) is not { } paragraph)
             return true;
+
+        if (ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl))
+            return false;
 
         var lo = Math.Min(from, to);
         var hi = Math.Max(from, to);
@@ -1883,25 +1860,32 @@ public sealed partial class DocumentView : Control
         return true;
     }
 
-    /// <summary>Runs an undoable edit on the H/F caret's paragraph, then refreshes layout + caret.</summary>
-    private void HfEditParagraph(HfTarget target, Action<List<HfAtom>> mutate, int newOffset)
+    /// <summary>Insert literal text without rebuilding unrelated source runs through character atoms.</summary>
+    private bool HfInsertText(string text) => RunTextGesture("Insert text", () => HfInsertTextCore(text));
+
+    private bool HfInsertTextCore(string text)
     {
-        var slot = HeaderFooterDialogPlanner.CommandSlotIndexFor(target.Slot);
-        var ownsUndoGroup = IsEmptyHeaderFooterPlaceholder(target) && !_bus.IsUndoGroupOpen;
+        if (_hfCaret is null)
+            return false;
+        if (NormalizedHfSelection() is not { } selection
+            || selection.Start.ParagraphIndex == selection.End.ParagraphIndex)
+            return HfTryInsertSameParagraphText(text);
+        if (!HfCanUseLegacyParagraphMerge())
+            return false;
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
         try
         {
-            MaterializeEmptyHeaderFooterStory(target);
-            _bus.Execute(new FreeW.Core.Model.EditHeaderFooterParagraphCommand(
-                target.SectionIndex, target.UseFinalSectionStore, slot, target.ParaIdx, p =>
-                {
-                    var atoms = HfAtoms(p);
-                    mutate(atoms);
-                    HfSetAtoms(p, atoms);
-                }));
+            if (!TryDeleteHfSelection() || !HfTryInsertSameParagraphText(text))
+            {
+                if (ownsUndoGroup)
+                    _bus.RollbackUndoGroup();
+                return false;
+            }
             if (ownsUndoGroup)
-                _bus.CommitUndoGroup("Edit header/footer");
+                _bus.CommitUndoGroup("Replace header/footer selection");
+            return true;
         }
         catch
         {
@@ -1909,114 +1893,38 @@ public sealed partial class DocumentView : Control
                 _bus.RollbackUndoGroup();
             throw;
         }
-        var len = HfParaLength(target);
-        _hfCaret = (target, Math.Clamp(newOffset, 0, len));
-        _hfSelectionAnchor = null;
-        // Re-layout at the current width so the H/F band + caret reflect the edit immediately.
-        var width = _laidOutWidth > 0 ? _laidOutWidth : FallbackWidth;
-        Relayout(width);
-        InvalidateVisual();
-        CaretMoved?.Invoke();
-    }
-
-    /// <summary>Insert literal text at the H/F caret (field runs are never split).</summary>
-    private void HfInsertText(string text) => RunTextGesture("Insert text", () => HfInsertTextCore(text));
-
-    private void HfInsertTextCore(string text)
-    {
-        if (_hfCaret is not { } hc)
-            return;
-        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
-        if (ownsUndoGroup)
-            _bus.BeginUndoGroup();
-        if (NormalizedHfSelection() is not null && !TryDeleteHfSelection())
-        {
-            if (ownsUndoGroup)
-                _bus.RollbackUndoGroup();
-            return;
-        }
-        if (_hfCaret is not { } activeCaret)
-            return;
-        var target = activeCaret.Target;
-        var offset = activeCaret.Offset;
-        // AV-CCEDIT: typing must not extend a locked field. The characters join whichever field they are
-        // typed into (see HfActiveContentControl), so the lock to consult is that field's — a strict
-        // "is the caret inside the run" test would miss typing at the field's END boundary, which
-        // inheritance still routes into the field.
-        if (!HfTypingIsAllowed(target, offset))
-        {
-            if (ownsUndoGroup)
-                _bus.RollbackUndoGroup();
-            return;
-        }
-
-        HfEditParagraph(target, atoms =>
-        {
-            var (idx, _) = HfAtomIndexForOffset(atoms, offset);
-            var fmt = HfActiveFormatting(atoms, offset);
-            // AV-CCEDIT: like body typing, the new characters inherit the field they are typed into (the
-            // atom before the caret, else the one after), so they extend that w:sdt instead of splitting
-            // it into "field / plain text / field" on save.
-            var control = HfActiveContentControl(atoms, idx);
-
-            // AV-CCPLACEHOLDER (header/footer): the header/footer twin of ApplyContentControlTextEdit's
-            // placeholder clearing -- this is a genuine edit to the field's own text, so it stops
-            // "showing placeholder text" even if Word never learns the field is now non-empty until this
-            // typed character lands, matching Word's drop of w:showingPlcHdr the instant a placeholder
-            // field is typed into. Every atom still referencing the original control instance (untouched
-            // characters via the atoms already in the list, the ones about to be typed via `control`
-            // above) is retargeted to one shared cleared instance so the flag clears everywhere at once
-            // without splitting the field's run (HfSetAtoms groups atoms by Control REFERENCE equality,
-            // see SameContentControl).
-            if (control?.WordMetadata is { ShowingPlaceholder: true } placeholderMetadata)
-            {
-                var cleared = control with
-                {
-                    WordMetadata = placeholderMetadata with { ShowingPlaceholder = false }
-                };
-                for (var i = 0; i < atoms.Count; i++)
-                {
-                    if (SameContentControl(atoms[i].Control, control))
-                        atoms[i] = atoms[i] with { Control = cleared };
-                }
-                control = cleared;
-            }
-
-            var at = idx;
-            foreach (var ch in text)
-                atoms.Insert(at++, new HfAtom(ch, fmt, null, control));
-        }, offset + text.Length);
-        if (ownsUndoGroup)
-            _bus.CommitUndoGroup("Replace header/footer selection");
     }
 
     private bool HfInsertFieldRun(Run run)
     {
-        if (_hfCaret is not { } caret)
+        if (_hfCaret is null)
             return false;
-
-        var ownsUndoGroup = NormalizedHfSelection() is not null && !_bus.IsUndoGroupOpen;
+        if (NormalizedHfSelection() is not { } selection
+            || selection.Start.ParagraphIndex == selection.End.ParagraphIndex)
+            return HfTryInsertSameParagraphRun(run);
+        if (!HfCanUseLegacyParagraphMerge())
+            return false;
+        var ownsUndoGroup = !_bus.IsUndoGroupOpen;
         if (ownsUndoGroup)
             _bus.BeginUndoGroup();
-        if (NormalizedHfSelection() is not null && !TryDeleteHfSelection())
+        try
         {
+            if (!TryDeleteHfSelection() || !HfTryInsertSameParagraphRun(run))
+            {
+                if (ownsUndoGroup)
+                    _bus.RollbackUndoGroup();
+                return false;
+            }
             if (ownsUndoGroup)
-                _bus.RollbackUndoGroup();
-            return false;
+                _bus.CommitUndoGroup("Replace header/footer selection with field");
+            return true;
         }
-        if (_hfCaret is not { } activeCaret)
-            return false;
-
-        var target = activeCaret.Target;
-        var offset = activeCaret.Offset;
-        HfEditParagraph(target, atoms =>
+        catch
         {
-            var (index, _) = HfAtomIndexForOffset(atoms, offset);
-            atoms.Insert(index, new HfAtom('\0', run.Formatting, run));
-        }, offset + run.Text.Length);
-        if (ownsUndoGroup)
-            _bus.CommitUndoGroup("Replace header/footer selection with field");
-        return true;
+            if (ownsUndoGroup && _bus.IsUndoGroupOpen)
+                _bus.RollbackUndoGroup();
+            throw;
+        }
     }
 
     /// <summary>Backspace at the H/F caret: delete the literal atom before the caret (skips/removes a whole field atom).</summary>
@@ -2046,27 +1954,15 @@ public sealed partial class DocumentView : Control
             {
                 return;
             }
+            var previousAnchor = _hfSelectionAnchor;
             _hfSelectionAnchor = (
                 target with { ParaIdx = previousParagraphIndex },
                 previousStory.Paragraphs[previousParagraphIndex].PlainText.Length);
-            TryDeleteHfSelection();
+            if (!TryDeleteHfSelection())
+                _hfSelectionAnchor = previousAnchor;
             return;
         }
-        var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
-        var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
-        var removeIdx = idx - 1;
-        if (removeIdx < 0 || removeIdx >= atoms0.Count)
-            return;
-        var removedModelLen = atoms0[removeIdx].ModelLength;
-        // AV-CCEDIT: deleting the character before the caret must respect the field's locks.
-        if (!HfEditIsAllowed(target, offset - removedModelLen, offset))
-            return;
-
-        HfEditParagraph(target, atoms =>
-        {
-            if (removeIdx >= 0 && removeIdx < atoms.Count)
-                atoms.RemoveAt(removeIdx);
-        }, offset - removedModelLen);
+        HfDeleteAdjacentRunText(target, offset, backward: true);
     }
 
     /// <summary>Forward-delete at the H/F caret: delete the atom at the caret (a whole field atom when on one).</summary>
@@ -2081,35 +1977,7 @@ public sealed partial class DocumentView : Control
         }
         var target = hc.Target;
         var offset = hc.Offset;
-        var atoms0 = GetHfParagraph(target) is { } p0 ? HfAtoms(p0) : new List<HfAtom>();
-        var (idx, _) = HfAtomIndexForOffset(atoms0, offset);
-        if (idx < 0 || idx >= atoms0.Count)
-        {
-            if (ResolveHfStore(target) is not { } nextStore
-                || HeaderFooterDialogPlanner.GetSlot(nextStore, target.Slot) is not { } nextStory
-                || target.ParaIdx + 1 >= nextStory.Paragraphs.Count)
-                return;
-            if (nextStory.Table is not null
-                && !HeaderFooterTableParagraphMap.AreInSameCell(
-                    nextStory,
-                    target.ParaIdx,
-                    target.ParaIdx + 1))
-            {
-                return;
-            }
-            _hfSelectionAnchor = (target with { ParaIdx = target.ParaIdx + 1 }, 0);
-            TryDeleteHfSelection();
-            return;
-        }
-        // AV-CCEDIT: forward-deleting the character at the caret must respect the field's locks.
-        if (!HfEditIsAllowed(target, offset, offset + atoms0[idx].ModelLength))
-            return;
-
-        HfEditParagraph(target, atoms =>
-        {
-            if (idx >= 0 && idx < atoms.Count)
-                atoms.RemoveAt(idx);
-        }, offset);
+        HfDeleteAdjacentRunText(target, offset, backward: false);
     }
 
     /// <summary>
@@ -2119,6 +1987,8 @@ public sealed partial class DocumentView : Control
     private void HfInsertParagraphBreak()
     {
         if (_hfCaret is not { } hc)
+            return;
+        if (!HfCanUseLegacyStructuralEdit())
             return;
         var ownsUndoGroup = (NormalizedHfSelection() is not null || IsEmptyHeaderFooterPlaceholder(hc.Target))
             && !_bus.IsUndoGroupOpen;
@@ -2178,6 +2048,11 @@ public sealed partial class DocumentView : Control
         {
             return false;
         }
+
+        if (selection.Start.ParagraphIndex == selection.End.ParagraphIndex)
+            return HfTryDeleteSameParagraphSelection(caret.Target, selection);
+        if (!HfCanUseLegacyParagraphMerge())
+            return false;
 
         // AV-CCEDIT: a selection delete in a header/footer respects the same field locks as the body.
         for (var index = selection.Start.ParagraphIndex; index <= selection.End.ParagraphIndex; index++)
@@ -17373,78 +17248,63 @@ public sealed partial class DocumentView : Control
             ContentControlInteractionPlanner.SelectDate(run, date));
 
     /// <summary>
-    /// AV-CCEDIT: a content control's location inside a header/footer story — the atom span the field
-    /// occupies plus the model run it stands for, so a planner can rewrite it exactly as it does a body
-    /// field.
+    /// A content control's source identity inside a header/footer story. Its current run span is
+    /// resolved again when a pending menu or calendar commits an edit.
     /// </summary>
-    private readonly record struct HfContentControlHit(
-        HfTarget Target,
-        int AtomStart,
-        int AtomCount,
-        int ModelStart,
-        Run Source);
+    private readonly record struct HfContentControlHit(HfTarget Target, Run Source);
 
-    /// <summary>
-    /// The content control the header/footer caret sits ON — strictly inside, matching the body's
-    /// <see cref="TryGetContentControlAt"/> rule, so a click just past a field does not operate it. (The
-    /// looser neighbour rule in <see cref="HfActiveContentControl"/> is for TYPING, where a character at
-    /// the boundary joins the field.)
-    /// </summary>
+    /// <summary>Resolves a contiguous content-control span without discarding its source run metadata.</summary>
     private bool TryGetHfContentControlAt(out HfContentControlHit hit)
     {
         hit = default;
         if (_hfCaret is not { } caret || GetHfParagraph(caret.Target) is not { } paragraph)
             return false;
-
-        var atoms = HfAtoms(paragraph);
-        var (index, _) = HfAtomIndexForOffset(atoms, caret.Offset);
-        if (index < 0 || index >= atoms.Count || atoms[index].IsField || atoms[index].Control is not { } control)
-            return false;
-
-        var start = index;
-        while (start > 0 && !atoms[start - 1].IsField && SameContentControl(atoms[start - 1].Control, control))
-            start--;
-        var end = index;
-        while (end + 1 < atoms.Count && !atoms[end + 1].IsField && SameContentControl(atoms[end + 1].Control, control))
-            end++;
-
-        var modelStart = 0;
-        for (var i = 0; i < start; i++)
-            modelStart += atoms[i].ModelLength;
-        var text = new string(atoms.Skip(start).Take(end - start + 1).Select(atom => atom.Ch).ToArray());
-        hit = new HfContentControlHit(
-            caret.Target,
-            start,
-            end - start + 1,
-            modelStart,
-            new Run(text, atoms[start].Fmt) { Control = control });
-        return true;
+        var offset = 0;
+        for (var index = 0; index < paragraph.Runs.Count; index++)
+        {
+            var run = paragraph.Runs[index];
+            var end = offset + run.Text.Length;
+            if (caret.Offset >= offset && caret.Offset < end && run.Control is { } control
+                && !StoryParagraphRunEditPlanner.IsAtomic(run))
+            {
+                var first = index;
+                while (first > 0 && SameContentControl(paragraph.Runs[first - 1].Control, control))
+                    first--;
+                var last = index;
+                while (last + 1 < paragraph.Runs.Count && SameContentControl(paragraph.Runs[last + 1].Control, control))
+                    last++;
+                var source = RevisionEditPlanner.CloneRunWithText(paragraph.Runs[first], string.Concat(
+                    paragraph.Runs.Skip(first).Take(last - first + 1).Select(item => item.Text)));
+                hit = new HfContentControlHit(caret.Target, source);
+                return true;
+            }
+            offset = end;
+        }
+        return false;
     }
 
-    /// <summary>
-    /// Rewrites the header/footer field <paramref name="hit"/> names with whatever
-    /// <paramref name="planner"/> returns, through the same undo-tracked H/F paragraph command every
-    /// other header edit uses. Declines when the field's lock or the protection policy forbids it.
-    /// </summary>
     private bool ApplyHfContentControlInteraction(HfContentControlHit hit, Func<Run, Run?> planner)
     {
-        if (!ContentControlInteractionPlanner.CanEditExistingContentControl(hit.Source, RestrictEditingPolicy))
+        if (GetHfParagraph(hit.Target) is not { } paragraph
+            || ContentControlInteractionPlanner.IsBlockContentControlLocked(paragraph.BlockContentControl))
             return false;
-        if (planner(hit.Source) is not { } updated)
+        // A menu/calendar can outlive another edit. Resolve the original control identity again
+        // rather than applying an old atom/run index to whatever now occupies that position.
+        var first = paragraph.Runs.FindIndex(run => ReferenceEquals(run.Control, hit.Source.Control));
+        if (first < 0)
             return false;
-
-        var formatting = hit.Source.Formatting;
-        HfEditParagraph(
-            hit.Target,
-            atoms =>
-            {
-                atoms.RemoveRange(hit.AtomStart, hit.AtomCount);
-                atoms.InsertRange(
-                    hit.AtomStart,
-                    updated.Text.Select(ch => new HfAtom(ch, formatting, null, updated.Control)));
-            },
-            hit.ModelStart + updated.Text.Length);
-        return true;
+        var last = first;
+        while (last + 1 < paragraph.Runs.Count
+            && SameContentControl(paragraph.Runs[last + 1].Control, hit.Source.Control))
+            last++;
+        var source = RevisionEditPlanner.CloneRunWithText(paragraph.Runs[first], string.Concat(
+            paragraph.Runs.Skip(first).Take(last - first + 1).Select(run => run.Text)));
+        if (!ContentControlInteractionPlanner.CanEditExistingContentControl(source, RestrictEditingPolicy)
+            || planner(source) is not { } updated)
+            return false;
+        var plan = StoryParagraphRunEditPlanner.PlanReplaceRuns(paragraph, first, last - first + 1, [updated],
+            source.Control, updated.Control);
+        return HfApplyRunEdit(hit.Target, plan);
     }
 
     /// <summary>
@@ -25633,6 +25493,19 @@ public sealed partial class DocumentView : Control
         var plan = _editingSession.Interaction.PlanPasteText(clipboardText, kind);
         if (!plan.HasText)
             return false;
+
+        if (_hfCaret is not null)
+        {
+            if (plan.Lines.Count == 1)
+            {
+                var inserted = HfInsertText(plan.Lines[0]);
+                if (inserted)
+                    Focus();
+                return inserted;
+            }
+            if (!HfCanUseLegacyStructuralEdit())
+                return false;
+        }
 
         if (plan.Lines.Count > 1 && SelectionNeedsStructuralPreservation())
             return false;

@@ -312,6 +312,7 @@ public static class RevisionEditPlanner
         Control = source.Control,
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml,
+        NestedRevision = source.NestedRevision,
         FormatRevision = source.FormatRevision,
         MoveRevisionId = source.MoveRevisionId,
         Ruby = text == source.Text ? source.Ruby : null
