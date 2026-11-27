@@ -45,6 +45,15 @@ public static class PresentationViewColorModePlanner
         PresentationViewColorModeState _,
         PresentationViewColorModeCommandPlan plan) => new(plan.Mode);
 
+    /// <summary>
+    /// Pixel treatment the renderers apply to the realized canvas for a non-Color mode:
+    /// Black and White is a 50% bi-level threshold, every other mode is plain grayscale.
+    /// </summary>
+    public static PictureColorEffectPlan BuildColorEffectPlan(PresentationViewColorMode mode) =>
+        mode == PresentationViewColorMode.BlackAndWhite
+            ? new PictureColorEffectPlan(Grayscale: false, BiLevelThreshold: 0.5, Brightness: null, Contrast: null)
+            : new PictureColorEffectPlan(Grayscale: true, BiLevelThreshold: null, Brightness: null, Contrast: null);
+
     public static string CommandIdFor(PresentationViewColorMode mode) => mode switch
     {
         PresentationViewColorMode.Color => ColorCommandId,

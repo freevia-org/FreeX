@@ -408,9 +408,7 @@ public sealed partial class SlideCanvas : Control
             new PixelSize(Math.Max(1, (int)Math.Ceiling(width)), Math.Max(1, (int)Math.Ceiling(height))),
             new Vector(96, 96));
         bitmap.Render(source);
-        var plan = _viewColorModeState.Mode == PresentationViewColorMode.BlackAndWhite
-            ? new PictureColorEffectPlan(Grayscale: false, BiLevelThreshold: 0.5, Brightness: null, Contrast: null)
-            : new PictureColorEffectPlan(Grayscale: true, BiLevelThreshold: null, Brightness: null, Contrast: null);
+        var plan = PresentationViewColorModePlanner.BuildColorEffectPlan(_viewColorModeState.Mode);
         using var processed = ApplyColorEffectsAvalonia(bitmap, plan);
         destination.DrawImage((IImage?)processed ?? bitmap, new Rect(0, 0, width, height));
     }

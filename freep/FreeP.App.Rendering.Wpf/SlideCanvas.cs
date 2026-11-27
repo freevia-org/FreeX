@@ -458,9 +458,7 @@ public sealed partial class SlideCanvas : FrameworkElement
             96,
             PixelFormats.Pbgra32);
         bitmap.Render(visual);
-        var plan = _viewColorModeState.Mode == PresentationViewColorMode.BlackAndWhite
-            ? new PictureColorEffectPlan(Grayscale: false, BiLevelThreshold: 0.5, Brightness: null, Contrast: null)
-            : new PictureColorEffectPlan(Grayscale: true, BiLevelThreshold: null, Brightness: null, Contrast: null);
+        var plan = PresentationViewColorModePlanner.BuildColorEffectPlan(_viewColorModeState.Mode);
         destination.DrawImage(ApplyColorEffectsWpf(bitmap, plan), new Rect(0, 0, width, height));
     }
 

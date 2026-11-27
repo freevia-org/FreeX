@@ -31,4 +31,33 @@ public sealed class PresentationViewColorModePlannerTests
         PresentationViewColorModePlanner.BuildPlan(PresentationViewColorMode.Color, state).IsChecked
             .Should().Be(mode == PresentationViewColorMode.Color);
     }
+
+    [Fact]
+    public void BuildColorEffectPlan_maps_black_and_white_to_a_bilevel_threshold_and_the_rest_to_grayscale()
+    {
+        PresentationViewColorModePlanner.BuildColorEffectPlan(PresentationViewColorMode.BlackAndWhite)
+            .Should().Be(new PictureColorEffectPlan(false, 0.5, null, null));
+        PresentationViewColorModePlanner.BuildColorEffectPlan(PresentationViewColorMode.Grayscale)
+            .Should().Be(new PictureColorEffectPlan(true, null, null, null));
+        PresentationViewColorModePlanner.BuildColorEffectPlan(PresentationViewColorMode.Color)
+            .Should().Be(new PictureColorEffectPlan(true, null, null, null));
+    }
+
+    [Fact]
+    public void Slide_canvases_use_the_shared_color_effect_plan_instead_of_a_local_mapping()
+    {
+        var root = AppContext.BaseDirectory;
+        while (root is not null && !Directory.Exists(Path.Combine(root, "freep", "FreeP.App.Rendering.Wpf")))
+        {
+            root = Path.GetDirectoryName(root);
+        }
+
+        root.Should().NotBeNull();
+        foreach (var project in new[] { "FreeP.App.Rendering.Wpf", "FreeP.App.Rendering.Avalonia" })
+        {
+            var source = File.ReadAllText(Path.Combine(root!, "freep", project, "SlideCanvas.cs"));
+            source.Should().Contain("PresentationViewColorModePlanner.BuildColorEffectPlan(");
+            source.Should().NotContain("new PictureColorEffectPlan(");
+        }
+    }
 }
