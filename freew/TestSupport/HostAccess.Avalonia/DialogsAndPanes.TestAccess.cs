@@ -293,6 +293,16 @@ public sealed partial class FindReplaceDialog
             .Select(button => AutomationProperties.GetAutomationId(button) ?? string.Empty)
             .ToList();
 
+    internal void FocusFieldForTest(FindReplaceDialogFieldKind field) =>
+        _lastFocusedBox = field == FindReplaceDialogFieldKind.Replace ? _replaceBox : _findBox;
+
+    /// <summary>The Special drop-down items the button would show for the last focused box.</summary>
+    internal IReadOnlyList<FindReplaceSpecialItem> SpecialItemsForTest()
+    {
+        SyncSessionInput();
+        return _session.BuildSpecialItems(LastFocusedField);
+    }
+
     internal void SetOptionForTest(FindReplaceOptionKind kind, bool isChecked) =>
         _options[kind].IsChecked = isChecked;
 

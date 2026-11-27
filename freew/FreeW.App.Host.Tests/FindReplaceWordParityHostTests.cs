@@ -303,6 +303,37 @@ public sealed class FindReplaceWordParityHostTests
     }
 
     [StaFact]
+    public void ReplaceAll_SoundsLikeAndAllWordForms()
+    {
+        var phonetic = BuildView(new Paragraph("Smith and Smyth met Jones"));
+        ReplaceAll(phonetic, "Smith", "X", dialog => dialog.SetOptionForTest(FindReplaceOptionKind.SoundsLike, true));
+        BodyText(phonetic).Should().Equal("X and X met Jones");
+
+        var forms = BuildView(new Paragraph("He runs, ran and is running; a runner"));
+        ReplaceAll(forms, "run", "X", dialog => dialog.SetOptionForTest(FindReplaceOptionKind.FindAllWordForms, true));
+        BodyText(forms).Should().Equal("He X, X and is X; a X");
+    }
+
+    [StaFact]
+    public void SoundsLikeAndWordForms_AreMutuallyExclusiveWithWildcardsAndEachOther()
+    {
+        var view = BuildView(new Paragraph("text"));
+
+        WithDialog(view, "x", "y", dialog =>
+        {
+            dialog.SetOptionForTest(FindReplaceOptionKind.SoundsLike, true);
+            dialog.IsOptionEnabledForTest(FindReplaceOptionKind.UseWildcards).Should().BeFalse();
+            dialog.IsOptionEnabledForTest(FindReplaceOptionKind.FindAllWordForms).Should().BeFalse();
+            dialog.IsOptionEnabledForTest(FindReplaceOptionKind.MatchPrefix).Should().BeFalse();
+
+            dialog.SetOptionForTest(FindReplaceOptionKind.SoundsLike, false);
+            dialog.SetOptionForTest(FindReplaceOptionKind.UseWildcards, true);
+            dialog.IsOptionEnabledForTest(FindReplaceOptionKind.SoundsLike).Should().BeFalse();
+            dialog.IsOptionEnabledForTest(FindReplaceOptionKind.FindAllWordForms).Should().BeFalse();
+        });
+    }
+
+    [StaFact]
     public void Dialog_ShowsTheWordOptions_AndWildcardsDisableAllButMatchCase()
     {
         var view = BuildView(new Paragraph("text"));
@@ -316,7 +347,9 @@ public sealed class FindReplaceWordParityHostTests
                 "Match prefix",
                 "Match suffix",
                 "Ignore punctuation characters",
-                "Ignore white-space characters");
+                "Ignore white-space characters",
+                "Sounds like (English)",
+                "Find all word forms (English)");
 
             dialog.SetOptionForTest(FindReplaceOptionKind.MatchPrefix, true);
             dialog.SetOptionForTest(FindReplaceOptionKind.UseWildcards, true);

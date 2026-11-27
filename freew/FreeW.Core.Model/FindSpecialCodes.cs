@@ -15,7 +15,9 @@ public readonly record struct TextSearchOptions(
     bool MatchPrefix = false,
     bool MatchSuffix = false,
     bool IgnorePunctuation = false,
-    bool IgnoreWhiteSpace = false);
+    bool IgnoreWhiteSpace = false,
+    bool SoundsLike = false,
+    bool FindAllWordForms = false);
 
 /// <summary>
 /// Word's caret ("Special") codes for the non-wildcard Find what / Replace with boxes, and the

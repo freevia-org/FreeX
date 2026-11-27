@@ -38,7 +38,9 @@ public sealed class FindReplaceDialogPlannerTests
                 FindReplaceOptionKind.MatchPrefix,
                 FindReplaceOptionKind.MatchSuffix,
                 FindReplaceOptionKind.IgnorePunctuation,
-                FindReplaceOptionKind.IgnoreWhiteSpace);
+                FindReplaceOptionKind.IgnoreWhiteSpace,
+                FindReplaceOptionKind.SoundsLike,
+                FindReplaceOptionKind.FindAllWordForms);
 
         FindReplaceDialogPlanner.OptionChoices.Select(choice => choice.Label)
             .Should().Equal(
@@ -48,7 +50,9 @@ public sealed class FindReplaceDialogPlannerTests
                 "Match prefix",
                 "Match suffix",
                 "Ignore punctuation characters",
-                "Ignore white-space characters");
+                "Ignore white-space characters",
+                "Sounds like (English)",
+                "Find all word forms (English)");
     }
 
     [Fact]

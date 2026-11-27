@@ -84,6 +84,8 @@ public static class TextSearch
 
         if (needle.Length == 0)
             return [];
+        if (FindWordMatching.IsWordSearch(options))
+            return FindWordMatching.FindAll(haystack, needle, options);
         if (options.UseWildcards || !FindSpecialCodes.RequiresPatternSearch(needle, options))
             return FindAll(haystack, needle, options.MatchCase, options.WholeWord, options.UseWildcards);
 

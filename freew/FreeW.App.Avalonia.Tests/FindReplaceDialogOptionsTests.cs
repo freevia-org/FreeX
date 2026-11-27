@@ -61,7 +61,116 @@ public sealed class FindReplaceDialogOptionsTests
         labels.Should().Equal(FindReplaceDialogPlanner.Surface.Options
             .Select(option => FindReplaceDialogPlanner.LabelFor(option.Kind, text)));
         ids.Should().Equal(FindReplaceDialogPlanner.Surface.Options.Select(option => option.AutomationId));
-        labels.Should().HaveCount(7);
+        labels.Should().HaveCount(9);
+    }
+
+    [Fact]
+    public async Task Sounds_like_and_word_forms_replace_all_through_the_shared_engine()
+    {
+        string? phonetic = null;
+        string? forms = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = ViewWith("Smith and Smyth met Jones");
+            var dialog = new FindReplaceDialog(view, FindReplaceOpenMode.Find);
+            try
+            {
+                dialog.SetFindTextForTest("Smith");
+                dialog.SetReplaceTextForTest("X");
+                dialog.SetOptionForTest(FindReplaceOptionKind.SoundsLike, true);
+                dialog.ReplaceAllForTest();
+                phonetic = BodyText(view);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+
+            var view2 = ViewWith("He runs, ran and is running; a runner");
+            var dialog2 = new FindReplaceDialog(view2, FindReplaceOpenMode.Find);
+            try
+            {
+                dialog2.SetFindTextForTest("run");
+                dialog2.SetReplaceTextForTest("X");
+                dialog2.SetOptionForTest(FindReplaceOptionKind.FindAllWordForms, true);
+                dialog2.ReplaceAllForTest();
+                forms = BodyText(view2);
+            }
+            finally
+            {
+                dialog2.Close();
+            }
+        });
+        ran.Should().BeTrue();
+
+        phonetic.Should().Be("X and X met Jones");
+        forms.Should().Be("He X, X and is X; a X");
+    }
+
+    [Fact]
+    public async Task Special_menu_items_come_from_the_shared_planner_per_box()
+    {
+        IReadOnlyList<string> find = [];
+        IReadOnlyList<string> replace = [];
+        IReadOnlyList<string> wildcard = [];
+        var ran = await OnUiThread(() =>
+        {
+            var dialog = new FindReplaceDialog(new DocumentView(), FindReplaceOpenMode.Find);
+            try
+            {
+                dialog.FocusFieldForTest(FindReplaceDialogFieldKind.Find);
+                find = dialog.SpecialItemsForTest().Select(item => item.Insert).ToList();
+                dialog.FocusFieldForTest(FindReplaceDialogFieldKind.Replace);
+                replace = dialog.SpecialItemsForTest().Select(item => item.Insert).ToList();
+                dialog.FocusFieldForTest(FindReplaceDialogFieldKind.Find);
+                dialog.SetOptionForTest(FindReplaceOptionKind.UseWildcards, true);
+                wildcard = dialog.SpecialItemsForTest().Select(item => item.Insert).ToList();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+        ran.Should().BeTrue();
+
+        find.Should().Contain(["^p", "^t", "^?", "^#", "^$", "^n", "^m", "^w"]).And.NotContain("^&");
+        replace.Should().Contain(["^p", "^t", "^l", "^&"]).And.NotContain(["^?", "^n"]);
+        wildcard.Should().Equal("?", "[0-9]", "[A-Za-z]", "<", ">");
+    }
+
+    [Fact]
+    public async Task Sounds_like_and_word_forms_are_exclusive_with_wildcards_and_each_other()
+    {
+        var soundsLike = new Dictionary<FindReplaceOptionKind, bool>();
+        var wildcards = new Dictionary<FindReplaceOptionKind, bool>();
+        var ran = await OnUiThread(() =>
+        {
+            var dialog = new FindReplaceDialog(new DocumentView(), FindReplaceOpenMode.Find);
+            try
+            {
+                dialog.SetOptionForTest(FindReplaceOptionKind.MatchPrefix, true);
+                dialog.SetOptionForTest(FindReplaceOptionKind.SoundsLike, true);
+                foreach (var option in FindReplaceDialogPlanner.Surface.Options)
+                    soundsLike[option.Kind] = dialog.IsOptionEnabledForTest(option.Kind);
+
+                dialog.SetOptionForTest(FindReplaceOptionKind.SoundsLike, false);
+                dialog.SetOptionForTest(FindReplaceOptionKind.UseWildcards, true);
+                foreach (var option in FindReplaceDialogPlanner.Surface.Options)
+                    wildcards[option.Kind] = dialog.IsOptionEnabledForTest(option.Kind);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+        ran.Should().BeTrue();
+
+        soundsLike.Where(pair => pair.Key != FindReplaceOptionKind.SoundsLike)
+            .Should().OnlyContain(pair => !pair.Value);
+        soundsLike[FindReplaceOptionKind.SoundsLike].Should().BeTrue();
+        wildcards[FindReplaceOptionKind.SoundsLike].Should().BeFalse();
+        wildcards[FindReplaceOptionKind.FindAllWordForms].Should().BeFalse();
+        wildcards[FindReplaceOptionKind.UseWildcards].Should().BeTrue();
     }
 
     [Fact]

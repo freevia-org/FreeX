@@ -611,6 +611,9 @@
   <data name="FreeW_FindReplace_Option_MatchSuffix" xml:space="preserve"><value>Suffixe</value></data>
   <data name="FreeW_FindReplace_Option_IgnorePunctuation" xml:space="preserve"><value>Ignorer les caract&#xE8;res de ponctuation</value></data>
   <data name="FreeW_FindReplace_Option_IgnoreWhiteSpace" xml:space="preserve"><value>Ignorer les espaces</value></data>
+  <data name="FreeW_FindReplace_Option_SoundsLike" xml:space="preserve"><value>Prononciation (anglais)</value></data>
+  <data name="FreeW_FindReplace_Option_FindAllWordForms" xml:space="preserve"><value>Toutes les formes du mot (anglais)</value></data>
+  <data name="FreeW_FindReplace_Special_ColumnBreak" xml:space="preserve"><value>Saut de colonne</value></data>
   <data name="FreeW_FindReplace_Format_Button" xml:space="preserve"><value>Format&#x2026;</value></data>
   <data name="FreeW_FindReplace_NoFormatting_Button" xml:space="preserve"><value>Sans attributs</value></data>
   <data name="FreeW_FindReplace_Format_Summary_Format" xml:space="preserve"><value>Format&#xA0;: {0}</value></data>

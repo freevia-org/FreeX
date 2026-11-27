@@ -55,6 +55,8 @@ public sealed record FindReplaceDialogState(
         FindReplaceOptionKind.MatchSuffix => Options.MatchSuffix,
         FindReplaceOptionKind.IgnorePunctuation => Options.IgnorePunctuation,
         FindReplaceOptionKind.IgnoreWhiteSpace => Options.IgnoreWhiteSpace,
+        FindReplaceOptionKind.SoundsLike => Options.SoundsLike,
+        FindReplaceOptionKind.FindAllWordForms => Options.FindAllWordForms,
         _ => false,
     };
 }
@@ -68,7 +70,9 @@ public readonly record struct FindReplaceDialogInput(
     bool MatchPrefix = false,
     bool MatchSuffix = false,
     bool IgnorePunctuation = false,
-    bool IgnoreWhiteSpace = false);
+    bool IgnoreWhiteSpace = false,
+    bool SoundsLike = false,
+    bool FindAllWordForms = false);
 
 public sealed record FindReplaceTextInsertionPlan(
     string Text,
@@ -139,7 +143,9 @@ public sealed class FindReplaceDialogSession
             input.MatchPrefix,
             input.MatchSuffix,
             input.IgnorePunctuation,
-            input.IgnoreWhiteSpace));
+            input.IgnoreWhiteSpace,
+            input.SoundsLike,
+            input.FindAllWordForms));
         return BuildState();
     }
 

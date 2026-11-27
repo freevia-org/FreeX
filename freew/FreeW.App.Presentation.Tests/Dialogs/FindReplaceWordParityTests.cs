@@ -26,7 +26,84 @@ public sealed class FindReplaceWordParityTests
     {
         FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Find, useWildcards: false)
             .Select(item => item.Insert)
-            .Should().Equal("^p", "^t", "^?", "^#", "^$", "^^", "^+", "^=", "^l", "^m", "^~", "^s", "^-", "^w");
+            .Should().Equal("^p", "^t", "^?", "^#", "^$", "^^", "^n", "^+", "^=", "^l", "^m", "^~", "^s", "^-", "^w");
+    }
+
+    [Fact]
+    public void SpecialMenu_ModelIsBuiltFromTheSharedItemList()
+    {
+        var items = FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Replace, useWildcards: false);
+
+        var menu = FreeWContextMenuPlanner.BuildFindSpecial(items);
+
+        menu.Items.Select(item => item.Header)
+            .Should().Equal(items.Select(item => item.Label));
+        menu.Items.Select(item => item.CommandId?.Value)
+            .Should().Equal(items.Select((_, i) => FreeWContextMenuPlanner.FindSpecialPrefix + i));
+    }
+
+    [Fact]
+    public void SpecialItems_ColumnBreakIsFindOnly_AndLocalized()
+    {
+        FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Replace, false)
+            .Should().NotContain(item => item.Insert == "^n");
+        FindReplaceDialogPlanner.BuildSpecialItems(
+                FindReplaceDialogFieldKind.Find, false, new FindReplaceDialogText(key => $"[{key}]"))
+            .Should().Contain(item => item.Insert == "^n"
+                && item.Label == "[FreeW_FindReplace_Special_ColumnBreak]  (^n)");
+    }
+
+    [Fact]
+    public void NormalizeOptions_SoundsLikeAndWordForms_AreExclusiveAndClearTheOthers()
+    {
+        var all = new FindReplaceSearchOptions(true, true, false, true, true, true, true, true, true);
+
+        FindReplaceDialogPlanner.NormalizeOptions(all)
+            .Should().Be(new FindReplaceSearchOptions(false, false, false, SoundsLike: true));
+        FindReplaceDialogPlanner.NormalizeOptions(all with { SoundsLike = false })
+            .Should().Be(new FindReplaceSearchOptions(false, false, false, FindAllWordForms: true));
+        FindReplaceDialogPlanner.NormalizeOptions(all with { UseWildcards = true })
+            .Should().Be(new FindReplaceSearchOptions(true, false, true));
+    }
+
+    [Fact]
+    public void IsOptionEnabled_GreysOutTheConflictingOptions()
+    {
+        var sounds = new FindReplaceSearchOptions(false, false, false, SoundsLike: true);
+        foreach (var kind in Enum.GetValues<FindReplaceOptionKind>())
+        {
+            FindReplaceDialogPlanner.IsOptionEnabled(kind, sounds)
+                .Should().Be(kind == FindReplaceOptionKind.SoundsLike, kind.ToString());
+        }
+
+        FindReplaceDialogPlanner.IsOptionEnabled(FindReplaceOptionKind.SoundsLike, new(false, false, true))
+            .Should().BeFalse();
+        FindReplaceDialogPlanner.IsOptionEnabled(FindReplaceOptionKind.FindAllWordForms, new(false, false, true))
+            .Should().BeFalse();
+        FindReplaceDialogPlanner.IsOptionEnabled(FindReplaceOptionKind.SoundsLike, new())
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void FindAll_SoundsLikeAndWordForms_RunThroughTheSharedEngine()
+    {
+        FindReplaceDialogPlanner.FindAll("Smith met Smyth", "Smith", NoOptions with { SoundsLike = true })
+            .Should().Equal((0, 5), (10, 5));
+        FindReplaceDialogPlanner.FindAll("runs ran", "run", NoOptions with { FindAllWordForms = true })
+            .Should().Equal((0, 4), (5, 3));
+        FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(NoOptions with { SoundsLike = true }).Should().BeFalse();
+        FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(NoOptions with { FindAllWordForms = true }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void OptionLabels_ForWordSearchOptions_ResolveThroughTheTextCatalog()
+    {
+        var text = new FindReplaceDialogText(key => $"[{key}]");
+
+        FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.SoundsLike, text)
+            .Should().Be("[FreeW_FindReplace_Option_SoundsLike]");
+        FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.FindAllWordForms, text)
+            .Should().Be("[FreeW_FindReplace_Option_FindAllWordForms]");
     }
 
     [Fact]

@@ -1101,6 +1101,9 @@
   <data name="FreeW_FindReplace_Option_MatchSuffix" xml:space="preserve"><value>Match suffix</value></data>
   <data name="FreeW_FindReplace_Option_IgnorePunctuation" xml:space="preserve"><value>Ignore punctuation characters</value></data>
   <data name="FreeW_FindReplace_Option_IgnoreWhiteSpace" xml:space="preserve"><value>Ignore white-space characters</value></data>
+  <data name="FreeW_FindReplace_Option_SoundsLike" xml:space="preserve"><value>Sounds like (English)</value></data>
+  <data name="FreeW_FindReplace_Option_FindAllWordForms" xml:space="preserve"><value>Find all word forms (English)</value></data>
+  <data name="FreeW_FindReplace_Special_ColumnBreak" xml:space="preserve"><value>Column Break</value></data>
   <data name="FreeW_FindReplace_Format_Button" xml:space="preserve"><value>Format&#x2026;</value></data>
   <data name="FreeW_FindReplace_NoFormatting_Button" xml:space="preserve"><value>No Formatting</value></data>
   <data name="FreeW_FindReplace_Format_Summary_Format" xml:space="preserve"><value>Format: {0}</value></data>

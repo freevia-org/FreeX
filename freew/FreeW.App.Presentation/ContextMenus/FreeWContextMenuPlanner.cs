@@ -198,6 +198,19 @@ public static class FreeWContextMenuPlanner
     public static RibbonMenu BuildFindSpecial() => IndexedMenu(
         FindSpecialCharacters.Select(item => item.Label).ToArray(), FindSpecialPrefix);
 
+    /// <summary>
+    /// The native-menu model for one Special drop-down (see
+    /// <see cref="FreeW.App.Presentation.Dialogs.FindReplaceDialogPlanner.BuildSpecialItems"/>): item
+    /// <c>i</c> carries command id <see cref="FindSpecialPrefix"/> + <c>i</c>, and the host inserts
+    /// <c>items[i].Insert</c>.
+    /// </summary>
+    public static RibbonMenu BuildFindSpecial(
+        IReadOnlyList<FreeW.App.Presentation.Dialogs.FindReplaceSpecialItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        return IndexedMenu(items.Select(item => item.Label).ToArray(), FindSpecialPrefix);
+    }
+
     public static RibbonMenu BuildParagraphSpacing(string? currentName = null) => IndexedMenu(
         DocumentParagraphSpacingSet.Catalog.Select(item => item.Name).ToArray(),
         ParagraphSpacingPrefix,

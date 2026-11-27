@@ -34,6 +34,7 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
                  {
                      "MatchCase", "WholeWord", "UseWildcards", "MatchPrefix",
                      "MatchSuffix", "IgnorePunctuation", "IgnoreWhiteSpace",
+                     "SoundsLike", "FindAllWordForms",
                  })
         {
             source.Should().Contain($"IsChecked(FindReplaceOptionKind.{kind})");
@@ -105,11 +106,16 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
             source.Should().Contain("_session.PlanSpecialInsertion(");
             source.Should().Contain("_session.BuildGoToTargets(");
             source.Should().Contain("_session.PlanGoTo(");
-            // The shared surface owns the option automation ids: the WPF host names them per kind, the
-            // Avalonia host loops over Surface.Options.
-            (source.Contains("Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId")
-                || source.Contains("SetAutomationId(box, choice.AutomationId)"))
-                .Should().BeTrue();
+            // The shared surface owns the option list and automation ids: both hosts loop over
+            // Surface.Options, never naming a kind (so a new shared option appears on both hosts).
+            source.Should().Contain("foreach (var choice in Surface.Options)");
+            source.Should().NotContain("Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId");
+            // The Special menu is built from the session's per-box item list, never a fixed catalog.
+            source.Should().Contain("_session.BuildSpecialItems(");
+            source.Should().NotContain("FindSpecialCharacters");
+            // Mutually exclusive options re-run the shared option policy.
+            source.Should().Contain("FindReplaceOptionKind.SoundsLike,");
+            source.Should().Contain("FindReplaceOptionKind.FindAllWordForms,");
             source.Should().Contain("Surface.GoToButtonAutomationId");
             source.Should().NotContain("FindReplaceDialogPlanner.BuildGoToTargets(");
             source.Should().NotContain("FindReplaceDialogPlanner.PlanGoTo(");

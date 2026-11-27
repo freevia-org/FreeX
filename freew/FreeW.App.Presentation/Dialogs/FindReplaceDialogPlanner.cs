@@ -12,7 +12,9 @@ public enum FindReplaceOptionKind
     MatchPrefix,
     MatchSuffix,
     IgnorePunctuation,
-    IgnoreWhiteSpace
+    IgnoreWhiteSpace,
+    SoundsLike,
+    FindAllWordForms
 }
 
 public enum FindReplaceDialogFieldKind
@@ -101,10 +103,12 @@ public readonly record struct FindReplaceSearchOptions(
     bool MatchPrefix = false,
     bool MatchSuffix = false,
     bool IgnorePunctuation = false,
-    bool IgnoreWhiteSpace = false)
+    bool IgnoreWhiteSpace = false,
+    bool SoundsLike = false,
+    bool FindAllWordForms = false)
 {
     public TextSearchOptions ToTextSearchOptions() =>
-        new(MatchCase, WholeWord, UseWildcards, MatchPrefix, MatchSuffix, IgnorePunctuation, IgnoreWhiteSpace);
+        new(MatchCase, WholeWord, UseWildcards, MatchPrefix, MatchSuffix, IgnorePunctuation, IgnoreWhiteSpace, SoundsLike, FindAllWordForms);
 }
 
 /// <summary>
@@ -278,7 +282,9 @@ public static class FindReplaceDialogPlanner
         new(FindReplaceOptionKind.MatchPrefix, "Match prefix", "FindReplaceMatchPrefixCheckBox"),
         new(FindReplaceOptionKind.MatchSuffix, "Match suffix", "FindReplaceMatchSuffixCheckBox"),
         new(FindReplaceOptionKind.IgnorePunctuation, "Ignore punctuation characters", "FindReplaceIgnorePunctuationCheckBox"),
-        new(FindReplaceOptionKind.IgnoreWhiteSpace, "Ignore white-space characters", "FindReplaceIgnoreWhiteSpaceCheckBox")
+        new(FindReplaceOptionKind.IgnoreWhiteSpace, "Ignore white-space characters", "FindReplaceIgnoreWhiteSpaceCheckBox"),
+        new(FindReplaceOptionKind.SoundsLike, "Sounds like (English)", "FindReplaceSoundsLikeCheckBox"),
+        new(FindReplaceOptionKind.FindAllWordForms, "Find all word forms (English)", "FindReplaceFindAllWordFormsCheckBox")
     ];
 
     public const string FormatButtonAutomationId = "FindReplaceFormatButton";
@@ -299,6 +305,8 @@ public static class FindReplaceDialogPlanner
             FindReplaceOptionKind.MatchSuffix => text.Get(FindReplaceTextId.OptionMatchSuffix),
             FindReplaceOptionKind.IgnorePunctuation => text.Get(FindReplaceTextId.OptionIgnorePunctuation),
             FindReplaceOptionKind.IgnoreWhiteSpace => text.Get(FindReplaceTextId.OptionIgnoreWhiteSpace),
+            FindReplaceOptionKind.SoundsLike => text.Get(FindReplaceTextId.OptionSoundsLike),
+            FindReplaceOptionKind.FindAllWordForms => text.Get(FindReplaceTextId.OptionFindAllWordForms),
             _ => LabelFor(kind),
         };
     }
@@ -311,6 +319,7 @@ public static class FindReplaceDialogPlanner
         (FindReplaceTextId.SpecialAnyDigit, "^#", true, false),
         (FindReplaceTextId.SpecialAnyLetter, "^$", true, false),
         (FindReplaceTextId.SpecialCaretCharacter, "^^", true, true),
+        (FindReplaceTextId.SpecialColumnBreak, "^n", true, false),
         (FindReplaceTextId.SpecialEmDash, "^+", true, true),
         (FindReplaceTextId.SpecialEnDash, "^=", true, true),
         (FindReplaceTextId.SpecialFindWhatText, "^&", false, true),
@@ -401,22 +410,56 @@ public static class FindReplaceDialogPlanner
     /// <summary>
     /// Wildcards disable every option except Match case, exactly as Word greys them out: a wildcard
     /// pattern expresses word boundaries itself (&lt; and &gt;) and matches punctuation literally.
+    /// Sounds like and Find all word forms are mutually exclusive with wildcards and with each other,
+    /// and (they compare whole words, case-insensitively) disable every other option.
     /// </summary>
-    public static bool IsOptionEnabled(FindReplaceOptionKind kind, FindReplaceSearchOptions options) =>
-        kind is FindReplaceOptionKind.MatchCase or FindReplaceOptionKind.UseWildcards
-        || !options.UseWildcards;
+    public static bool IsOptionEnabled(FindReplaceOptionKind kind, FindReplaceSearchOptions options)
+    {
+        var wordSearch = options.SoundsLike || options.FindAllWordForms;
+        return kind switch
+        {
+            FindReplaceOptionKind.MatchCase => !wordSearch,
+            FindReplaceOptionKind.UseWildcards => !wordSearch,
+            FindReplaceOptionKind.SoundsLike => !options.UseWildcards && !options.FindAllWordForms,
+            FindReplaceOptionKind.FindAllWordForms => !options.UseWildcards && !options.SoundsLike,
+            _ => !options.UseWildcards && !wordSearch,
+        };
+    }
 
-    public static FindReplaceSearchOptions NormalizeOptions(FindReplaceSearchOptions options) =>
-        options.UseWildcards
-            ? options with
+    public static FindReplaceSearchOptions NormalizeOptions(FindReplaceSearchOptions options)
+    {
+        // Conflicts resolve in the order the controls grey each other out: wildcards win, then
+        // Sounds like over Find all word forms.
+        if (options.UseWildcards)
+        {
+            return options with
             {
                 WholeWord = false,
                 MatchPrefix = false,
                 MatchSuffix = false,
                 IgnorePunctuation = false,
                 IgnoreWhiteSpace = false,
-            }
-            : options;
+                SoundsLike = false,
+                FindAllWordForms = false,
+            };
+        }
+
+        if (options.SoundsLike || options.FindAllWordForms)
+        {
+            return options with
+            {
+                MatchCase = false,
+                WholeWord = false,
+                MatchPrefix = false,
+                MatchSuffix = false,
+                IgnorePunctuation = false,
+                IgnoreWhiteSpace = false,
+                FindAllWordForms = !options.SoundsLike && options.FindAllWordForms,
+            };
+        }
+
+        return options;
+    }
 
     public static IReadOnlyList<FindReplaceGoToTarget> BuildGoToTargets(TextDocument document)
     {
@@ -476,7 +519,9 @@ public static class FindReplaceDialogPlanner
             && !effective.MatchPrefix
             && !effective.MatchSuffix
             && !effective.IgnorePunctuation
-            && !effective.IgnoreWhiteSpace;
+            && !effective.IgnoreWhiteSpace
+            && !effective.SoundsLike
+            && !effective.FindAllWordForms;
     }
 
     public static bool TryCreateSearchRequest(

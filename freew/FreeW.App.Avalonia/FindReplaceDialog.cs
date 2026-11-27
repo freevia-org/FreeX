@@ -115,8 +115,18 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
             _options[choice.Kind] = box;
         }
 
-        // "Use wildcards" disables every option but Match case (incompatible, mirrors Word).
-        _options[FindReplaceOptionKind.UseWildcards].IsCheckedChanged += (_, _) => ApplyOptionPolicy();
+        // "Use wildcards", "Sounds like" and "Find all word forms" grey out the other options
+        // (incompatible, mirrors Word); see FindReplaceDialogPlanner.IsOptionEnabled.
+        foreach (var exclusive in new[]
+                 {
+                     FindReplaceOptionKind.UseWildcards,
+                     FindReplaceOptionKind.SoundsLike,
+                     FindReplaceOptionKind.FindAllWordForms,
+                 })
+        {
+            _options[exclusive].IsCheckedChanged += (_, _) => ApplyOptionPolicy();
+        }
+
         ApplyOptionPolicy();
         AutomationProperties.SetAutomationId(_findBox, Surface.Field(FindReplaceDialogFieldKind.Find).AutomationId);
         AutomationProperties.SetAutomationId(_replaceBox, Surface.Field(FindReplaceDialogFieldKind.Replace).AutomationId);
@@ -216,18 +226,24 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
         var button = MakeButton(Surface.SpecialButtonLabel, (_, _) => { }, Surface.SpecialButtonAutomationId);
         button.HorizontalAlignment = HorizontalAlignment.Left;
 
-        var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
-            FreeWContextMenuPlanner.BuildFindSpecial(),
-            commandId =>
-            {
-                if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.FindSpecialPrefix, out var index)
-                    && index < FreeWContextMenuPlanner.FindSpecialCharacters.Count)
+        button.Click += (_, _) =>
+        {
+            // Word offers a different list per box, and wildcard operators when wildcards are on.
+            SyncSessionInput();
+            var items = _session.BuildSpecialItems(LastFocusedField);
+            var menu = AvaloniaContextMenuRenderer.BuildContextMenu(
+                FreeWContextMenuPlanner.BuildFindSpecial(items),
+                commandId =>
                 {
-                    InsertSpecial(FreeWContextMenuPlanner.FindSpecialCharacters[index].Insert);
-                }
-            });
-        button.ContextMenu = menu;
-        button.Click += (_, _) => menu.Open(button);
+                    if (FreeWContextMenuPlanner.TryParseIndex(commandId, FreeWContextMenuPlanner.FindSpecialPrefix, out var index)
+                        && index < items.Count)
+                    {
+                        InsertSpecial(items[index].Insert);
+                    }
+                });
+            button.ContextMenu = menu;
+            menu.Open(button);
+        };
         return button;
     }
 
@@ -367,7 +383,9 @@ public sealed partial class FindReplaceDialog : FreeWDialogWindow
             IsChecked(FindReplaceOptionKind.MatchPrefix),
             IsChecked(FindReplaceOptionKind.MatchSuffix),
             IsChecked(FindReplaceOptionKind.IgnorePunctuation),
-            IsChecked(FindReplaceOptionKind.IgnoreWhiteSpace));
+            IsChecked(FindReplaceOptionKind.IgnoreWhiteSpace),
+            IsChecked(FindReplaceOptionKind.SoundsLike),
+            IsChecked(FindReplaceOptionKind.FindAllWordForms));
 
     private bool IsChecked(FindReplaceOptionKind kind) => _options[kind].IsChecked == true;
 

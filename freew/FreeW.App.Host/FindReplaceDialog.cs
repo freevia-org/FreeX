@@ -72,17 +72,21 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         AddRow(grid, Surface.Field(FindReplaceDialogFieldKind.Replace).Label, _replaceBox);
         AddInFieldColumn(grid, _replaceFormatSummary);
 
-        AddOption(grid, FindReplaceOptionKind.MatchCase, Surface.Option(FindReplaceOptionKind.MatchCase).AutomationId);
-        AddOption(grid, FindReplaceOptionKind.WholeWord, Surface.Option(FindReplaceOptionKind.WholeWord).AutomationId);
-        AddOption(grid, FindReplaceOptionKind.UseWildcards, Surface.Option(FindReplaceOptionKind.UseWildcards).AutomationId);
-        AddOption(grid, FindReplaceOptionKind.MatchPrefix, Surface.Option(FindReplaceOptionKind.MatchPrefix).AutomationId);
-        AddOption(grid, FindReplaceOptionKind.MatchSuffix, Surface.Option(FindReplaceOptionKind.MatchSuffix).AutomationId);
-        AddOption(grid, FindReplaceOptionKind.IgnorePunctuation, Surface.Option(FindReplaceOptionKind.IgnorePunctuation).AutomationId);
-        AddOption(grid, FindReplaceOptionKind.IgnoreWhiteSpace, Surface.Option(FindReplaceOptionKind.IgnoreWhiteSpace).AutomationId);
+        foreach (var choice in Surface.Options)
+            AddOption(grid, choice.Kind, choice.AutomationId);
 
-        // "Use wildcards" disables every option but Match case (incompatible, mirrors Word).
-        _options[FindReplaceOptionKind.UseWildcards].Checked += (_, _) => ApplyOptionPolicy();
-        _options[FindReplaceOptionKind.UseWildcards].Unchecked += (_, _) => ApplyOptionPolicy();
+        // "Use wildcards", "Sounds like" and "Find all word forms" grey out the other options
+        // (incompatible, mirrors Word); see FindReplaceDialogPlanner.IsOptionEnabled.
+        foreach (var exclusive in new[]
+                 {
+                     FindReplaceOptionKind.UseWildcards,
+                     FindReplaceOptionKind.SoundsLike,
+                     FindReplaceOptionKind.FindAllWordForms,
+                 })
+        {
+            _options[exclusive].Checked += (_, _) => ApplyOptionPolicy();
+            _options[exclusive].Unchecked += (_, _) => ApplyOptionPolicy();
+        }
         ApplyOptionPolicy();
 
         // Special / Format / No Formatting act on whichever box last had focus, as in Word.
@@ -330,7 +334,9 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             IsChecked(FindReplaceOptionKind.MatchPrefix),
             IsChecked(FindReplaceOptionKind.MatchSuffix),
             IsChecked(FindReplaceOptionKind.IgnorePunctuation),
-            IsChecked(FindReplaceOptionKind.IgnoreWhiteSpace));
+            IsChecked(FindReplaceOptionKind.IgnoreWhiteSpace),
+            IsChecked(FindReplaceOptionKind.SoundsLike),
+            IsChecked(FindReplaceOptionKind.FindAllWordForms));
 
     private bool IsChecked(FindReplaceOptionKind kind) => _options[kind].IsChecked == true;
 
