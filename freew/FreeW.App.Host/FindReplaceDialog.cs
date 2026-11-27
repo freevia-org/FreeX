@@ -707,19 +707,20 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             var regionLength = match.Length;
 
             // A comment reference is a textless run: selecting it selects nothing, so the surface cannot
-            // delete it. The shared body planner (Replace All's edit) consumes it, so a match that covers
-            // one is that planner's edit too, located in the model instead of on the surface.
-            var coversComment = found.Contains(FindSpecialCodes.CommentMark);
+            // delete it. A manual page / column break written by the replacement is a run too, not text.
+            // The shared body planner (Replace All's edit) handles both, so such a match is that planner's
+            // edit, located in the model instead of on the surface.
+            var needsModelEdit = found.Contains(FindSpecialCodes.CommentMark) || plan.InsertsBreak;
 
             // Inside a table cell the surface cannot format the written text, so a Replace with
             // formatting (or one that only reformats the found text) is the shared body planner's edit --
             // the same one Replace All makes for that match.
-            if ((plan.Format is not null || !plan.ReplacesText || coversComment)
+            if ((plan.Format is not null || !plan.ReplacesText || needsModelEdit)
                 && projection.TryGetRange(match.Start, match.Length, out var cellStart, out var cellEnd))
             {
                 editor.CommitToModel();
                 if ((editor.TryLocateTableCellFindMatch(cellStart, cellEnd)
-                        ?? (coversComment ? editor.TryLocateBodyFindMatch(cellStart, cellEnd) : null)) is { } location
+                        ?? (needsModelEdit ? editor.TryLocateBodyFindMatch(cellStart, cellEnd) : null)) is { } location
                     && FindReplaceBodyPlanner.PlanReplaceMatch(editor.Model, request, location, RevisionContext())
                         is { ReplacedCount: > 0 } command)
                 {
@@ -735,7 +736,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
 
             // The planner declined it (Track Changes cannot strike an object through, or the paragraph
             // does not map to the model): the surface cannot remove the mark either, so step over it.
-            if (coversComment)
+            if (needsModelEdit)
                 return skip;
 
             if (plan.ReplacesText)

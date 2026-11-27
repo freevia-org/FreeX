@@ -134,7 +134,7 @@ public sealed class FindReplaceDialogOptionsTests
         ran.Should().BeTrue();
 
         find.Should().Contain(["^p", "^t", "^?", "^#", "^$", "^n", "^m", "^w"]).And.NotContain("^&");
-        replace.Should().Contain(["^p", "^t", "^l", "^&"]).And.NotContain(["^?", "^n"]);
+        replace.Should().Contain(["^p", "^t", "^l", "^&", "^n", "^m"]).And.NotContain(["^?", "^g"]);
         wildcard.Should().Equal("?", "[0-9]", "[A-Za-z]", "<", ">");
     }
 

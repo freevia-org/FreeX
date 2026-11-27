@@ -37,7 +37,9 @@ public readonly record struct FindReplaceStoryReplacement(IDocumentCommand? Comm
 /// <remarks>
 /// Matching is per paragraph: a paragraph mark is never part of a story match, and a replacement
 /// that would insert one is skipped, because splitting or merging paragraphs needs a different
-/// structural edit for each story container.
+/// structural edit for each story container. A replacement that writes a manual page or column break
+/// (<c>^m</c> / <c>^n</c>) is skipped for the same reason: a break is a run of the flow, and a header,
+/// note or text box has no page or column of its own to break.
 /// </remarks>
 public static class FindReplaceStoryPlanner
 {
@@ -72,12 +74,12 @@ public static class FindReplaceStoryPlanner
                     minOffset = Math.Max(0, position.Offset);
             }
 
-            foreach (var (start, length) in FormattedTextSearch.FindAll(document, story.Paragraph, criteria))
+            var (text, matches) = MatchesIn(document, story.Paragraph, criteria);
+            foreach (var (start, length) in matches)
             {
                 if (start < minOffset)
                     continue;
 
-                var text = story.Paragraph.PlainText;
                 return new FindReplaceStoryMatch(
                     story.Address,
                     start,
@@ -90,6 +92,28 @@ public static class FindReplaceStoryPlanner
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// A story paragraph's matches and the text they index. A paragraph with no object mark in it is
+    /// searched as its <see cref="Paragraph.PlainText"/>. One that holds a note or comment reference, an
+    /// inline graphic or (for <c>^d</c>) a field is searched in the projected haystack Replace All uses,
+    /// where each such mark is one matchable character (<c>^g ^f ^e ^a ^d</c>), so a match is no longer
+    /// tied to <see cref="Paragraph.PlainText"/> offsets: <see cref="FindReplaceStoryMatch.Start"/> and
+    /// <see cref="FindReplaceStoryMatch.Length"/> then index that haystack.
+    /// </summary>
+    private static (string Text, IReadOnlyList<(int Start, int Length)> Matches) MatchesIn(
+        TextDocument document,
+        Paragraph paragraph,
+        FindCriteria criteria)
+    {
+        if (!FindReplaceBodyPlanner.HasObjectMarks(paragraph, criteria))
+            return (paragraph.PlainText, FormattedTextSearch.FindAll(document, paragraph, criteria));
+
+        var matches = FindReplaceBodyPlanner.MatchParagraph(document, paragraph, criteria, out var haystack)
+            .Select(match => (match.HayStart, match.HayLength))
+            .ToList();
+        return (haystack, matches);
     }
 
     /// <summary>Whether <paramref name="match"/> is still exactly a match (the story may have changed).</summary>
@@ -117,13 +141,15 @@ public static class FindReplaceStoryPlanner
         var skip = new FindReplaceStoryPosition(match.Address, match.Start + Math.Max(1, match.Length));
         var plan = FindReplaceDialogPlanner.PlanReplacement(request, match.MatchedText);
         var paragraph = DocumentStories.Resolve(document, match.Address)?.Paragraph;
-        if (paragraph is null
-            || plan.InsertsParagraphMark
-            || (plan.ReplacesText
-                && !RevisionEditPlanner.CanReplacePlainTextRange(paragraph, match.Start, match.Length)))
-        {
+        if (paragraph is null || plan.InsertsParagraphMark || plan.InsertsBreak)
             return new FindReplaceStoryReplacement(null, () => skip);
-        }
+
+        // The match's offsets index the projected haystack, not PlainText, in a paragraph with object marks.
+        if (FindReplaceBodyPlanner.HasObjectMarks(paragraph, request.ToCriteria()))
+            return PlanHaystackReplacement(document, paragraph, match, request, tracked, skip);
+
+        if (plan.ReplacesText && !RevisionEditPlanner.CanReplacePlainTextRange(paragraph, match.Start, match.Length))
+            return new FindReplaceStoryReplacement(null, () => skip);
 
         var start = match.Start;
         var length = match.Length;
@@ -184,6 +210,35 @@ public static class FindReplaceStoryPlanner
     }
 
     /// <summary>
+    /// Plans a match of a paragraph searched in its projected haystack (it holds an object mark; see
+    /// <see cref="MatchesIn"/>): the edit is the body planner's, which consumes the marks the match covers,
+    /// and it is tried on a copy first so a match it cannot replace (over a field result, or over an object
+    /// while tracking) is skipped rather than counted. The walk resumes past what was written.
+    /// </summary>
+    private static FindReplaceStoryReplacement PlanHaystackReplacement(
+        TextDocument document,
+        Paragraph paragraph,
+        FindReplaceStoryMatch match,
+        FindReplaceReplaceRequest request,
+        FindReplaceRevisionContext? tracked,
+        FindReplaceStoryPosition skip)
+    {
+        var criteria = request.ToCriteria();
+        FindReplaceBodyPlanner.MatchParagraph(document, paragraph, criteria, out var before);
+        var probe = DocumentModelCloner.CloneParagraph(paragraph, RevisionClonePolicy.Preserve);
+        if (!FindReplaceBodyPlanner.ReplaceInParagraph(document, probe, request, match.Start, match.Length, tracked))
+            return new FindReplaceStoryReplacement(null, () => skip);
+
+        FindReplaceBodyPlanner.MatchParagraph(document, probe, criteria, out var after);
+        var resume = new FindReplaceStoryPosition(match.Address, match.Start + match.Length + after.Length - before.Length);
+        var command = new EditStoryParagraphCommand(
+            match.Address,
+            target => FindReplaceBodyPlanner.ReplaceInParagraph(
+                document, target, request, match.Start, match.Length, tracked));
+        return new FindReplaceStoryReplacement(command, () => resume);
+    }
+
+    /// <summary>
     /// Plans the replacement of the match at [<paramref name="start"/>, <paramref name="start"/> +
     /// <paramref name="length"/>) of a story paragraph the host holds by reference (for example the
     /// header paragraph its caret is in) -- the same edit, including Replace-with formatting, as
@@ -203,12 +258,41 @@ public static class FindReplaceStoryPlanner
         ArgumentNullException.ThrowIfNull(request);
 
         var text = paragraph.PlainText;
-        if (start < 0 || length <= 0 || start + length > text.Length
+        if (start < 0 || length < 0 || start + length > text.Length
             || DocumentStories.Enumerate(document)
                 .FirstOrDefault(story => ReferenceEquals(story.Paragraph, paragraph)) is not { } story)
         {
             return null;
         }
+
+        // A paragraph with object marks is searched in its projected haystack: the PlainText span the
+        // host selected is the one match whose text extent it is, addressed here by its haystack span.
+        var criteria = request.ToCriteria();
+        if (FindReplaceBodyPlanner.HasObjectMarks(paragraph, criteria))
+        {
+            var found = FindReplaceBodyPlanner.MatchParagraph(document, paragraph, criteria, out var haystack)
+                .Where(candidate => candidate.PlainStart == start && candidate.PlainLength == length)
+                .Cast<FindReplaceBodyPlanner.ParagraphMatch?>()
+                .FirstOrDefault();
+            if (found is not { } located)
+                return null;
+
+            return PlanReplacement(
+                document,
+                new FindReplaceStoryMatch(
+                    story.Address,
+                    located.HayStart,
+                    located.HayLength,
+                    story.StoryNumber,
+                    story.Slot,
+                    haystack.Substring(located.HayStart, located.HayLength),
+                    Excerpt(haystack, located.HayStart, located.HayLength)),
+                request,
+                tracked);
+        }
+
+        if (length <= 0)
+            return null;
 
         var match = new FindReplaceStoryMatch(
             story.Address,
@@ -301,11 +385,19 @@ public static class FindReplaceStoryPlanner
 
     private static string Excerpt(string text, int start, int length)
     {
+        // A projected haystack ends in the flow-end mark and holds one structural character per object;
+        // neither is anything to show.
+        if (text.Length > 0 && text[^1] == FindSpecialCodes.CellMark)
+            text = text[..^1];
+
         var from = Math.Max(0, start - ContextRadius);
         var to = Math.Min(text.Length, start + length + ContextRadius);
+        var shown = text[from..to];
+        if (shown.Any(FindSpecialCodes.IsStructuralMark))
+            shown = new string(shown.Where(c => !FindSpecialCodes.IsStructuralMark(c)).ToArray());
         return string.Concat(
             from > 0 ? "…" : string.Empty,
-            text[from..to].Replace('\n', ' ').Replace('\t', ' '),
+            shown.Replace('\n', ' ').Replace('\t', ' '),
             to < text.Length ? "…" : string.Empty);
     }
 }

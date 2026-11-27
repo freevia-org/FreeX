@@ -999,7 +999,7 @@ public sealed partial class DocumentView : Control
     {
         var original = SelectedText;
         var plan = FindReplaceDialogPlanner.PlanReplacement(request, original);
-        var needsPlanner = plan.Format is not null || plan.InsertsParagraphMark || !plan.ReplacesText;
+        var needsPlanner = plan.Format is not null || plan.InsertsParagraphMark || plan.InsertsBreak || !plan.ReplacesText;
 
         // A match that runs across paragraph marks, or one in a table cell or the header/footer whose
         // replacement carries formatting, a paragraph mark, or keeps the found text and only reformats
@@ -1017,7 +1017,7 @@ public sealed partial class DocumentView : Control
         // A body match whose replacement carries formatting, a paragraph mark, or keeps the found text and
         // only reformats it is the shared body planner's job (one match, restricted to the selection).
         if (CurrentBodySelectionAsFindMatch() is { } body
-            && (plan.Format is not null || plan.InsertsParagraphMark || !plan.ReplacesText))
+            && (plan.Format is not null || plan.InsertsParagraphMark || plan.InsertsBreak || !plan.ReplacesText))
         {
             ReplaceBodyMatchThroughPlanner(request, body, plan, original);
             return;
@@ -1025,12 +1025,16 @@ public sealed partial class DocumentView : Control
 
         // Plain text replacements (a table cell's or the header/footer's included, whose formatted ones
         // went to the planners above) are rewritten in place.
-        if (plan.ReplacesText && !plan.InsertsParagraphMark)
+        if (plan.ReplacesText && !plan.InsertsParagraphMark && !plan.InsertsBreak)
         {
             ReplaceSelectionWith(plan.Text);
             SkipTrackedLeftoverMatch(original);
         }
     }
+
+    /// <summary>The number of PlainText characters a replacement piece writes (a manual break is a run, not text).</summary>
+    private static int WrittenTextLength(string piece) =>
+        piece.Count(c => c != FindSpecialCodes.ManualPageBreak && c != FindSpecialCodes.ColumnBreak);
 
     private void ReplaceBodyMatchThroughPlanner(
         FindReplaceReplaceRequest request,
@@ -1061,7 +1065,9 @@ public sealed partial class DocumentView : Control
         {
             var pieces = plan.Text.Split(FindSpecialCodes.ParagraphMark);
             block += pieces.Length - 1;
-            offset = pieces.Length == 1 ? match.Start + pieces[0].Length : pieces[^1].Length;
+            offset = pieces.Length == 1
+                ? match.Start + WrittenTextLength(pieces[0])
+                : WrittenTextLength(pieces[^1]);
         }
 
         _caret = new DocPosition(block, offset);
@@ -1107,7 +1113,9 @@ public sealed partial class DocumentView : Control
         {
             var pieces = plan.Text.Split(FindSpecialCodes.ParagraphMark);
             paragraph = firstParagraph + pieces.Length - 1;
-            offset = pieces.Length == 1 ? match.Start + pieces[0].Length : pieces[^1].Length;
+            offset = pieces.Length == 1
+                ? match.Start + WrittenTextLength(pieces[0])
+                : WrittenTextLength(pieces[^1]);
         }
 
         if (!match.IsInTableCell)

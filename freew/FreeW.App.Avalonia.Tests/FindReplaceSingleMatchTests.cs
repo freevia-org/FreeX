@@ -290,4 +290,44 @@ public sealed class FindReplaceSingleMatchTests
 
         texts.Should().Equal("end here END. next END. last");
     }
+
+    [Fact]
+    public async Task ReplaceNext_WithAPageBreakCode_WritesABreakRunNotTheControlCharacter()
+    {
+        Paragraph[]? paragraphs = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Load(DocumentOf(new Paragraph("one; two")));
+
+            view.FindNext("; ").Should().BeTrue();
+            view.ReplaceNext(Request("; ", "^m"));
+
+            paragraphs = view.Document.Blocks.OfType<Paragraph>().ToArray();
+        });
+        ran.Should().BeTrue();
+
+        string.Concat(paragraphs!.Select(paragraph => paragraph.PlainText)).Should().Be("onetwo");
+        paragraphs!.SelectMany(paragraph => paragraph.Runs).Should().ContainSingle(run => run.IsPageBreak);
+        paragraphs!.SelectMany(paragraph => paragraph.Runs).Should().NotContain(run => run.Text.Contains('\f'));
+    }
+
+    [Fact]
+    public async Task ReplaceNext_WithNumericCodes_WritesThoseCharacters_AndFindWhatReadsThem()
+    {
+        string? text = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Load(DocumentOf(new Paragraph("Terms (c) apply — always")));
+
+            view.FindNext("(c)").Should().BeTrue();
+            view.ReplaceNext(Request("(c)", "^0169"));
+            view.FindNext("^u8212").Should().BeTrue();
+            view.ReplaceNext(Request("^u8212", "^0150"));
+
+            text = ((Paragraph)view.Document.Blocks[0]).PlainText;
+        });
+        ran.Should().BeTrue();
+
+        text.Should().Be("Terms © apply – always");
+    }
 }

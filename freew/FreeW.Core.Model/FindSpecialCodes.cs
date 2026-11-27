@@ -113,11 +113,65 @@ public static class FindSpecialCodes
             return false;
         for (var i = 0; i + 1 < text.Length; i++)
         {
-            if (text[i] == '^' && FindCodeToRegex(text[i + 1]) is not null)
+            if (text[i] == '^'
+                && (FindCodeToRegex(text[i + 1]) is not null || TryReadNumericCode(text, i, out _, out _)))
+            {
                 return true;
+            }
         }
 
         return false;
+    }
+
+    // Windows-1252 code points 0x80-0x9F that differ from Latin-1; Word's ^0nnn is an ANSI character.
+    private const string Windows1252High =
+        "€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008DŽ\u008F"
+        + "\u0090‘’“”•–—˜™š›œ\u009DžŸ";
+
+    /// <summary>
+    /// Reads Word's numeric character codes at the caret at <paramref name="caret"/>: <c>^0nnn</c> (an ANSI
+    /// character, nnn = one to three decimal digits, 1-255, read as Windows-1252) and <c>^unnnn</c> (a
+    /// Unicode character, nnnn = one to five decimal digits, 1-65535 and not a surrogate). On success
+    /// <paramref name="length"/> is the whole code's length including the caret. Anything out of range is
+    /// no code at all and stays literal text.
+    /// </summary>
+    public static bool TryReadNumericCode(string text, int caret, out char value, out int length)
+    {
+        value = default;
+        length = 0;
+        if (caret < 0 || caret + 2 >= text.Length || text[caret] != '^')
+            return false;
+
+        var kind = text[caret + 1];
+        int maxDigits;
+        if (kind == '0')
+            maxDigits = 3;
+        else if (kind is 'u' or 'U')
+            maxDigits = 5;
+        else
+            return false;
+
+        var number = 0;
+        var digits = 0;
+        var index = caret + 2;
+        while (digits < maxDigits && index < text.Length && text[index] is >= '0' and <= '9')
+        {
+            var next = number * 10 + (text[index] - '0');
+            if (kind != '0' && next > 0xFFFF)
+                break;
+            number = next;
+            digits++;
+            index++;
+        }
+
+        if (digits == 0 || number == 0 || (kind == '0' && number > 255) || number is >= 0xD800 and <= 0xDFFF)
+            return false;
+
+        value = kind == '0' && number is >= 0x80 and <= 0x9F
+            ? Windows1252High[number - 0x80]
+            : (char)number;
+        length = index - caret;
+        return true;
     }
 
     /// <summary>
@@ -151,6 +205,13 @@ public static class FindSpecialCodes
                 continue;
             }
 
+            if (c == '^' && TryReadNumericCode(needle, i, out var numeric, out var numericLength))
+            {
+                tokens.Add(Regex.Escape(numeric.ToString()));
+                i += numericLength - 1;
+                continue;
+            }
+
             if (options.IgnorePunctuation && char.IsPunctuation(c))
                 continue;
             if (options.IgnoreWhiteSpace && IsIgnorableWhiteSpace(c))
@@ -180,12 +241,15 @@ public static class FindSpecialCodes
     }
 
     /// <summary>
-    /// Expands the caret codes Word accepts in Replace with: <c>^p ^t ^l ^s ^- ^~ ^+ ^= ^^</c> and
+    /// Expands the caret codes Word accepts in Replace with: <c>^p ^t ^l ^m ^n ^s ^- ^~ ^+ ^= ^^</c>, the
+    /// numeric <c>^0nnn</c> / <c>^unnnn</c> characters (see <see cref="TryReadNumericCode"/>) and
     /// <c>^&amp;</c> (the found text, without the structural marks of objects it spanned), and <c>^c</c>
     /// (the clipboard's text, read lazily from <paramref name="clipboardText"/> only when the code is
     /// present; a null result is an empty clipboard, as in Word). A paragraph mark comes back as
-    /// <see cref="ParagraphMark"/>; the caller decides how to realise it. Unrecognised codes are kept
-    /// literally, and so is <c>^c</c> when no clipboard provider is supplied.
+    /// <see cref="ParagraphMark"/>, a manual page break as <see cref="ManualPageBreak"/> and a column
+    /// break as <see cref="ColumnBreak"/>; the caller decides how to realise them (they are runs of the
+    /// model, not text). Unrecognised codes are kept literally, and so is <c>^c</c> when no clipboard
+    /// provider is supplied.
     /// </summary>
     public static string ExpandReplacement(
         string? replacement,
@@ -207,12 +271,21 @@ public static class FindSpecialCodes
                 continue;
             }
 
+            if (TryReadNumericCode(replacement, i, out var numeric, out var numericLength))
+            {
+                result.Append(numeric);
+                i += numericLength - 1;
+                continue;
+            }
+
             var code = replacement[i + 1];
             switch (code)
             {
                 case 'p' or 'P': result.Append(ParagraphMark); break;
                 case 't' or 'T': result.Append(Tab); break;
                 case 'l' or 'L': result.Append(ManualLineBreak); break;
+                case 'm' or 'M': result.Append(ManualPageBreak); break;
+                case 'n' or 'N': result.Append(ColumnBreak); break;
                 case 's' or 'S': result.Append(NonBreakingSpace); break;
                 case '-': result.Append(OptionalHyphen); break;
                 case '~': result.Append(NonBreakingHyphen); break;

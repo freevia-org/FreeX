@@ -129,6 +129,66 @@ public class FindSpecialCodesTests
         FindSpecialCodes.ExpandReplacement(replacement, found).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("a©b", "^0169", 1)]
+    [InlineData("a—b", "^0151", 1)] // Windows-1252 0x97 is the em dash
+    [InlineData("a€b", "^0128", 1)] // Windows-1252 0x80 is the euro sign
+    [InlineData("xAb", "^065", 1)]
+    [InlineData("a—b", "^u8212", 1)]
+    [InlineData("a•b", "^u8226", 1)]
+    [InlineData("xAb", "^u65", 1)]
+    [InlineData("a©b", "^U169", 1)]
+    public void NumericCodes_FindTheirCharacter(string haystack, string needle, int start)
+    {
+        Find(haystack, needle).Should().Equal((start, 1));
+        FindSpecialCodes.ContainsFindCode(needle).Should().BeTrue();
+    }
+
+    [Fact]
+    public void NumericCodes_CombineWithTextAndOtherCodes_AndReadAtMostTheirDigits()
+    {
+        Find("see © 2026 ©", "^0169 2026").Should().Equal((4, 6));
+        Find("©", "^0169^p").Should().BeEmpty();
+        // ^0nnn reads three digits and ^unnnn five: the digit after them is ordinary text.
+        Find("©1 —999", "^01691").Should().Equal((0, 2));
+        Find("a—999", "^u8212999").Should().Equal((1, 4));
+        Find("—" + "1", "^u8212" + "1").Should().Equal((0, 2));
+    }
+
+    [Theory]
+    [InlineData("^0")]
+    [InlineData("^u")]
+    [InlineData("^0x")]
+    [InlineData("^0300")] // beyond the ANSI range
+    [InlineData("^u0")]
+    [InlineData("^uD800")]
+    [InlineData("^u55296")] // a lone surrogate
+    public void NumericCodes_OutOfRangeOrIncomplete_AreLiteralText(string needle)
+    {
+        FindSpecialCodes.ContainsFindCode(needle).Should().BeFalse();
+        Find("x" + needle + "y", needle).Should().Equal((1, needle.Length));
+        FindSpecialCodes.ExpandReplacement(needle, "x").Should().Be(needle);
+    }
+
+    [Theory]
+    [InlineData("^0169", "©")]
+    [InlineData("(^0151)", "(—)")]
+    [InlineData("^u8212^u65", "—A")]
+    [InlineData("^^0169", "^0169")]
+    [InlineData("a^u8226 b", "a• b")]
+    public void NumericCodes_ExpandInReplaceWith(string replacement, string expected)
+    {
+        FindSpecialCodes.ExpandReplacement(replacement, "x").Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("^m", "\f")]
+    [InlineData("a^nb", "a\u000Eb")]
+    public void PageAndColumnBreakCodes_ExpandInReplaceWith(string replacement, string expected)
+    {
+        FindSpecialCodes.ExpandReplacement(replacement, "x").Should().Be(expected);
+    }
+
     [Fact]
     public void ExpandReplacement_OfNothing_IsEmpty()
     {

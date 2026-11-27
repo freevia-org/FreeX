@@ -284,26 +284,106 @@ public static class FindReplaceBodyPlanner
     public static IReadOnlyList<(int Start, int Length)> FindInParagraph(
         TextDocument document,
         Paragraph paragraph,
-        FindCriteria criteria)
+        FindCriteria criteria) =>
+        MatchParagraph(document, paragraph, criteria, out _)
+            .Where(match => match.PlainLength > 0)
+            .Select(match => (match.PlainStart, match.PlainLength))
+            .ToList();
+
+    /// <summary>
+    /// One match inside one paragraph, in both coordinate systems: the projected haystack (where an object
+    /// mark is one character) and <see cref="Paragraph.PlainText"/>. A match that covers nothing but marks
+    /// with no text of their own (a graphic, a comment mark) has <see cref="PlainLength"/> zero and is
+    /// addressed by <see cref="FirstMarkRunIndex"/>: the index in <see cref="Paragraph.Runs"/> of the first
+    /// mark run it covers (<see cref="LastMarkRunIndex"/> the last), -1 when it covers none.
+    /// </summary>
+    public readonly record struct ParagraphMatch(
+        int HayStart,
+        int HayLength,
+        int PlainStart,
+        int PlainLength,
+        int FirstMarkRunIndex = -1,
+        int LastMarkRunIndex = -1);
+
+    /// <summary>
+    /// Every match in one paragraph's projected haystack (the same one Replace All searches, so an object
+    /// mark is one matchable character and a note reference's number is not text), including matches that
+    /// have no <see cref="Paragraph.PlainText"/> extent. <paramref name="haystack"/> is the projected text
+    /// the <see cref="ParagraphMatch.HayStart"/> offsets index; it ends in the flow-end mark nothing matches.
+    /// </summary>
+    public static IReadOnlyList<ParagraphMatch> MatchParagraph(
+        TextDocument document,
+        Paragraph paragraph,
+        FindCriteria criteria,
+        out string haystack)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(paragraph);
         ArgumentNullException.ThrowIfNull(criteria);
 
         var projection = FlowProjection.Build(document, [paragraph], criteria);
+        haystack = projection.Text;
         var map = projection.Maps[0];
-        var spans = new List<(int Start, int Length)>();
+        var matches = new List<ParagraphMatch>();
         foreach (var (start, length) in projection.FindAll(criteria))
         {
             var from = map.ToPlain(start);
             var to = map.ToPlain(start + length);
-            if (to > from)
-                spans.Add((from, to - from));
+            var first = -1;
+            var last = -1;
+            foreach (var piece in map.Pieces)
+            {
+                if (piece.RunIndex < 0 || piece.Hay < start || piece.Hay >= start + length)
+                    continue;
+                if (first < 0)
+                    first = piece.RunIndex;
+                last = piece.RunIndex;
+            }
+
+            matches.Add(new ParagraphMatch(start, length, from, Math.Max(0, to - from), first, last));
         }
 
-        return spans;
+        return matches;
     }
 
+    /// <summary>
+    /// Replaces the match at haystack span [<paramref name="hayStart"/>, <paramref name="hayStart"/> +
+    /// <paramref name="hayLength"/>) of one paragraph (see <see cref="MatchParagraph"/>) in place, with
+    /// exactly the edit Replace All makes to it: the object marks it covers are consumed, the replacement
+    /// text and formatting are written, and Track Changes strikes text through. For a paragraph of a story
+    /// whose flow is that paragraph alone. Returns false, leaving the paragraph as it was, when the span is
+    /// no longer a match or cannot be replaced (a match over a field's cached result, or over an object
+    /// while tracking).
+    /// </summary>
+    public static bool ReplaceInParagraph(
+        TextDocument document,
+        Paragraph paragraph,
+        FindReplaceReplaceRequest request,
+        int hayStart,
+        int hayLength,
+        FindReplaceRevisionContext? tracked = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty)
+            return false;
+
+        var projection = FlowProjection.Build(document, [paragraph], criteria);
+        var match = projection.FindAll(criteria).FirstOrDefault(candidate =>
+            candidate.Start == hayStart && candidate.Length == hayLength);
+        return match.Length > 0
+            && ApplyMatch(
+                document,
+                new List<Paragraph> { paragraph },
+                projection,
+                match,
+                request,
+                tracked,
+                new Dictionary<Paragraph, Paragraph>(ReferenceEqualityComparer.Instance));
+    }
     private static void AddSpanning(
         FlowProjection projection,
         FindCriteria criteria,
@@ -419,7 +499,8 @@ public static class FindReplaceBodyPlanner
     /// stands for a run (a break, a note or comment mark, a graphic, the start of a field); its
     /// <paramref name="MarkOrdinal"/> is that run's position among the paragraph's removable mark runs.
     /// </summary>
-    private readonly record struct Piece(int Hay, int HayLength, int Plain, bool ZeroWidth, int MarkOrdinal = -1);
+    private readonly record struct Piece(
+        int Hay, int HayLength, int Plain, bool ZeroWidth, int MarkOrdinal = -1, int RunIndex = -1);
 
     /// <summary>
     /// Whether a run is one the haystack represents by a structural character a Replace can consume:
@@ -530,12 +611,14 @@ public static class FindReplaceBodyPlanner
                 var map = new ParagraphMap(paragraph, projection._text.Length);
                 var plain = 0;
                 var marks = 0;
+                var runIndex = -1;
                 foreach (var run in paragraph.Runs)
                 {
+                    runIndex++;
                     if (run.IsPageBreak || run.IsColumnBreak)
                     {
                         var mark = run.IsPageBreak ? FindSpecialCodes.ManualPageBreak : FindSpecialCodes.ColumnBreak;
-                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++));
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++, runIndex));
                         projection.Add(new FindTextSegment(mark.ToString(), RunFormatting.Default, paragraph.StyleId, true));
                         plain += run.Text.Length;
                         continue;
@@ -544,7 +627,7 @@ public static class FindReplaceBodyPlanner
                     if (run.Revision != RevisionKind.Deleted && FormattedTextSearch.StructuralMarkFor(run) is { } objectMark)
                     {
                         // One haystack character stands for the whole run, whatever text it mirrors.
-                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++));
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++, runIndex));
                         projection.Add(new FindTextSegment(objectMark.ToString(), RunFormatting.Default, paragraph.StyleId, true));
                         plain += run.Text.Length;
                         continue;
@@ -556,7 +639,7 @@ public static class FindReplaceBodyPlanner
                     {
                         // The field's cached result sits between its start and end marks, so ^d spans
                         // the whole field while ordinary text still reads through it when no mark is projected.
-                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++));
+                        map.Pieces.Add(new Piece(projection._text.Length, 1, plain, ZeroWidth: true, marks++, runIndex));
                         projection.Add(new FindTextSegment(
                             FindSpecialCodes.FieldStart.ToString(), RunFormatting.Default, paragraph.StyleId, true));
                         if (text.Length > 0)
@@ -747,6 +830,12 @@ public static class FindReplaceBodyPlanner
         var inserted = new List<(Paragraph Paragraph, int From, int To)>();
         var firstPiece = 0;
 
+        // A manual page / column break in the replacement is a run, not text: the text before the first
+        // one is written in place, the rest (breaks included) is inserted after it.
+        var firstBreak = pieces[0].AsSpan().IndexOfAny(FindSpecialCodes.ManualPageBreak, FindSpecialCodes.ColumnBreak);
+        var firstRemainder = firstBreak < 0 ? string.Empty : pieces[0][firstBreak..];
+        var firstText = firstBreak < 0 ? pieces[0] : pieces[0][..firstBreak];
+
         // New text takes the formatting of the first character it replaces, as in Word.
         var covered = ranges.FirstOrDefault(range => range.To > range.From);
         var inherited = covered.Paragraph is not null
@@ -763,7 +852,7 @@ public static class FindReplaceBodyPlanner
 
                 // The first piece is written in place so it keeps the replaced run's hyperlink,
                 // character style and formatting; everything else the match covered is removed.
-                var text = i == 0 ? pieces[0] : string.Empty;
+                var text = i == 0 ? firstText : string.Empty;
                 RevisionEditPlanner.TryReplacePlainTextRange(range.Paragraph, range.From, range.To - range.From, text);
                 if (i == 0)
                 {
@@ -771,6 +860,8 @@ public static class FindReplaceBodyPlanner
                     offset = range.From + text.Length;
                     if (text.Length > 0)
                         inserted.Add((range.Paragraph, range.From, offset));
+                    if (firstRemainder.Length > 0)
+                        offset = InsertPiece(range.Paragraph, offset, firstRemainder, inherited, null, inserted);
                 }
             }
         }
@@ -817,11 +908,7 @@ public static class FindReplaceBodyPlanner
             if (pieces[i].Length == 0)
                 continue;
 
-            var after = tracked is null
-                ? RevisionEditPlanner.InsertText(target, offset, pieces[i], inherited)
-                : RevisionEditPlanner.InsertTrackedText(target, offset, pieces[i], inherited, tracked.Author, tracked.DateXml);
-            inserted.Add((target, after - pieces[i].Length, after));
-            offset = after;
+            offset = InsertPiece(target, offset, pieces[i], inherited, tracked, inserted);
         }
 
         if (plan.Format is { } format)
@@ -841,6 +928,78 @@ public static class FindReplaceBodyPlanner
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Writes one paragraph's worth of replacement at <paramref name="offset"/>: its text, and a run for
+    /// each manual page / column break in it (<see cref="FindSpecialCodes.ManualPageBreak"/> /
+    /// <see cref="FindSpecialCodes.ColumnBreak"/>). Returns the PlainText offset after it, and records
+    /// each stretch of written text in <paramref name="inserted"/> so Replace-with formatting reaches it.
+    /// </summary>
+    private static int InsertPiece(
+        Paragraph target,
+        int offset,
+        string piece,
+        RunFormatting inherited,
+        FindReplaceRevisionContext? tracked,
+        List<(Paragraph Paragraph, int From, int To)> inserted)
+    {
+        if (piece.AsSpan().IndexOfAny(FindSpecialCodes.ManualPageBreak, FindSpecialCodes.ColumnBreak) < 0)
+        {
+            var after = tracked is null
+                ? RevisionEditPlanner.InsertText(target, offset, piece, inherited)
+                : RevisionEditPlanner.InsertTrackedText(target, offset, piece, inherited, tracked.Author, tracked.DateXml);
+            inserted.Add((target, after - piece.Length, after));
+            return after;
+        }
+
+        // The runs are built in order and inserted as one block: inserting them one at a time by offset
+        // would put each text run before the zero-width break run written just ahead of it.
+        var block = new List<Run>();
+        var index = 0;
+        while (index < piece.Length)
+        {
+            var next = piece.AsSpan(index).IndexOfAny(FindSpecialCodes.ManualPageBreak, FindSpecialCodes.ColumnBreak);
+            var textLength = next < 0 ? piece.Length - index : next;
+            Run run;
+            if (textLength > 0)
+            {
+                run = new Run(piece.Substring(index, textLength), inherited);
+                index += textLength;
+            }
+            else
+            {
+                var page = piece[index] == FindSpecialCodes.ManualPageBreak;
+                run = new Run(string.Empty, inherited) { IsPageBreak = page, IsColumnBreak = !page };
+                index++;
+            }
+
+            if (tracked is not null)
+            {
+                run.Revision = RevisionKind.Inserted;
+                run.RevisionAuthor = tracked.Author;
+                run.RevisionDateXml = tracked.DateXml;
+            }
+
+            block.Add(run);
+        }
+
+        var cursor = RevisionEditPlanner.InsertRunAtOffset(target, offset, block[0]);
+        var at = 0;
+        while (at < target.Runs.Count && !ReferenceEquals(target.Runs[at], block[0]))
+            at++;
+        for (var i = 1; i < block.Count; i++)
+            target.Runs.Insert(at + i, block[i]);
+
+        foreach (var run in block)
+        {
+            if (run.Text.Length == 0)
+                continue;
+            inserted.Add((target, cursor, cursor + run.Text.Length));
+            cursor += run.Text.Length;
+        }
+
+        return cursor;
     }
 
     /// <summary>The paragraph that now holds <paramref name="paragraph"/>'s text (see <see cref="JoinInto"/>).</summary>

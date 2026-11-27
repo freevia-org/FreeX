@@ -285,6 +285,44 @@ public sealed class FindReplaceSingleMatchHostTests
     }
 
     [StaFact]
+    public void Replace_WithAPageBreakCode_WritesABreakRunNotTheControlCharacter()
+    {
+        var view = Load(_ => { }, new Paragraph("one; two"));
+
+        WithDialog(view, "; ", "^m", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var paragraphs = view.Model.Blocks.OfType<Paragraph>().ToList();
+        string.Concat(paragraphs.Select(paragraph => paragraph.PlainText)).Should().Be("onetwo");
+        paragraphs.SelectMany(paragraph => paragraph.Runs).Should().ContainSingle(run => run.IsPageBreak);
+        paragraphs.SelectMany(paragraph => paragraph.Runs).Should().NotContain(run => run.Text.Contains('\f'));
+    }
+
+    [StaFact]
+    public void Replace_WithNumericCodes_WritesThoseCharacters_AndFindWhatReadsThem()
+    {
+        var view = Load(_ => { }, new Paragraph("Terms (c) apply — always"));
+
+        WithDialog(view, "(c)", "^0169", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+        WithDialog(view, "^u8212", "^0150", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Paragraph>().Single().PlainText.Should().Be("Terms © apply – always");
+    }
+
+    [StaFact]
     public void FindNext_OnACommentMark_AdvancesToTheNextOneInsteadOfRepeatingIt()
     {
         var view = Load(

@@ -45,10 +45,10 @@ public sealed class FindReplaceWordParityTests
     }
 
     [Fact]
-    public void SpecialItems_ColumnBreakIsFindOnly_AndLocalized()
+    public void SpecialItems_ColumnBreakIsOfferedForBothBoxes_AndLocalized()
     {
         FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Replace, false)
-            .Should().NotContain(item => item.Insert == "^n");
+            .Should().Contain(item => item.Insert == "^n");
         FindReplaceDialogPlanner.BuildSpecialItems(
                 FindReplaceDialogFieldKind.Find, false, new FindReplaceDialogText(key => $"[{key}]"))
             .Should().Contain(item => item.Insert == "^n"
@@ -114,7 +114,7 @@ public sealed class FindReplaceWordParityTests
         var items = FindReplaceDialogPlanner.BuildSpecialItems(FindReplaceDialogFieldKind.Replace, useWildcards: false);
 
         items.Select(item => item.Insert)
-            .Should().Equal("^p", "^t", "^^", "^+", "^=", "^c", "^&", "^l", "^~", "^s", "^-");
+            .Should().Equal("^p", "^t", "^^", "^n", "^+", "^=", "^c", "^&", "^l", "^m", "^~", "^s", "^-");
         items.Should().Contain(item => item.Label == "Find What Text  (^&)");
     }
 
@@ -461,6 +461,191 @@ public sealed class FindReplaceWordParityTests
             .Should().BeTrue();
         FindReplaceStoryPlanner.IsCurrent(document, new FindReplaceSearchRequest("Draft", NoOptions), match)
             .Should().BeFalse();
+    }
+
+    // ---- Object marks in stories -------------------------------------------------------------
+
+    private static Run StoryGraphic() => Run.FromImage(new InlineImage([1, 2, 3], 10, 10));
+
+    private static Paragraph MarkedParagraph(string before, Run mark, string after)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(before));
+        paragraph.Runs.Add(mark);
+        paragraph.Runs.Add(new Run(after));
+        return paragraph;
+    }
+
+    private static HeaderFooter MarkedHeaderFooter(string before, Run mark, string after)
+    {
+        var region = new HeaderFooter();
+        region.Paragraphs.Add(MarkedParagraph(before, mark, after));
+        return region;
+    }
+
+    /// <summary>One object mark in the paragraph of every kind of story: header, footer, notes, comment, text box.</summary>
+    private static TextDocument BuildMarkedStoryDocument()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        var host = new Paragraph("Host ");
+        var box = Shape.TextBoxWith("placeholder", 100, 40);
+        box.TextParagraphs.Clear();
+        box.TextParagraphs.Add(MarkedParagraph("K", StoryGraphic(), "L"));
+        host.Runs.Add(Run.FromShape(box));
+        document.Blocks.Add(host);
+
+        document.Header = MarkedHeaderFooter("A", StoryGraphic(), "B");
+        document.Footer = MarkedHeaderFooter("C", StoryGraphic(), "D");
+        document.Footer.Paragraphs.Add(MarkedParagraph("M", Run.PageNumberField(), "N"));
+        var footnote = new Footnote(1, string.Empty);
+        footnote.Content.Clear();
+        footnote.Content.Add(MarkedParagraph("E", StoryGraphic(), "F"));
+        document.Footnotes[1] = footnote;
+        var endnote = new Endnote(1, string.Empty);
+        endnote.Content.Clear();
+        endnote.Content.Add(MarkedParagraph("G", Run.FootnoteReference(9), "H"));
+        document.Endnotes[1] = endnote;
+        var comment = new Comment(3, string.Empty, "Ann");
+        comment.Content.Clear();
+        comment.Content.Add(MarkedParagraph("I", Run.CommentReference(5), "J"));
+        document.Comments[3] = comment;
+        return document;
+    }
+
+    private static List<string> StoryTexts(TextDocument document) =>
+    [
+        document.Header!.Paragraphs[0].PlainText,
+        document.Footer!.Paragraphs[0].PlainText,
+        document.Footer.Paragraphs[1].PlainText,
+        document.Footnotes[1].PlainText,
+        document.Endnotes[1].PlainText,
+        document.Comments[3].PlainText,
+        ((Paragraph)document.Blocks[0]).Runs[1].Shape!.PlainText,
+    ];
+
+    // A field shows its cached result ("1") and a note reference its number ("9"); a comment mark and a
+    // graphic have no text.
+    private static readonly string[] MarkedStoriesUntouched = ["AB", "CD", "M1N", "EF", "G9H", "IJ", "KL"];
+
+    private static string[] WithStoryEdits(params (int Index, string Text)[] edits)
+    {
+        var texts = (string[])MarkedStoriesUntouched.Clone();
+        foreach (var (index, text) in edits)
+            texts[index] = text;
+        return texts;
+    }
+
+    [Fact]
+    public void StoryGraphicCode_ReplaceAll_ConsumesTheGraphicInHeaderFooterNoteAndTextBox_AndUndoRestoresThem()
+    {
+        var document = BuildMarkedStoryDocument();
+        var executed = new List<IDocumentCommand>();
+
+        var count = ReplaceAllInStories(document, new FindReplaceReplaceRequest("^g", "[x]", NoOptions), executed);
+
+        count.Should().Be(4);
+        StoryTexts(document).Should().Equal(WithStoryEdits((0, "A[x]B"), (1, "C[x]D"), (3, "E[x]F"), (6, "K[x]L")));
+        document.Header!.Paragraphs[0].Runs.Should().NotContain(run => run.Image != null);
+
+        var context = new Context(document);
+        foreach (var command in Enumerable.Reverse(executed))
+            command.Revert(context);
+        StoryTexts(document).Should().Equal(MarkedStoriesUntouched);
+        document.Header.Paragraphs[0].Runs.Should().Contain(run => run.Image != null, "undo puts the graphic back");
+    }
+
+    [Fact]
+    public void StoryNoteCommentAndFieldCodes_ReplaceAll_ConsumeTheirMarkInTheirOwnStory()
+    {
+        var document = BuildMarkedStoryDocument();
+
+        ReplaceAllInStories(document, new FindReplaceReplaceRequest("^f", "[f]", NoOptions)).Should().Be(1);
+        ReplaceAllInStories(document, new FindReplaceReplaceRequest("^a", "[a]", NoOptions)).Should().Be(1);
+        ReplaceAllInStories(document, new FindReplaceReplaceRequest("^d", "[d]", NoOptions)).Should().Be(1);
+
+        StoryTexts(document).Should().Equal(WithStoryEdits((2, "M[d]N"), (4, "G[f]H"), (5, "I[a]J")));
+        document.Endnotes[1].Content[0].Runs.Should().NotContain(run => run.FootnoteId != null);
+        document.Comments[3].Content[0].Runs.Should().NotContain(run => run.IsCommentReference);
+    }
+
+    [Fact]
+    public void StoryFindNext_StepsFromOneMarkToTheNext_WithoutRepeatingAZeroWidthHit()
+    {
+        var document = BuildMarkedStoryDocument();
+        var request = new FindReplaceSearchRequest("^g", NoOptions);
+        var found = new List<string>();
+
+        FindReplaceStoryPosition? from = null;
+        while (FindReplaceStoryPlanner.FindNext(document, request, from) is { } match)
+        {
+            found.Add(FindReplaceStoryPlanner.DescribeLocation(match));
+            found.Count.Should().BeLessThan(10, "the walk must move past a match that has no text extent");
+            from = match.End;
+        }
+
+        found.Should().Equal("header (section 1)", "footer (section 1)", "footnote 1", "text box 1");
+    }
+
+    [Fact]
+    public void StoryMatch_InAParagraphWithMarks_DescribesItsContextWithoutTheMarks()
+    {
+        var document = BuildMarkedStoryDocument();
+
+        var match = FindReplaceStoryPlanner.FindNext(document, new FindReplaceSearchRequest("^g", NoOptions))!;
+
+        match.Context.Should().Be("AB");
+        match.MatchedText.Should().Be("\u0001");
+    }
+
+    [Fact]
+    public void StoryNoteMarkNumber_IsNotText_AndTextAroundAMarkStillMatches()
+    {
+        var document = BuildMarkedStoryDocument();
+        document.Footnotes[1].Content[0].Runs[1] = Run.FootnoteReference(7);
+        document.Footnotes[1].Content[0].Runs[1].Text.Should().NotBeEmpty("a note reference shows its number");
+        var number = document.Footnotes[1].Content[0].Runs[1].Text;
+
+        FindReplaceStoryPlanner.FindNext(document, new FindReplaceSearchRequest(number, NoOptions), null)
+            .Should().BeNull("the number of a reference mark is not searchable text");
+        ReplaceAllInStories(document, new FindReplaceReplaceRequest("F", "f", NoOptions)).Should().Be(1);
+        document.Footnotes[1].Content[0].Runs.Should().ContainSingle(run => run.FootnoteId == 7);
+    }
+
+    [Fact]
+    public void StoryReplace_TrackedOverAnObject_IsSkippedNotCounted()
+    {
+        var document = BuildMarkedStoryDocument();
+        var tracked = new FindReplaceRevisionContext("Ann", null);
+
+        ReplaceAllInStories(document, new FindReplaceReplaceRequest("^g", "[x]", NoOptions), tracked: tracked)
+            .Should().Be(0, "an object cannot be struck through");
+        document.Header!.Paragraphs[0].Runs.Should().Contain(run => run.Image != null);
+    }
+
+    [Fact]
+    public void StoryReplaceAt_ForAHeaderParagraphWithAMark_UsesThePlainTextSpanTheHostSelected()
+    {
+        var document = BuildMarkedStoryDocument();
+        var header = document.Header!.Paragraphs[0];
+
+        // "B" sits at PlainText offset 1 (the graphic has no text), though it is haystack offset 2.
+        var plan = FindReplaceStoryPlanner.PlanReplacementAt(
+            document, header, 1, 1, new FindReplaceReplaceRequest("B", "b", NoOptions));
+
+        plan.Should().NotBeNull();
+        plan!.Value.Command!.Apply(new Context(document));
+        header.PlainText.Should().Be("Ab");
+        header.Runs.Should().Contain(run => run.Image != null);
+    }
+
+    [Fact]
+    public void StoryBreakReplacement_IsSkippedBecauseAStoryHasNoPageOrColumnToBreak()
+    {
+        var document = BuildStoryDocument();
+
+        ReplaceAllInStories(document, new FindReplaceReplaceRequest("Draft", "^m", NoOptions)).Should().Be(0);
+        document.Header!.PlainText.Should().Be("Draft header");
     }
 
     [Fact]

@@ -117,6 +117,60 @@ public sealed class FindReplaceBodyPlannerTests
         Count(document, code).Should().Be(1);
     }
 
+    private static string RunsWithBreaks(Paragraph paragraph) =>
+        string.Concat(paragraph.Runs.Select(run =>
+            run.IsPageBreak ? "<page>" : run.IsColumnBreak ? "<column>" : run.Text));
+
+    [Fact]
+    public void PageAndColumnBreakCodes_InReplaceWith_InsertBreakRunsNotText()
+    {
+        var document = Doc(new Paragraph("one; two; three"));
+
+        var page = Replace(document, Request("; two", "^mX^nY"));
+
+        page.ReplacedCount.Should().Be(1);
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.PlainText.Should().Be("oneXY; three", "a break contributes no text");
+        RunsWithBreaks(paragraph).Should().Be("one<page>X<column>Y; three");
+        paragraph.Runs.Where(run => run.IsPageBreak || run.IsColumnBreak).Should().OnlyContain(run => run.Text.Length == 0);
+    }
+
+    [Fact]
+    public void PageBreakCode_InReplaceWith_AfterAParagraphMark_StaysWithinItsOwnParagraph()
+    {
+        var document = Doc(new Paragraph("a|b"));
+
+        Replace(document, Request("|", "^p^m"));
+
+        Text(document).Should().Equal("a", "b");
+        RunsWithBreaks((Paragraph)document.Blocks[1]).Should().Be("<page>b");
+    }
+
+    [Fact]
+    public void BreakCode_InReplaceWith_IsMarkedInsertedWhenTracked()
+    {
+        var document = Doc(new Paragraph("one; two"));
+
+        Replace(document, Request("; ", "^n"), new FindReplaceRevisionContext("Ann", null));
+
+        var inserted = ((Paragraph)document.Blocks[0]).Runs.Single(run => run.IsColumnBreak);
+        inserted.Revision.Should().Be(RevisionKind.Inserted);
+        inserted.RevisionAuthor.Should().Be("Ann");
+    }
+
+    [Fact]
+    public void NumericCodes_FindAndReplaceThroughTheBody()
+    {
+        var document = Doc(new Paragraph("Terms (c) apply — always"), new Paragraph("Last (c)"));
+
+        Replace(document, Request("(c)", "^0169")).ReplacedCount.Should().Be(2);
+        Text(document).Should().Equal("Terms © apply — always", "Last ©");
+
+        Replace(document, Request("^u8212", "^0150")).ReplacedCount.Should().Be(1);
+        Replace(document, Request("^0169", "(C)")).ReplacedCount.Should().Be(2);
+        Text(document).Should().Equal("Terms (C) apply – always", "Last (C)");
+    }
+
     [Fact]
     public void FindNext_LocatesANoteMarkByItsPlainTextExtent_AndNeverByItsNumber()
     {

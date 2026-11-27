@@ -151,6 +151,13 @@ public sealed record FindReplaceReplaceRequest(
 public readonly record struct FindReplaceReplacementPlan(bool ReplacesText, string Text, FindFormat? Format)
 {
     public bool InsertsParagraphMark => ReplacesText && Text.Contains(FindSpecialCodes.ParagraphMark);
+
+    /// <summary>
+    /// True when the replacement writes a manual page break (<c>^m</c>) or a column break (<c>^n</c>).
+    /// Those are runs of the model rather than text, so only the shared body planner can write them.
+    /// </summary>
+    public bool InsertsBreak =>
+        ReplacesText && Text.AsSpan().IndexOfAny(FindSpecialCodes.ManualPageBreak, FindSpecialCodes.ColumnBreak) >= 0;
 }
 
 /// <summary>
@@ -325,7 +332,7 @@ public static class FindReplaceDialogPlanner
         (FindReplaceTextId.SpecialAnyDigit, "^#", true, false),
         (FindReplaceTextId.SpecialAnyLetter, "^$", true, false),
         (FindReplaceTextId.SpecialCaretCharacter, "^^", true, true),
-        (FindReplaceTextId.SpecialColumnBreak, "^n", true, false),
+        (FindReplaceTextId.SpecialColumnBreak, "^n", true, true),
         (FindReplaceTextId.SpecialEmDash, "^+", true, true),
         (FindReplaceTextId.SpecialEnDash, "^=", true, true),
         (FindReplaceTextId.SpecialEndnoteMark, "^e", true, false),
@@ -335,7 +342,7 @@ public static class FindReplaceDialogPlanner
         (FindReplaceTextId.SpecialClipboardContents, "^c", false, true),
         (FindReplaceTextId.SpecialFindWhatText, "^&", false, true),
         (FindReplaceTextId.SpecialManualLineBreak, "^l", true, true),
-        (FindReplaceTextId.SpecialManualPageBreak, "^m", true, false),
+        (FindReplaceTextId.SpecialManualPageBreak, "^m", true, true),
         (FindReplaceTextId.SpecialNonbreakingHyphen, "^~", true, true),
         (FindReplaceTextId.SpecialNonbreakingSpace, "^s", true, true),
         (FindReplaceTextId.SpecialOptionalHyphen, "^-", true, true),
