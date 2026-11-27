@@ -184,6 +184,46 @@ public static class FindReplaceStoryPlanner
     }
 
     /// <summary>
+    /// Plans the replacement of the match at [<paramref name="start"/>, <paramref name="start"/> +
+    /// <paramref name="length"/>) of a story paragraph the host holds by reference (for example the
+    /// header paragraph its caret is in) -- the same edit, including Replace-with formatting, as
+    /// <see cref="PlanReplacement"/> makes for a match the walk found. Null when the paragraph is not part
+    /// of any non-body story or the span is no longer a match.
+    /// </summary>
+    public static FindReplaceStoryReplacement? PlanReplacementAt(
+        TextDocument document,
+        Paragraph paragraph,
+        int start,
+        int length,
+        FindReplaceReplaceRequest request,
+        FindReplaceRevisionContext? tracked = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var text = paragraph.PlainText;
+        if (start < 0 || length <= 0 || start + length > text.Length
+            || DocumentStories.Enumerate(document)
+                .FirstOrDefault(story => ReferenceEquals(story.Paragraph, paragraph)) is not { } story)
+        {
+            return null;
+        }
+
+        var match = new FindReplaceStoryMatch(
+            story.Address,
+            start,
+            length,
+            story.StoryNumber,
+            story.Slot,
+            text.Substring(start, length),
+            Excerpt(text, start, length));
+        return IsCurrent(document, request.ToSearchRequest(), match)
+            ? PlanReplacement(document, match, request, tracked)
+            : null;
+    }
+
+    /// <summary>
     /// Replaces every match in every non-body story, running each edit through
     /// <paramref name="execute"/>. Each replacement resumes past the text it just wrote, so a
     /// replacement that re-creates the search term (Confidential -> Strictly Confidential) cannot

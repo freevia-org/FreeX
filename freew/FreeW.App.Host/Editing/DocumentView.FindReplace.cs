@@ -9,6 +9,7 @@ using WpfList = System.Windows.Documents.List;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun = System.Windows.Documents.Run;
 using WpfTable = System.Windows.Documents.Table;
+using WpfTableCell = System.Windows.Documents.TableCell;
 
 namespace FreeW.App.Host.Editing;
 
@@ -158,6 +159,56 @@ public sealed partial class DocumentView
     /// </summary>
     internal DocumentTextRange? FindReplaceSelectionRange() =>
         TryGetCurrentBodyTextRange(out var range) ? range : null;
+
+    /// <summary>
+    /// Where a rendered span lies in the model when it is text of one cell of a top-level table: the
+    /// table block, row, grid column and paragraph(s) with plain-text offsets, ready for
+    /// <see cref="FindReplaceBodyPlanner.PlanReplaceMatch"/>. Null for anything else (body text, a nested
+    /// table, a list, text across cells), which the caller edits on the surface as before. The body must
+    /// have been committed to the model first.
+    /// </summary>
+    internal FindReplaceMatch? TryLocateTableCellFindMatch(TextPointer start, TextPointer end)
+    {
+        if (start.Paragraph is not { } startParagraph
+            || end.Paragraph is not { } endParagraph
+            || startParagraph.Parent is not WpfTableCell cell
+            || !ReferenceEquals(endParagraph.Parent, cell)
+            || cell.Blocks.Any(block => block is WpfList)
+            || cell.Parent is not System.Windows.Documents.TableRow wpfRow
+            || wpfRow.Parent is not System.Windows.Documents.TableRowGroup group
+            || group.Parent is not WpfTable wpfTable
+            || wpfTable.Parent is not FlowDocument)
+        {
+            return null;
+        }
+
+        var location = TableLocationOf(cell);
+        if (location.BlockIndex < 0
+            || location.BlockIndex >= _model.Blocks.Count
+            || _model.Blocks[location.BlockIndex] is not FreeW.Core.Model.Table
+            || TableEdits.AddressFromCellIndex(location.BlockIndex, location.RowIndex, location.ColumnIndex) is not { } address)
+        {
+            return null;
+        }
+
+        var paragraphs = cell.Blocks.OfType<WpfParagraph>().ToList();
+        var first = paragraphs.IndexOf(startParagraph);
+        var last = paragraphs.IndexOf(endParagraph);
+        if (first < 0 || last < first)
+            return null;
+
+        var startOffset = OffsetInParagraph(startParagraph, start);
+        var endOffset = OffsetInParagraph(endParagraph, end);
+        return new FindReplaceMatch(
+            address.BlockIndex,
+            startOffset,
+            Math.Max(1, endOffset - startOffset),
+            address.RowIndex,
+            address.GridColumn,
+            first,
+            EndParagraphIndex: last > first ? last : null,
+            EndOffset: last > first ? endOffset : null);
+    }
 
     private static void ProjectFindBlocks(
         BlockCollection blocks,

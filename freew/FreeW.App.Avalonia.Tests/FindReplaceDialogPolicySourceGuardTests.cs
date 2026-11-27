@@ -169,6 +169,17 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().NotContain("FindNextHeaderFooterOnly(");
     }
 
+    [Fact]
+    public void DocumentView_SingleReplaceInCellsAndHeaderFooterUsesTheSharedPlanners()
+    {
+        var source = ReadAvaloniaSource("Editing", "DocumentView.cs");
+
+        // A single Replace applies Replace-with formatting in a table cell / header / footer, and over a
+        // paragraph-spanning match, through the same planners Replace All uses -- not a local edit.
+        source.Should().Contain("FindReplaceBodyPlanner.PlanReplaceMatch(_doc, request, match, tracked)");
+        source.Should().Contain("FindReplaceStoryPlanner.PlanReplacementAt(");
+    }
+
     /// <summary>
     /// Guards the cross-app Find &amp; Replace open mode: FreeW must consume
     /// <c>Free.Shared.AppServices.FindReplaceOpenMode</c> (shared with FreeX and FreeP) and must

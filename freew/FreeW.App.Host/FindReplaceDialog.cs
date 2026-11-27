@@ -643,6 +643,27 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             var includeFormatting = request.FindFormat is not null;
             var regionLength = match.Length;
 
+            // Inside a table cell the surface cannot format the written text, so a Replace with
+            // formatting (or one that only reformats the found text) is the shared body planner's edit --
+            // the same one Replace All makes for that match.
+            if ((plan.Format is not null || !plan.ReplacesText)
+                && projection.TryGetRange(match.Start, match.Length, out var cellStart, out var cellEnd))
+            {
+                editor.CommitToModel();
+                if (editor.TryLocateTableCellFindMatch(cellStart, cellEnd) is { } location
+                    && FindReplaceBodyPlanner.PlanReplaceMatch(editor.Model, request, location, RevisionContext())
+                        is { ReplacedCount: > 0 } command)
+                {
+                    var before = projection;
+                    editor.Commands.Execute(command);
+                    projection = editor.BuildFindReplaceProjection(includeFormatting);
+                    replaced = true;
+                    return match.Start + (plan.ReplacesText
+                        ? Math.Max(0, match.Length + projection.Length - before.Length)
+                        : match.Length);
+                }
+            }
+
             if (plan.ReplacesText)
             {
                 if (!projection.TryGetRange(match.Start, match.Length, out var matchStart, out var matchEnd))

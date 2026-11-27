@@ -99,6 +99,191 @@ public static class FindReplaceBodyPlanner
         return new FindReplaceBodyReplaceAllCommand(replaced > 0 ? after : before, replaced);
     }
 
+    /// <summary>
+    /// Plans the replacement of ONE match, located as Find Next reports it (a body paragraph span, a span
+    /// in a table cell, or one that runs across paragraph marks), with exactly the edit Replace All makes
+    /// to it: the same projection, the same replacement expansion, and Replace-with formatting applied to
+    /// the written text (or to the kept text when the Replace with box is empty). Nothing in
+    /// <paramref name="document"/> is touched; the returned command swaps the block list like
+    /// <see cref="PlanReplaceAll"/>'s, and replaces nothing when the location is no longer a match.
+    /// </summary>
+    public static FindReplaceBodyReplaceAllCommand PlanReplaceMatch(
+        TextDocument document,
+        FindReplaceReplaceRequest request,
+        FindReplaceMatch location,
+        FindReplaceRevisionContext? tracked = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var before = document.Blocks.ToList();
+        var none = new FindReplaceBodyReplaceAllCommand(before, 0, ReplaceLabel);
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty || location.IsInHeaderFooter || location.Block < 0 || location.Block >= before.Count)
+            return none;
+
+        var unit = Units(before).First(candidate =>
+            location.Block >= candidate.FirstBlockIndex && location.Block < candidate.FirstBlockIndex + candidate.Blocks.Count);
+        var clone = unit.Clone();
+
+        Flow? flow;
+        int firstParagraph;
+        int lastParagraph;
+        if (unit.IsParagraphRun)
+        {
+            if (location.IsInTableCell)
+                return none;
+
+            flow = clone.Flows().FirstOrDefault();
+            firstParagraph = location.Block - unit.FirstBlockIndex;
+            lastParagraph = (location.EndBlock ?? location.Block) - unit.FirstBlockIndex;
+        }
+        else
+        {
+            if (clone.Blocks[0] is not Table table
+                || location.TableRow is not { } row
+                || row < 0
+                || row >= table.Rows.Count
+                || location.TableCol is not { } column
+                || TableGridProjection.StartingAt(table.Rows[row], column)?.Cell is not { } cell
+                || location.TableParagraphIndex is not { } paragraphIndex)
+            {
+                return none;
+            }
+
+            flow = clone.Flows().FirstOrDefault(candidate => ReferenceEquals(candidate.Container, cell.Paragraphs));
+            firstParagraph = paragraphIndex;
+            lastParagraph = location.EndParagraphIndex ?? paragraphIndex;
+        }
+
+        if (flow is null)
+            return none;
+
+        var projection = FlowProjection.Build(document, flow.Paragraphs, criteria.HasFormat);
+        var endOffset = location.EndOffset ?? location.Start + location.Length;
+        foreach (var match in projection.FindAll(criteria))
+        {
+            var first = projection.ParagraphAt(match.Start);
+            var end = match.Start + match.Length;
+            var last = projection.ParagraphAt(end);
+            if (first != firstParagraph
+                || last != lastParagraph
+                || projection.Maps[first].ToPlain(match.Start) != location.Start
+                || projection.Maps[last].ToPlain(end) != endOffset)
+            {
+                continue;
+            }
+
+            if (!ApplyMatch(document, flow.Container, projection, match, request, tracked, new(ReferenceEqualityComparer.Instance)))
+                return none;
+
+            var after = new List<Block>(before.Count);
+            foreach (var other in Units(before))
+            {
+                if (ReferenceEquals(other.Blocks[0], unit.Blocks[0]))
+                    after.AddRange(clone.Blocks);
+                else
+                    after.AddRange(other.Blocks);
+            }
+
+            return new FindReplaceBodyReplaceAllCommand(after, 1, ReplaceLabel);
+        }
+
+        return none;
+    }
+
+    /// <summary>
+    /// The matches that run across at least one paragraph mark, each located by where it starts and ends
+    /// (see <see cref="FindReplaceMatch.IsSpanning"/>), in document order. Only text a caret can be
+    /// placed in is covered: top-level paragraph runs and the cells of top-level tables (a match never
+    /// crosses a cell edge); nested tables are left to the other body walkers.
+    /// </summary>
+    public static IReadOnlyList<FindReplaceMatch> FindParagraphSpanningMatches(
+        TextDocument document,
+        FindReplaceSearchRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var criteria = request.ToCriteria();
+        var result = new List<FindReplaceMatch>();
+        if (criteria.IsEmpty)
+            return result;
+
+        foreach (var unit in Units(document.Blocks))
+        {
+            if (unit.IsParagraphRun)
+            {
+                if (unit.Blocks.Count > 1)
+                {
+                    var paragraphs = unit.Blocks.Cast<Paragraph>().ToList();
+                    AddSpanning(
+                        FlowProjection.Build(document, paragraphs, criteria.HasFormat),
+                        criteria,
+                        result,
+                        (first, last, start, end) => new FindReplaceMatch(
+                            unit.FirstBlockIndex + first,
+                            start,
+                            end.Length,
+                            EndBlock: unit.FirstBlockIndex + last,
+                            EndOffset: end.Offset));
+                }
+            }
+            else if (unit.Blocks[0] is Table table)
+            {
+                for (var row = 0; row < table.Rows.Count; row++)
+                {
+                    foreach (var projected in TableGridProjection.ProjectRow(table.Rows[row]))
+                    {
+                        if (projected.Cell.Paragraphs.Count < 2)
+                            continue;
+
+                        var rowIndex = row;
+                        var column = projected.StartColumn;
+                        AddSpanning(
+                            FlowProjection.Build(document, projected.Cell.Paragraphs.ToList(), criteria.HasFormat),
+                            criteria,
+                            result,
+                            (first, last, start, end) => new FindReplaceMatch(
+                                unit.FirstBlockIndex,
+                                start,
+                                end.Length,
+                                rowIndex,
+                                column,
+                                first,
+                                EndParagraphIndex: last,
+                                EndOffset: end.Offset));
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private static void AddSpanning(
+        FlowProjection projection,
+        FindCriteria criteria,
+        List<FindReplaceMatch> result,
+        Func<int, int, int, (int Offset, int Length), FindReplaceMatch> locate)
+    {
+        foreach (var (start, length) in projection.FindAll(criteria))
+        {
+            var first = projection.ParagraphAt(start);
+            var last = projection.ParagraphAt(start + length);
+            if (last > first)
+            {
+                result.Add(locate(
+                    first,
+                    last,
+                    projection.Maps[first].ToPlain(start),
+                    (projection.Maps[last].ToPlain(start + length), length)));
+            }
+        }
+    }
+
+    private const string ReplaceLabel = "Replace";
+
     // ---- units and flows ---------------------------------------------------------------------
 
     /// <summary>
@@ -592,11 +777,12 @@ public static class FindReplaceBodyPlanner
 /// </remarks>
 public sealed class FindReplaceBodyReplaceAllCommand(
     IReadOnlyList<Block> after,
-    int replacedCount) : IDocumentCommand
+    int replacedCount,
+    string label = "Replace All") : IDocumentCommand
 {
     private List<Block>? _previous;
 
-    public string Label => "Replace All";
+    public string Label => label;
 
     /// <summary>How many body matches the command replaces.</summary>
     public int ReplacedCount => replacedCount;

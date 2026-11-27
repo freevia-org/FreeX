@@ -201,10 +201,23 @@ public readonly record struct FindReplaceMatch(
     int? TableCol = null,
     int? TableParagraphIndex = null,
     bool? HeaderFooterIsFooter = null,
-    int? HeaderFooterParagraphIndex = null)
+    int? HeaderFooterParagraphIndex = null,
+    int? EndBlock = null,
+    int? EndParagraphIndex = null,
+    int? EndOffset = null)
 {
     public bool IsInTableCell => TableRow is not null;
     public bool IsInHeaderFooter => HeaderFooterIsFooter is not null;
+
+    /// <summary>
+    /// True when the match runs across one or more paragraph marks (Word's <c>^p</c>). It then starts at
+    /// <see cref="Start"/> in the paragraph addressed by <see cref="Block"/> (and, in a table cell,
+    /// <see cref="TableParagraphIndex"/>) and ends at <see cref="EndOffset"/> in the paragraph addressed by
+    /// <see cref="EndBlock"/> (a body match) or <see cref="EndParagraphIndex"/> (a match inside one cell).
+    /// <see cref="Length"/> is then the matched length counting each paragraph mark as one character; it is
+    /// at least 1 and is not an offset into any one paragraph.
+    /// </summary>
+    public bool IsSpanning => EndOffset is not null;
 }
 
 public enum FindReplaceGoToTargetKind
@@ -736,6 +749,8 @@ public static class FindReplaceDialogPlanner
         return FindNextMatchCore(
             document,
             paragraph => EnumerateMatches(paragraph.PlainText, term, options),
+            FindReplaceBodyPlanner.FindParagraphSpanningMatches(
+                document, new FindReplaceSearchRequest(term, NormalizeOptions(options))),
             fromBlock,
             fromOffset,
             fromTableCell,
@@ -767,6 +782,8 @@ public static class FindReplaceDialogPlanner
         return FindNextMatchCore(
             document,
             paragraph => FormattedTextSearch.FindAll(document, paragraph, criteria),
+            FindReplaceBodyPlanner.FindParagraphSpanningMatches(
+                document, request with { Options = NormalizeOptions(request.Options) }),
             fromBlock,
             fromOffset,
             fromTableCell,
@@ -784,6 +801,24 @@ public static class FindReplaceDialogPlanner
         ArgumentNullException.ThrowIfNull(request);
 
         var criteria = request.ToCriteria();
+        if (location.IsSpanning)
+        {
+            // A selection that runs across paragraph marks is a match only when the flow's own
+            // projection finds exactly that span (the same matches Replace All would visit).
+            return !criteria.IsEmpty
+                && FindReplaceBodyPlanner
+                    .FindParagraphSpanningMatches(document, request with { Options = NormalizeOptions(request.Options) })
+                    .Any(match =>
+                        match.Block == location.Block
+                        && match.Start == location.Start
+                        && match.TableRow == location.TableRow
+                        && match.TableCol == location.TableCol
+                        && match.TableParagraphIndex == location.TableParagraphIndex
+                        && match.EndBlock == location.EndBlock
+                        && match.EndParagraphIndex == location.EndParagraphIndex
+                        && match.EndOffset == location.EndOffset);
+        }
+
         if (criteria.IsEmpty || location.Length <= 0 || ResolveParagraph(document, location) is not { } paragraph)
             return false;
 
@@ -829,9 +864,45 @@ public static class FindReplaceDialogPlanner
         return document.Blocks[location.Block] as Paragraph;
     }
 
+    /// <summary>
+    /// The first body-paragraph match starting at an accepted offset: the paragraph's own matches and any
+    /// match that starts in it and runs on across paragraph marks (see <see cref="FindReplaceMatch.IsSpanning"/>).
+    /// When both start at the same offset the longer, spanning one wins.
+    /// </summary>
+    private static FindReplaceMatch? FirstBodyMatch(
+        int blockIndex,
+        Paragraph paragraph,
+        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        IReadOnlyList<FindReplaceMatch> spanning,
+        Func<int, bool> accepts)
+    {
+        FindReplaceMatch? best = null;
+        foreach (var (start, length) in matchesIn(paragraph))
+        {
+            if (length > 0 && accepts(start))
+            {
+                best = new FindReplaceMatch(blockIndex, start, length);
+                break;
+            }
+        }
+
+        foreach (var span in spanning)
+        {
+            if (span.IsInTableCell || span.Block != blockIndex || !accepts(span.Start))
+                continue;
+
+            if (best is not { } current || span.Start <= current.Start)
+                best = span;
+            break;
+        }
+
+        return best;
+    }
+
     private static FindReplaceMatch? FindNextMatchCore(
         TextDocument document,
         Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        IReadOnlyList<FindReplaceMatch> spanning,
         int fromBlock,
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell,
@@ -849,41 +920,33 @@ public static class FindReplaceDialogPlanner
             if (block is Paragraph paragraph)
             {
                 var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
-                var match = matchesIn(paragraph)
-                    .FirstOrDefault(item => item.Start >= startAt);
-                if (match.Length > 0)
-                    return new FindReplaceMatch(blockIndex, match.Start, match.Length);
+                if (FirstBodyMatch(blockIndex, paragraph, matchesIn, spanning, start => start >= startAt) is { } hit)
+                    return hit;
                 continue;
             }
 
             if (block is Table table)
             {
                 var startCell = step == 0 ? fromTableCell : null;
-                var tableMatch = EnumerateTableMatches(table, matchesIn)
+                var tableMatch = EnumerateTableMatches(table, blockIndex, matchesIn, spanning)
                     .FirstOrDefault(item => IsTableMatchAtOrAfter(item, startCell));
                 if (tableMatch.Length > 0)
-                    return new FindReplaceMatch(
-                        blockIndex, tableMatch.Start, tableMatch.Length,
-                        tableMatch.Row, tableMatch.Col, tableMatch.ParagraphIndex);
+                    return tableMatch.ToMatch(blockIndex);
             }
         }
 
         if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
         {
             var startAt = Math.Clamp(fromOffset, 0, startParagraph.PlainText.Length);
-            var match = matchesIn(startParagraph)
-                .FirstOrDefault(item => item.Start < startAt);
-            if (match.Length > 0)
-                return new FindReplaceMatch(startBlock, match.Start, match.Length);
+            if (FirstBodyMatch(startBlock, startParagraph, matchesIn, spanning, start => start < startAt) is { } wrapped)
+                return wrapped;
         }
         else if (startBlock >= 0 && document.Blocks[startBlock] is Table startTable && fromTableCell is not null)
         {
-            var wrapMatch = EnumerateTableMatches(startTable, matchesIn)
+            var wrapMatch = EnumerateTableMatches(startTable, startBlock, matchesIn, spanning)
                 .FirstOrDefault(item => IsTableMatchBefore(item, fromTableCell.Value));
             if (wrapMatch.Length > 0)
-                return new FindReplaceMatch(
-                    startBlock, wrapMatch.Start, wrapMatch.Length,
-                    wrapMatch.Row, wrapMatch.Col, wrapMatch.ParagraphIndex);
+                return wrapMatch.ToMatch(startBlock);
         }
 
         // The whole body (and, when applicable, the table it wrapped through) has now been searched with
@@ -1030,7 +1093,18 @@ public static class FindReplaceDialogPlanner
         DocumentStories.Enumerate(document)
             .Sum(story => FormattedTextSearch.FindAll(document, story.Paragraph, criteria).Count);
 
-    private readonly record struct TableTextMatch(int Row, int Col, int ParagraphIndex, int Start, int Length);
+    private readonly record struct TableTextMatch(
+        int Row,
+        int Col,
+        int ParagraphIndex,
+        int Start,
+        int Length,
+        int? EndParagraphIndex = null,
+        int? EndOffset = null)
+    {
+        public FindReplaceMatch ToMatch(int blockIndex) =>
+            new(blockIndex, Start, Length, Row, Col, ParagraphIndex, EndParagraphIndex: EndParagraphIndex, EndOffset: EndOffset);
+    }
 
     /// <summary>
     /// Walks a table's cells in row-major, then-column order (matching how a reader/Find Next would
@@ -1042,7 +1116,9 @@ public static class FindReplaceDialogPlanner
     /// </summary>
     private static IEnumerable<TableTextMatch> EnumerateTableMatches(
         Table table,
-        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn)
+        int blockIndex,
+        Func<Paragraph, IEnumerable<(int Start, int Length)>> matchesIn,
+        IReadOnlyList<FindReplaceMatch> spanning)
     {
         for (var row = 0; row < table.Rows.Count; row++)
         {
@@ -1061,8 +1137,23 @@ public static class FindReplaceDialogPlanner
                 var paragraphs = projected.Cell.Paragraphs;
                 for (var paraIdx = 0; paraIdx < paragraphs.Count; paraIdx++)
                 {
-                    foreach (var (start, length) in matchesIn(paragraphs[paraIdx]))
-                        yield return new TableTextMatch(row, projected.StartColumn, paraIdx, start, length);
+                    var inParagraph = matchesIn(paragraphs[paraIdx])
+                        .Select(match => new TableTextMatch(
+                            row, projected.StartColumn, paraIdx, match.Start, match.Length));
+                    var startColumn = projected.StartColumn;
+                    var index = paraIdx;
+                    var running = spanning
+                        .Where(span => span.IsInTableCell
+                            && span.Block == blockIndex
+                            && span.TableRow == row
+                            && span.TableCol == startColumn
+                            && span.TableParagraphIndex == index)
+                        .Select(span => new TableTextMatch(
+                            row, startColumn, index, span.Start, span.Length, span.EndParagraphIndex, span.EndOffset));
+
+                    // A match that runs on across paragraph marks sits among the paragraph's own by start.
+                    foreach (var match in inParagraph.Concat(running).OrderBy(match => match.Start))
+                        yield return match;
                 }
             }
         }

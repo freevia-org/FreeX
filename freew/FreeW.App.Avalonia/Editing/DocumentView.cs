@@ -825,7 +825,9 @@ public sealed partial class DocumentView : Control
         {
             var anchor = (TableBlock: hit.Block, Row: hit.TableRow!.Value, Col: hit.TableCol!.Value,
                 ParaIdx: hit.TableParagraphIndex!.Value, Offset: hit.Start);
-            var caret = anchor with { Offset = hit.Start + hit.Length };
+            var caret = hit.IsSpanning
+                ? anchor with { ParaIdx = hit.EndParagraphIndex!.Value, Offset = hit.EndOffset!.Value }
+                : anchor with { Offset = hit.Start + hit.Length };
             _cellAnchor = anchor;
             _cellCaret = caret;
             _selectionAnchor = new DocPosition(hit.Block, FindCellGlyphOffset(
@@ -838,7 +840,9 @@ public sealed partial class DocumentView : Control
         _cellCaret = null;
         _cellAnchor = null;
         _selectionAnchor = new DocPosition(hit.Block, hit.Start);
-        _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
+        _caret = hit.IsSpanning
+            ? new DocPosition(hit.EndBlock!.Value, hit.EndOffset!.Value)
+            : new DocPosition(hit.Block, hit.Start + hit.Length);
     }
 
     /// <summary>
@@ -984,15 +988,31 @@ public sealed partial class DocumentView : Control
     }
 
     private bool SelectionIsFindMatch(FindReplaceSearchRequest search) =>
-        search.Format is null
-            ? FindReplaceDialogPlanner.MatchesExactly(SelectedText, search.Term, search.Options)
-            : CurrentSelectionAsFindMatch() is { } selected
-                && FindReplaceDialogPlanner.IsMatchAt(_doc, search, selected);
+        CurrentSelectionAsFindMatch() is { IsSpanning: true } spanning
+            ? FindReplaceDialogPlanner.IsMatchAt(_doc, search, spanning)
+            : search.Format is null
+                ? FindReplaceDialogPlanner.MatchesExactly(SelectedText, search.Term, search.Options)
+                : CurrentSelectionAsFindMatch() is { } selected
+                    && FindReplaceDialogPlanner.IsMatchAt(_doc, search, selected);
 
     private void ReplaceSelectedFindMatch(FindReplaceReplaceRequest request)
     {
         var original = SelectedText;
         var plan = FindReplaceDialogPlanner.PlanReplacement(request, original);
+        var needsPlanner = plan.Format is not null || plan.InsertsParagraphMark || !plan.ReplacesText;
+
+        // A match that runs across paragraph marks, or one in a table cell or the header/footer whose
+        // replacement carries formatting, a paragraph mark, or keeps the found text and only reformats
+        // it, is the same shared planners' job as the body's and Replace All's.
+        if (CurrentSelectionAsFindMatch() is { } located
+            && (located.IsSpanning || (needsPlanner &&(located.IsInTableCell || located.IsInHeaderFooter))))
+        {
+            if (located.IsInHeaderFooter)
+                ReplaceHeaderFooterMatchThroughPlanner(request, located);
+            else
+                ReplaceLocatedBodyMatchThroughPlanner(request, located, plan, original);
+            return;
+        }
 
         // A body match whose replacement carries formatting, a paragraph mark, or keeps the found text and
         // only reformats it is the shared body planner's job (one match, restricted to the selection).
@@ -1003,9 +1023,8 @@ public sealed partial class DocumentView : Control
             return;
         }
 
-        // Plain text, and table-cell / header-footer selections (which the body planner cannot address
-        // as one match), are rewritten in place; a replacement needing a paragraph mark or formatting
-        // there is skipped, as the story planner skips it.
+        // Plain text replacements (a table cell's or the header/footer's included, whose formatted ones
+        // went to the planners above) are rewritten in place.
         if (plan.ReplacesText && !plan.InsertsParagraphMark)
         {
             ReplaceSelectionWith(plan.Text);
@@ -1049,6 +1068,95 @@ public sealed partial class DocumentView : Control
         ClampCaret();
         if (tracked is not null && plan.ReplacesText)
             SkipTrackedLeftoverMatch(original);
+    }
+
+    /// <summary>
+    /// Replaces a located match that is a table-cell span or runs across paragraph marks through the
+    /// shared body planner (<see cref="FindReplaceBodyPlanner.PlanReplaceMatch"/>), so the written text,
+    /// Replace-with formatting and tracked revisions are exactly what Replace All produces for it, and
+    /// parks the caret just after what was written.
+    /// </summary>
+    private void ReplaceLocatedBodyMatchThroughPlanner(
+        FindReplaceReplaceRequest request,
+        FindReplaceMatch match,
+        FindReplaceReplacementPlan plan,
+        string original)
+    {
+        var tracked = TrackChangesEnabled
+            ? new FindReplaceRevisionContext(RevisionAuthor, _editingSession.RevisionDateXmlForEdit())
+            : null;
+        var command = FindReplaceBodyPlanner.PlanReplaceMatch(_doc, request, match, tracked);
+        if (command.ReplacedCount == 0)
+            return;
+
+        _bus.Execute(command);
+
+        // Where the caret belongs afterwards, as a paragraph index (a body block or a cell paragraph)
+        // and a plain-text offset: after the written text, or after the kept text when only reformatted.
+        var firstParagraph = match.IsInTableCell ? match.TableParagraphIndex!.Value : match.Block;
+        int paragraph;
+        int offset;
+        if (!plan.ReplacesText)
+        {
+            paragraph = match.IsInTableCell
+                ? match.EndParagraphIndex ?? firstParagraph
+                : match.EndBlock ?? match.Block;
+            offset = match.EndOffset ?? match.Start + match.Length;
+        }
+        else
+        {
+            var pieces = plan.Text.Split(FindSpecialCodes.ParagraphMark);
+            paragraph = firstParagraph + pieces.Length - 1;
+            offset = pieces.Length == 1 ? match.Start + pieces[0].Length : pieces[^1].Length;
+        }
+
+        if (!match.IsInTableCell)
+        {
+            _caret = new DocPosition(paragraph, offset);
+            ClampCaret();
+        }
+        else
+        {
+            // Drop every stale cell address, lay the edited table out again, then park a collapsed cell
+            // caret so the next search resumes from here rather than from the table's first cell.
+            _caret = new DocPosition(match.Block, 0);
+            ClampCaret();
+            Relayout(_laidOutWidth > 0 ? _laidOutWidth : FallbackWidth);
+            var cell = (TableBlock: match.Block, Row: match.TableRow!.Value, Col: match.TableCol!.Value,
+                ParaIdx: paragraph, Offset: offset);
+            _cellAnchor = cell;
+            _cellCaret = cell;
+            var glyph = FindCellGlyphOffset(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, cell.Offset);
+            _selectionAnchor = _caret = new DocPosition(match.Block, glyph);
+        }
+
+        if (tracked is not null && plan.ReplacesText && !match.IsSpanning)
+            SkipTrackedLeftoverMatch(original);
+    }
+
+    /// <summary>
+    /// Replaces the match the header/footer caret has selected through the shared story planner
+    /// (<see cref="FindReplaceStoryPlanner.PlanReplacementAt"/>), the same edit Replace All makes there,
+    /// formatting included, and parks the header/footer caret just after the written text.
+    /// </summary>
+    private void ReplaceHeaderFooterMatchThroughPlanner(
+        FindReplaceReplaceRequest request,
+        FindReplaceMatch match)
+    {
+        if (_hfCaret is not { } caret || GetHfParagraph(caret.Target) is not { } paragraph)
+            return;
+
+        var tracked = TrackChangesEnabled
+            ? new FindReplaceRevisionContext(RevisionAuthor, _editingSession.RevisionDateXmlForEdit())
+            : null;
+        if (FindReplaceStoryPlanner.PlanReplacementAt(_doc, paragraph, match.Start, match.Length, request, tracked)
+            is not { Command: { } command } replacement)
+        {
+            return;
+        }
+
+        _bus.Execute(command);
+        PlaceCaretInHeaderFooter(caret.Target, replacement.Resume().Offset);
     }
 
     /// <summary>The current body selection as a Find/Replace location, when it lies in one paragraph.</summary>
@@ -1097,20 +1205,52 @@ public sealed partial class DocumentView : Control
 
         if (HasCellTextSelection())
         {
-            return _cellAnchor is { } a
-                && _cellCaret is { } c
-                && a.TableBlock == c.TableBlock
-                && a.Row == c.Row
-                && a.Col == c.Col
-                && a.ParaIdx == c.ParaIdx
-                    ? new FindReplaceMatch(
-                        a.TableBlock,
-                        Math.Min(a.Offset, c.Offset),
-                        Math.Abs(a.Offset - c.Offset),
-                        a.Row,
-                        a.Col,
-                        a.ParaIdx)
-                    : null;
+            if (_cellAnchor is not { } a
+                || _cellCaret is not { } c
+                || a.TableBlock != c.TableBlock
+                || a.Row != c.Row
+                || a.Col != c.Col)
+            {
+                return null;
+            }
+
+            if (a.ParaIdx == c.ParaIdx)
+            {
+                return new FindReplaceMatch(
+                    a.TableBlock,
+                    Math.Min(a.Offset, c.Offset),
+                    Math.Abs(a.Offset - c.Offset),
+                    a.Row,
+                    a.Col,
+                    a.ParaIdx);
+            }
+
+            // Several paragraphs of one cell: a candidate for a match that runs across paragraph marks.
+            var (from, to) = CompareCellEndpoints(a, c) <= 0 ? (a, c) : (c, a);
+            return new FindReplaceMatch(
+                from.TableBlock,
+                from.Offset,
+                Math.Max(1, SelectedText.Length),
+                from.Row,
+                from.Col,
+                from.ParaIdx,
+                EndParagraphIndex: to.ParaIdx,
+                EndOffset: to.Offset);
+        }
+
+        if (_hfCaret is null
+            && NormalizedSelection() is { } span
+            && span.Start.Block != span.End.Block
+            && span.End.Block < _doc.Blocks.Count
+            && Enumerable.Range(span.Start.Block, span.End.Block - span.Start.Block + 1)
+                .All(block => _doc.Blocks[block] is Paragraph))
+        {
+            return new FindReplaceMatch(
+                span.Start.Block,
+                span.Start.Offset,
+                Math.Max(1, SelectedText.Length),
+                EndBlock: span.End.Block,
+                EndOffset: span.End.Offset);
         }
 
         return CurrentBodySelectionAsFindMatch();
@@ -25361,8 +25501,8 @@ public sealed partial class DocumentView : Control
 
     /// <summary>
     /// Plain text currently selected inside a table cell (see <see cref="_cellAnchor"/>/<see cref="_cellCaret"/>),
-    /// e.g. a match <see cref="SelectFindReplaceMatch"/> just located. Only handles a same-paragraph
-    /// selection -- the only shape Find/Replace ever produces; a cross-paragraph/cross-cell block
+    /// e.g. a match <see cref="SelectFindReplaceMatch"/> just located. Handles a selection inside one
+    /// cell (one paragraph, or several when a match ran across paragraph marks); a cross-cell block
     /// selection is a different concept surfaced separately via <see cref="SelectedCellRange"/>.
     /// </summary>
     private string CellTextSelectionText()
@@ -25371,8 +25511,26 @@ public sealed partial class DocumentView : Control
             return string.Empty;
 
         var (start, end) = CompareCellEndpoints(anchor, caret) <= 0 ? (anchor, caret) : (caret, anchor);
-        if (start.Row != end.Row || start.Col != end.Col || start.ParaIdx != end.ParaIdx)
+        if (start.Row != end.Row || start.Col != end.Col)
             return string.Empty;
+
+        if (start.ParaIdx != end.ParaIdx)
+        {
+            // Paragraphs of one cell (a Find match that runs across paragraph marks): the rest of the
+            // first, any whole ones between, and the head of the last, one line break between each.
+            var parts = new List<string>();
+            for (var index = start.ParaIdx; index <= end.ParaIdx; index++)
+            {
+                if (GetCellParagraph(start.TableBlock, start.Row, start.Col, index)?.PlainText is not { } paragraphText)
+                    return string.Empty;
+
+                var first = index == start.ParaIdx ? Math.Clamp(start.Offset, 0, paragraphText.Length) : 0;
+                var last = index == end.ParaIdx ? Math.Clamp(end.Offset, 0, paragraphText.Length) : paragraphText.Length;
+                parts.Add(last > first ? paragraphText[first..last] : string.Empty);
+            }
+
+            return string.Join('\n', parts);
+        }
 
         var para = GetCellParagraph(start.TableBlock, start.Row, start.Col, start.ParaIdx);
         if (para is null)
