@@ -1456,7 +1456,8 @@ public sealed partial class MainWindow
         };
         var findBox = new TextBox
         {
-            PlaceholderText = plan.PlaceholderText,
+            // The Fluent template draws its built-in placeholder at 0.5 opacity, which washes the WPF
+            // #6D6D6D placeholder out to ~#B6B6B6; the placeholder is drawn by the overlay below instead.
             MinHeight = 0,
             Height = plan.BoxHeight - 2,
             Padding = new Thickness(3, 0),
@@ -1464,7 +1465,6 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             FontStyle = FontStyle.Italic,
             Background = Brushes.Transparent,
-            PlaceholderForeground = Brush(96, 96, 96),
             BorderThickness = new Thickness(0),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
@@ -1501,11 +1501,27 @@ public sealed partial class MainWindow
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"),
         };
+        var placeholderOverlay = new TextBlock
+        {
+            Text = plan.PlaceholderText,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            FontStyle = FontStyle.Italic,
+            Foreground = Brush(109, 109, 109),
+            Margin = new Thickness(3, 0, 0, 0),
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            IsHitTestVisible = false,
+            IsVisible = string.IsNullOrEmpty(findBox.Text),
+        };
+        AutomationProperties.SetAutomationId(placeholderOverlay, "PrintPreviewFindPlaceholder");
+        findBox.TextChanged += (_, _) => placeholderOverlay.IsVisible = string.IsNullOrEmpty(findBox.Text);
         Grid.SetColumn(findBox, 0);
+        Grid.SetColumn(placeholderOverlay, 0);
         Grid.SetColumn(previous, 1);
         Grid.SetColumn(next, 2);
         Grid.SetColumn(dropDownGlyph, 3);
         boxGrid.Children.Add(findBox);
+        boxGrid.Children.Add(placeholderOverlay);
         boxGrid.Children.Add(previous);
         boxGrid.Children.Add(next);
         boxGrid.Children.Add(dropDownGlyph);
@@ -1516,7 +1532,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(plan.BoxLeftOffset, plan.BoxTopOffset, 0, 0),
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Background = Brushes.White,
-            BorderBrush = Brush(130, 130, 130),
+            BorderBrush = Brush(160, 160, 160),
             BorderThickness = new Thickness(1),
             Child = boxGrid,
         };

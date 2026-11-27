@@ -56,6 +56,13 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("boxGrid.Children.Add(previous)");
         source.Should().Contain("boxGrid.Children.Add(next)");
         source.Should().NotContain("ColumnDefinitions(\"240,Auto,Auto,*\")");
+        // WPF DocumentViewer find box: #6D6D6D italic placeholder inside an #A0A0A0 frame. The Fluent
+        // template's own placeholder is drawn at 0.5 opacity, so the overlay owns the placeholder.
+        source.Should().Contain("Foreground = Brush(109, 109, 109)");
+        source.Should().Contain("BorderBrush = Brush(160, 160, 160)");
+        source.Should().Contain("Text = plan.PlaceholderText");
+        source.Should().NotContain("PlaceholderForeground = Brush(96, 96, 96)");
+        source.Should().NotContain("PlaceholderText = plan.PlaceholderText");
         source.Should().Contain("new MenuFlyout { Items = { overflowItem } }");
         source.Should().Contain("toolbar.Children.AddRange(controls)");
 
