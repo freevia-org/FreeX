@@ -84,6 +84,80 @@ public sealed class FindReplaceSingleMatchHostTests
     }
 
     [StaFact]
+    public void Replace_WithReplaceFormatting_InACellParagraphWithTabs_FormatsTheWrittenText()
+    {
+        // The tab is one character in the model and a tab-stop element on the surface; the rendered
+        // selection must still land on the same model offsets.
+        var view = Load(_ => { }, new Paragraph("intro"), TableOf("a\tb\tsee cat here"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.SetFormatForTest(FindReplaceDialogFieldKind.Replace, BoldRed);
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var paragraph = view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0].Paragraphs[0];
+        paragraph.PlainText.Should().Be("a\tb\tsee tiger here");
+        AssertFormatted(paragraph, "tiger");
+    }
+
+    [StaFact]
+    public void Replace_WithReplaceFormatting_AfterATabInASecondCellParagraph_FormatsTheWrittenText()
+    {
+        var view = Load(_ => { }, TableOf("first", "x\ty cat z"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.SetFormatForTest(FindReplaceDialogFieldKind.Replace, BoldRed);
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var cell = view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0];
+        cell.Paragraphs[0].PlainText.Should().Be("first");
+        cell.Paragraphs[1].PlainText.Should().Be("x\ty tiger z");
+        AssertFormatted(cell.Paragraphs[1], "tiger");
+    }
+
+    [StaFact]
+    public void Replace_WithReplaceFormatting_InAListParagraphOfACell_FormatsTheWrittenText()
+    {
+        var item = new Paragraph("item cat") { Formatting = ParagraphFormatting.Default with { ListKind = ListKind.Bullet } };
+        var table = TableOf("lead");
+        table.Rows[0].Cells[0].Paragraphs.Add(item);
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("tail"));
+        var view = Load(_ => { }, table);
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.SetFormatForTest(FindReplaceDialogFieldKind.Replace, BoldRed);
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var cell = view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0];
+        cell.Paragraphs.Select(paragraph => paragraph.PlainText).Should().Equal("lead", "item tiger", "tail");
+        AssertFormatted(cell.Paragraphs[1], "tiger");
+    }
+
+    [StaFact]
+    public void FindNext_DoesNotSeeTextInANestedTable_BecauseTheSurfaceHostsItReadOnly()
+    {
+        // A nested table is rendered inside a read-only hosted editor (the outer editor never places a
+        // caret there), so Find Next / single Replace can never be positioned in one; Replace All
+        // reaches it through the model. This pins why the nested-table case needs no surface mapping.
+        var outer = TableOf("outer text");
+        outer.Rows[0].Cells[0].NestedTables.Add(TableOf("nested cat"));
+        var view = Load(_ => { }, outer);
+
+        view.BuildFindReplaceProjection(includeFormatting: false).Text.Should().NotContain("nested");
+    }
+
+    [StaFact]
     public void Replace_WithReplaceFormatting_FormatsTheWrittenTextInTheHeader()
     {
         var view = Load(document => document.Header = new HeaderFooter("see cat here"), new Paragraph("nothing relevant"));

@@ -173,9 +173,18 @@ public sealed partial class DocumentView
     /// Where a rendered span lies in the model when it is text of one cell of a top-level table: the
     /// table block, row, grid column and paragraph(s) with plain-text offsets, ready for
     /// <see cref="FindReplaceBodyPlanner.PlanReplaceMatch"/>. Null for anything else (body text, a nested
-    /// table, a list, text across cells), which the caller edits on the surface as before. The body must
-    /// have been committed to the model first.
+    /// table, text across cells), which the caller edits on the surface as before. A cell whose paragraphs
+    /// carry list numbering is located like any other: the numbering is a view-only marker run that
+    /// <see cref="PlainOffsetInParagraph"/> does not count. The body must have been committed to the
+    /// model first.
     /// </summary>
+    /// <remarks>
+    /// Why the remaining cases stay on the surface path. A nested table is rendered inside a read-only
+    /// hosted editor, so the outer editor can never select its text (and the Find projection does not
+    /// walk into it): Find Next cannot produce a location there, and Replace All reaches it through the
+    /// model. A <see cref="WpfList"/> physically inside a cell is a surface-only structure that a commit
+    /// does not carry back into the model, so its paragraphs have no model address.
+    /// </remarks>
     internal FindReplaceMatch? TryLocateTableCellFindMatch(TextPointer start, TextPointer end)
     {
         if (start.Paragraph is not { } startParagraph
@@ -194,7 +203,7 @@ public sealed partial class DocumentView
         var location = TableLocationOf(cell);
         if (location.BlockIndex < 0
             || location.BlockIndex >= _model.Blocks.Count
-            || _model.Blocks[location.BlockIndex] is not FreeW.Core.Model.Table
+            || _model.Blocks[location.BlockIndex] is not FreeW.Core.Model.Table table
             || TableEdits.AddressFromCellIndex(location.BlockIndex, location.RowIndex, location.ColumnIndex) is not { } address)
         {
             return null;
@@ -206,8 +215,22 @@ public sealed partial class DocumentView
         if (first < 0 || last < first)
             return null;
 
-        var startOffset = OffsetInParagraph(startParagraph, start);
-        var endOffset = OffsetInParagraph(endParagraph, end);
+        // The rendered paragraphs must be the model cell's paragraphs one for one, and each must measure
+        // exactly as its model text does; otherwise the offsets cannot be trusted and the caller edits on
+        // the surface instead.
+        var modelParagraphs = address.RowIndex < table.Rows.Count
+            ? TableGridProjection.StartingAt(table.Rows[address.RowIndex], address.GridColumn)?.Cell.Paragraphs
+            : null;
+        if (modelParagraphs is null
+            || modelParagraphs.Count != paragraphs.Count
+            || PlainOffsetInParagraph(startParagraph, startParagraph.ContentEnd) != modelParagraphs[first].PlainText.Length
+            || PlainOffsetInParagraph(endParagraph, endParagraph.ContentEnd) != modelParagraphs[last].PlainText.Length)
+        {
+            return null;
+        }
+
+        var startOffset = PlainOffsetInParagraph(startParagraph, start);
+        var endOffset = PlainOffsetInParagraph(endParagraph, end);
         return new FindReplaceMatch(
             address.BlockIndex,
             startOffset,
@@ -217,6 +240,56 @@ public sealed partial class DocumentView
             first,
             EndParagraphIndex: last > first ? last : null,
             EndOffset: last > first ? endOffset : null);
+    }
+
+    /// <summary>
+    /// The model <see cref="FreeW.Core.Model.Paragraph.PlainText"/> offset of a rendered position:
+    /// a tab (a tab-stop element on the surface) is one character, and the view-only list-numbering
+    /// marker run / gap is none. Unlike a text range over the rendered paragraph it never counts that
+    /// chrome. Position past the paragraph's end gives the paragraph's whole width.
+    /// </summary>
+    private static int PlainOffsetInParagraph(WpfParagraph paragraph, TextPointer position)
+    {
+        var total = 0;
+        PlainOffsetInInlines(paragraph.Inlines, position, ref total);
+        return total;
+    }
+
+    // Returns true once the position has been reached (the offset is final).
+    private static bool PlainOffsetInInlines(InlineCollection inlines, TextPointer position, ref int total)
+    {
+        foreach (var inline in inlines)
+        {
+            if (position.CompareTo(inline.ElementStart) <= 0)
+                return true;
+
+            if (inline is Span span)
+            {
+                if (PlainOffsetInInlines(span.Inlines, position, ref total))
+                    return true;
+                continue;
+            }
+
+            var width = inline switch
+            {
+                WpfRun { Tag: MultiLevelMarker } => 0,
+                WpfRun run => run.Text.Length,
+                LineBreak => 1,
+                InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan } } => 1,
+                _ => 0,
+            };
+            if (position.CompareTo(inline.ElementEnd) >= 0)
+            {
+                total += width;
+                continue;
+            }
+
+            if (inline is WpfRun { Tag: not MultiLevelMarker } inside)
+                total += Math.Clamp(inside.ContentStart.GetOffsetToPosition(position), 0, inside.Text.Length);
+            return true;
+        }
+
+        return false;
     }
 
     private static void ProjectFindBlocks(
