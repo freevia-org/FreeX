@@ -515,6 +515,9 @@ public sealed class SelectionAdornerGeometryTests
             "FreeP.App.Rendering.Avalonia",
             "AvaloniaCanvasGestureHandler.cs");
 
+        ReadWorkspaceFile("freep", "FreeP.App.Presentation", "CanvasGestureHostGlue.cs")
+            .Should().Contain("SelectionAdornerGeometry.BuildProjection(")
+            .And.Contain("SelectionAdornerProjectionPlan.Empty");
         portable.Should().Contain("public sealed record SelectionAdornerProjectionPlan")
             .And.Contain("public static SelectionAdornerProjectionPlan BuildProjection(")
             .And.Contain("PictureCropAuthoringPlanner.Build(shape, bounds)")
@@ -524,8 +527,8 @@ public sealed class SelectionAdornerGeometryTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("SelectionAdornerGeometry.BuildProjection(")
-                .And.Contain("SelectionAdornerProjectionPlan.Empty")
+            source.Should().Contain("_glue.BuildAdornerProjection(")
+                .And.NotContain("SelectionAdornerGeometry.BuildProjection(")
                 .And.NotContain("PictureCropAuthoringPlanner.Build")
                 .And.NotContain("ShapeGeometryAdjustmentPlanner.Build")
                 .And.NotContain("shape.Kind == SlideShapeKind.Picture")

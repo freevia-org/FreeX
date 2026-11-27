@@ -30,9 +30,6 @@ public sealed partial class CanvasGestureHandler : IDisposable
 
     private readonly SlideCanvas       _canvas;
     private readonly ICanvasGestureEditingSession _editor;
-    private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
-    private readonly Func<OleObjectInfo?, bool>? _tryActivateOleExternally;
-    private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
     private readonly SelectionAdorner  _adorner;
     private readonly AdornerLayer?     _adornerLayer;
     private bool                       _disposed;
@@ -41,6 +38,7 @@ public sealed partial class CanvasGestureHandler : IDisposable
 
     private readonly CanvasGestureRouter _gestureRouter;
     private readonly CanvasGesturePreviewSurfaceAdapter _previewSurface;
+    private readonly CanvasGestureHostGlue _glue;
 
     // ── Move ──────────────────────────────────────────────────────────────────────────────────
 
@@ -95,9 +93,6 @@ public sealed partial class CanvasGestureHandler : IDisposable
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _gestureRouter = new CanvasGestureRouter(_editor);
-        _tryOpenOleInPlace = tryOpenOleInPlace;
-        _onChartPointDoubleClick = onChartPointDoubleClick;
-        _tryActivateOleExternally = tryActivateOleExternally;
 
         // Add adorner to the adorner layer
         _adornerLayer = AdornerLayer.GetAdornerLayer(_canvas);
@@ -117,6 +112,13 @@ public sealed partial class CanvasGestureHandler : IDisposable
                 name,
                 new Point(point.X, point.Y)),
             bounds => _adorner.UpdateMarquee(ToWpfRect(bounds)));
+        _glue = new CanvasGestureHostGlue(
+            _editor,
+            _gestureRouter,
+            _previewSurface,
+            onChartPointDoubleClick,
+            tryOpenOleInPlace,
+            tryActivateOleExternally);
 
         // Hook canvas events
         _canvas.MouseLeftButtonDown += OnMouseDown;
@@ -173,50 +175,17 @@ public sealed partial class CanvasGestureHandler : IDisposable
         if (slide is null || _editor.Presentation is null)
             return;
 
-        var plan = _gestureRouter.HandlePointerPressed(CreatePressRequest(
-            pt,
-            xf,
+        var plan = _gestureRouter.HandlePointerPressed(_glue.CreatePressRequest(
+            ToGesturePoint(pt),
+            ToCoreTransform(xf),
             slide,
             e.ClickCount,
             ToGestureModifiers(Keyboard.Modifiers)));
-        ApplyPressAction(plan);
+        _glue.ApplyPressAction(plan);
         if (plan.CapturePointer)
             _canvas.CaptureMouse();
         e.Handled = plan.Handled;
     }
-
-    internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
-        CanvasGesturePlanner.ShouldContinueDoubleClickSelection(shape);
-
-    private CanvasGesturePressRequest CreatePressRequest(
-        Point point,
-        SlideTransform transform,
-        Slide slide,
-        int clickCount,
-        FreeKeyModifiers modifiers)
-    {
-        var coreTransform = ToCoreTransform(transform);
-        var projection = SelectionAdornerGeometry.BuildProjection(
-            slide,
-            _editor.Presentation!,
-            _editor.SelectedShapeIds,
-            coreTransform,
-            EditPointsEnabled);
-        return CanvasGestureInteractionPlanner.BuildPressRequest(
-            ToGesturePoint(point),
-            coreTransform,
-            projection,
-            clickCount,
-            modifiers,
-            EditPointsEnabled,
-            _onChartPointDoubleClick is not null);
-    }
-
-    private void ApplyPressAction(CanvasGesturePressPlan plan)
-        => CanvasGesturePressActionDispatcher.Dispatch(
-            plan,
-            _onChartPointDoubleClick,
-            shape => HandleOleDoubleClick(shape));
 
     // ── Mouse move ────────────────────────────────────────────────────────────────────────────
 
@@ -230,19 +199,14 @@ public sealed partial class CanvasGestureHandler : IDisposable
 
         var point = e.GetPosition(_canvas);
         var transform = _canvas.CurrentTransform;
-        ApplyPreviewPlan(
+        var coreTransform = ToCoreTransform(transform);
+        _glue.ApplyPreviewPlan(
             _gestureRouter.PreviewPointer(
                 ToGesturePoint(point),
-                ToCoreTransform(transform),
+                coreTransform,
                 ToGestureModifiers(Keyboard.Modifiers)),
-            transform);
+            coreTransform);
     }
-
-    private bool HandleOleDoubleClick(SlideShape shape) =>
-        OleActivationCoordinator.TryActivate(
-            shape,
-            _tryOpenOleInPlace,
-            _tryActivateOleExternally);
 
     // ── Mouse up ──────────────────────────────────────────────────────────────────────────────
 
@@ -295,17 +259,6 @@ public sealed partial class CanvasGestureHandler : IDisposable
     }
 
     // ── Move gesture ──────────────────────────────────────────────────────────────────────────
-
-    private void ApplyPreviewPlan(CanvasGesturePreviewPlan plan, SlideTransform transform)
-    {
-        var coreTransform = ToCoreTransform(transform);
-        var visual = CanvasGesturePreviewProjector.Project(
-            plan,
-            _editor.CurrentSlide,
-            _editor.Presentation,
-            coreTransform);
-        CanvasGesturePreviewDispatcher.Apply(visual, coreTransform, _previewSurface);
-    }
 
     // ── Resize gesture ────────────────────────────────────────────────────────────────────────
 
@@ -368,28 +321,9 @@ public sealed partial class CanvasGestureHandler : IDisposable
 
     private void UpdateCursor(Point screenPt)
     {
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null)
-        {
-            _canvas.Cursor = Cursors.Arrow;
-            return;
-        }
-
-        var transform = ToCoreTransform(_canvas.CurrentTransform);
-        var projection = SelectionAdornerGeometry.BuildProjection(
-            slide,
-            _editor.Presentation,
-            _editor.SelectedShapeIds,
-            transform,
-            EditPointsEnabled);
-        _canvas.Cursor = CanvasGestureInteractionPlanner.PlanCursor(
-            slide,
-            _editor.Presentation,
-            _editor.SelectedShapeIds,
-            transform,
-            projection,
+        _canvas.Cursor = _glue.PlanCursor(
             ToGesturePoint(screenPt),
-            EditPointsEnabled) switch
+            ToCoreTransform(_canvas.CurrentTransform)) switch
         {
             CanvasGestureCursorKind.Pointer => Cursors.Hand,
             CanvasGestureCursorKind.Move => Cursors.SizeAll,
@@ -406,17 +340,8 @@ public sealed partial class CanvasGestureHandler : IDisposable
 
     private void RefreshAdorner()
     {
-        var slide = _editor.CurrentSlide;
-        var projection = slide is null || _editor.Presentation is not { } presentation
-            ? SelectionAdornerProjectionPlan.Empty
-            : SelectionAdornerGeometry.BuildProjection(
-                slide,
-                presentation,
-                _editor.SelectedShapeIds,
-                ToCoreTransform(_canvas.CurrentTransform),
-                EditPointsEnabled);
-
-        _adorner.UpdateProjection(projection);
+        _adorner.UpdateProjection(
+            _glue.BuildAdornerProjection(ToCoreTransform(_canvas.CurrentTransform)));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────

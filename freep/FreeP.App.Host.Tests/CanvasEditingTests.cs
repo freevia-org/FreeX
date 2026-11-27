@@ -22,10 +22,10 @@ public sealed class CanvasEditingTests
     [Fact]
     public void DoubleClickPolicy_TextlessShapesContinueSelection_TextShapesDeferToEditor()
     {
-        CanvasGestureHandler.ShouldContinueDoubleClickSelection(
+        CanvasGestureHostGlue.ShouldContinueDoubleClickSelection(
             new SlideShape { Kind = SlideShapeKind.AutoShape })
             .Should().BeTrue();
-        CanvasGestureHandler.ShouldContinueDoubleClickSelection(
+        CanvasGestureHostGlue.ShouldContinueDoubleClickSelection(
             new SlideShape
             {
                 Kind = SlideShapeKind.AutoShape,
@@ -1099,12 +1099,14 @@ public sealed class CanvasEditingTests
         sharedSession.Should().Contain("editor.SetPictureCrop");
         sharedRouter.Should().Contain("_session.CommitGeometryAdjustment");
         gestures.Should().Contain("_gestureRouter.CompletePointer");
-        gestures.Should().Contain("SelectionAdornerGeometry.BuildProjection(");
-        gestures.Should().Contain("_adorner.UpdateProjection(projection)");
+        var sharedGlue = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "CanvasGestureHostGlue.cs");
+        sharedGlue.Should().Contain("SelectionAdornerGeometry.BuildProjection(");
+        gestures.Should().Contain("_glue.BuildAdornerProjection(");
+        gestures.Should().Contain("_adorner.UpdateProjection(");
         gestures.Should().NotContain("_adorner.UpdateGeometryHandles(");
         avaloniaGestures.Should().Contain("_gestureRouter.CompletePointer");
-        avaloniaGestures.Should().Contain("SelectionAdornerGeometry.BuildProjection(");
-        avaloniaGestures.Should().Contain("_adorner.UpdateProjection(projection)");
+        avaloniaGestures.Should().Contain("_glue.BuildAdornerProjection(");
+        avaloniaGestures.Should().Contain("_adorner.UpdateProjection(");
         avaloniaGestures.Should().NotContain("_adorner.UpdateGeometryHandles(");
         adorner.Should().Contain("ISelectionAdornerSurface<Rect, Point>");
         adorner.Should().Contain("SelectionAdornerController<Rect, Point>");

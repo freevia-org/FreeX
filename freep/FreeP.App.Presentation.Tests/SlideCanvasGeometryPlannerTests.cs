@@ -222,7 +222,7 @@ public sealed class SlideCanvasGeometryPlannerTests
             source.Should().Contain("CanvasGestureRouter _gestureRouter");
             source.Should().Contain("_gestureRouter.PreviewPointer(");
             source.Should().Contain("ApplyPreviewPlan(");
-            source.Should().Contain("CanvasGesturePreviewProjector.Project(");
+            source.Should().NotContain("CanvasGesturePreviewProjector.Project(");
             source.Should().Contain("ToGesturePoint(");
             source.Should().NotContain("CanvasGesturePlanner.CaptureMoveState");
             source.Should().NotContain("CanvasGesturePlanner.PlanMove");

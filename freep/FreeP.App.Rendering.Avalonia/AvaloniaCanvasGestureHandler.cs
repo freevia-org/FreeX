@@ -30,9 +30,6 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
     private readonly SlideCanvas            _canvas;
     private readonly ICanvasGestureEditingSession _editor;
     private readonly SelectionAdornerLayer  _adorner;
-    private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
-    private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
-    private readonly Func<OleObjectInfo?, bool>? _tryActivateOleExternally;
     private IPointer? _capturedPointer;
     private bool _disposed;
 
@@ -40,6 +37,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
 
     private readonly CanvasGestureRouter _gestureRouter;
     private readonly CanvasGesturePreviewSurfaceAdapter _previewSurface;
+    private readonly CanvasGestureHostGlue _glue;
 
     // ── Move ───────────────────────────────────────────────────────────────────
 
@@ -116,9 +114,13 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
                 name,
                 new Point(point.X, point.Y)),
             bounds => _adorner.UpdateMarquee(ToAvaloniaRect(bounds)));
-        _onChartPointDoubleClick = onChartPointDoubleClick;
-        _tryOpenOleInPlace = tryOpenOleInPlace;
-        _tryActivateOleExternally = tryActivateOleExternally;
+        _glue = new CanvasGestureHostGlue(
+            _editor,
+            _gestureRouter,
+            _previewSurface,
+            onChartPointDoubleClick,
+            tryOpenOleInPlace,
+            tryActivateOleExternally);
 
         _canvas.PointerPressed      += OnPointerPressed;
         _canvas.PointerReleased     += OnPointerReleased;
@@ -232,57 +234,17 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
 
         if (slide is null || _editor.Presentation is null) return;
 
-        var plan = _gestureRouter.HandlePointerPressed(CreatePressRequest(
-            pt,
+        var plan = _gestureRouter.HandlePointerPressed(_glue.CreatePressRequest(
+            ToGesturePoint(pt),
             xf,
             slide,
             e.ClickCount,
             ToGestureModifiers(e.KeyModifiers)));
-        ApplyPressAction(plan);
+        _glue.ApplyPressAction(plan);
         if (plan.CapturePointer)
             CapturePointer(e.Pointer);
         e.Handled = plan.Handled;
-        return;
-
     }
-
-    private CanvasGesturePressRequest CreatePressRequest(
-        Point point,
-        SlideTransformCore transform,
-        Slide slide,
-        int clickCount,
-        FreeKeyModifiers modifiers)
-    {
-        var projection = SelectionAdornerGeometry.BuildProjection(
-            slide,
-            _editor.Presentation!,
-            _editor.SelectedShapeIds,
-            transform,
-            EditPointsEnabled);
-        return CanvasGestureInteractionPlanner.BuildPressRequest(
-            ToGesturePoint(point),
-            transform,
-            projection,
-            clickCount,
-            modifiers,
-            EditPointsEnabled,
-            _onChartPointDoubleClick is not null);
-    }
-
-    private void ApplyPressAction(CanvasGesturePressPlan plan)
-        => CanvasGesturePressActionDispatcher.Dispatch(
-            plan,
-            _onChartPointDoubleClick,
-            shape => HandleOleDoubleClick(shape));
-
-    private bool HandleOleDoubleClick(SlideShape shape) =>
-        OleActivationCoordinator.TryActivate(
-            shape,
-            _tryOpenOleInPlace,
-            _tryActivateOleExternally);
-
-    internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
-        CanvasGesturePlanner.ShouldContinueDoubleClickSelection(shape);
 
     // ── Pointer move ───────────────────────────────────────────────────────────
 
@@ -297,7 +259,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
         }
 
         var transform = _canvas.CurrentTransform;
-        ApplyPreviewPlan(
+        _glue.ApplyPreviewPlan(
             _gestureRouter.PreviewPointer(
                 ToGesturePoint(pt),
                 transform,
@@ -325,16 +287,6 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
     {
         _capturedPointer = pointer;
         pointer.Capture(_canvas);
-    }
-
-    private void ApplyPreviewPlan(CanvasGesturePreviewPlan plan, SlideTransformCore transform)
-    {
-        var visual = CanvasGesturePreviewProjector.Project(
-            plan,
-            _editor.CurrentSlide,
-            _editor.Presentation,
-            transform);
-        CanvasGesturePreviewDispatcher.Apply(visual, transform, _previewSurface);
     }
 
     // ── Resize gesture ─────────────────────────────────────────────────────────
@@ -375,28 +327,9 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
 
     private void UpdateCursor(Point screenPt)
     {
-        var slide = _editor.CurrentSlide;
-        if (slide is null || _editor.Presentation is null)
-        {
-            _canvas.Cursor = Cursor.Default;
-            return;
-        }
-
-        var transform = _canvas.CurrentTransform;
-        var projection = SelectionAdornerGeometry.BuildProjection(
-            slide,
-            _editor.Presentation,
-            _editor.SelectedShapeIds,
-            transform,
-            EditPointsEnabled);
-        _canvas.Cursor = CanvasGestureInteractionPlanner.PlanCursor(
-            slide,
-            _editor.Presentation,
-            _editor.SelectedShapeIds,
-            transform,
-            projection,
+        _canvas.Cursor = _glue.PlanCursor(
             ToGesturePoint(screenPt),
-            EditPointsEnabled) switch
+            _canvas.CurrentTransform) switch
         {
             CanvasGestureCursorKind.Pointer => new Cursor(StandardCursorType.Hand),
             CanvasGestureCursorKind.Move => new Cursor(StandardCursorType.SizeAll),
@@ -413,17 +346,7 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
 
     private void RefreshAdorner()
     {
-        var slide = _editor.CurrentSlide;
-        var projection = slide is null || _editor.Presentation is not { } presentation
-            ? SelectionAdornerProjectionPlan.Empty
-            : SelectionAdornerGeometry.BuildProjection(
-                slide,
-                presentation,
-                _editor.SelectedShapeIds,
-                _canvas.CurrentTransform,
-                EditPointsEnabled);
-
-        _adorner.UpdateProjection(projection);
+        _adorner.UpdateProjection(_glue.BuildAdornerProjection(_canvas.CurrentTransform));
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────

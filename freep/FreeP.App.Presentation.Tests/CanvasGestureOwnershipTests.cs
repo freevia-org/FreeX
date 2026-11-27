@@ -47,6 +47,18 @@ public sealed class CanvasGestureOwnershipTests
         router.Should().Contain("ShapeHitTester.MarqueeHitTest");
         router.Should().Contain("ChartPointHitTester.TryHitTest");
         router.Should().Contain("ZoomNavigationService.TryGetTargetSlideIndex");
+        var glue = ReadRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGestureHostGlue.cs");
+        glue.Should().Contain("public sealed class CanvasGestureHostGlue");
+        glue.Should().Contain("CanvasGestureInteractionPlanner.BuildPressRequest(");
+        glue.Should().Contain("CanvasGestureInteractionPlanner.PlanCursor(");
+        glue.Should().Contain("CanvasGesturePreviewProjector.Project(");
+        glue.Should().Contain("CanvasGesturePreviewDispatcher.Apply(");
+        glue.Should().Contain("CanvasGesturePressActionDispatcher.Dispatch(");
+        glue.Should().Contain("OleActivationCoordinator.TryActivate(");
+        glue.Should().Contain("SelectionAdornerGeometry.BuildProjection(");
         interaction.Should().Contain("BuildPressRequest(");
         interaction.Should().Contain("PlanCursor(");
         interaction.Should().Contain("SelectionAdornerProjectionPlan selection");
@@ -56,14 +68,25 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().Contain("CanvasGestureRouter _gestureRouter");
             adapter.Should().Contain("_gestureRouter.HandlePointerPressed(");
             adapter.Should().Contain("_gestureRouter.PreviewPointer(");
-            adapter.Should().Contain("CanvasGesturePreviewProjector.Project(");
-            adapter.Should().Contain("CanvasGesturePreviewDispatcher.Apply(");
+            adapter.Should().Contain("CanvasGestureHostGlue _glue");
+            adapter.Should().Contain("_glue.CreatePressRequest(");
+            adapter.Should().Contain("_glue.ApplyPressAction(");
+            adapter.Should().Contain("_glue.ApplyPreviewPlan(");
+            adapter.Should().Contain("_glue.PlanCursor(");
+            adapter.Should().Contain("_glue.BuildAdornerProjection(");
             adapter.Should().Contain("_gestureRouter.CompletePointer(");
             adapter.Should().Contain("_gestureRouter.HandleKeyDown(");
-            adapter.Should().Contain("CreatePressRequest(");
-            adapter.Should().Contain("CanvasGestureInteractionPlanner.BuildPressRequest(");
-            adapter.Should().Contain("CanvasGestureInteractionPlanner.PlanCursor(");
-            adapter.Should().Contain("ApplyPreviewPlan(");
+            // The press/preview/cursor/adorner/OLE glue lives once in CanvasGestureHostGlue; a
+            // native handler re-growing any of it is the duplication this guard exists to catch.
+            adapter.Should().NotContain("CanvasGesturePreviewProjector.Project(");
+            adapter.Should().NotContain("CanvasGesturePreviewDispatcher.Apply(");
+            adapter.Should().NotContain("CanvasGestureInteractionPlanner.");
+            adapter.Should().NotContain("CanvasGesturePressActionDispatcher.");
+            adapter.Should().NotContain("OleActivationCoordinator.");
+            adapter.Should().NotContain("SelectionAdornerGeometry.BuildProjection(");
+            adapter.Should().NotContain("private CanvasGesturePressRequest CreatePressRequest(");
+            adapter.Should().NotContain("private void ApplyPreviewPlan(");
+            adapter.Should().NotContain("ShouldContinueDoubleClickSelection");
             adapter.Should().Contain("ToGestureModifiers(");
             adapter.Should().NotContain("CanvasGestureSession");
             adapter.Should().NotContain("private enum GestureKind");

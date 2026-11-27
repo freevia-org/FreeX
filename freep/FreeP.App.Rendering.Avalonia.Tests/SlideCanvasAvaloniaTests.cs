@@ -4685,10 +4685,10 @@ public sealed class GestureHandlerAltSnapTests
     [Fact]
     public void DoubleClickPolicy_TextlessShapesContinueSelection_TextShapesDeferToEditor()
     {
-        AvaloniaCanvasGestureHandler.ShouldContinueDoubleClickSelection(
+        CanvasGestureHostGlue.ShouldContinueDoubleClickSelection(
             new SlideShape { Kind = SlideShapeKind.AutoShape })
             .Should().BeTrue();
-        AvaloniaCanvasGestureHandler.ShouldContinueDoubleClickSelection(
+        CanvasGestureHostGlue.ShouldContinueDoubleClickSelection(
             new SlideShape
             {
                 Kind = SlideShapeKind.AutoShape,

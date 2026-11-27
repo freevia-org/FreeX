@@ -19,7 +19,7 @@ public sealed partial class CanvasGestureHandler
 
     internal SelectionAdorner AdornerForTests => _adorner;
 
-    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
+    internal bool HandleOleDoubleClickForTests(SlideShape shape) => _glue.HandleOleDoubleClick(shape);
 
     internal bool HandleEscapeForTests() => HandleKeyDown(Key.Escape, ModifierKeys.None);
 

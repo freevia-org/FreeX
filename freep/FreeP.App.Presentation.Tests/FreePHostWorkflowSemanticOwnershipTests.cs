@@ -5,13 +5,15 @@ public sealed class FreePHostWorkflowSemanticOwnershipTests
     [Fact]
     public void OleCanvasRenderersDelegateEligibilityAndFallbackOrderingToCoordinator()
     {
+        ReadWorkspaceFile("freep", "FreeP.App.Presentation", "CanvasGestureHostGlue.cs")
+            .Should().Contain("OleActivationCoordinator.TryActivate(");
         foreach (var source in new[]
         {
             ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs"),
             ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "AvaloniaCanvasGestureHandler.cs")
         })
         {
-            source.Should().Contain("OleActivationCoordinator.TryActivate(");
+            source.Should().NotContain("OleActivationCoordinator.TryActivate(");
             source.Should().NotContain("shape.Kind != SlideShapeKind.Ole");
             source.Should().NotContain("OleActivationService.TryActivate(shape.OleObject)");
         }

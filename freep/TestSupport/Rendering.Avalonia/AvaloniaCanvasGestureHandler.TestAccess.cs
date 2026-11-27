@@ -44,7 +44,7 @@ public sealed partial class AvaloniaCanvasGestureHandler
         _adorner.HasTransientInteractionVisualsForTests ||
         _canvas.HasLiveTransformPreviewForTests;
 
-    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
+    internal bool HandleOleDoubleClickForTests(SlideShape shape) => _glue.HandleOleDoubleClick(shape);
 
     internal void SimulateCaptureLossForTests() => CancelActiveGesture(releaseCapture: false);
 
