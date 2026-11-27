@@ -118,7 +118,10 @@ public sealed class AvaloniaMainWindowNameBoxStage2Tests
             overlay.Bounds.Width.Should().Be(NameBoxDropdownWidthForTest);
             // WPF drop-down parity: content height (list + 2px border), capped at MaxDropDownHeight 220.
             overlay.Bounds.Height.Should().BeLessThanOrEqualTo(220);
-            overlay.Bounds.Height.Should().Be(list.Bounds.Height + 2);
+            // 2px border + 4px list inset around the content rows.
+            overlay.Bounds.Height.Should().Be(list.Bounds.Height + 6);
+            // Five 26px rows reproduce WPF's 208x136 popup frame exactly, on any platform font.
+            overlay.Bounds.Height.Should().Be(136);
             overlay.IsHitTestVisible.Should().BeTrue();
             list.IsAttachedToVisualTree().Should().BeTrue();
             list.IsFocused.Should().BeTrue();
