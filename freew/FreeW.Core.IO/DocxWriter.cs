@@ -2942,10 +2942,10 @@ public static partial class DocxWriter
         tblPr.Add(new XElement(W + "tblLayout", new XAttribute(W + "type",
             table.AutoFit == AutoFitMode.Fixed ? "fixed" : "autofit")));
 
-        // Default cell margins (w:tblCellMar): inside padding applied to cells with no own override.
-        // Emitted only when set, so plain tables stay unchanged. Follows tblBorders in CT_TblPr order.
-        if (table.DefaultCellMargins is { } cellMar)
-            tblPr.Add(BuildCellMarginsElement("tblCellMar", cellMar));
+        // Null is the native editor's displayed 5.4pt default, while an imported unstyled/marginless
+        // table can resolve to 0.5pt/0pt. Write the native intent explicitly so Word and reopening
+        // agree with the editor; imported tables already carry their resolved padding here.
+        tblPr.Add(BuildCellMarginsElement("tblCellMar", table.DefaultCellMargins ?? TableCellMargins.Default));
 
         // w:tblLook carries the table-style toggles so they round-trip without a full table-style part:
         // w:firstRow="1" persists HeaderRow; w:noHBand="0" persists BandedRows (banding on). The flags are

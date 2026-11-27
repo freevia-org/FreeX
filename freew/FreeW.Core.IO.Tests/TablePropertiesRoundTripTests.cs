@@ -277,7 +277,10 @@ public class TablePropertiesRoundTripTests
         read.IndentFromLeftPt.Should().BeNull();
         read.CellSpacingPt.Should().BeNull();
         read.TextWrapping.Should().BeFalse();
-        read.DefaultCellMargins.Should().BeNull();
+        // Null in the native model displays 5.4pt padding. Serialization must state that intent
+        // explicitly because an unstyled Word package otherwise resolves to different padding.
+        table.DefaultCellMargins.Should().BeNull();
+        read.DefaultCellMargins.Should().Be(TableCellMargins.Default);
         read.Rows[0].HeightPt.Should().BeNull();
         read.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Auto);
         read.Rows[0].AllowBreakAcrossPages.Should().BeTrue();

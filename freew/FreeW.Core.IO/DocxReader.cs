@@ -5219,8 +5219,10 @@ public static partial class DocxReader
         // Visually right-to-left table (w:bidiVisual): columns are mirrored, first grid column at the right.
         table.RightToLeft = ReadToggle(tblPr, "bidiVisual");
 
-        // Default cell margins (w:tblCellMar); absent → null (use the implicit docx default).
-        table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"));
+        // Imported padding depends on the selected/default table style, not the native model's
+        // 5.4pt default. Resolve it before applying direct table, row, and cell edge overrides.
+        var styleMargins = ReadTableStyleCellMargins(preservedDrawingTarget?.Styles, tblStyleId);
+        table.DefaultCellMargins = ReadCellMargins(tblPr?.Element(W + "tblCellMar"), styleMargins) ?? styleMargins;
 
         // The table grid (w:tblGrid/w:gridCol) carries per-column widths in dxa.
         var grid = tbl.Element(W + "tblGrid");
@@ -5291,6 +5293,8 @@ public static partial class DocxReader
                 }
             }
 
+            var rowMargins = ReadCellMargins(tr.Element(W + "tblPrEx")?.Element(W + "tblCellMar"), table.DefaultCellMargins);
+
             // The writer emits legacy light fills as explicit cell shading so Word honours them even when a
             // named table style is also present. Explicit OOXML shading must win over the catalog style on
             // read, so only strip those legacy values for tables without a named catalog style.
@@ -5300,7 +5304,7 @@ public static partial class DocxReader
                 && TableBanding.IsBandedBodyRow(rowIndex, headerRow);
             foreach (var tc in EnumerateRowCells(tr))
             {
-                var cell = new TableCell();
+                var cell = new TableCell { Margins = rowMargins };
                 var tcPr = tc.Element(W + "tcPr");
                 if (tcPr is not null)
                 {
@@ -5344,8 +5348,9 @@ public static partial class DocxReader
                     // Per-cell border override (w:tcBorders); absent → null (inherit table-level borders).
                     cell.Borders = ReadCellBorders(tcPr.Element(W + "tcBorders"));
 
-                    // Per-cell margin override (w:tcMar); absent → null (inherit table default).
-                    cell.Margins = ReadCellMargins(tcPr.Element(W + "tcMar"));
+                    // Resolve each explicit cell edge over the row exception and table/style edges.
+                    // A partial tcMar must not discard the row's remaining padding.
+                    cell.Margins = ReadCellMargins(tcPr.Element(W + "tcMar"), rowMargins ?? table.DefaultCellMargins) ?? rowMargins;
 
                     // Text direction (w:textDirection w:val); absent → Horizontal.
                     cell.TextDirection = (tcPr.Element(W + "textDirection")?.Attribute(W + "val")?.Value) switch
@@ -5417,17 +5422,6 @@ public static partial class DocxReader
                     cell.Paragraphs.Add(new Paragraph());
                 row.Cells.Add(cell);
             }
-            // Row-level table property exception (w:tblPrEx/w:tblCellMar): this row's cells take its margins
-            // instead of the table default, unless a cell carries its own w:tcMar. An edge the exception
-            // omits keeps the table default for that edge.
-            if (tr.Element(W + "tblPrEx")?.Element(W + "tblCellMar") is { } rowMargins)
-            {
-                var rowFallback = table.DefaultCellMargins ?? TableCellMargins.Default;
-                var rowOverride = ReadCellMargins(rowMargins, rowFallback);
-                foreach (var rowCell in row.Cells)
-                    rowCell.Margins ??= rowOverride;
-            }
-
             table.Rows.Add(row);
             rowIndex++;
         }
@@ -5440,8 +5434,48 @@ public static partial class DocxReader
     private const string StyleHeaderFill = "D9E2F3";
     private const string StyleBandedFill = "F2F2F2";
 
-    // Reads a cell-margins container (w:tblCellMar or w:tcMar) into a TableCellMargins, or null when the
-    // element is absent. Each edge defaults to the model's default if missing from the element.
+    private static TableCellMargins ReadTableStyleCellMargins(
+        IReadOnlyDictionary<string, DocumentStyle>? styles, string? styleId)
+    {
+        DocumentStyle? selected = null;
+        if (styles is not null)
+        {
+            if (styleId is not null && styles.TryGetValue(styleId, out var explicitStyle)
+                && explicitStyle is { Type: StyleType.Table, PreservedTableStyleXml.Length: > 0 })
+                selected = explicitStyle;
+            selected ??= styles.Values.FirstOrDefault(style =>
+                style is { Type: StyleType.Table, IsDefault: true, PreservedTableStyleXml.Length: > 0 });
+        }
+
+        // Word distinguishes an unstyled table from a selected, marginless table style.
+        // Neither fallback is the native editor's 5.4pt left/right padding.
+        if (selected is null)
+            return new TableCellMargins(TopPt: 0, LeftPt: 0.5, BottomPt: 0, RightPt: 0.5);
+        var margins = new TableCellMargins(0, 0, 0, 0);
+        var chain = new List<DocumentStyle>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = selected; current is not null && seen.Add(current.Id);)
+        {
+            chain.Add(current);
+            current = current.BasedOnStyleId is { } parentId && styles!.TryGetValue(parentId, out var parent)
+                && parent.Type == StyleType.Table ? parent : null;
+        }
+        for (var index = chain.Count - 1; index >= 0; index--)
+        {
+            if (chain[index].PreservedTableStyleXml is not { Length: > 0 } xml)
+                continue;
+            XElement definition;
+            try { definition = XElement.Parse(xml); }
+            catch (System.Xml.XmlException) { continue; }
+            // Resolve whole-style defaults only. Conditional tblStylePr margins require a
+            // cell-position-aware cascade; applying every condition here would corrupt all cells.
+            margins = ReadCellMargins(definition.Element(W + "tblPr")?.Element(W + "tblCellMar"), margins) ?? margins;
+        }
+        return margins;
+    }
+
+    // An absent container remains absent. Edges omitted from a present container inherit the
+    // caller's already-resolved lower-priority margins; explicit zero remains an override.
     private static TableCellMargins? ReadCellMargins(XElement? container, TableCellMargins? fallback = null)
     {
         if (container is null)
