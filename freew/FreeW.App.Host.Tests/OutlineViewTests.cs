@@ -63,10 +63,15 @@ public sealed class OutlineViewTests
         source.Should().Contain("_controller.SetOutlineLevel(item.Level)");
         source.Should().Contain("_controller.CurrentOutlineLevel");
         source.Should().Contain("_controller.ProjectedRows");
-        source.Should().Contain("OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers)");
+        source.Should().Contain("OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, OutlineViewPlanner.RowMarkers)");
         source.Should().Contain("private TextDocument GetCommittedDocument()");
         source.Should().Contain("_editor.CommitToModel();", "WPF must still commit native edits before shared refresh");
-        source.Should().Contain("\"⊞ \"").And.Contain("\"▢ \"", "WPF owns its visual marker glyphs");
+        source.Should().Contain("OutlineViewPlanner.CommandGlyph(command.Command)");
+        source.Should().Contain("OutlineViewPlanner.ToolbarSpacerWidth");
+        source.Should().NotContain("RowMarkers = new(", "row markers live in OutlineViewPlanner.RowMarkers");
+        source.Should().NotContain("CommandContent(");
+        source.Should().NotContain("▢").And.NotContain("⊞").And.NotContain("⟪")
+            .And.NotContain("◄").And.NotContain("►").And.NotContain("▲").And.NotContain("▼");
         source.Should().NotContain("OutlineViewModel.Build(");
         source.Should().NotContain("class ShowLevelItem");
         source.Should().NotContain("class OutlineLevelItem");

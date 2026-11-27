@@ -224,6 +224,24 @@ public sealed class OutlineViewControllerTests
     }
 
     [Fact]
+    public void Planner_owns_command_glyphs_row_markers_and_spacer_width()
+    {
+        OutlineViewPlanner.CommandPlans.Select(plan => OutlineViewPlanner.CommandGlyph(plan.Command))
+            .Should().Equal("⟪", "◄", "►", "▲", "▼", "+", "−");
+        OutlineViewPlanner.CommandPlans.Select(plan => plan.Command).Distinct().Should()
+            .HaveCount(Enum.GetValues<OutlineCommand>().Length);
+        var act = () => OutlineViewPlanner.CommandGlyph((OutlineCommand)999);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+
+        OutlineViewPlanner.RowMarkers.Should().Be(new OutlineRowMarkers("▢ ", "⊞ ", "    "));
+        OutlineViewPlanner.ToolbarSpacerWidth.Should().Be(10);
+        OutlineViewPlanner.FormatRow(
+                new OutlineProjectedRow(new OutlineRow(2, 1, "Chapter", IsHeading: true), IsCollapsed: true),
+                OutlineViewPlanner.RowMarkers)
+            .Should().Be("    ⊞ Chapter");
+    }
+
+    [Fact]
     public void Planner_formats_indent_markers_and_empty_heading_fallback()
     {
         var markers = new OutlineRowMarkers("open ", "closed ", "body ");

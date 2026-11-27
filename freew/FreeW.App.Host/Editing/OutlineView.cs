@@ -19,8 +19,6 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal sealed partial class OutlineView : Border
 {
-    private static readonly OutlineRowMarkers RowMarkers = new("▢ ", "⊞ ", "    ");
-
     private readonly DocumentView _editor;
     private readonly OutlineViewController _controller;
     private readonly ListBox _list;
@@ -55,7 +53,7 @@ internal sealed partial class OutlineView : Border
         _controller.RowsChanged += RenderRows;
         _list.SelectionChanged += OnSelectionChanged;
 
-        _showLevel = new ComboBox { Width = 120, VerticalAlignment = VerticalAlignment.Center };
+        _showLevel = BuildShowLevelCombo();
         _outlineLevelCombo = BuildOutlineLevelCombo();
         var toolbar = BuildToolbar();
 
@@ -100,16 +98,6 @@ internal sealed partial class OutlineView : Border
             Margin = new Thickness(0, 0, 6, 0)
         });
 
-        foreach (var option in OutlineViewPlanner.ShowLevelOptions)
-            _showLevel.Items.Add(option);
-        _showLevel.SelectedIndex = 0;
-        _showLevel.SelectionChanged += (_, _) =>
-        {
-            if (_showLevel.SelectedItem is OutlineLevelOption item)
-            {
-                _controller.SetShowLevel(item.Level);
-            }
-        };
         bar.Children.Add(_showLevel);
 
         bar.Children.Add(Spacer());
@@ -127,7 +115,7 @@ internal sealed partial class OutlineView : Border
             if (command.StartsGroup)
                 bar.Children.Add(Spacer());
             bar.Children.Add(ToolButton(
-                CommandContent(command.Command),
+                OutlineViewPlanner.CommandGlyph(command.Command),
                 command.Label,
                 () => _controller.Execute(command.Command)));
         }
@@ -150,6 +138,22 @@ internal sealed partial class OutlineView : Border
             Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
             Child = bar
         };
+    }
+
+    private ComboBox BuildShowLevelCombo()
+    {
+        var combo = new ComboBox { Width = 120, VerticalAlignment = VerticalAlignment.Center };
+        foreach (var option in OutlineViewPlanner.ShowLevelOptions)
+            combo.Items.Add(option);
+        combo.SelectedIndex = 0;
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedItem is OutlineLevelOption item)
+            {
+                _controller.SetShowLevel(item.Level);
+            }
+        };
+        return combo;
     }
 
     private ComboBox BuildOutlineLevelCombo()
@@ -181,19 +185,7 @@ internal sealed partial class OutlineView : Border
     }
 
     private static UIElement Spacer() =>
-        new Border { Width = 10 };
-
-    private static string CommandContent(OutlineCommand command) => command switch
-    {
-        OutlineCommand.PromoteToHeading1 => "⟪",
-        OutlineCommand.Promote => "◄",
-        OutlineCommand.Demote => "►",
-        OutlineCommand.MoveUp => "▲",
-        OutlineCommand.MoveDown => "▼",
-        OutlineCommand.Expand => "+",
-        OutlineCommand.Collapse => "−",
-        _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
-    };
+        new Border { Width = OutlineViewPlanner.ToolbarSpacerWidth };
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -220,7 +212,7 @@ internal sealed partial class OutlineView : Border
         {
             _list.Items.Clear();
             OutlineDisplayRow? toSelect = null;
-            foreach (var item in OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers))
+            foreach (var item in OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, OutlineViewPlanner.RowMarkers))
             {
                 _list.Items.Add(item);
                 if (item.Row.BlockIndex == _controller.SelectedBlockIndex)

@@ -66,10 +66,21 @@ public sealed class OutlineViewParityTests
         source.Should().Contain("_controller.SetOutlineLevel(");
         source.Should().Contain("_controller.CurrentOutlineLevel");
         source.Should().Contain("_controller.ProjectedRows");
-        source.Should().Contain("OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers)");
+        source.Should().Contain("OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, OutlineViewPlanner.RowMarkers)");
         source.Should().Contain("navigateToBlock: blockIndex => _editor.MoveCaretToBlock(blockIndex, 0)",
             "Avalonia adapts native caret movement once and the controller owns navigation decisions");
-        source.Should().Contain("\"[+] \"").And.Contain("\"[-] \"", "Avalonia owns its visual marker glyphs");
+        source.Should().Contain("OutlineViewPlanner.CommandGlyph(command.Command)",
+            "button content comes from the shared planner so Avalonia matches the WPF glyph buttons");
+        source.Should().Contain("OutlineViewPlanner.ToolbarSpacerWidth");
+        source.Should().NotContain("RowMarkers = new(", "row markers live in OutlineViewPlanner.RowMarkers");
+        source.Should().NotContain("[+]").And.NotContain("[-]");
+        source.Should().NotContain("▢").And.NotContain("⊞").And.NotContain("⟪")
+            .And.NotContain("◄").And.NotContain("►").And.NotContain("▲").And.NotContain("▼");
+        source.Should().NotContain("command.Label,\r\n                command.Label")
+            .And.NotContain("command.Label,\n                command.Label",
+                "label is the tooltip, not the button content");
+        System.Text.RegularExpressions.Regex.Matches(source, @"bar\.Children\.Add\(Spacer\(\)\);\s+var firstLine")
+            .Count.Should().Be(1, "Avalonia keeps the WPF spacer before the Show First Line Only checkbox");
         source.Should().NotContain("OutlineViewModel.Build(");
         source.Should().NotContain("class ShowLevelItem");
         source.Should().NotContain("class OutlineLevelItem");
@@ -166,9 +177,9 @@ public sealed class OutlineViewParityTests
         selectedAfterMove.Should().Be(4);
         collapsed.Should().BeTrue();
         expanded.Should().BeTrue();
-        expandedMarkerBefore.Should().Contain("[-] Chapter One");
-        collapsedMarker.Should().Contain("[+] Chapter One");
-        expandedMarkerAfter.Should().Contain("[-] Chapter One");
+        expandedMarkerBefore.Should().Contain("▢ Chapter One");
+        collapsedMarker.Should().Contain("⊞ Chapter One");
+        expandedMarkerAfter.Should().Contain("▢ Chapter One");
         collapseExpandDocumentChangedCount.Should().Be(0);
     }
 
@@ -261,10 +272,10 @@ public sealed class OutlineViewParityTests
 
         dirtyBefore.Should().BeFalse();
         collapsed.Should().BeTrue();
-        collapsedMarker.Should().Contain("[+]");
+        collapsedMarker.Should().Contain("⊞");
         dirtyAfterCollapse.Should().BeFalse();
         expanded.Should().BeTrue();
-        expandedMarker.Should().Contain("[-]");
+        expandedMarker.Should().Contain("▢");
         dirtyAfterExpand.Should().BeFalse();
     }
 }

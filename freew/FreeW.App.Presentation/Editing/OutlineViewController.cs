@@ -39,7 +39,7 @@ public sealed record OutlineDisplayRow(OutlineProjectedRow ProjectedRow, string 
 
 /// <summary>
 /// Canonical labels, option catalogs, toolbar ordering, and row text projection for the outline surface.
-/// Native renderers retain control construction and choose only their heading marker glyphs.
+/// Native renderers retain control construction only; glyphs, markers, and tooltips come from here.
 /// </summary>
 public static class OutlineViewPlanner
 {
@@ -63,6 +63,30 @@ public static class OutlineViewPlanner
         new(OutlineCommand.Expand, "Expand", StartsGroup: true),
         new(OutlineCommand.Collapse, "Collapse"),
     ];
+
+    /// <summary>Width of the gap both hosts place between toolbar groups.</summary>
+    public const double ToolbarSpacerWidth = 10;
+
+    /// <summary>
+    /// Heading/body markers shared by both hosts. Hosts must not substitute their own glyphs; Avalonia
+    /// relies on Skia system-font fallback (Segoe UI Symbol, DejaVu Sans, Apple Symbols) for coverage.
+    /// </summary>
+    public static OutlineRowMarkers RowMarkers { get; } = new("▢ ", "⊞ ", "    ");
+
+    /// <summary>
+    /// Toolbar button content for a command; the <see cref="OutlineCommandPlan.Label"/> is the tooltip.
+    /// </summary>
+    public static string CommandGlyph(OutlineCommand command) => command switch
+    {
+        OutlineCommand.PromoteToHeading1 => "⟪",
+        OutlineCommand.Promote => "◄",
+        OutlineCommand.Demote => "►",
+        OutlineCommand.MoveUp => "▲",
+        OutlineCommand.MoveDown => "▼",
+        OutlineCommand.Expand => "+",
+        OutlineCommand.Collapse => "−",
+        _ => throw new ArgumentOutOfRangeException(nameof(command), command, null),
+    };
 
     public static int OutlineLevelOptionIndex(int level)
     {

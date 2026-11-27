@@ -15,8 +15,6 @@ namespace FreeW.App.Avalonia.Editing;
 /// </summary>
 internal sealed partial class OutlineView : Border
 {
-    private static readonly OutlineRowMarkers RowMarkers = new("[-] ", "[+] ", "    ");
-
     private readonly DocumentView _editor;
     private readonly OutlineViewController _controller;
     private readonly ListBox _list;
@@ -127,16 +125,17 @@ internal sealed partial class OutlineView : Border
             if (command.StartsGroup)
                 bar.Children.Add(Spacer());
             bar.Children.Add(ToolButton(
-                command.Label,
+                OutlineViewPlanner.CommandGlyph(command.Command),
                 command.Label,
                 () => _controller.Execute(command.Command)));
         }
 
+        bar.Children.Add(Spacer());
         var firstLine = new CheckBox
         {
             Content = OutlineViewPlanner.ShowFirstLineOnlyLabel,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(4, 0, 0, 0),
         };
         firstLine.IsCheckedChanged += (_, _) => _controller.SetFirstLineOnly(firstLine.IsChecked == true);
         bar.Children.Add(firstLine);
@@ -172,7 +171,7 @@ internal sealed partial class OutlineView : Border
         return button;
     }
 
-    private static Border Spacer() => new() { Width = 10 };
+    private static Border Spacer() => new() { Width = OutlineViewPlanner.ToolbarSpacerWidth };
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
@@ -211,7 +210,7 @@ internal sealed partial class OutlineView : Border
         {
             _list.Items.Clear();
             OutlineDisplayRow? toSelect = null;
-            foreach (var item in OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, RowMarkers))
+            foreach (var item in OutlineViewPlanner.BuildDisplayRows(_controller.ProjectedRows, OutlineViewPlanner.RowMarkers))
             {
                 _list.Items.Add(item);
                 if (item.Row.BlockIndex == _controller.SelectedBlockIndex)
