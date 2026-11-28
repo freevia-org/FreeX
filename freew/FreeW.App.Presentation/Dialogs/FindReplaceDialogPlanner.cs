@@ -870,6 +870,12 @@ public static class FindReplaceDialogPlanner
     /// <see cref="FindReplaceMatch.IsMarkOnly"/>) whose last run index is that: the matches that cover only
     /// objects at the starting offset, up to and including that run, have been visited already and are not
     /// reported again (several objects can sit at one offset, so the offset alone cannot say which).
+    /// The walk is the one the WPF host makes: the rest of the body from the caret, then the default
+    /// header/footer, then the body again from its top. When the caret is itself in the default
+    /// header/footer, pass its position as <paramref name="resumeHeaderFooterFrom"/> (the offset is where
+    /// the search resumes, <paramref name="resumeAfterMarkRun"/> then names a text-less object there): the
+    /// walk continues through the header and footer, then the body from its top, then the header/footer
+    /// from its top, so repeated calls step through every match.
     /// </summary>
     public static FindReplaceMatch? FindNextMatch(
         TextDocument document,
@@ -1073,13 +1079,25 @@ public static class FindReplaceDialogPlanner
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom,
         int resumeAfterMarkRun)
     {
-        if (document.Blocks.Count == 0)
-            return null;
-
-        var startBlock = Math.Clamp(fromBlock, 0, document.Blocks.Count - 1);
-        for (var step = 0; step < document.Blocks.Count; step++)
+        // The caret is in the default header/footer: continue there from it (header, then footer), then
+        // the body from its top, then the header/footer from its top -- the order the WPF host walks its
+        // stories, wrapping back to the first match.
+        if (resumeHeaderFooterFrom is not null)
         {
-            var blockIndex = (startBlock + step) % document.Blocks.Count;
+            return FindInDefaultHeaderFooter(document, matchesIn, resumeHeaderFooterFrom, resumeAfterMarkRun)
+                ?? FindNextBodyMatchCore(document, matchesIn, spanning, 0, 0, null, -1)
+                ?? FindInDefaultHeaderFooter(document, matchesIn);
+        }
+
+        if (document.Blocks.Count == 0)
+            return FindInDefaultHeaderFooter(document, matchesIn);
+
+        // The caret is in the body: the rest of the body from it, then the header/footer, then the body
+        // again from its top up to the caret (the wrap).
+        var startBlock = Math.Clamp(fromBlock, 0, document.Blocks.Count - 1);
+        for (var blockIndex = startBlock; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            var step = blockIndex - startBlock;
             var block = document.Blocks[blockIndex];
 
             if (block is Paragraph paragraph)
@@ -1108,6 +1126,29 @@ public static class FindReplaceDialogPlanner
             }
         }
 
+        // See freew-find-replace F1: Find Next used to only ever walk document.Blocks, so a term that
+        // existed only in a header/footer was reported "not found". The default header/footer is now the
+        // next story after the body, before the search wraps back to the top of the body.
+        if (FindInDefaultHeaderFooter(document, matchesIn) is { } story)
+            return story;
+
+        for (var blockIndex = 0; blockIndex < startBlock; blockIndex++)
+        {
+            var block = document.Blocks[blockIndex];
+            if (block is Paragraph paragraph)
+            {
+                if (FirstBodyMatch(blockIndex, paragraph, matchesIn, spanning, _ => true) is { } hit)
+                    return hit;
+            }
+            else if (block is Table table
+                && EnumerateTableMatches(table, blockIndex, matchesIn, spanning)
+                    .Cast<TableTextMatch?>()
+                    .FirstOrDefault() is { } tableMatch)
+            {
+                return tableMatch.ToMatch(blockIndex);
+            }
+        }
+
         if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
         {
             var startAt = Math.Clamp(fromOffset, 0, startParagraph.PlainText.Length);
@@ -1131,34 +1172,69 @@ public static class FindReplaceDialogPlanner
             }
         }
 
-        // The whole body (and, when applicable, the table it wrapped through) has now been searched with
-        // no hit. Fall back to the document's default header/footer -- see freew-find-replace F1: Find
-        // Next used to only ever walk document.Blocks, so a term that existed only in a header/footer was
-        // reported "not found" even though CountMatches/DocumentContains (fixed for headers/footers by an
-        // earlier round, see the TextDocumentStoryTraversal.HeadersFooters walk in CountMatches below) had
-        // already proven it was there. See FindInDefaultHeaderFooter's remarks for this fallback's scope.
-        return FindInDefaultHeaderFooter(document, matchesIn, resumeHeaderFooterFrom);
+        return null;
     }
 
     /// <summary>
-    /// Best-effort Find Next fallback into the document's default header/footer
+    /// The first body match at or after a position, then (wrapping) any before it, for the walk that
+    /// restarts the body from its top after the header/footer. <paramref name="fromBlock"/> is clamped.
+    /// </summary>
+    private static FindReplaceMatch? FindNextBodyMatchCore(
+        TextDocument document,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
+        IReadOnlyList<FindReplaceMatch> spanning,
+        int fromBlock,
+        int fromOffset,
+        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell,
+        int resumeAfterMarkRun)
+    {
+        for (var blockIndex = Math.Clamp(fromBlock, 0, Math.Max(0, document.Blocks.Count - 1));
+             blockIndex < document.Blocks.Count;
+             blockIndex++)
+        {
+            var step = blockIndex - fromBlock;
+            var block = document.Blocks[blockIndex];
+            if (block is Paragraph paragraph)
+            {
+                var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
+                var visited = step == 0 ? resumeAfterMarkRun : -1;
+                if (FirstBodyMatch(
+                        blockIndex, paragraph, matchesIn, spanning, span => IsAtOrAfter(span, startAt, visited)) is { } hit)
+                {
+                    return hit;
+                }
+            }
+            else if (block is Table table
+                && EnumerateTableMatches(table, blockIndex, matchesIn, spanning)
+                    .Cast<TableTextMatch?>()
+                    .FirstOrDefault(item => IsTableMatchAtOrAfter(
+                        item!.Value, step == 0 ? fromTableCell : null, step == 0 ? resumeAfterMarkRun : -1)) is { } tableMatch)
+            {
+                return tableMatch.ToMatch(blockIndex);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Find Next into the document's default header/footer
     /// (<see cref="TextDocument.Header"/>/<see cref="TextDocument.Footer"/>, i.e. the final section's
-    /// default slot) once the whole body has been searched with no hit. This is deliberately the ONLY
-    /// header/footer slot covered: it is the only one
+    /// default slot), the story after the body. This is deliberately the ONLY header/footer slot covered:
+    /// it is the only one
     /// <c>FreeW.App.Avalonia.Editing.DocumentView.PlaceCaretInHeaderFooter</c> -- the sole production
     /// consumer of a <see cref="FindReplaceMatch.IsInHeaderFooter"/> hit -- can place a caret in today.
     /// EvenHeader/EvenFooter/FirstHeader/FirstFooter, other sections' headers/footers, footnotes, endnotes,
     /// and text-box content remain outside Find Next's reach (see freew-find-replace F1 remarks) until
-    /// those shells grow a way to select text there too. Always returns the FIRST remaining match, header
-    /// before footer -- there is no "resume from a header/footer position" concept, so repeated Find Next
-    /// clicks re-land on the same hit until it is replaced or the caret leaves some other way (matching
-    /// how Replace All -- which just keeps calling Find Next until a call returns null -- still terminates:
-    /// each replacement removes that occurrence, so the next call finds the next one or nothing).
+    /// those shells grow a way to select text there too. Without a resume point it returns the FIRST
+    /// match, header before footer; with one (the caret is already in the slot) it returns the next match
+    /// after that position, the objects up to <c>visitedThroughMarkRun</c> at that offset counting as
+    /// visited, so repeated Find Next steps through every match in the slot.
     /// </summary>
     /// <summary>
     /// Header/footer-only Find Next, for callers that have already exhausted the body story.
-    /// <see cref="FindNextMatch"/> reaches the header/footer only when the body yields NO match
-    /// at all, because the body walk wraps and reports its own first match again. Replace All has
+    /// <see cref="FindNextMatch"/> walks body, then header/footer, then the body again, so it would
+    /// report a body match once the header/footer is done. Replace All has
     /// to be able to say "the body is finished, continue into the header and footer" explicitly --
     /// without this, a document whose body contained the search term had its header and footer
     /// occurrences silently skipped, and the count reported to the user was short by that many.
@@ -1182,7 +1258,8 @@ public static class FindReplaceDialogPlanner
     private static FindReplaceMatch? FindInDefaultHeaderFooter(
         TextDocument document,
         Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
-        (bool IsFooter, int ParagraphIndex, int Offset)? resumeFrom = null)
+        (bool IsFooter, int ParagraphIndex, int Offset)? resumeFrom = null,
+        int visitedThroughMarkRun = -1)
     {
         // r177: when a resume point is supplied, the slot it names is searched from that offset
         // and the OTHER slot is still searched in full. Without this the header could never be
@@ -1197,14 +1274,14 @@ public static class FindReplaceDialogPlanner
         if (resumeFrom is not { IsFooter: true })
         {
             var header = resumeFrom is { IsFooter: false } h
-                ? FindInHeaderFooterSlot(document.Header, false, matchesIn, h.ParagraphIndex, h.Offset)
+                ? FindInHeaderFooterSlot(document.Header, false, matchesIn, h.ParagraphIndex, h.Offset, visitedThroughMarkRun)
                 : FindInHeaderFooterSlot(document.Header, false, matchesIn);
             if (header is not null)
                 return header;
         }
 
         return resumeFrom is { IsFooter: true } f
-            ? FindInHeaderFooterSlot(document.Footer, true, matchesIn, f.ParagraphIndex, f.Offset)
+            ? FindInHeaderFooterSlot(document.Footer, true, matchesIn, f.ParagraphIndex, f.Offset, visitedThroughMarkRun)
             : FindInHeaderFooterSlot(document.Footer, true, matchesIn);
     }
 
@@ -1213,7 +1290,8 @@ public static class FindReplaceDialogPlanner
         bool isFooter,
         Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
         int fromParagraphIndex = 0,
-        int fromOffset = 0)
+        int fromOffset = 0,
+        int visitedThroughMarkRun = -1)
     {
         if (headerFooter is null)
             return null;
@@ -1221,11 +1299,14 @@ public static class FindReplaceDialogPlanner
         for (var paraIdx = Math.Max(0, fromParagraphIndex); paraIdx < headerFooter.Paragraphs.Count; paraIdx++)
         {
             // Only the paragraph the resume point names starts partway in; every later paragraph
-            // in the slot is searched from its beginning, as it has not been visited yet.
-            var minOffset = paraIdx == fromParagraphIndex ? Math.Max(0, fromOffset) : 0;
+            // in the slot is searched from its beginning, as it has not been visited yet. Within it the
+            // objects up to run visitedThroughMarkRun at exactly that offset have been visited too.
+            var startsHere = paraIdx == fromParagraphIndex;
+            var minOffset = startsHere ? Math.Max(0, fromOffset) : 0;
+            var visited = startsHere ? visitedThroughMarkRun : -1;
             var match = matchesIn(headerFooter.Paragraphs[paraIdx])
                 .Cast<FindSpan?>()
-                .FirstOrDefault(candidate => candidate!.Value.Start >= minOffset
+                .FirstOrDefault(candidate => IsAtOrAfter(candidate!.Value, minOffset, visited)
                     && (candidate.Value.Length > 0 || candidate.Value.IsMarkOnly));
             if (match is { } found)
             {

@@ -475,4 +475,81 @@ public sealed class FindReplaceSingleMatchTests
         header!.PlainText.Should().Be("H[hdr]I");
         header.Runs.Should().NotContain(run => run.Image != null);
     }
+
+    // ---- header/footer: Find Next steps through the slot and across the stories ---------------
+
+    private static string Where(DocumentView view) =>
+        view.HeaderFooterCaretInfo is { } hf
+            ? $"{(hf.IsFooter ? "footer" : "header")}{hf.ParaIdx}@{hf.Offset}"
+            : $"body{view.CaretPosition}";
+
+    [Fact]
+    public async Task FindNext_StepsThroughEveryMatchInTheHeader_AndWrapsToTheFirst()
+    {
+        var offsets = new List<int>();
+        var ran = await OnUiThread(() =>
+        {
+            var document = DocumentOf(new Paragraph("nothing relevant here"));
+            document.Header = new HeaderFooter("cat and cat and cat");
+            var view = Load(document);
+
+            for (var i = 0; i < 4; i++)
+            {
+                view.FindNext("cat").Should().BeTrue();
+                offsets.Add(view.HeaderFooterCaretInfo!.Value.Offset);
+            }
+        });
+        ran.Should().BeTrue();
+
+        // The caret sits at the end of each selected match; the fourth Find Next wraps to the first.
+        offsets.Should().Equal(3, 11, 19, 3);
+    }
+
+    [Fact]
+    public async Task FindNext_WalksTheBodyThenTheHeaderAndFooterThenWrapsToTheBody()
+    {
+        var steps = new List<string>();
+        var ran = await OnUiThread(() =>
+        {
+            var document = DocumentOf(new Paragraph("cat"));
+            document.Header = new HeaderFooter("cat");
+            document.Footer = new HeaderFooter("cat");
+            document.Footer.Paragraphs.Add(new Paragraph("another cat"));
+            var view = Load(document);
+
+            for (var i = 0; i < 6; i++)
+            {
+                view.FindNext("cat").Should().BeTrue();
+                steps.Add(Where(view));
+            }
+        });
+        ran.Should().BeTrue();
+
+        steps.Should().Equal(
+            "body(0, 3)", "header0@3", "footer0@3", "footer1@11", "body(0, 3)", "header0@3");
+    }
+
+    [Fact]
+    public async Task FindNext_InTheHeader_StepsPastEachObjectAtOneOffset()
+    {
+        byte[] remaining = [];
+        var ran = await OnUiThread(() =>
+        {
+            var document = DocumentOf(new Paragraph("nothing relevant here"));
+            document.Header = new HeaderFooter();
+            document.Header.Paragraphs.Add(Marked(new Run("H"), Image(1), Image(2), new Run("I")));
+            var view = Load(document);
+
+            view.FindNext("^g").Should().BeTrue();
+            view.FindNext("^g").Should().BeTrue();
+
+            // Two Find Nexts on two graphics at one offset: the second landed on the second graphic.
+            view.ReplaceNext(Request("^g", string.Empty));
+            remaining = view.Document.Header!.Paragraphs[0].Runs
+                .Where(run => run.Image != null).Select(run => run.Image!.Bytes[0]).ToArray();
+        });
+        ran.Should().BeTrue();
+
+        remaining.Should().Equal(new byte[] { 1 });
+    }
 }

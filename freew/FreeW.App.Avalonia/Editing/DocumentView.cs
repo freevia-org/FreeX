@@ -772,7 +772,7 @@ public sealed partial class DocumentView : Control
 
         // The caret may be parked on a graphic or comment mark a previous Find Next selected: it has no
         // text extent, so the search resumes after that object, not after the offset it sits at.
-        var resumeAfterMarkRun = CurrentFindMarkMatch() is { IsInHeaderFooter: false } onMark
+        var resumeAfterMarkRun = CurrentFindMarkMatch() is { } onMark
             ? onMark.MarkEndRunIndex ?? -1
             : -1;
         if (FindReplaceDialogPlanner.FindNextMatch(
@@ -781,6 +781,7 @@ public sealed partial class DocumentView : Control
                 _caret.Block,
                 _caret.Offset,
                 CurrentFindReplaceTableCellPosition(),
+                CurrentFindReplaceHeaderFooterPosition(),
                 resumeAfterMarkRun: resumeAfterMarkRun) is not { } hit)
             return false;
 
@@ -801,6 +802,26 @@ public sealed partial class DocumentView : Control
         _cellCaret is { } cc && cc.TableBlock == _caret.Block
             ? (cc.Row, cc.Col, cc.ParaIdx, cc.Offset)
             : null;
+
+    /// <summary>
+    /// The header/footer position Find Next should resume from when the caret is in the document's default
+    /// header or footer (the only slots a hit can be selected in): the slot, the paragraph, and the end of
+    /// the selection there (the caret when nothing is selected), so a match already selected is stepped
+    /// past. Null when the caret is in the body or in any other header/footer slot.
+    /// </summary>
+    private (bool IsFooter, int ParagraphIndex, int Offset)? CurrentFindReplaceHeaderFooterPosition()
+    {
+        if (_hfCaret is not { Target: { UseFinalSectionStore: true } target } caret
+            || target.Slot is not (HeaderFooterSlotKind.Header or HeaderFooterSlotKind.Footer))
+        {
+            return null;
+        }
+
+        var end = _hfSelectionAnchor is { } anchor && SameHfStory(anchor.Target, target)
+            ? Math.Max(anchor.Offset, caret.Offset)
+            : caret.Offset;
+        return (target.Slot == HeaderFooterSlotKind.Footer, target.ParaIdx, end);
+    }
 
     /// <summary>
     /// Selects a Find/Replace hit: a plain body-text match moves the ordinary block/offset caret and
@@ -905,6 +926,11 @@ public sealed partial class DocumentView : Control
             PlaceCaretInHeaderFooter(target, hit.Start + hit.Length, extendSelection: true);
             return;
         }
+
+        // Find Next left the header/footer for the body (the search wrapped, or walked on past it): the
+        // header/footer caret must stop being the live one, or the next Find Next would resume there.
+        if (_hfCaret is not null)
+            ExitHeaderFooterCaret();
 
         if (hit.IsInTableCell)
         {

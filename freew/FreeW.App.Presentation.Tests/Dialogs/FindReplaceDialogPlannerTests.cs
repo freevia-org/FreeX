@@ -716,6 +716,48 @@ public sealed class FindReplaceDialogPlannerTests
     }
 
     [Fact]
+    public void FindNextMatch_WithTheCaretInTheHeader_StepsThroughTheSlotThenTheFooterThenTheBodyThenWraps()
+    {
+        var doc = BuildSampleDoc("body cat");
+        doc.Header = new HeaderFooter("cat and cat");
+        doc.Footer = new HeaderFooter("cat");
+        var options = new FindReplaceSearchOptions();
+
+        FindReplaceMatch? Next((bool IsFooter, int Paragraph, int Offset) from) =>
+            FindReplaceDialogPlanner.FindNextMatch(
+                doc, "cat", options, 0, 0, resumeHeaderFooterFrom: (from.IsFooter, from.Paragraph, from.Offset));
+
+        // From the end of the header's first match: its second match.
+        var second = Next((false, 0, 3));
+        (second!.Value.HeaderFooterIsFooter, second.Value.HeaderFooterParagraphIndex, second.Value.Start)
+            .Should().Be((false, 0, 8));
+
+        // Past the header's last match: the footer, then the body from its top, then the header again.
+        var footer = Next((false, 0, 11));
+        (footer!.Value.HeaderFooterIsFooter, footer.Value.Start).Should().Be((true, 0));
+        var body = Next((true, 0, 3));
+        body.Should().Be(new FindReplaceMatch(0, 5, 3));
+        body!.Value.IsInHeaderFooter.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FindNextMatch_WithTheCaretInTheBody_WalksTheHeaderBeforeWrappingToTheBodyStart()
+    {
+        var doc = BuildSampleDoc("cat then cat");
+        doc.Header = new HeaderFooter("cat");
+
+        // After the last body match: the header comes before the body's first match.
+        var afterLast = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "cat", new FindReplaceSearchOptions(), fromBlock: 0, fromOffset: 12);
+        afterLast!.Value.IsInHeaderFooter.Should().BeTrue();
+
+        // From the header's only match the walk wraps to the body's first.
+        var wrapped = FindReplaceDialogPlanner.FindNextMatch(
+            doc, "cat", new FindReplaceSearchOptions(), 0, 12, resumeHeaderFooterFrom: (false, 0, 3));
+        wrapped.Should().Be(new FindReplaceMatch(0, 0, 3));
+    }
+
+    [Fact]
     public void FindNextMatch_StillReturnsNullWhenTermIsNowhereInTheBodyOrHeaderOrFooter()
     {
         // Sibling/non-regression coverage: a document with header/footer content that just doesn't
