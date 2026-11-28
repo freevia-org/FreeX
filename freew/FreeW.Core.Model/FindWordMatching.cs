@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -733,10 +734,12 @@ public static class FindWordMatching
         "moist rigid sane serene severe sincere stern thorough vivid wide bright cute huge nice rich poor " +
         "great brave late old tall big new proud shy polite rude strange pure rare wise ripe lame crude vague");
 
-    private static readonly Dictionary<string, string[]> Entries = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, string[]> VerbEntries = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, HashSet<string>> FormToLemmas = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, HashSet<string>> VerbFormToLemmas = new(StringComparer.Ordinal);
+    // Filled once by the static constructor and only read afterwards; concurrent types keep the shared
+    // static collection guard (r517) satisfied without a lock on the read path.
+    private static readonly ConcurrentDictionary<string, string[]> Entries = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, string[]> VerbEntries = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, HashSet<string>> FormToLemmas = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, HashSet<string>> VerbFormToLemmas = new(StringComparer.Ordinal);
 
     static FindWordMatching()
     {
@@ -1014,7 +1017,7 @@ public static class FindWordMatching
             }
         }
 
-        static void Index(Dictionary<string, HashSet<string>> map, string form, string lemma)
+        static void Index(ConcurrentDictionary<string, HashSet<string>> map, string form, string lemma)
         {
             if (!map.TryGetValue(form, out var set))
                 map[form] = set = new HashSet<string>(StringComparer.Ordinal);
