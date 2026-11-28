@@ -234,7 +234,7 @@ public sealed partial class DocumentView
         return new FindReplaceMatch(
             address.BlockIndex,
             startOffset,
-            Math.Max(1, endOffset - startOffset),
+            Math.Max(0, endOffset - startOffset),
             address.RowIndex,
             address.GridColumn,
             first,
@@ -283,6 +283,49 @@ public sealed partial class DocumentView
         return endBlock == startBlock
             ? new FindReplaceMatch(startBlock, startOffset, Math.Max(0, endOffset - startOffset))
             : new FindReplaceMatch(startBlock, startOffset, 1, EndBlock: endBlock, EndOffset: endOffset);
+    }
+
+    /// <summary>
+    /// How many matches of <paramref name="matches"/> that come before <paramref name="match"/> are textless
+    /// objects (a comment mark) sitting at the same model offset in the same rendered paragraph as it: the
+    /// surface selects nothing for such a match, so this ordinal is the only thing that tells two adjacent
+    /// marks apart (see <see cref="FindReplaceBodyPlanner.WithMarkRun"/>). Zero for a match with text.
+    /// </summary>
+    internal int CountEarlierObjectMatchesAtSameOffset(
+        FindReplaceBodyProjection projection,
+        IReadOnlyList<(int Start, int Length)> matches,
+        (int Start, int Length) match)
+    {
+        if (!projection.TryGetRange(match.Start, match.Length, out var start, out var end)
+            || start.Paragraph is not { } paragraph
+            || end.Paragraph != paragraph)
+        {
+            return 0;
+        }
+
+        var offset = PlainOffsetInParagraph(paragraph, start);
+        if (PlainOffsetInParagraph(paragraph, end) != offset)
+            return 0;
+
+        var ordinal = 0;
+        for (var index = matches.Count - 1; index >= 0; index--)
+        {
+            var earlier = matches[index];
+            if (earlier.Start >= match.Start)
+                continue;
+            if (!projection.TryGetRange(earlier.Start, earlier.Length, out var earlierStart, out var earlierEnd)
+                || earlierStart.Paragraph != paragraph
+                || earlierEnd.Paragraph != paragraph
+                || PlainOffsetInParagraph(paragraph, earlierStart) != offset
+                || PlainOffsetInParagraph(paragraph, earlierEnd) != offset)
+            {
+                break;
+            }
+
+            ordinal++;
+        }
+
+        return ordinal;
     }
 
     /// <summary>

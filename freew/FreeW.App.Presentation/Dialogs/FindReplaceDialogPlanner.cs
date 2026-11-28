@@ -981,7 +981,7 @@ public static class FindReplaceDialogPlanner
             && (!location.IsMarkOnly || match.MarkRun == location.MarkRunIndex));
     }
 
-    private static Paragraph? ResolveParagraph(TextDocument document, FindReplaceMatch location)
+    internal static Paragraph? ResolveParagraph(TextDocument document, FindReplaceMatch location)
     {
         if (location.IsInHeaderFooter)
         {

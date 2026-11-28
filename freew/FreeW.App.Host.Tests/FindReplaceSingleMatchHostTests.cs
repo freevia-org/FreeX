@@ -284,6 +284,93 @@ public sealed class FindReplaceSingleMatchHostTests
         paragraphs.SelectMany(paragraph => paragraph.Runs).Should().NotContain(run => run.IsCommentReference);
     }
 
+    private static Paragraph AdjacentCommentsParagraph()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("one "));
+        paragraph.Runs.Add(Run.CommentReference(1));
+        paragraph.Runs.Add(Run.CommentReference(2));
+        paragraph.Runs.Add(new Run(" two"));
+        return paragraph;
+    }
+
+    private static string[] Labels(Paragraph paragraph) =>
+        paragraph.Runs.Select(run => run.IsCommentReference ? "c" + run.CommentId : run.Text).ToArray();
+
+    [StaFact]
+    public void Replace_OnTheSecondOfTwoAdjacentCommentMarks_ConsumesThatMarkNotTheFirst()
+    {
+        var view = Load(document => AddComments(document, 1, 2), AdjacentCommentsParagraph());
+
+        WithDialog(view, "^a", string.Empty, dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        Labels(view.Model.Blocks.OfType<Paragraph>().Single()).Should().Equal("one ", "c1", " two");
+    }
+
+    [StaFact]
+    public void Replace_OnTheFirstOfTwoAdjacentCommentMarks_ConsumesThatMarkAndMovesToTheSecond()
+    {
+        var view = Load(document => AddComments(document, 1, 2), AdjacentCommentsParagraph());
+
+        WithDialog(view, "^a", string.Empty, dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+            view.CommitToModel();
+            Labels(view.Model.Blocks.OfType<Paragraph>().Single()).Should().Equal("one ", "c2", " two");
+
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        Labels(view.Model.Blocks.OfType<Paragraph>().Single()).Should().Equal("one ", " two");
+    }
+
+    [StaFact]
+    public void Replace_OnTheSecondOfTwoAdjacentCommentMarks_WritesTheTextWhereThatMarkWas()
+    {
+        var view = Load(document => AddComments(document, 1, 2), AdjacentCommentsParagraph());
+
+        WithDialog(view, "^a", "|", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        Labels(view.Model.Blocks.OfType<Paragraph>().Single()).Should().Equal("one ", "c1", "|", " two");
+    }
+
+    [StaFact]
+    public void Replace_OnACommentMarkInATableCell_ConsumesTheMarkTheSecondOfTwoIncluded()
+    {
+        var cell = new TableCell();
+        cell.Paragraphs.Add(AdjacentCommentsParagraph());
+        var row = new TableRow();
+        row.Cells.Add(cell);
+        var table = new Table();
+        table.Rows.Add(row);
+        var view = Load(document => AddComments(document, 1, 2), new Paragraph("intro"), table);
+
+        WithDialog(view, "^a", string.Empty, dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        Labels(view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0].Paragraphs[0])
+            .Should().Equal("one ", "c1", " two");
+    }
+
     [StaFact]
     public void Replace_WithAPageBreakCode_WritesABreakRunNotTheControlCharacter()
     {

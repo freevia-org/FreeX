@@ -379,8 +379,12 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
 
         // Find Next landed on a body match that has no text extent (a comment mark is a textless run, so
         // selecting it selects nothing): its haystack span, so a following Replace still acts on it.
+        // _markCaret is where the caret sat in the haystack right after Find Next selected it: the surface
+        // parks it past every textless run at that spot, so it can lie beyond the match's own span when
+        // several objects are adjacent. The caret is "still on the mark" while it reads the same.
         private (int Start, int Length)? _markMatch;
         private FindReplaceSearchRequest? _markRequest;
+        private int _markCaret;
 
         public string? LastMatchStatus { get; private set; }
 
@@ -423,7 +427,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                     // select it, so the caret sitting on it is the selection.
                     var caret = projection.OffsetOf(editor.CaretPosition);
                     var (markStart, markLength) = _markMatch!.Value;
-                    selected = caret >= markStart && caret <= markStart + markLength
+                    selected = CaretIsOnMark(caret, markStart, markLength)
                         ? FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, search)
                             .FirstOrDefault(match => match.Start == markStart && match.Length == markLength)
                         : default;
@@ -615,8 +619,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             if (_markMatch is { } mark
                 && Equals(_markRequest, request)
                 && editor.Selection.IsEmpty
-                && from >= mark.Start
-                && from <= mark.Start + mark.Length)
+                && CaretIsOnMark(from, mark.Start, mark.Length))
             {
                 // The caret still sits on the textless match Find Next last reported: move past it.
                 from = mark.Start + mark.Length;
@@ -626,6 +629,10 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 || SelectStory(request, null)
                 || SelectBody(projection, request, 0);
         }
+
+        private bool CaretIsOnMark(int caretOffset, int markStart, int markLength) =>
+            caretOffset == _markCaret
+            || (caretOffset >= markStart && caretOffset <= markStart + markLength);
 
         private FindReplaceBodyProjection Project(FindReplaceSearchRequest request) =>
             editor.BuildFindReplaceProjection(
@@ -647,6 +654,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 {
                     _markMatch = (start, length);
                     _markRequest = request;
+                    _markCaret = projection.OffsetOf(editor.CaretPosition);
                 }
 
                 return true;
@@ -719,8 +727,21 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                 && projection.TryGetRange(match.Start, match.Length, out var cellStart, out var cellEnd))
             {
                 editor.CommitToModel();
-                if ((editor.TryLocateTableCellFindMatch(cellStart, cellEnd)
-                        ?? (needsModelEdit ? editor.TryLocateBodyFindMatch(cellStart, cellEnd) : null)) is { } location
+                var located = editor.TryLocateTableCellFindMatch(cellStart, cellEnd)
+                    ?? (needsModelEdit ? editor.TryLocateBodyFindMatch(cellStart, cellEnd) : null);
+                if (located is { Length: 0, IsSpanning: false } objectOnly)
+                {
+                    // Two textless objects at one offset select the same (empty) range on the surface; the
+                    // match's place among them names the one the planner consumes.
+                    var all = FindReplaceDialogPlanner.FindAllInSegments(projection.Segments, request.ToSearchRequest()).ToList();
+                    located = FindReplaceBodyPlanner.WithMarkRun(
+                        editor.Model,
+                        request.ToSearchRequest(),
+                        objectOnly,
+                        editor.CountEarlierObjectMatchesAtSameOffset(projection, all, match));
+                }
+
+                if (located is { } location
                     && FindReplaceBodyPlanner.PlanReplaceMatch(editor.Model, request, location, RevisionContext())
                         is { ReplacedCount: > 0 } command)
                 {

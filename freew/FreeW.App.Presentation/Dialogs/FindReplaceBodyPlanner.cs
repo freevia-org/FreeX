@@ -195,6 +195,49 @@ public static class FindReplaceBodyPlanner
     }
 
     /// <summary>
+    /// Names the object a textless match (see <see cref="FindReplaceMatch.IsMarkOnly"/>) covers, for a host
+    /// that can place the match only by offset and so cannot tell two objects at one offset apart (the WPF
+    /// surface selects nothing for a comment mark). <paramref name="ordinal"/> is the match's position among
+    /// the textless matches of <paramref name="request"/> at that same offset, in document order; the
+    /// returned location carries the run index of that match's first and last object, so
+    /// <see cref="PlanReplaceMatch"/> consumes that one. A location that is not a textless body, table-cell
+    /// or spanning-free match, or whose ordinal no match answers, comes back unchanged.
+    /// </summary>
+    public static FindReplaceMatch WithMarkRun(
+        TextDocument document,
+        FindReplaceSearchRequest request,
+        FindReplaceMatch location,
+        int ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (location.IsMarkOnly
+            || location.Length != 0
+            || location.IsSpanning
+            || ordinal < 0
+            || FindReplaceDialogPlanner.ResolveParagraph(document, location) is not { } paragraph)
+        {
+            return location;
+        }
+
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty)
+            return location;
+
+        var objects = MatchParagraph(document, paragraph, criteria, out _)
+            .Where(match => match.PlainLength == 0 && match.FirstMarkRunIndex >= 0 && match.PlainStart == location.Start)
+            .ToList();
+        return ordinal < objects.Count
+            ? location with
+            {
+                MarkRunIndex = objects[ordinal].FirstMarkRunIndex,
+                MarkEndRunIndex = objects[ordinal].LastMarkRunIndex,
+            }
+            : location;
+    }
+
+    /// <summary>
     /// The matches that run across at least one paragraph mark, each located by where it starts and ends
     /// (see <see cref="FindReplaceMatch.IsSpanning"/>), in document order. Only text a caret can be
     /// placed in is covered: top-level paragraph runs and the cells of top-level tables (a match never
@@ -828,6 +871,7 @@ public static class FindReplaceBodyPlanner
         // with it. They are taken out first so the text check below sees only what is left; if the
         // match is then declined they go back exactly where they were.
         var removedMarks = new List<(Paragraph Paragraph, List<(int Index, Run Run)> Removed)>();
+        int? markRunIndex = null;
         if (tracked is null)
         {
             for (var index = last; index >= first; index--)
@@ -837,6 +881,12 @@ public static class FindReplaceBodyPlanner
                     ranges[slot].Paragraph, match.Start, end, projection.FieldMarks);
                 removedMarks.Add((ranges[slot].Paragraph, removed));
                 ranges[slot] = (ranges[slot].Paragraph, ranges[slot].From, Math.Max(ranges[slot].From, ranges[slot].To - width));
+
+                // A match that covered only objects in its first paragraph (no text of its own there): the
+                // replacement takes the place of the first object it consumed among the runs, as in Word,
+                // not the front of every object that shares its offset.
+                if (index == first && removed.Count > 0 && ranges[slot].To <= ranges[slot].From)
+                    markRunIndex = removed.Min(entry => entry.Index);
             }
         }
 
@@ -934,7 +984,14 @@ public static class FindReplaceBodyPlanner
             if (pieces[i].Length == 0)
                 continue;
 
-            offset = InsertPiece(target, offset, pieces[i], inherited, tracked, inserted);
+            offset = InsertPiece(
+                target,
+                offset,
+                pieces[i],
+                inherited,
+                tracked,
+                inserted,
+                i == firstPiece && i == 0 ? markRunIndex : null);
         }
 
         if (plan.Format is { } format)
@@ -968,9 +1025,11 @@ public static class FindReplaceBodyPlanner
         string piece,
         RunFormatting inherited,
         FindReplaceRevisionContext? tracked,
-        List<(Paragraph Paragraph, int From, int To)> inserted)
+        List<(Paragraph Paragraph, int From, int To)> inserted,
+        int? atRunIndex = null)
     {
-        if (piece.AsSpan().IndexOfAny(FindSpecialCodes.ManualPageBreak, FindSpecialCodes.ColumnBreak) < 0)
+        if (atRunIndex is null
+            && piece.AsSpan().IndexOfAny(FindSpecialCodes.ManualPageBreak, FindSpecialCodes.ColumnBreak) < 0)
         {
             var after = tracked is null
                 ? RevisionEditPlanner.InsertText(target, offset, piece, inherited)
@@ -1010,12 +1069,24 @@ public static class FindReplaceBodyPlanner
             block.Add(run);
         }
 
-        var cursor = RevisionEditPlanner.InsertRunAtOffset(target, offset, block[0]);
-        var at = 0;
-        while (at < target.Runs.Count && !ReferenceEquals(target.Runs[at], block[0]))
-            at++;
-        for (var i = 1; i < block.Count; i++)
-            target.Runs.Insert(at + i, block[i]);
+        int cursor;
+        if (atRunIndex is { } runIndex)
+        {
+            // The match consumed objects that sat at this offset: the written runs take the first consumed
+            // object's place among the runs, so the objects that stay keep their order around them. The
+            // PlainText offset is the same wherever among zero-width runs they land.
+            target.Runs.InsertRange(Math.Clamp(runIndex, 0, target.Runs.Count), block);
+            cursor = Math.Clamp(offset, 0, target.PlainText.Length - block.Sum(run => run.Text.Length));
+        }
+        else
+        {
+            cursor = RevisionEditPlanner.InsertRunAtOffset(target, offset, block[0]);
+            var at = 0;
+            while (at < target.Runs.Count && !ReferenceEquals(target.Runs[at], block[0]))
+                at++;
+            for (var i = 1; i < block.Count; i++)
+                target.Runs.Insert(at + i, block[i]);
+        }
 
         foreach (var run in block)
         {

@@ -289,6 +289,74 @@ public sealed class FindReplaceBodyPlannerTests
         Remaining(first).Should().Equal(new byte[] { 2 }, "the location named the first graphic");
     }
 
+    private static string[] RunLabels(Paragraph paragraph) =>
+        paragraph.Runs
+            .Select(run => run.Image is { } image
+                ? "img" + image.Bytes[0]
+                : run.IsCommentReference
+                    ? "c" + run.CommentId
+                    : run.Text)
+            .ToArray();
+
+    [Fact]
+    public void PlanReplaceMatch_OfAMarkOnlyLocation_WritesTheReplacementWhereThatObjectWas()
+    {
+        static Run Image(byte id) => Run.FromImage(new InlineImage([id], 10, 10));
+
+        // Consuming the SECOND of two objects at one offset: the text takes its place after the first,
+        // not the front of both.
+        var second = Doc(Runs(new Run("a"), Image(1), Image(2), new Run("b")));
+        FindReplaceBodyPlanner.PlanReplaceMatch(
+                second,
+                new FindReplaceReplaceRequest("^g", "[x]", NoOptions),
+                new FindReplaceMatch(0, 1, 0, MarkRunIndex: 2, MarkEndRunIndex: 2))
+            .Apply(new Context(second));
+        RunLabels((Paragraph)second.Blocks[0]).Should().Equal("a", "img1", "[x]", "b");
+
+        // The first one: the text takes its place before the second.
+        var first = Doc(Runs(new Run("a"), Image(1), Image(2), new Run("b")));
+        FindReplaceBodyPlanner.PlanReplaceMatch(
+                first,
+                new FindReplaceReplaceRequest("^g", "[y]", NoOptions),
+                new FindReplaceMatch(0, 1, 0, MarkRunIndex: 1, MarkEndRunIndex: 1))
+            .Apply(new Context(first));
+        RunLabels((Paragraph)first.Blocks[0]).Should().Equal("a", "[y]", "img2", "b");
+    }
+
+    [Fact]
+    public void ReplaceAllOfAdjacentObjects_WritesEachReplacementWhereItsObjectWas()
+    {
+        static Run Image(byte id) => Run.FromImage(new InlineImage([id], 10, 10));
+
+        var document = Doc(Runs(new Run("a"), Image(1), Run.CommentReference(7), Image(2), new Run("b")));
+
+        Replace(document, Request("^g", "x")).ReplacedCount.Should().Be(2);
+
+        // The comment mark between them is not a match and stays between the two written texts.
+        RunLabels((Paragraph)document.Blocks[0]).Should().Equal("a", "x", "c7", "x", "b");
+    }
+
+    [Fact]
+    public void WithMarkRun_NamesTheObjectByItsPlaceAmongTheTextlessMatchesAtOneOffset()
+    {
+        var document = Doc(Runs(new Run("a"), Run.CommentReference(1), Run.CommentReference(2), new Run("b")));
+        var request = new FindReplaceSearchRequest("^a", NoOptions);
+        var location = new FindReplaceMatch(0, 1, 0);
+
+        var firstObject = FindReplaceBodyPlanner.WithMarkRun(document, request, location, 0);
+        var secondObject = FindReplaceBodyPlanner.WithMarkRun(document, request, location, 1);
+
+        (firstObject.MarkRunIndex, firstObject.MarkEndRunIndex).Should().Be((1, 1));
+        (secondObject.MarkRunIndex, secondObject.MarkEndRunIndex).Should().Be((2, 2));
+        FindReplaceBodyPlanner.WithMarkRun(document, request, location, 2).Should().Be(location, "no match answers it");
+        FindReplaceBodyPlanner.WithMarkRun(document, request, location with { Length = 1 }, 1)
+            .Should().Be(location with { Length = 1 }, "a match with text is not an object");
+
+        FindReplaceBodyPlanner.PlanReplaceMatch(document, new FindReplaceReplaceRequest("^a", "", NoOptions), secondObject)
+            .Apply(new Context(document));
+        RunLabels((Paragraph)document.Blocks[0]).Should().Equal("a", "c1", "b");
+    }
+
     [Fact]
     public void NoteMarkNumber_IsNotSearchableText()
     {
