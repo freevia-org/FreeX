@@ -104,7 +104,8 @@ public sealed class FindReplaceDialogOptionsTests
         ran.Should().BeTrue();
 
         phonetic.Should().Be("X and X met Jones");
-        forms.Should().Be("He X, X and is X; a X");
+        // "runner" is a derived noun, not an inflection of "run", so it is left alone.
+        forms.Should().Be("He X, X and is X; a runner");
     }
 
     [Fact]
