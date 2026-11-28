@@ -359,7 +359,8 @@ public sealed class FindReplaceWordParityHostTests
 
         var forms = BuildView(new Paragraph("He runs, ran and is running; a runner"));
         ReplaceAll(forms, "run", "X", dialog => dialog.SetOptionForTest(FindReplaceOptionKind.FindAllWordForms, true));
-        BodyText(forms).Should().Equal("He X, X and is X; a X");
+        // "runner" is a derived noun, not an inflection of "run", so it is left alone.
+        BodyText(forms).Should().Equal("He X, X and is X; a runner");
     }
 
     [StaFact]
