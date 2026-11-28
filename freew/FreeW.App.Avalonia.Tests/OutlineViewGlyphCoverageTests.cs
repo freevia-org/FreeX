@@ -22,16 +22,43 @@ public sealed class OutlineViewGlyphCoverageTests
             .Distinct()
             .ToArray();
 
-    [Fact]
-    public void Planner_glyphs_resolve_to_a_real_face_through_the_platform_fallback_chain()
+    /// <summary>
+    /// Returns a description of every glyph for which the platform fallback chain does not resolve a face that
+    /// contains the code point. This is the assertion seam: it takes the glyph list so a test can prove it reports
+    /// an uncoverable glyph without editing the production planner data.
+    /// </summary>
+    private static string[] FindUncoveredGlyphs(IEnumerable<string> glyphs)
     {
-        foreach (var glyph in SharedGlyphs())
+        var uncovered = new List<string>();
+        foreach (var glyph in glyphs)
         {
             var codePoint = char.ConvertToUtf32(glyph, 0);
             using var matched = SKFontManager.Default.MatchCharacter(codePoint);
-            matched.Should().NotBeNull($"U+{codePoint:X4} ({glyph}) needs a platform fallback face or it renders as tofu");
-            matched!.ContainsGlyph(codePoint).Should().BeTrue(
-                $"fallback face '{matched.FamilyName}' must contain U+{codePoint:X4} ({glyph})");
+            if (matched is null)
+            {
+                uncovered.Add($"U+{codePoint:X4} ({glyph}) needs a platform fallback face or it renders as tofu");
+            }
+            else if (!matched.ContainsGlyph(codePoint))
+            {
+                uncovered.Add($"fallback face '{matched.FamilyName}' must contain U+{codePoint:X4} ({glyph})");
+            }
         }
+
+        return uncovered.ToArray();
+    }
+
+    [Fact]
+    public void Planner_glyphs_resolve_to_a_real_face_through_the_platform_fallback_chain()
+    {
+        FindUncoveredGlyphs(SharedGlyphs()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Coverage_check_reports_a_code_point_no_installed_face_contains()
+    {
+        // U+10FFFF is a Unicode noncharacter: no font covers it, so the check must flag it.
+        var uncovered = FindUncoveredGlyphs([char.ConvertFromUtf32(0x10FFFF)]);
+
+        uncovered.Should().ContainSingle().Which.Should().Contain("U+10FFFF");
     }
 }
