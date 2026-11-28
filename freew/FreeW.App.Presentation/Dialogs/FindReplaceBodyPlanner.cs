@@ -11,6 +11,32 @@ namespace FreeW.App.Presentation.Dialogs;
 public readonly record struct FindReplaceNestedPosition(int Block, int Flow, int Hay);
 
 /// <summary>
+/// One hop on the way to the cell a nested-table match lives in: the row and the (raw) cell index in that
+/// row, and, except on the last hop, which of that cell's <c>NestedTables</c> the path descends into
+/// (<c>-1</c> on the last hop). The first hop is a cell of the top-level table.
+/// </summary>
+public readonly record struct FindReplaceNestedStep(int Row, int Cell, int NestedIndex);
+
+/// <summary>
+/// How much of the Find Next walk <c>FindReplaceDialogPlanner.FindNextMatch</c> covers. A host that also walks the matches in nested tables (which sit between the body and the
+/// header/footer) composes the walk from the stages; the others take <see cref="Full"/>.
+/// </summary>
+public enum FindReplaceWalkStage
+{
+    /// <summary>The body from the caret, the default header/footer, then the body again from its top.</summary>
+    Full,
+
+    /// <summary>Only the rest of the body from the caret (no wrap, no header/footer).</summary>
+    Body,
+
+    /// <summary>Only the default header/footer, from the resume position or from its start.</summary>
+    HeaderFooter,
+
+    /// <summary>Only the wrap: the body from its top up to the caret.</summary>
+    WrappedBody,
+}
+
+/// <summary>
 /// A match inside a table nested in a table cell (see <see cref="FindReplaceBodyPlanner.FindNextNested"/>).
 /// <see cref="HayStart"/>/<see cref="HayLength"/> address it in its flow's projected haystack (what
 /// <see cref="FindReplaceBodyPlanner.PlanReplaceNested"/> re-finds it by); the paragraph and offset members
@@ -26,7 +52,8 @@ public sealed record FindReplaceNestedMatch(
     int LastParagraph,
     int EndOffset,
     string MatchedText,
-    string Context)
+    string Context,
+    IReadOnlyList<FindReplaceNestedStep>? Path = null)
 {
     /// <summary>The position just past the match, where the walk resumes when it is not replaced.</summary>
     public FindReplaceNestedPosition End => new(Block, Flow, HayStart + HayLength);
@@ -281,7 +308,8 @@ public static class FindReplaceBodyPlanner
                         last,
                         projection.Maps[last].ToPlain(end),
                         projection.Text.Substring(start, length),
-                        FindReplaceStoryPlanner.Excerpt(projection.Text, start, length));
+                        FindReplaceStoryPlanner.Excerpt(projection.Text, start, length),
+                        flow.Path);
                 }
             }
         }
@@ -667,18 +695,29 @@ public static class FindReplaceBodyPlanner
             }
         }
 
-        private static IEnumerable<Flow> TableFlows(Table table)
+        private static IEnumerable<Flow> TableFlows(Table table, IReadOnlyList<FindReplaceNestedStep>? parent = null)
         {
-            foreach (var row in table.Rows)
+            for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
             {
-                foreach (var cell in row.Cells)
+                var row = table.Rows[rowIndex];
+                for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
                 {
+                    var cell = row.Cells[cellIndex];
                     if (cell.Paragraphs.Count > 0)
-                        yield return new Flow(cell.Paragraphs, cell.Paragraphs.ToList());
-                    foreach (var nested in cell.NestedTables)
                     {
-                        foreach (var flow in TableFlows(nested))
-                            yield return flow with { Nested = true };
+                        yield return new Flow(
+                            cell.Paragraphs,
+                            cell.Paragraphs.ToList(),
+                            parent is not null,
+                            [.. parent ?? [], new FindReplaceNestedStep(rowIndex, cellIndex, -1)]);
+                    }
+
+                    for (var nestedIndex = 0; nestedIndex < cell.NestedTables.Count; nestedIndex++)
+                    {
+                        IReadOnlyList<FindReplaceNestedStep> hops =
+                            [.. parent ?? [], new FindReplaceNestedStep(rowIndex, cellIndex, nestedIndex)];
+                        foreach (var flow in TableFlows(cell.NestedTables[nestedIndex], hops))
+                            yield return flow;
                     }
                 }
             }
@@ -689,7 +728,11 @@ public static class FindReplaceBodyPlanner
     /// One flow: its paragraphs in order and the list they live in. <paramref name="Nested"/> is true for the
     /// cells of a table that sits inside a cell of another table (at any depth).
     /// </summary>
-    private sealed record Flow(IList Container, List<Paragraph> Paragraphs, bool Nested = false);
+    private sealed record Flow(
+        IList Container,
+        List<Paragraph> Paragraphs,
+        bool Nested = false,
+        IReadOnlyList<FindReplaceNestedStep>? Path = null);
 
     private static IEnumerable<Unit> Units(IReadOnlyList<Block> blocks)
     {

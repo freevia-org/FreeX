@@ -3487,9 +3487,9 @@ public sealed partial class MainWindow : Window
     {
         if (_scroller is null)
             return;
-        var target = Math.Max(0, _editor.CaretTop - 40);
+        var target = Math.Max(0, _editor.ScrollTargetTop - 40);
         var horizontal = _viewSession.CurrentDepth.IsSideToSideActive
-            ? Math.Max(0, _editor.CaretLeft - 40)
+            ? Math.Max(0, _editor.ScrollTargetLeft - 40)
             : _scroller.Offset.X;
         _scroller.Offset = new Vector(horizontal, target);
     }

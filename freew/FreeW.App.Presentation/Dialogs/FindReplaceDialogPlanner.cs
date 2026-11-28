@@ -885,7 +885,8 @@ public static class FindReplaceDialogPlanner
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null,
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null,
-        int resumeAfterMarkRun = -1)
+        int resumeAfterMarkRun = -1,
+        FindReplaceWalkStage stage = FindReplaceWalkStage.Full)
     {
         ArgumentNullException.ThrowIfNull(document);
         if (string.IsNullOrEmpty(term))
@@ -900,7 +901,8 @@ public static class FindReplaceDialogPlanner
             fromOffset,
             fromTableCell,
             resumeHeaderFooterFrom,
-            resumeAfterMarkRun);
+            resumeAfterMarkRun,
+            stage);
     }
 
     /// <summary>
@@ -915,7 +917,8 @@ public static class FindReplaceDialogPlanner
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell = null,
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom = null,
-        int resumeAfterMarkRun = -1)
+        int resumeAfterMarkRun = -1,
+        FindReplaceWalkStage stage = FindReplaceWalkStage.Full)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(request);
@@ -923,7 +926,7 @@ public static class FindReplaceDialogPlanner
         {
             return FindNextMatch(
                 document, request.Term, request.Options, fromBlock, fromOffset, fromTableCell,
-                resumeHeaderFooterFrom, resumeAfterMarkRun);
+                resumeHeaderFooterFrom, resumeAfterMarkRun, stage);
         }
 
         var criteria = request.ToCriteria();
@@ -939,7 +942,8 @@ public static class FindReplaceDialogPlanner
             fromOffset,
             fromTableCell,
             resumeHeaderFooterFrom,
-            resumeAfterMarkRun);
+            resumeAfterMarkRun,
+            stage);
     }
 
     /// <summary>
@@ -1077,8 +1081,40 @@ public static class FindReplaceDialogPlanner
         int fromOffset,
         (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell,
         (bool IsFooter, int ParagraphIndex, int Offset)? resumeHeaderFooterFrom,
-        int resumeAfterMarkRun)
+        int resumeAfterMarkRun,
+        FindReplaceWalkStage stage = FindReplaceWalkStage.Full)
     {
+        // A host that walks more than the body and the header/footer (the matches in nested tables sit
+        // between the two) composes the walk itself, one stage at a time.
+        if (stage != FindReplaceWalkStage.Full)
+        {
+            return stage switch
+            {
+                FindReplaceWalkStage.Body => document.Blocks.Count == 0
+                    ? null
+                    : FindNextBodyMatchCore(
+                        document,
+                        matchesIn,
+                        spanning,
+                        Math.Clamp(fromBlock, 0, document.Blocks.Count - 1),
+                        fromOffset,
+                        fromTableCell,
+                        resumeAfterMarkRun),
+                FindReplaceWalkStage.HeaderFooter => FindInDefaultHeaderFooter(
+                    document, matchesIn, resumeHeaderFooterFrom, resumeAfterMarkRun),
+                _ => document.Blocks.Count == 0
+                    ? null
+                    : FindWrappedBodyMatchCore(
+                        document,
+                        matchesIn,
+                        spanning,
+                        Math.Clamp(fromBlock, 0, document.Blocks.Count - 1),
+                        fromOffset,
+                        fromTableCell,
+                        resumeAfterMarkRun),
+            };
+        }
+
         // The caret is in the default header/footer: continue there from it (header, then footer), then
         // the body from its top, then the header/footer from its top -- the order the WPF host walks its
         // stories, wrapping back to the first match.
@@ -1132,6 +1168,24 @@ public static class FindReplaceDialogPlanner
         if (FindInDefaultHeaderFooter(document, matchesIn) is { } story)
             return story;
 
+        return FindWrappedBodyMatchCore(
+            document, matchesIn, spanning, startBlock, fromOffset, fromTableCell, resumeAfterMarkRun);
+    }
+
+    /// <summary>
+    /// The wrap of the body walk: the matches from the top of the body up to where the walk started
+    /// (<paramref name="startBlock"/>, <paramref name="fromOffset"/>, <paramref name="fromTableCell"/>),
+    /// including those in the starting block that precede the starting offset.
+    /// </summary>
+    private static FindReplaceMatch? FindWrappedBodyMatchCore(
+        TextDocument document,
+        Func<Paragraph, IEnumerable<FindSpan>> matchesIn,
+        IReadOnlyList<FindReplaceMatch> spanning,
+        int startBlock,
+        int fromOffset,
+        (int Row, int Col, int ParagraphIndex, int Offset)? fromTableCell,
+        int resumeAfterMarkRun)
+    {
         for (var blockIndex = 0; blockIndex < startBlock; blockIndex++)
         {
             var block = document.Blocks[blockIndex];

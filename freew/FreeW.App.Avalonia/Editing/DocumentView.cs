@@ -775,22 +775,147 @@ public sealed partial class DocumentView : Control
         var resumeAfterMarkRun = CurrentFindMarkMatch() is { } onMark
             ? onMark.MarkEndRunIndex ?? -1
             : -1;
-        if (FindReplaceDialogPlanner.FindNextMatch(
-                _doc,
-                request,
-                _caret.Block,
-                _caret.Offset,
-                CurrentFindReplaceTableCellPosition(),
-                CurrentFindReplaceHeaderFooterPosition(),
-                resumeAfterMarkRun: resumeAfterMarkRun) is not { } hit)
+
+        // The walk the WPF host makes: the body from the caret, the matches in tables nested in a table
+        // cell (this surface does not lay them out, so they cannot hold a caret; the shared body planner
+        // walks them in the model), the default header/footer, then the body from its top.
+        FindReplaceMatch? Stage(
+            FindReplaceWalkStage stage,
+            int block,
+            int offset,
+            (int Row, int Col, int ParagraphIndex, int Offset)? cell,
+            (bool IsFooter, int ParagraphIndex, int Offset)? headerFooter,
+            int markRun) =>
+            FindReplaceDialogPlanner.FindNextMatch(_doc, request, block, offset, cell, headerFooter, markRun, stage);
+
+        FindNestedMatch = null;
+        FindReplaceMatch? hit;
+        FindReplaceNestedMatch? nested = null;
+        var headerFooterPosition = CurrentFindReplaceHeaderFooterPosition();
+        if (CurrentFindNested(request) is { } walk)
+        {
+            // Find Next is on a nested-table match already: on past it, then the stories and the body.
+            nested = FindReplaceBodyPlanner.FindNextNested(_doc, request, walk.Resume);
+            hit = nested is not null
+                ? null
+                : Stage(FindReplaceWalkStage.HeaderFooter, 0, 0, null, null, -1)
+                    ?? Stage(FindReplaceWalkStage.Body, 0, 0, null, null, -1);
+            nested ??= hit is null ? FindReplaceBodyPlanner.FindNextNested(_doc, request) : null;
+        }
+        else if (headerFooterPosition is not null)
+        {
+            hit = Stage(FindReplaceWalkStage.HeaderFooter, _caret.Block, _caret.Offset, null, headerFooterPosition, resumeAfterMarkRun)
+                ?? Stage(FindReplaceWalkStage.Body, 0, 0, null, null, -1);
+            nested = hit is null ? FindReplaceBodyPlanner.FindNextNested(_doc, request) : null;
+            hit ??= nested is null ? Stage(FindReplaceWalkStage.HeaderFooter, 0, 0, null, null, -1) : null;
+        }
+        else
+        {
+            var cell = CurrentFindReplaceTableCellPosition();
+            hit = Stage(FindReplaceWalkStage.Body, _caret.Block, _caret.Offset, cell, null, resumeAfterMarkRun);
+            nested = hit is null ? FindReplaceBodyPlanner.FindNextNested(_doc, request) : null;
+            hit ??= nested is null
+                ? Stage(FindReplaceWalkStage.HeaderFooter, 0, 0, null, null, -1)
+                    ?? Stage(FindReplaceWalkStage.WrappedBody, _caret.Block, _caret.Offset, cell, null, resumeAfterMarkRun)
+                : null;
+        }
+
+        if (nested is { } reached)
+        {
+            ShowFindNestedMatch(request, reached, reached.End);
+            return true;
+        }
+
+        _findNested = null;
+        if (hit is not { } found)
             return false;
 
-        SelectFindReplaceMatch(hit);
+        SelectFindReplaceMatch(found);
         Focus();
         InvalidateVisual();
         ScrollToCaretRequested?.Invoke();
         return true;
     }
+
+    /// <summary>
+    /// Where a Find Next that landed in a table nested in a table cell stands: the request it answered, what
+    /// it found, where the walk resumes (past the match, or past the text a Replace wrote) and the caret as it
+    /// was left. The match is not selected (the caret stays where it was), so any caret move or edit ends it.
+    /// </summary>
+    private sealed record FindNestedState(
+        FindReplaceSearchRequest Request,
+        FindReplaceNestedMatch Match,
+        FindReplaceNestedPosition Resume,
+        FindMarkCaretState Caret);
+
+    private FindNestedState? _findNested;
+
+    /// <summary>
+    /// The nested-table match the last Find Next / Replace reported (the dialog says where it is in its
+    /// status line), or null when it landed anywhere else or found nothing.
+    /// </summary>
+    internal FindReplaceNestedMatch? FindNestedMatch { get; private set; }
+
+    private FindNestedState? CurrentFindNested(FindReplaceSearchRequest request) =>
+        _findNested is { } state && Equals(state.Request, request) && state.Caret == CaptureFindMarkCaret()
+            ? state
+            : null;
+
+    private void ShowFindNestedMatch(
+        FindReplaceSearchRequest request,
+        FindReplaceNestedMatch match,
+        FindReplaceNestedPosition resume)
+    {
+        _findNested = new FindNestedState(request, match, resume, CaptureFindMarkCaret());
+        FindNestedMatch = match;
+
+        // This surface does not lay a nested table out (its text is model-only here), so no caret or
+        // selection can sit in it: the cue is the cell of the top-level table that holds it, brought into
+        // view and shaded until the caret moves or the document is edited.
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        Focus();
+        InvalidateVisual();
+        ScrollToCaretRequested?.Invoke();
+    }
+
+    /// <summary>
+    /// The cell of the top-level table that holds the nested table the last Find Next reached, in control
+    /// coordinates, while that cue is live (the caret has not moved and the document has not been edited).
+    /// </summary>
+    internal Rect? FindNestedCueRect()
+    {
+        if (_findNested is not { Match: { Path: { Count: > 0 } path } match } state
+            || state.Caret != CaptureFindMarkCaret()
+            || match.Block < 0
+            || match.Block >= _doc.Blocks.Count
+            || _doc.Blocks[match.Block] is not Table table
+            || path[0].Row < 0
+            || path[0].Row >= table.Rows.Count)
+        {
+            return null;
+        }
+
+        foreach (var projected in TableGridProjection.ProjectRow(table.Rows[path[0].Row]))
+        {
+            if (projected.CellIndex != path[0].Cell)
+                continue;
+
+            foreach (var hit in _cellHits)
+            {
+                if (hit.Block == match.Block && hit.Row == path[0].Row && hit.Col == projected.StartColumn)
+                    return hit.Rect;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Where the scroll viewer brings the view to after Find Next: the nested-table cue, else the caret.</summary>
+    internal double ScrollTargetTop => FindNestedCueRect() is { } cue ? cue.Y : CaretTop;
+
+    /// <summary>The left edge counterpart of <see cref="ScrollTargetTop"/>.</summary>
+    internal double ScrollTargetLeft => FindNestedCueRect() is { } cue ? cue.X : CaretLeft;
 
     /// <summary>
     /// The table-cell position Find Next should resume from when the caret is currently sitting inside a
@@ -1092,10 +1217,51 @@ public sealed partial class DocumentView : Control
         if (search.ToCriteria().IsEmpty)
             return false;
 
-        if (!IsEditingLocked && SelectionIsFindMatch(search))
+        if (!IsEditingLocked && CurrentFindNested(search) is { } nested)
+            ReplaceNestedFindMatch(request, nested);
+        else if (!IsEditingLocked && SelectionIsFindMatch(search))
             ReplaceSelectedFindMatch(request);
 
         return FindNext(search);
+    }
+
+    /// <summary>
+    /// Replaces the nested-table match Find Next reported through the shared body planner (the edit Replace
+    /// All makes to it, one undo step) and sets the walk to resume past what was written.
+    /// </summary>
+    private void ReplaceNestedFindMatch(FindReplaceReplaceRequest request, FindNestedState reported)
+    {
+        var search = request.ToSearchRequest();
+        var match = reported.Match;
+        var start = new FindReplaceNestedPosition(match.Block, match.Flow, match.HayStart);
+        if (FindReplaceBodyPlanner.FindNextNested(_doc, search, start) is not { } current
+            || current.Block != match.Block
+            || current.Flow != match.Flow
+            || current.HayStart != match.HayStart
+            || current.HayLength != match.HayLength)
+        {
+            return;
+        }
+
+        var tracked = TrackChangesEnabled
+            ? new FindReplaceRevisionContext(RevisionAuthor, _editingSession.RevisionDateXmlForEdit())
+            : null;
+        var plan = FindReplaceDialogPlanner.PlanReplacement(request, current.MatchedText);
+        var command = FindReplaceBodyPlanner.PlanReplaceNested(_doc, request, current, tracked);
+        var resume = current.HayStart + current.HayLength;
+        if (command.ReplacedCount > 0)
+        {
+            _bus.Execute(command);
+
+            // Untracked the written text replaces the match; tracked the struck-through original stays in
+            // the haystack (masked) next to it.
+            if (plan.ReplacesText)
+                resume = current.HayStart + plan.Text.Length + (tracked is null ? 0 : current.HayLength);
+        }
+
+        // The edit ended the cue; the walk carries on from past what was written.
+        _findNested = new FindNestedState(
+            search, current, new FindReplaceNestedPosition(current.Block, current.Flow, resume), CaptureFindMarkCaret());
     }
 
     private bool SelectionIsFindMatch(FindReplaceSearchRequest search) =>
@@ -12432,6 +12598,11 @@ public sealed partial class DocumentView : Control
                 context.FillRectangle(CellBlockSelectionBrush, cellRect);
             }
         }
+
+        // Find Next landed in a table nested in a cell (a table this surface does not lay out): shade the
+        // top-level cell that holds it until the caret moves or the document is edited.
+        if (FindNestedCueRect() is { } nestedFindCue)
+            context.FillRectangle(CellBlockSelectionBrush, nestedFindCue);
 
         // AV-TAB: draw tab leader spans (dots/dashes/underline) before the glyph text.
         foreach (var (x1, x2, spanY, lineH, leader, spanFmt) in _tabLeaderSpans)
@@ -26681,6 +26852,8 @@ public sealed partial class DocumentView : Control
 
     private void OnModelChanged()
     {
+        // An edit ends the nested-table cue (and the walk Find Next had on it).
+        _findNested = null;
         ClearBitmapCache();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();

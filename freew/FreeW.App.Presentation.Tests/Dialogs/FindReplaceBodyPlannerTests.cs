@@ -391,6 +391,70 @@ public sealed class FindReplaceBodyPlannerTests
     }
 
     [Fact]
+    public void FindNextNested_NamesTheCellsTheMatchSitsIn_FromTheTopLevelCellDownTheNesting()
+    {
+        // outer table: one row, cells [0] "plain" and [1] holding nested table A (row 1, cell 1 holds table B).
+        var inner = TableOf(["deep cat"]);
+        var middle = new Table();
+        var middleTop = new TableRow();
+        middleTop.Cells.Add(new TableCell { Paragraphs = { new Paragraph("none") } });
+        var middleBottom = new TableRow();
+        middleBottom.Cells.Add(new TableCell { Paragraphs = { new Paragraph("none") } });
+        var carrier = new TableCell { Paragraphs = { new Paragraph("carrier") } };
+        carrier.NestedTables.Add(inner);
+        middleBottom.Cells.Add(carrier);
+        middle.Rows.Add(middleTop);
+        middle.Rows.Add(middleBottom);
+        var outer = new Table();
+        var outerRow = new TableRow();
+        outerRow.Cells.Add(new TableCell { Paragraphs = { new Paragraph("plain") } });
+        var host = new TableCell { Paragraphs = { new Paragraph("host") } };
+        host.NestedTables.Add(middle);
+        outerRow.Cells.Add(host);
+        outer.Rows.Add(outerRow);
+        var document = Doc(new Paragraph("lead"), outer);
+
+        var match = FindReplaceBodyPlanner.FindNextNested(
+            document, new FindReplaceSearchRequest("deep cat", NoOptions))!;
+
+        match.Block.Should().Be(1);
+        match.Path.Should().Equal(
+            new FindReplaceNestedStep(0, 1, 0),
+            new FindReplaceNestedStep(1, 1, 0),
+            new FindReplaceNestedStep(0, 0, -1));
+    }
+
+    [Fact]
+    public void FindNextMatch_Stages_CoverTheBodyTheHeaderFooterAndTheWrapSeparately()
+    {
+        var document = Doc(new Paragraph("cat zero"), new Paragraph("cat one"));
+        document.Header = new HeaderFooter();
+        document.Header.Paragraphs.Add(new Paragraph("cat header"));
+        var request = new FindReplaceSearchRequest("cat", NoOptions);
+
+        var body = FindReplaceDialogPlanner.FindNextMatch(
+            document, request, 1, 0, stage: FindReplaceWalkStage.Body)!.Value;
+        body.Block.Should().Be(1, "the body stage walks forward from the caret only");
+        body.IsInHeaderFooter.Should().BeFalse();
+        FindReplaceDialogPlanner.FindNextMatch(
+            document, request, 1, 0, stage: FindReplaceWalkStage.Body).Should().NotBeNull();
+        FindReplaceDialogPlanner.FindNextMatch(
+            document, request, 1, 8, stage: FindReplaceWalkStage.Body).Should().BeNull("there is no wrap and no header");
+
+        FindReplaceDialogPlanner.FindNextMatch(
+            document, request, 1, 8, stage: FindReplaceWalkStage.HeaderFooter)!.Value
+            .IsInHeaderFooter.Should().BeTrue();
+
+        var wrapped = FindReplaceDialogPlanner.FindNextMatch(
+            document, request, 1, 8, stage: FindReplaceWalkStage.WrappedBody)!.Value;
+        (wrapped.Block, wrapped.IsInHeaderFooter).Should().Be((0, false), "the wrap is the body from its top");
+
+        // The full walk is the three stages in that order, as it always was.
+        FindReplaceDialogPlanner.FindNextMatch(document, request, 1, 8)!.Value
+            .IsInHeaderFooter.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlanReplaceNested_MakesReplaceAllsEditForThatMatchOnly()
     {
         var document = Doc(WithNested(TableOf(["outer cat"]), TableOf(["cat and cat"])));
