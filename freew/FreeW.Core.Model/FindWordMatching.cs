@@ -220,13 +220,20 @@ public static class FindWordMatching
                 {
                     if (next == 'H')
                     {
-                        if (i + 2 >= n)
+                        if (IsFSoundGh(w, i))
                         {
-                            // Word-final GH: "laugh"/"tough"-style F after U (but not OUGH); otherwise silent.
+                            // "tough"/"rough"/"enough"/"cough"/"laugh"/"draught": GH is /f/ (also inside
+                            // "laughing", "roughly", "toughen").
+                            key.Append('F');
+                        }
+                        else if (i + 2 >= n)
+                        {
+                            // Other word-final GH ("though", "through", "high", "weigh") is silent, except
+                            // the AUGH/UGH-after-non-O shape handled below.
                             if (prev == 'U' && At(i - 2) != 'O')
                                 key.Append('F');
                         }
-                        else if (Vowel(next2))
+                        else if (Vowel(next2) && prev != 'I')
                         {
                             key.Append('K');
                         }
@@ -327,6 +334,26 @@ public static class FindWordMatching
         }
 
         return key.ToString();
+    }
+
+    // Word stems whose "GH" is pronounced /f/. Anchored at the start of the word so that "though",
+    // "through", "thorough", "borough", "bought", "brought" and "slaughter" keep a silent GH.
+    private static readonly string[] FSoundGhStems =
+    {
+        "LAUGH", "TOUGH", "ROUGH", "COUGH", "ENOUGH", "TROUGH", "CHOUGH", "HICCOUGH", "DRAUGH",
+    };
+
+    private static bool IsFSoundGh(string w, int ghIndex)
+    {
+        // ghIndex is the index of 'G'; the stem must end exactly at the 'H'.
+        var end = ghIndex + 2;
+        foreach (var stem in FSoundGhStems)
+        {
+            if (stem.Length == end && w.StartsWith(stem, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
     }
 
     // ---------------------------------------------------------------------------------------------

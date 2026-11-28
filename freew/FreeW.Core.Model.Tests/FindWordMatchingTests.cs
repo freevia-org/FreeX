@@ -38,6 +38,68 @@ public class FindWordMatchingTests
         FindWordMatching.PhoneticKey(word).Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("tough", "TF")]
+    [InlineData("rough", "RF")]
+    [InlineData("enough", "ENF")]
+    [InlineData("cough", "KF")]
+    [InlineData("trough", "TRF")]
+    [InlineData("laughing", "LFNK")]
+    [InlineData("roughly", "RFL")]
+    [InlineData("draught", "TRFT")]
+    [InlineData("though", "0")]
+    [InlineData("through", "0R")]
+    [InlineData("thought", "0T")]
+    [InlineData("bought", "BT")]
+    [InlineData("daughter", "TTR")]
+    [InlineData("slaughter", "SLTR")]
+    [InlineData("high", "H")]
+    [InlineData("higher", "HR")]
+    [InlineData("sigh", "S")]
+    [InlineData("weigh", "W")]
+    [InlineData("neighbour", "NBR")]
+    [InlineData("ghost", "KST")]
+    [InlineData("photo", "FT")]
+    [InlineData("check", "XK")]
+    [InlineData("science", "SNS")]
+    [InlineData("edge", "EJ")]
+    [InlineData("thumb", "0M")]
+    [InlineData("xylophone", "SLFN")]
+    [InlineData("pneumonia", "NMN")]
+    [InlineData("chair", "XR")]
+    public void PhoneticKey_GhAndOtherStandardRules(string word, string expected)
+    {
+        FindWordMatching.PhoneticKey(word).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("tough", "tuff")]
+    [InlineData("rough", "ruff")]
+    [InlineData("laugh", "laff")]
+    [InlineData("cough", "coff")]
+    [InlineData("enough", "enuff")]
+    [InlineData("though", "tho")]
+    [InlineData("night", "nite")]
+    [InlineData("high", "hi")]
+    public void SoundsLike_GhPairs_Match(string a, string b)
+    {
+        FindWordMatching.SoundsLike(a, b).Should().BeTrue();
+        FindWordMatching.SoundsLike(b, a).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("tough", "though")]
+    [InlineData("tough", "tho")]
+    [InlineData("rough", "through")]
+    [InlineData("night", "knife")]
+    [InlineData("bought", "buff")]
+    [InlineData("daughter", "dafter")]
+    public void SoundsLike_GhPairs_DoNotMatch(string a, string b)
+    {
+        FindWordMatching.SoundsLike(a, b).Should().BeFalse();
+        FindWordMatching.SoundsLike(b, a).Should().BeFalse();
+    }
+
     [Fact]
     public void PhoneticKey_IsNullForNonLatinOrDigitWords()
     {
