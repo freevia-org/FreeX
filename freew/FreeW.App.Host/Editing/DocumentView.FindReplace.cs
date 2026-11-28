@@ -378,6 +378,155 @@ public sealed partial class DocumentView
         return false;
     }
 
+    // ---- the visible cue for a match in a nested table ---------------------------------------------
+
+    // The read-only editor hosting the nested table a Find Next match was last revealed in; its selection
+    // is the cue and is cleared when the caret moves, the document is edited or the walk moves on.
+    private System.Windows.Controls.RichTextBox? _nestedFindCueHost;
+
+    /// <summary>
+    /// Reveals a match <see cref="FindReplaceBodyPlanner.FindNextNested"/> reported: the read-only editor
+    /// hosting the nested table takes the match as its (inactive-highlighted) selection and is scrolled into
+    /// view, the way a found match shows in Word. The body editor's own selection and focus are untouched, so
+    /// the walk carries on from where it was. False when the rendered table cannot be matched to the model
+    /// (a table nested deeper than the surface renders, or cells that do not line up), in which case the
+    /// status line is the only cue. The body must have been committed to the model first.
+    /// </summary>
+    internal bool RevealNestedFindMatch(FindReplaceNestedMatch match)
+    {
+        ClearNestedFindCue();
+        if (ResolveNestedFindRange(match) is not { } target)
+            return false;
+
+        var (host, start, end) = target;
+        host.IsInactiveSelectionHighlightEnabled = true;
+        host.Selection.Select(start, end);
+        _nestedFindCueHost = host;
+
+        // The hosted editor sizes to its table, so the match is revealed by bringing its own rectangle
+        // (and with it the hosting editor) into view in the editor that scrolls.
+        host.UpdateLayout();
+        var rect = start.GetCharacterRect(LogicalDirection.Forward);
+        if (rect.IsEmpty)
+            host.BringIntoView();
+        else
+            host.BringIntoView(rect);
+        return true;
+    }
+
+    /// <summary>The text the nested-table match cue currently selects (null when there is no cue).</summary>
+    internal string? NestedFindCueText => _nestedFindCueHost?.Selection.Text;
+
+    /// <summary>Ends the nested-table match cue (a no-op when there is none).</summary>
+    internal void ClearNestedFindCue()
+    {
+        if (_nestedFindCueHost is not { } host)
+            return;
+
+        _nestedFindCueHost = null;
+        var origin = host.Document.ContentStart;
+        host.Selection.Select(origin, origin);
+    }
+
+    protected override void OnSelectionChanged(RoutedEventArgs e)
+    {
+        // The caret moved: the match Find Next showed in a nested table is no longer "the selection".
+        ClearNestedFindCue();
+        base.OnSelectionChanged(e);
+    }
+
+    private (System.Windows.Controls.RichTextBox Host, TextPointer Start, TextPointer End)? ResolveNestedFindRange(
+        FindReplaceNestedMatch match)
+    {
+        if (match.Path is not { Count: >= 2 } path
+            || match.Block < 0
+            || match.Block >= _model.Blocks.Count
+            || _model.Blocks[match.Block] is not FreeW.Core.Model.Table modelTable)
+        {
+            return null;
+        }
+
+        var wpfTable = EnumerateRenderedTables(Document.Blocks).FirstOrDefault(table =>
+            table.Tag is WpfTableTag { SourceBlockIndex: var source } && source == match.Block);
+        System.Windows.Controls.RichTextBox? host = null;
+        foreach (var step in path)
+        {
+            if (wpfTable is null
+                || step.Row < 0
+                || step.Row >= modelTable.Rows.Count
+                || step.Cell < 0
+                || step.Cell >= modelTable.Rows[step.Row].Cells.Count
+                || RenderedCellOf(wpfTable, modelTable.Rows[step.Row], step.Row, step.Cell) is not { } wpfCell)
+            {
+                return null;
+            }
+
+            var modelCell = modelTable.Rows[step.Row].Cells[step.Cell];
+            if (step.NestedIndex >= 0)
+            {
+                var hosts = wpfCell.Blocks.OfType<BlockUIContainer>()
+                    .Select(container => container.Child as System.Windows.Controls.RichTextBox)
+                    .Where(editor => editor is not null)
+                    .ToList();
+                if (step.NestedIndex >= hosts.Count || step.NestedIndex >= modelCell.NestedTables.Count)
+                    return null;
+
+                host = hosts[step.NestedIndex];
+                wpfTable = host!.Document.Blocks.OfType<WpfTable>().FirstOrDefault();
+                modelTable = modelCell.NestedTables[step.NestedIndex];
+                continue;
+            }
+
+            // The cell that holds the match: its rendered paragraphs are the model cell's one for one.
+            var paragraphs = wpfCell.Blocks.OfType<WpfParagraph>().ToList();
+            if (host is null
+                || paragraphs.Count != modelCell.Paragraphs.Count
+                || match.FirstParagraph < 0
+                || match.LastParagraph < match.FirstParagraph
+                || match.LastParagraph >= paragraphs.Count)
+            {
+                return null;
+            }
+
+            return (
+                host,
+                TextPointerAtParagraphOffset(paragraphs[match.FirstParagraph], match.Start),
+                TextPointerAtParagraphOffset(paragraphs[match.LastParagraph], match.EndOffset));
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The rendered cell of a model cell: the row that renders the model row (a repeated header copy never
+    /// counts), then the cell at the position the model cell has among the cells the surface draws (a cell
+    /// that continues a vertical merge is not drawn; grid-gap fillers are not model cells).
+    /// </summary>
+    private static WpfTableCell? RenderedCellOf(
+        WpfTable wpfTable,
+        FreeW.Core.Model.TableRow modelRow,
+        int modelRowIndex,
+        int cellIndex)
+    {
+        if (modelRow.Cells[cellIndex].VerticalMerge == VerticalMergeState.Continue)
+            return null;
+
+        var ordinal = modelRow.Cells.Take(cellIndex).Count(cell => cell.VerticalMerge != VerticalMergeState.Continue);
+        foreach (var group in wpfTable.RowGroups)
+        {
+            foreach (var row in group.Rows)
+            {
+                if (IsRepeatedHeaderRenderRow(row) || ModelRowIndexOfRenderedRow(group, row) != modelRowIndex)
+                    continue;
+
+                var drawn = row.Cells.Where(cell => cell.Tag is not WpfTableGridGapTag).ToList();
+                return ordinal < drawn.Count ? drawn[ordinal] : null;
+            }
+        }
+
+        return null;
+    }
+
     private static void ProjectFindBlocks(
         BlockCollection blocks,
         FindReplaceBodyProjection projection,

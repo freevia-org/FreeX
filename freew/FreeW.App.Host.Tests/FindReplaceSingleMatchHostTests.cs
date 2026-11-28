@@ -265,6 +265,104 @@ public sealed class FindReplaceSingleMatchHostTests
     }
 
     [StaFact]
+    public void FindNext_InANestedTable_SelectsTheMatchInTheReadOnlyHostingEditor()
+    {
+        var view = Load(_ => { }, new Paragraph("intro"), OuterWithNested("outer text", "nested cat here"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.StatusForTest.Should().Contain("nested");
+            view.NestedFindCueText.Should().Be("cat", "the hosted editor takes the match as its selection");
+        });
+    }
+
+    [StaFact]
+    public void FindNext_InANestedTable_RevealsTheExactMatch_InTheSecondParagraphAndAfterEarlierText()
+    {
+        var view = Load(_ => { }, OuterWithNested("outer text", "no match", "xx dog and cat yy"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().Be("cat");
+
+            var host = FindNestedHost(view);
+            host.Selection.Start.Paragraph!.Inlines.OfType<System.Windows.Documents.Run>().Select(run => run.Text)
+                .Should().Contain("xx dog and cat yy", "the selection sits in the paragraph the match is in");
+        });
+    }
+
+    [StaFact]
+    public void FindNext_InATableNestedTwoDeep_RevealsTheMatchInTheInnermostHostingEditor()
+    {
+        var inner = TableOf("deep cat");
+        var middle = TableOf("middle text");
+        middle.Rows[0].Cells[0].NestedTables.Add(inner);
+        var outer = TableOf("outer text");
+        outer.Rows[0].Cells[0].NestedTables.Add(middle);
+        var view = Load(_ => { }, outer);
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.StatusForTest.Should().Contain("nested");
+            view.NestedFindCueText.Should().Be("cat");
+        });
+    }
+
+    [StaFact]
+    public void FindNext_InANestedTable_CueEndsWhenTheWalkMovesOnOrTheCaretMoves()
+    {
+        var view = Load(_ => { }, new Paragraph("body cat"), OuterWithNested("outer text", "nested cat"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().BeNull("a body match is selected on the surface, not in a nested table");
+
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().Be("cat");
+
+            // Moving the caret in the body ends the cue.
+            view.Selection.Select(view.Document.ContentStart, view.Document.ContentStart);
+            view.NestedFindCueText.Should().BeNull();
+
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().BeNull("the walk went on to the body match");
+
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().Be("cat");
+
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().BeNull("the walk wrapped to the body match");
+        });
+    }
+
+    [StaFact]
+    public void Replace_InANestedTable_LeavesNoStaleCueOnTheReplacedText()
+    {
+        var view = Load(_ => { }, OuterWithNested("outer text", "see cat here"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            view.NestedFindCueText.Should().Be("cat");
+
+            dialog.ReplaceForTest();
+            view.NestedFindCueText.Should().NotBe("cat", "the cue never selects text that was just replaced");
+        });
+    }
+
+    private static System.Windows.Controls.RichTextBox FindNestedHost(DocumentView view)
+    {
+        var table = view.Document.Blocks.OfType<System.Windows.Documents.Table>().First();
+        var cell = table.RowGroups[0].Rows[0].Cells[0];
+        return cell.Blocks.OfType<System.Windows.Documents.BlockUIContainer>()
+            .Select(container => container.Child).OfType<System.Windows.Controls.RichTextBox>().First();
+    }
+
+    [StaFact]
     public void FindNext_DoesNotSeeTextInANestedTable_BecauseTheSurfaceHostsItReadOnly()
     {
         // A nested table is rendered inside a read-only hosted editor (the outer editor never places a

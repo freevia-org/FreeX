@@ -398,12 +398,14 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         public bool FindNext(FindReplaceSearchRequest request)
         {
             LastMatchStatus = null;
+            editor.ClearNestedFindCue();
             return Advance(request);
         }
 
         public bool ReplaceNext(FindReplaceReplaceRequest request)
         {
             LastMatchStatus = null;
+            editor.ClearNestedFindCue();
             var search = request.ToSearchRequest();
             if (!editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
                 return Advance(search);
@@ -483,6 +485,7 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         public FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request)
         {
             LastMatchStatus = null;
+            editor.ClearNestedFindCue();
             ClearStoryCursor();
             var restrictToSelection = !editor.Selection.IsEmpty;
             if (!editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
@@ -671,6 +674,10 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             _nestedRequest = request;
             _nestedPosition = match.End;
             LastMatchStatus = FindReplaceBodyPlanner.DescribeNested(match, text);
+
+            // The body editor cannot select into the nested table, so the match shows as the selection of
+            // the read-only editor hosting that table (when it can be found); the status line says where it is.
+            editor.RevealNestedFindMatch(match);
             return true;
         }
 
