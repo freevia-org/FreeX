@@ -5,6 +5,34 @@ using FreeW.Core.Model;
 namespace FreeW.App.Presentation.Dialogs;
 
 /// <summary>
+/// Where a walk over the matches in nested tables resumes: the top-level table block, the ordinal of the
+/// flow (cell) inside it, and an offset in that flow's projected haystack.
+/// </summary>
+public readonly record struct FindReplaceNestedPosition(int Block, int Flow, int Hay);
+
+/// <summary>
+/// A match inside a table nested in a table cell (see <see cref="FindReplaceBodyPlanner.FindNextNested"/>).
+/// <see cref="HayStart"/>/<see cref="HayLength"/> address it in its flow's projected haystack (what
+/// <see cref="FindReplaceBodyPlanner.PlanReplaceNested"/> re-finds it by); the paragraph and offset members
+/// say where it starts and ends in the cell's paragraphs.
+/// </summary>
+public sealed record FindReplaceNestedMatch(
+    int Block,
+    int Flow,
+    int HayStart,
+    int HayLength,
+    int FirstParagraph,
+    int Start,
+    int LastParagraph,
+    int EndOffset,
+    string MatchedText,
+    string Context)
+{
+    /// <summary>The position just past the match, where the walk resumes when it is not replaced.</summary>
+    public FindReplaceNestedPosition End => new(Block, Flow, HayStart + HayLength);
+}
+
+/// <summary>
 /// Body-story Find and Replace computed in ONE pass over the model: every flow (a run of consecutive
 /// top-level paragraphs, or the paragraphs of one table cell, nested tables included) is projected
 /// once, all its matches are found once, and Replace All applies them back to front so earlier
@@ -192,6 +220,134 @@ public static class FindReplaceBodyPlanner
         }
 
         return none;
+    }
+
+    /// <summary>
+    /// The first match inside a table nested in a table cell (any depth) at or after
+    /// <paramref name="from"/> in document order, or the very first when <paramref name="from"/> is null.
+    /// A host whose surface cannot place a caret in a nested table (WPF hosts it in a read-only editor)
+    /// walks these matches in the model, like the matches of the stories outside the body, and replaces
+    /// them with <see cref="PlanReplaceNested"/>. Matches in the body paragraphs and the cells of
+    /// top-level tables are not reported here.
+    /// </summary>
+    public static FindReplaceNestedMatch? FindNextNested(
+        TextDocument document,
+        FindReplaceSearchRequest request,
+        FindReplaceNestedPosition? from = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty)
+            return null;
+
+        foreach (var unit in Units(document.Blocks))
+        {
+            if (unit.IsParagraphRun || (from is { } limit && unit.FirstBlockIndex < limit.Block))
+                continue;
+
+            var ordinal = -1;
+            foreach (var flow in unit.Flows())
+            {
+                ordinal++;
+                if (!flow.Nested
+                    || (from is { } floor && unit.FirstBlockIndex == floor.Block && ordinal < floor.Flow))
+                {
+                    continue;
+                }
+
+                var projection = FlowProjection.Build(document, flow.Paragraphs, criteria);
+                foreach (var (start, length) in projection.FindAll(criteria))
+                {
+                    if (from is { } resume
+                        && unit.FirstBlockIndex == resume.Block
+                        && ordinal == resume.Flow
+                        && start < resume.Hay)
+                    {
+                        continue;
+                    }
+
+                    var first = projection.ParagraphAt(start);
+                    var end = start + length;
+                    var last = projection.ParagraphAt(end);
+                    return new FindReplaceNestedMatch(
+                        unit.FirstBlockIndex,
+                        ordinal,
+                        start,
+                        length,
+                        first,
+                        projection.Maps[first].ToPlain(start),
+                        last,
+                        projection.Maps[last].ToPlain(end),
+                        projection.Text.Substring(start, length),
+                        FindReplaceStoryPlanner.Excerpt(projection.Text, start, length));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The status line for a nested-table match the host cannot select on screen.</summary>
+    public static string DescribeNested(FindReplaceNestedMatch match, FindReplaceDialogText? text = null)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        text ??= FindReplaceDialogText.NeutralEnglish;
+        return text.Format(
+            FindReplaceTextId.FoundInStoryFormat, text.Get(FindReplaceTextId.StoryNestedTable), match.Context);
+    }
+
+    /// <summary>
+    /// Plans the replacement of one match <see cref="FindNextNested"/> reported, with exactly the edit
+    /// Replace All makes to it (replacement codes, Replace-with formatting, Track Changes). The command
+    /// replaces nothing when the match is no longer one or the planner cannot make the edit (an object
+    /// under Track Changes).
+    /// </summary>
+    public static FindReplaceBodyReplaceAllCommand PlanReplaceNested(
+        TextDocument document,
+        FindReplaceReplaceRequest request,
+        FindReplaceNestedMatch match,
+        FindReplaceRevisionContext? tracked = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(match);
+
+        var before = document.Blocks.ToList();
+        var none = new FindReplaceBodyReplaceAllCommand(before, 0, ReplaceLabel);
+        var criteria = request.ToCriteria();
+        if (criteria.IsEmpty)
+            return none;
+
+        var unit = Units(before).FirstOrDefault(candidate =>
+            !candidate.IsParagraphRun && candidate.FirstBlockIndex == match.Block);
+        if (unit is null)
+            return none;
+
+        var clone = unit.Clone();
+        if (clone.Flows().Skip(match.Flow).FirstOrDefault() is not { Nested: true } flow)
+            return none;
+
+        var projection = FlowProjection.Build(document, flow.Paragraphs, criteria);
+        var located = projection.FindAll(criteria).FirstOrDefault(candidate =>
+            candidate.Start == match.HayStart && candidate.Length == match.HayLength);
+        if (located.Length == 0
+            || !ApplyMatch(document, flow.Container, projection, located, request, tracked, new(ReferenceEqualityComparer.Instance)))
+        {
+            return none;
+        }
+
+        var after = new List<Block>(before.Count);
+        foreach (var other in Units(before))
+        {
+            if (ReferenceEquals(other.Blocks[0], unit.Blocks[0]))
+                after.AddRange(clone.Blocks);
+            else
+                after.AddRange(other.Blocks);
+        }
+
+        return new FindReplaceBodyReplaceAllCommand(after, 1, ReplaceLabel);
     }
 
     /// <summary>
@@ -522,15 +678,18 @@ public static class FindReplaceBodyPlanner
                     foreach (var nested in cell.NestedTables)
                     {
                         foreach (var flow in TableFlows(nested))
-                            yield return flow;
+                            yield return flow with { Nested = true };
                     }
                 }
             }
         }
     }
 
-    /// <summary>One flow: its paragraphs in order and the list they live in.</summary>
-    private sealed record Flow(IList Container, List<Paragraph> Paragraphs);
+    /// <summary>
+    /// One flow: its paragraphs in order and the list they live in. <paramref name="Nested"/> is true for the
+    /// cells of a table that sits inside a cell of another table (at any depth).
+    /// </summary>
+    private sealed record Flow(IList Container, List<Paragraph> Paragraphs, bool Nested = false);
 
     private static IEnumerable<Unit> Units(IReadOnlyList<Block> blocks)
     {

@@ -392,7 +392,7 @@ public static class FindReplaceStoryPlanner
             ? ((int)left.Kind).CompareTo((int)right.Kind)
             : left.Ordinal.CompareTo(right.Ordinal);
 
-    private static string Excerpt(string text, int start, int length)
+    internal static string Excerpt(string text, int start, int length)
     {
         // A projected haystack ends in the flow-end mark and holds one structural character per object;
         // neither is anything to show.

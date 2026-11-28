@@ -178,12 +178,98 @@ public sealed class FindReplaceSingleMatchHostTests
         AssertFormatted(paragraphs[1], "tiger");
     }
 
+    private static Table OuterWithNested(string outerText, params string[] nestedParagraphs)
+    {
+        var outer = TableOf(outerText);
+        outer.Rows[0].Cells[0].NestedTables.Add(TableOf(nestedParagraphs));
+        return outer;
+    }
+
+    private static string NestedText(DocumentView view, int paragraph = 0) =>
+        view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0].NestedTables[0].Rows[0].Cells[0]
+            .Paragraphs[paragraph].PlainText;
+
+    [StaFact]
+    public void FindNext_ReachesTextInANestedTable_ThroughTheModel_AndSaysWhereItIs()
+    {
+        var view = Load(_ => { }, OuterWithNested("outer text", "nested cat here"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.StatusForTest.Should().Contain("nested").And.Contain("cat");
+        });
+    }
+
+    [StaFact]
+    public void Replace_InANestedTable_MakesReplaceAllsEdit_AndStepsOnToTheNextMatch()
+    {
+        var view = Load(_ => { }, OuterWithNested("outer text", "cat and cat", "last cat"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+            view.CommitToModel();
+            NestedText(view).Should().Be("tiger and cat", "a single Replace changes only the match it is on");
+
+            dialog.ReplaceForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        NestedText(view).Should().Be("tiger and tiger");
+        NestedText(view, 1).Should().Be("last tiger");
+    }
+
+    [StaFact]
+    public void Replace_InANestedTable_FormatsTheWrittenText_AndUndoesAsOneStep()
+    {
+        var view = Load(_ => { }, OuterWithNested("outer text", "see cat here"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.SetFormatForTest(FindReplaceDialogFieldKind.Replace, BoldRed);
+            dialog.FindNextForTest();
+            dialog.ReplaceForTest();
+        });
+
+        view.CommitToModel();
+        var paragraph = view.Model.Blocks.OfType<Table>().Single().Rows[0].Cells[0].NestedTables[0].Rows[0].Cells[0].Paragraphs[0];
+        paragraph.PlainText.Should().Be("see tiger here");
+        AssertFormatted(paragraph, "tiger");
+
+        view.Undo();
+        view.CommitToModel();
+        NestedText(view).Should().Be("see cat here");
+    }
+
+    [StaFact]
+    public void FindNext_WalksTheBodyThenTheNestedTable_ThenWrapsToTheBody()
+    {
+        var view = Load(_ => { }, new Paragraph("body cat"), OuterWithNested("outer text", "nested cat"));
+
+        WithDialog(view, "cat", "tiger", dialog =>
+        {
+            dialog.FindNextForTest();
+            view.Selection.IsEmpty.Should().BeFalse("the body match is selected on the surface");
+            dialog.StatusForTest.Should().NotContain("nested");
+
+            dialog.FindNextForTest();
+            dialog.StatusForTest.Should().Contain("nested");
+
+            dialog.FindNextForTest();
+            view.Selection.IsEmpty.Should().BeFalse("the walk wrapped to the body match");
+            dialog.StatusForTest.Should().NotContain("nested");
+        });
+    }
+
     [StaFact]
     public void FindNext_DoesNotSeeTextInANestedTable_BecauseTheSurfaceHostsItReadOnly()
     {
         // A nested table is rendered inside a read-only hosted editor (the outer editor never places a
-        // caret there), so Find Next / single Replace can never be positioned in one; Replace All
-        // reaches it through the model. This pins why the nested-table case needs no surface mapping.
+        // caret there), so the surface projection cannot see its text: Find Next / single Replace reach
+        // it through the model instead (see the tests above), as Replace All does.
         var outer = TableOf("outer text");
         outer.Rows[0].Cells[0].NestedTables.Add(TableOf("nested cat"));
         var view = Load(_ => { }, outer);

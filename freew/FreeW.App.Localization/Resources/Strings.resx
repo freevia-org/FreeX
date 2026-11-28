@@ -1172,6 +1172,7 @@
   <data name="FreeW_FindReplace_Story_Endnote_Format" xml:space="preserve"><value>endnote {0}</value></data>
   <data name="FreeW_FindReplace_Story_Comment_Format" xml:space="preserve"><value>comment {0}</value></data>
   <data name="FreeW_FindReplace_Story_TextBox_Format" xml:space="preserve"><value>text box {0}</value></data>
+  <data name="FreeW_FindReplace_Story_NestedTable" xml:space="preserve"><value>a table nested in a table</value></data>
   <data name="StyleDefinition_NewTitle" xml:space="preserve"><value>Create New Style from Formatting</value></data>
   <data name="StyleDefinition_ModifyTitle" xml:space="preserve"><value>Modify Style</value></data>
   <data name="StyleDefinition_PropertiesGroup" xml:space="preserve"><value>Properties</value></data>

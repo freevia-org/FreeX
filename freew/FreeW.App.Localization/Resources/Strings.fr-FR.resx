@@ -682,6 +682,7 @@
   <data name="FreeW_FindReplace_Story_Endnote_Format" xml:space="preserve"><value>la note de fin {0}</value></data>
   <data name="FreeW_FindReplace_Story_Comment_Format" xml:space="preserve"><value>le commentaire {0}</value></data>
   <data name="FreeW_FindReplace_Story_TextBox_Format" xml:space="preserve"><value>la zone de texte {0}</value></data>
+  <data name="FreeW_FindReplace_Story_NestedTable" xml:space="preserve"><value>un tableau imbriqué dans un tableau</value></data>
   <data name="StyleDefinition_NewTitle" xml:space="preserve"><value>Créer un style à partir de la mise en forme</value></data>
   <data name="StyleDefinition_ModifyTitle" xml:space="preserve"><value>Modifier le style</value></data>
   <data name="StyleDefinition_PropertiesGroup" xml:space="preserve"><value>Propriétés</value></data>

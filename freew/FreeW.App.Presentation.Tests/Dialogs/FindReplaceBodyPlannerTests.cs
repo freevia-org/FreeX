@@ -357,6 +357,61 @@ public sealed class FindReplaceBodyPlannerTests
         RunLabels((Paragraph)document.Blocks[0]).Should().Equal("a", "c1", "b");
     }
 
+    private static Table WithNested(Table outer, params Table[] nested)
+    {
+        foreach (var table in nested)
+            outer.Rows[0].Cells[0].NestedTables.Add(table);
+        return outer;
+    }
+
+    private static string NestedCellText(TextDocument document, int nested = 0, int paragraph = 0) =>
+        ((Table)document.Blocks.OfType<Table>().Single()).Rows[0].Cells[0].NestedTables[nested]
+            .Rows[0].Cells[0].Paragraphs[paragraph].PlainText;
+
+    [Fact]
+    public void FindNextNested_WalksTheMatchesOfNestedTablesOnly_InDocumentOrder()
+    {
+        var document = Doc(
+            new Paragraph("body cat"),
+            WithNested(TableOf(["outer cat"]), TableOf(["nested cat one", "cat two"]), TableOf(["third cat"])));
+        var request = new FindReplaceSearchRequest("cat", NoOptions);
+
+        var first = FindReplaceBodyPlanner.FindNextNested(document, request)!;
+        (first.Block, first.FirstParagraph, first.Start, first.MatchedText).Should().Be((1, 0, 7, "cat"));
+
+        var second = FindReplaceBodyPlanner.FindNextNested(document, request, first.End)!;
+        (second.FirstParagraph, second.Start).Should().Be((1, 0), "the next paragraph of the same nested cell");
+
+        var third = FindReplaceBodyPlanner.FindNextNested(document, request, second.End)!;
+        third.Context.Should().Contain("third cat");
+
+        FindReplaceBodyPlanner.FindNextNested(document, request, third.End).Should().BeNull();
+        FindReplaceBodyPlanner.FindNextNested(
+            Doc(new Paragraph("cat"), TableOf(["outer cat"])), request).Should().BeNull("there is no nested table");
+    }
+
+    [Fact]
+    public void PlanReplaceNested_MakesReplaceAllsEditForThatMatchOnly()
+    {
+        var document = Doc(WithNested(TableOf(["outer cat"]), TableOf(["cat and cat"])));
+        var request = new FindReplaceReplaceRequest("cat", "tiger", NoOptions);
+        var match = FindReplaceBodyPlanner.FindNextNested(document, request.ToSearchRequest())!;
+        var second = FindReplaceBodyPlanner.FindNextNested(document, request.ToSearchRequest(), match.End)!;
+
+        var command = FindReplaceBodyPlanner.PlanReplaceNested(document, request, second);
+        command.ReplacedCount.Should().Be(1);
+        NestedCellText(document).Should().Be("cat and cat", "planning touches nothing");
+
+        command.Apply(new Context(document));
+        NestedCellText(document).Should().Be("cat and tiger");
+
+        command.Revert(new Context(document));
+        NestedCellText(document).Should().Be("cat and cat");
+
+        // A match that is no longer one is declined.
+        FindReplaceBodyPlanner.PlanReplaceNested(document, request with { Term = "dog" }, second).ReplacedCount.Should().Be(0);
+    }
+
     [Fact]
     public void NoteMarkNumber_IsNotSearchableText()
     {

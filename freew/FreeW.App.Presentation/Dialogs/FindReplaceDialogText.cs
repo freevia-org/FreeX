@@ -85,6 +85,7 @@ public enum FindReplaceTextId
     StoryEndnoteFormat,
     StoryCommentFormat,
     StoryTextBoxFormat,
+    StoryNestedTable,
 }
 
 /// <summary>
@@ -176,6 +177,7 @@ public sealed class FindReplaceDialogText
             [FindReplaceTextId.StoryEndnoteFormat] = new("FreeW_FindReplace_Story_Endnote_Format", "endnote {0}"),
             [FindReplaceTextId.StoryCommentFormat] = new("FreeW_FindReplace_Story_Comment_Format", "comment {0}"),
             [FindReplaceTextId.StoryTextBoxFormat] = new("FreeW_FindReplace_Story_TextBox_Format", "text box {0}"),
+            [FindReplaceTextId.StoryNestedTable] = new("FreeW_FindReplace_Story_NestedTable", "a table nested in a table"),
         };
 
     private readonly Func<string, string?>? _getText;

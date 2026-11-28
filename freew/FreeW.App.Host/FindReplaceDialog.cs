@@ -377,6 +377,13 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
         private FindReplaceSearchRequest? _storyRequest;
         private FindReplaceStoryPosition? _storyPosition;
 
+        // Find Next has reached text in a table nested inside a table cell: the surface hosts such a table
+        // in a read-only editor the body editor can never select into, so, like a story, the match is
+        // walked and replaced in the model (through the shared body planner) and reported in the status.
+        private FindReplaceNestedMatch? _nestedMatch;
+        private FindReplaceSearchRequest? _nestedRequest;
+        private FindReplaceNestedPosition? _nestedPosition;
+
         // Find Next landed on a body match that has no text extent (a comment mark is a textless run, so
         // selecting it selects nothing): its haystack span, so a following Replace still acts on it.
         // _markCaret is where the caret sat in the haystack right after Find Next selected it: the surface
@@ -413,6 +420,12 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                     _storyPosition = replacement.Resume();
                 }
 
+                return Advance(search);
+            }
+
+            if (_nestedMatch is { } nested && Equals(_nestedRequest, search))
+            {
+                ReplaceNestedMatch(nested, request);
                 return Advance(search);
             }
 
@@ -610,7 +623,20 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
                     return true;
 
                 ClearStoryCursor();
-                return SelectBody(projection, request, 0) || SelectStory(request, null);
+                return SelectBody(projection, request, 0)
+                    || SelectNested(request, null)
+                    || SelectStory(request, null);
+            }
+
+            if (_nestedMatch is not null && Equals(_nestedRequest, request))
+            {
+                if (SelectNested(request, _nestedPosition))
+                    return true;
+
+                ClearStoryCursor();
+                return SelectStory(request, null)
+                    || SelectBody(projection, request, 0)
+                    || SelectNested(request, null);
             }
 
             ClearStoryCursor();
@@ -626,8 +652,61 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             }
 
             return SelectBody(projection, request, from)
+                || SelectNested(request, null)
                 || SelectStory(request, null)
                 || SelectBody(projection, request, 0);
+        }
+
+        /// <summary>
+        /// Moves the walk to the next match inside a nested table at or after <paramref name="from"/>
+        /// (the first when null). The match is not selected on the surface; the status line says where it is.
+        /// </summary>
+        private bool SelectNested(FindReplaceSearchRequest request, FindReplaceNestedPosition? from)
+        {
+            editor.CommitToModel();
+            if (FindReplaceBodyPlanner.FindNextNested(editor.Model, request, from) is not { } match)
+                return false;
+
+            _nestedMatch = match;
+            _nestedRequest = request;
+            _nestedPosition = match.End;
+            LastMatchStatus = FindReplaceBodyPlanner.DescribeNested(match, text);
+            return true;
+        }
+
+        /// <summary>
+        /// Replaces the nested-table match Find Next reported through the shared body planner (the edit
+        /// Replace All makes to it) and sets the walk to resume past what was written.
+        /// </summary>
+        private void ReplaceNestedMatch(FindReplaceNestedMatch reported, FindReplaceReplaceRequest request)
+        {
+            editor.CommitToModel();
+            var search = request.ToSearchRequest();
+            var start = new FindReplaceNestedPosition(reported.Block, reported.Flow, reported.HayStart);
+            if (FindReplaceBodyPlanner.FindNextNested(editor.Model, search, start) is not { } current
+                || current.Block != reported.Block
+                || current.Flow != reported.Flow
+                || current.HayStart != reported.HayStart
+                || current.HayLength != reported.HayLength)
+            {
+                return;
+            }
+
+            var tracked = RevisionContext();
+            var plan = FindReplaceDialogPlanner.PlanReplacement(request, current.MatchedText);
+            var command = FindReplaceBodyPlanner.PlanReplaceNested(editor.Model, request, current, tracked);
+            var resume = current.HayStart + current.HayLength;
+            if (command.ReplacedCount > 0)
+            {
+                editor.Commands.Execute(command);
+
+                // Untracked the written text replaces the match; tracked the struck-through original stays
+                // in the haystack (masked) next to it.
+                if (plan.ReplacesText)
+                    resume = current.HayStart + plan.Text.Length + (tracked is null ? 0 : current.HayLength);
+            }
+
+            _nestedPosition = new FindReplaceNestedPosition(current.Block, current.Flow, resume);
         }
 
         private bool CaretIsOnMark(int caretOffset, int markStart, int markLength) =>
@@ -681,6 +760,9 @@ internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogW
             _storyMatch = null;
             _storyRequest = null;
             _storyPosition = null;
+            _nestedMatch = null;
+            _nestedRequest = null;
+            _nestedPosition = null;
         }
 
         private FindReplaceRevisionContext? RevisionContext() =>
